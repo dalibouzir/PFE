@@ -1,80 +1,76 @@
-# WeeFarm - Frontend Demo (Role-Based)
+# WeeFarm Frontend
 
-Plateforme de gestion cooperative agricole (Senegal) avec interface **Admin** et **Manager**.
+Interface web de demonstration pour WeeFarm, une plateforme de gestion de cooperatives agricoles au Senegal.
 
-Ce repository contient un monorepo, mais la livraison actuelle est **frontend-first** (Next.js), avec donnees mock locales, sans integration backend.
+Cette livraison est **frontend-only**: aucune logique backend, base de donnees, authentification reelle ou integration IA serveur.
 
-## Important: GitHub + Vercel
-- **Oui**, c'est normal de pousser le dossier `frontend/` (et son contenu) dans le repo.
-- Pour deployer sur Vercel, configure:
-  - **Framework**: `Next.js`
-  - **Root Directory**: `frontend`
-  - **Build Command**: `npm run build`
-  - **Install Command**: `npm install`
-- Tu n'es pas oblige de remonter les fichiers du dossier `frontend/` a la racine du repo.
+## Etat actuel du repo
 
-## Current Frontend Scope
-Implementation UI complete pour:
-- **Admin platform**
-  - Tableau de bord
-  - Cooperatives
-  - Managers
-  - Parametres
-- **Manager cooperative**
-  - Tableau de bord
-  - Membres
-  - Parcelles
-  - Produits
-  - Inputs
-  - Stocks
-  - Lots
-  - Transformations
-  - Analytique
-  - Assistant IA (UI mock uniquement)
-  - Parametres
+L'application Next.js est maintenant a la **racine du repository**.
 
-Hors scope technique dans cette passe:
-- backend API
-- auth reelle
-- base de donnees
-- appels LLM reels
-- RAG reel
-- moteur de recommandation
-- prediction
+- Oui: il faut pousser le contenu de `frontend/` vers la racine (ce qui est fait)
+- Non: il ne faut pas deployer une app vide avec un dossier wrapper `frontend` comme point d'entree
+- Pour Vercel: laisse `Root Directory` vide (ou `.`)
 
-## UI and Data Principles
-- Design coherent, calme, dashboard-first
-- Labels et microcopy en francais
-- Donnees mock realistes Senegal:
-  - zones: Thies, Louga, Casamance, etc.
-  - produits: mangue, arachide, mil
-  - lots, stocks, transformations, membres coherents entre pages
+## Perimetre fonctionnel implemente
 
-## Project Structure
-- `frontend/` - Next.js app (App Router, TypeScript, Tailwind)
-- `backend/` - backend workspace (non utilise pour cette demo frontend)
-- `ai/` - IA workspace (non branche a l'UI de demo)
-- `database/` - schema/seed (non utilise par le frontend mock)
-- `docs/`, `docker/`, `scripts/` - ressources projet
+### Espace Admin (plateforme)
+- Tableau de bord
+- Cooperatives
+- Managers
+- Parametres
 
-Frontend key paths:
-- `frontend/app/(platform)/admin/*` - pages Admin
-- `frontend/app/(platform)/manager/*` - pages Manager
-- `frontend/components/*` - UI components
-- `frontend/lib/mock-data.ts` - donnees mock centrales
+### Espace Manager (cooperative)
+- Tableau de bord
+- Membres
+- Parcelles
+- Produits
+- Inputs
+- Stocks
+- Lots
+- Transformations
+- Analytique
+- Assistant IA (UI mock uniquement)
+- Parametres
 
-## Routing Overview
-Entree:
-- `/` -> ecran login/demo
-- `/login` -> alias du login
+## Assistant IA (frontend-only)
 
-Admin:
+La page ` /manager/assistant-ia ` est une interface de chat de demonstration:
+- zone conversation
+- suggestions de prompts
+- etat vide
+- historique mock
+- reponses mock coherentes avec les donnees operationnelles
+
+Non inclus:
+- appels LLM
+- RAG
+- recommandations/predictions reelles
+- API backend
+
+## Donnees mock
+
+Les donnees sont locales et coherentes entre les ecrans:
+- regions/zones: Thies, Louga, Casamance
+- produits: mangue, arachide, mil
+- lots, stocks, pertes, statuts, transformations
+
+Fichier principal:
+- `lib/mock-data.ts`
+
+## Structure du projet
+
+- `app/` routes Next.js (App Router)
+- `components/` composants UI
+- `lib/` helpers + mock data
+- `public/` assets statiques
+- `backend/`, `database/`, `ai/` non utilises par cette demo frontend
+
+Routes principales:
 - `/admin/dashboard`
 - `/admin/cooperatives`
 - `/admin/managers`
 - `/admin/parametres`
-
-Manager:
 - `/manager/dashboard`
 - `/manager/membres`
 - `/manager/parcelles`
@@ -87,56 +83,50 @@ Manager:
 - `/manager/assistant-ia`
 - `/manager/parametres`
 
-Legacy routes (compat):
-- `/dashboard`, `/membres`, `/inputs`, `/lots`, `/transformations`, `/analytique`
-- redirigees vers l'espace manager
+## Lancer en local
 
-## Assistant IA (Frontend Only)
-La page `/manager/assistant-ia` est volontairement UI-only:
-- layout chat propre
-- zone conversation
-- suggestions de prompts
-- etat vide
-- panneau historique
-- reponses mock coherentes avec les donnees operationnelles
-
-Aucune logique IA serveur n'est executee.
-
-## Local Development (Frontend)
 Depuis la racine du repo:
 
 ```bash
-cd frontend
 npm install
 npm run dev
 ```
 
-App disponible sur:
+Application disponible sur:
 - `http://localhost:3001`
 
 Build production:
 
 ```bash
-cd frontend
 npm run build
 npm run start
 ```
 
-## Deploy to Vercel
-1. Import le repo `dalibouzir/PFE` dans Vercel
-2. Set **Root Directory** = `frontend`
-3. Verifie les commandes:
+## Deploiement Vercel
+
+1. Importer `dalibouzir/PFE`
+2. Detecter automatiquement `Next.js`
+3. Verifier les commandes:
    - Install: `npm install`
    - Build: `npm run build`
-4. Deploy
+4. **Root Directory**: vide (ou `.`)
+5. Deploy
 
-## Notes for Team
-- Les donnees sont centralisees dans `frontend/lib/mock-data.ts`
-- Les pages sont organisees par role pour garder une navigation claire
-- Les modales/formulaires actuels sont en mode demo local
-- Pour brancher un vrai backend plus tard:
-  - conserver les structures de page
-  - remplacer les mocks par une couche service/API
+## Si Vercel affiche "Not Found"
+
+Verifier:
+- le projet pointe bien sur la branche contenant la migration vers la racine
+- `Root Directory` n'est plus `frontend`
+- le framework detecte est `Next.js`
+- un nouveau redeploy a ete lance apres la mise a jour
+
+## Notes techniques
+
+- UI en francais, concise, dashboard-first
+- Design garde une direction agricole moderne et calme
+- Responsive desktop + mobile
+- Donnees locales realistes pour demo PFE
 
 ## License
-Usage academique / demo projet PFE.
+
+Usage academique / demo PFE.

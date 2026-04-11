@@ -1,7 +1,14 @@
 # macOS
 .DS_Store
 
-# Frontend (Next.js)
+# Next.js app (repo root)
+node_modules/
+.next/
+out/
+.vercel/
+.env*
+
+# Legacy nested frontend workspace (local leftovers)
 frontend/node_modules/
 frontend/.next/
 frontend/out/
