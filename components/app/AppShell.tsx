@@ -109,7 +109,7 @@ function buildProfileMenu(role: AppRole): ProfileItem[] {
     { label: "Mon profil", icon: ProfileIcon, href: settingsHref },
     { label: "Parametres", icon: SettingsIcon, href: settingsHref },
     { label: "Aide", icon: HelpIcon },
-    { label: "Deconnexion", icon: LogoutIcon, tone: "danger" },
+    { label: "Deconnexion", icon: LogoutIcon, tone: "danger", href: "/" },
   ];
 }
 
@@ -176,7 +176,10 @@ function ProfileDropdown({ open, role }: { open: boolean; role: AppRole }) {
   const meta = shellMeta[role];
 
   return (
-    <div className="shell-pop absolute right-0 top-[calc(100%+10px)] z-[80] w-64 rounded-2xl border border-[var(--line)] bg-white/96 p-2 shadow-[0_20px_46px_rgba(14,42,30,0.18)] backdrop-blur-md">
+    <div
+      className="shell-pop absolute right-0 top-[calc(100%+10px)] z-[80] w-64 rounded-2xl border border-[var(--line)] bg-white/96 p-2 shadow-[0_20px_46px_rgba(14,42,30,0.18)] backdrop-blur-md"
+      data-liquid-glass
+    >
       <div className="mb-2 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2.5">
         <p className="text-sm font-semibold text-[var(--green-900)]">{meta.name}</p>
         <p className="text-xs text-[var(--muted)]">{meta.roleLabel}</p>
@@ -191,9 +194,12 @@ function ProfileDropdown({ open, role }: { open: boolean; role: AppRole }) {
             : "text-[var(--text)] hover:bg-[var(--surface-soft)]",
         );
 
+        const dangerClassName =
+          "soft-focus flex h-10 items-center rounded-xl border border-[#e5d2d2] bg-white text-sm font-medium text-[#9c3e3e] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#fff4f4] w-full gap-2 px-3";
+
         if (item.href) {
           return (
-            <Link key={item.label} href={item.href} className={className}>
+            <Link key={item.label} href={item.href} className={item.tone === "danger" ? dangerClassName : className}>
               <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[#ad4e4e]" : "text-[var(--muted)]")} />
               {item.label}
             </Link>

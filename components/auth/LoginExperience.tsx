@@ -37,25 +37,13 @@ export function LoginExperience() {
               </p>
             </div>
 
-            <div className="relative mr-[-1.75rem] flex flex-1 items-end justify-end pb-1 sm:mr-[-2.5rem]">
-              <div className="pointer-events-none absolute left-1/2 top-[26%] h-44 w-44 -translate-x-[10%] rounded-full bg-[radial-gradient(circle,rgba(223,247,233,0.55)_0%,rgba(223,247,233,0.03)_74%)] blur-[8px]" />
-              <Image
-                src="/hand-plant.png"
-                alt="Main tenant une plante"
-                width={610}
-                height={420}
-                className="relative z-20 h-auto w-full max-w-[790px] object-contain drop-shadow-[0_20px_20px_rgba(14,56,40,0.2)]"
-                priority
-              />
-            </div>
-
-            <div className="rounded-xl border border-white/30 bg-white/25 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
-              <ul className="space-y-1 text-[13px] font-medium leading-relaxed text-[#163529]">
+            <div className="wf-liquid-card mt-7 rounded-2xl p-5 sm:mt-8 sm:p-6">
+              <ul className="space-y-1.5 text-[14px] font-medium leading-relaxed text-[#163529]">
                 <li>- Gestion cooperatives et managers (admin)</li>
                 <li>- Suivi membres, parcelles, stocks et lots (manager)</li>
                 <li>- Transformations et analytique operationnelle</li>
               </ul>
-              <p className="mt-2.5 text-[12px] leading-relaxed text-[#1e4335]/90">
+              <p className="mt-3 text-[13px] leading-relaxed text-[#1e4335]/90">
                 Support: <span className="font-semibold text-[#18392c]">support@wefarm.sn</span>
               </p>
             </div>
