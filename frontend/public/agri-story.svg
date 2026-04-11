@@ -1,0 +1,32 @@
+<svg width="1200" height="1200" viewBox="0 0 1200 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgSoft" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(615 610) rotate(90) scale(520)">
+      <stop stop-color="#B4E3C5" stop-opacity="0.44"/>
+      <stop offset="1" stop-color="#B4E3C5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mainStroke" x1="274" y1="164" x2="908" y2="972" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E7FFF0" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#C6F0D6" stop-opacity="0.45"/>
+    </linearGradient>
+    <linearGradient id="fillLeaf" x1="571" y1="280" x2="705" y2="460" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C5F3D4" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#85CDA4" stop-opacity="0.7"/>
+    </linearGradient>
+    <filter id="blurSoft" x="120" y="120" width="960" height="960" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+
+  <circle cx="615" cy="610" r="440" fill="url(#bgSoft)"/>
+
+  <g filter="url(#blurSoft)" opacity="0.92">
+    <path d="M366 754C403 691 470 657 560 650C599 647 643 645 693 639C761 631 807 596 839 535" stroke="url(#mainStroke)" stroke-width="40" stroke-linecap="round"/>
+    <path d="M814 531C829 553 847 565 865 571C896 582 931 578 960 562" stroke="url(#mainStroke)" stroke-width="28" stroke-linecap="round"/>
+    <path d="M302 794C353 804 424 820 495 804C545 793 591 763 614 723" stroke="url(#mainStroke)" stroke-width="32" stroke-linecap="round"/>
+    <path d="M515 682C548 703 596 716 642 702C692 686 725 646 741 595" stroke="url(#mainStroke)" stroke-width="24" stroke-linecap="round"/>
+
+    <path d="M584 403C632 379 658 337 665 278C621 286 584 312 565 351C556 370 553 389 554 412C562 410 572 408 584 403Z" fill="url(#fillLeaf)"/>
+    <path d="M666 426C706 416 740 391 760 352C716 347 681 360 657 386C644 400 635 417 632 437C643 435 654 431 666 426Z" fill="url(#fillLeaf)"/>
+    <path d="M612 660C616 607 619 553 621 498" stroke="url(#mainStroke)" stroke-width="18" stroke-linecap="round"/>
+  </g>
+</svg>
