@@ -109,7 +109,7 @@ function buildProfileMenu(role: AppRole): ProfileItem[] {
     { label: "Mon profil", icon: ProfileIcon, href: settingsHref },
     { label: "Parametres", icon: SettingsIcon, href: settingsHref },
     { label: "Aide", icon: HelpIcon },
-    { label: "Deconnexion", icon: LogoutIcon, tone: "danger", href: "/" },
+    { label: "Deconnexion", icon: LogoutIcon, tone: "danger", href: "/login" },
   ];
 }
 
@@ -177,12 +177,11 @@ function ProfileDropdown({ open, role }: { open: boolean; role: AppRole }) {
 
   return (
     <div
-      className="shell-pop absolute right-0 top-[calc(100%+10px)] z-[80] w-64 rounded-2xl border border-[var(--line)] bg-white/96 p-2 shadow-[0_20px_46px_rgba(14,42,30,0.18)] backdrop-blur-md"
-      data-liquid-glass
+      className="shell-pop absolute right-0 top-[calc(100%+10px)] z-[80] w-64 rounded-2xl border border-white/20 bg-black/20 p-2 text-white shadow-lg backdrop-blur-md"
     >
-      <div className="mb-2 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2.5">
-        <p className="text-sm font-semibold text-[var(--green-900)]">{meta.name}</p>
-        <p className="text-xs text-[var(--muted)]">{meta.roleLabel}</p>
+      <div className="mb-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2.5">
+        <p className="text-sm font-semibold text-white">{meta.name}</p>
+        <p className="text-xs text-white/75">{meta.roleLabel}</p>
       </div>
 
       {profileMenu.map((item) => {
@@ -190,25 +189,25 @@ function ProfileDropdown({ open, role }: { open: boolean; role: AppRole }) {
         const className = cx(
           "soft-focus flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors",
           item.tone === "danger"
-            ? "text-[#9c3e3e] hover:bg-[#fff1f1]"
-            : "text-[var(--text)] hover:bg-[var(--surface-soft)]",
+            ? "text-[#ffd4d4] hover:bg-[#4f1818]/45"
+            : "text-white/90 hover:bg-white/10",
         );
 
         const dangerClassName =
-          "soft-focus flex h-10 items-center rounded-xl border border-[#e5d2d2] bg-white text-sm font-medium text-[#9c3e3e] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#fff4f4] w-full gap-2 px-3";
+          "soft-focus flex h-10 w-full items-center gap-2 rounded-xl border border-[#f3b6b6]/50 bg-[#3b1111]/30 px-3 text-sm font-medium text-[#ffd4d4] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#4e1515]/45";
 
         if (item.href) {
           return (
             <Link key={item.label} href={item.href} className={item.tone === "danger" ? dangerClassName : className}>
-              <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[#ad4e4e]" : "text-[var(--muted)]")} />
+              <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[#ffc2c2]" : "text-white/70")} />
               {item.label}
             </Link>
           );
         }
 
         return (
-          <button key={item.label} className={className}>
-            <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[#ad4e4e]" : "text-[var(--muted)]")} />
+          <button key={item.label} className={className} type="button">
+            <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[#ffc2c2]" : "text-white/70")} />
             {item.label}
           </button>
         );
@@ -373,8 +372,8 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
   const shellLayoutStyle = { ["--sidebar-width" as string]: `${collapsed ? 92 : 258}px` } as React.CSSProperties;
 
   return (
-    <div className="relative h-screen overflow-hidden bg-transparent" style={shellLayoutStyle}>
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-width)] px-3 py-4 transition-[width] duration-300 ease-out lg:block">
+    <div className="relative min-h-screen bg-transparent" style={shellLayoutStyle}>
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-width)] px-3 py-4 transition-[width] duration-300 ease-out md:block">
         <div className="flex h-full flex-col rounded-[24px] border border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.96)_0%,rgba(245,250,245,0.94)_100%)] p-3 shadow-[0_14px_38px_rgba(18,45,32,0.08)] backdrop-blur-md">
           <SidebarBrand collapsed={collapsed} role={role} onCollapse={() => setCollapsed(true)} onExpand={() => setCollapsed(false)} />
 
@@ -403,8 +402,8 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
               </div>
             )}
 
-            <button
-              aria-label="Deconnexion"
+            <Link
+              href="/login"
               className={cx(
                 "soft-focus flex h-10 items-center rounded-xl border border-[#e5d2d2] bg-white text-sm font-medium text-[#9c3e3e] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#fff4f4]",
                 collapsed ? "mx-auto w-10 justify-center px-0" : "w-full gap-2 px-3",
@@ -414,17 +413,17 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
               <span className={cx("overflow-hidden whitespace-nowrap transition-all duration-200", collapsed ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100")}>
                 Deconnexion
               </span>
-            </button>
+            </Link>
           </div>
         </div>
       </aside>
 
-      <div className={cx("fixed inset-0 z-[70] lg:hidden transition-opacity duration-200", mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0")}>
-        <button className="absolute inset-0 bg-[#0f2f22]/40 backdrop-blur-[1.5px]" onClick={() => setMobileOpen(false)} aria-label="Fermer le menu" />
+      <div className={cx("fixed inset-0 z-[70] md:hidden transition-opacity duration-200", mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0")}>
+        <button className="absolute inset-0 bg-[#0f2f22]/45 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-label="Fermer le menu" />
 
         <aside
           className={cx(
-            "absolute left-0 top-0 h-full w-[290px] border-r border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.98)_0%,rgba(245,250,245,0.96)_100%)] p-4 shadow-[0_24px_48px_rgba(15,43,31,0.22)] transition-transform duration-300",
+            "absolute left-0 top-0 h-[100dvh] w-[min(86vw,290px)] overflow-y-auto overscroll-y-contain border-r border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.98)_0%,rgba(245,250,245,0.96)_100%)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_24px_48px_rgba(15,43,31,0.22)] touch-pan-y transition-transform duration-300",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
@@ -454,16 +453,19 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
             <p className="mt-2 text-xs text-[var(--muted)]">Derniere synchro: {currentTime}</p>
           </div>
 
-          <button className="soft-focus mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#e5d2d2] bg-white text-sm font-medium text-[#9c3e3e] transition-all hover:bg-[#fff4f4]">
+          <Link
+            href="/login"
+            className="soft-focus mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#e5d2d2] bg-white text-sm font-medium text-[#9c3e3e] transition-all hover:bg-[#fff4f4]"
+          >
             <LogoutIcon className="h-4 w-4" />
             Deconnexion
-          </button>
+          </Link>
         </aside>
       </div>
 
-      <div className="relative z-10 h-screen min-w-0 overflow-y-auto px-3 pb-8 pt-3 transition-[margin-left] duration-300 ease-out sm:px-5 lg:ml-[var(--sidebar-width)] lg:px-7 lg:pt-6">
+      <div className="relative z-10 min-h-screen min-w-0 overflow-y-auto overscroll-y-contain scroll-smooth px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-3 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:px-7 md:pt-6">
         <header className="sticky top-3 z-50 mb-6 rounded-[22px] border border-[#d8e7d9] bg-[color:rgba(251,253,251,0.84)] px-3 py-3 shadow-[0_10px_28px_rgba(18,45,32,0.08)] backdrop-blur-md sm:px-4">
-          <div className="hidden items-center gap-3 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+          <div className="hidden items-center gap-3 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto]">
             <div className="flex items-center gap-2.5">
               <span className="inline-flex h-9 items-center rounded-full border border-[#d9e7da] bg-white px-2.5 text-sm shadow-[0_4px_10px_rgba(18,45,32,0.06)]">🇸🇳</span>
               <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#d9e7da] bg-white/88 px-3 text-xs font-medium text-[var(--muted)] shadow-[0_4px_10px_rgba(18,45,32,0.06)]">
@@ -512,7 +514,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
             </div>
           </div>
 
-          <div className="space-y-3 lg:hidden">
+          <div className="space-y-3 md:hidden">
             <div className="flex items-center gap-2">
               <button className="soft-focus rounded-xl border border-[#d9e7da] bg-white p-2 text-[var(--muted)] shadow-[0_4px_10px_rgba(18,45,32,0.05)]" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu">
                 <MenuIcon className="h-5 w-5" />
@@ -548,7 +550,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
             </div>
           </div>
 
-          <p className="mt-2 hidden text-right text-[11px] text-[var(--muted)] lg:block">{currentDate}</p>
+          <p className="mt-2 hidden text-right text-[11px] text-[var(--muted)] md:block">{currentDate}</p>
         </header>
 
         <div className="relative z-0">{children}</div>

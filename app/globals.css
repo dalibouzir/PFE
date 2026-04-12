@@ -508,7 +508,6 @@ h6 {
 
 @layer utilities {
   [data-liquid-glass] {
-    background: linear-gradient(140deg, rgba(255, 255, 255, 0.46), rgba(221, 245, 223, 0.2));
-    @apply shadow-[0_8px_32px_0_rgba(31,38,135,0.37)];
+    @apply border border-white/20 bg-black/20 shadow-lg backdrop-blur-md;
   }
 }
