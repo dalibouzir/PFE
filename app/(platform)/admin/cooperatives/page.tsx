@@ -64,10 +64,6 @@ function buildForm(record?: CooperativeRecord): CooperativeFormState {
   };
 }
 
-function cx(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
-
 export default function AdminCooperativesPage() {
   const [records, setRecords] = useState<CooperativeRecord[]>(cooperativeRecords);
   const [query, setQuery] = useState("");

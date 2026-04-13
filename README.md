@@ -1,4 +1,4 @@
-# WeeFarm Frontend
+# WeeFarm Web App
 
 Interface web de demonstration pour WeeFarm, une plateforme de gestion de cooperatives agricoles au Senegal.
 
@@ -6,11 +6,11 @@ Cette livraison est **frontend-only**: aucune logique backend, base de donnees, 
 
 ## Etat actuel du repo
 
-L'application Next.js est maintenant a la **racine du repository**.
+L'application Next.js tourne a la racine du repository.
 
-- Oui: il faut pousser le contenu de `frontend/` vers la racine (ce qui est fait)
-- Non: il ne faut pas deployer une app vide avec un dossier wrapper `frontend` comme point d'entree
-- Pour Vercel: laisse `Root Directory` vide (ou `.`)
+- Point d'entree: `app/` (App Router)
+- Root Directory Vercel: vide (ou `.`)
+- Commandes: `npm run dev`, `npm run build`, `npm run start`
 
 ## Perimetre fonctionnel implemente
 
@@ -35,7 +35,7 @@ L'application Next.js est maintenant a la **racine du repository**.
 
 ## Assistant IA (frontend-only)
 
-La page ` /manager/assistant-ia ` est une interface de chat de demonstration:
+La page `/manager/assistant-ia` est une interface de chat de demonstration:
 - zone conversation
 - suggestions de prompts
 - etat vide
@@ -44,7 +44,7 @@ La page ` /manager/assistant-ia ` est une interface de chat de demonstration:
 
 Non inclus:
 - appels LLM
-- RAG
+- RAG serveur
 - recommandations/predictions reelles
 - API backend
 
@@ -64,9 +64,10 @@ Fichier principal:
 - `components/` composants UI
 - `lib/` helpers + mock data
 - `public/` assets statiques
-- `backend/`, `database/`, `ai/` non utilises par cette demo frontend
+- `ai/`, `database/`, `docs/`, `docker/` ressources projet hors runtime frontend
 
-Routes principales:
+## Routes principales
+
 - `/admin/dashboard`
 - `/admin/cooperatives`
 - `/admin/managers`
@@ -112,18 +113,9 @@ npm run start
 4. **Root Directory**: vide (ou `.`)
 5. Deploy
 
-## Si Vercel affiche "Not Found"
-
-Verifier:
-- le projet pointe bien sur la branche contenant la migration vers la racine
-- `Root Directory` n'est plus `frontend`
-- le framework detecte est `Next.js`
-- un nouveau redeploy a ete lance apres la mise a jour
-
 ## Notes techniques
 
 - UI en francais, concise, dashboard-first
-- Design garde une direction agricole moderne et calme
 - Responsive desktop + mobile
 - Donnees locales realistes pour demo PFE
 

@@ -1,18 +1,16 @@
 # Architecture
 
 ## Overview
-- Frontend (`Next.js + TypeScript + Tailwind`): operational dashboard, transformation analysis UI, RAG chat UI.
-- Backend (`FastAPI`): API layer, orchestration, validation, service modules.
-- AI Layer (`ai/`): reusable RAG and analytics modules shared by backend services.
-- Database (`PostgreSQL + pgvector`): operational tables + vectorized knowledge base.
+- Web App (`Next.js + TypeScript + Tailwind`): admin and manager dashboards, analytics pages, and assistant IA demo UI.
+- Data Layer (`lib/mock-data.ts`): local mock datasets shared across pages for demo consistency.
+- Static Assets (`public/`): logos and visual assets used by the UI.
 
-## Service Flow
-1. Cooperative data is sent to `/api/inputs` and `/api/process`.
-2. `/api/analyze` computes loss/efficiency and anomaly flags.
-3. `/api/recommend` returns practical corrective actions.
-4. `/api/chat` runs RAG retrieval over `knowledge_chunks` and queries LLM.
+## Rendering Flow
+1. Next.js App Router serves route groups from `app/`.
+2. Route pages compose reusable UI from `components/`.
+3. Pages read mock entities from `lib/mock-data.ts` and render role-based views.
 
 ## Scalability Notes
-- Keep model providers behind service interfaces.
-- Move ingestion/embedding to async workers for large document sets.
-- Add Alembic for schema migrations as soon as schema starts evolving.
+- Replace mock data with API or database adapters behind `lib/` helpers.
+- Add API routes under `app/api` if server logic is needed in the same app.
+- Keep route-level loading and splitting for dashboard performance on mobile.

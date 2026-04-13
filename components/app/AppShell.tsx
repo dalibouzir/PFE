@@ -336,7 +336,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
       setNavLoading(false);
       navLoadingTimeoutRef.current = null;
     }, remaining);
-  }, [pathname]);
+  }, [navLoading, pathname]);
 
   useEffect(() => {
     return () => {

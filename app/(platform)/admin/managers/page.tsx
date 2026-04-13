@@ -46,10 +46,6 @@ function formatActivityStamp() {
   }).format(new Date());
 }
 
-function cx(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
-
 export default function AdminManagersPage() {
   const [records, setRecords] = useState<ManagerAccount[]>(managerAccounts);
   const [query, setQuery] = useState("");
