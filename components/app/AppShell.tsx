@@ -610,9 +610,9 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
           <div className={cx("transition-[filter,opacity] duration-200", navLoading && "pointer-events-none blur-[3px] saturate-75")}>{children}</div>
 
           {navLoading && (
-            <div className="absolute inset-0 z-[55] flex items-center justify-center px-3 sm:px-4">
+            <div className="absolute inset-0 z-[55] flex items-start justify-center px-3 pt-4 sm:px-4 sm:pt-8">
               <div className="absolute inset-0 bg-[color:rgba(240,247,241,0.36)] backdrop-blur-md" />
-              <div className="relative">
+              <div className="relative sticky top-3 sm:top-6">
                 <AgriBrandLoader
                   mode="panel"
                   title="Chargement de section"
