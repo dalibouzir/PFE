@@ -29,6 +29,7 @@ import {
   UsersIcon,
   WeatherIcon,
 } from "@/components/app/icons";
+import { AgriBrandLoader } from "@/components/ui/AgriBrandLoader";
 
 type IconRenderer = (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element;
 
@@ -122,7 +123,7 @@ function SidebarNav({
   pathname: string;
   collapsed: boolean;
   role: AppRole;
-  onNavigate?: () => void;
+  onNavigate?: (href: string) => void;
 }) {
   return (
     <nav className={cx(collapsed ? "space-y-2.5" : "space-y-1.5")}>
@@ -135,7 +136,7 @@ function SidebarNav({
             key={item.href}
             href={item.href}
             title={item.label}
-            onClick={onNavigate}
+            onClick={() => onNavigate?.(item.href)}
             className={cx(
               "group relative flex h-11 items-center overflow-hidden rounded-2xl text-[15px] font-semibold transition-all duration-200",
               collapsed ? "justify-center px-0" : "gap-2.5 px-3",
@@ -177,41 +178,48 @@ function ProfileDropdown({ open, role }: { open: boolean; role: AppRole }) {
 
   return (
     <div
-      className="shell-pop absolute right-0 top-[calc(100%+10px)] z-[80] w-64 rounded-2xl border border-white/20 bg-black/20 p-2 text-white shadow-lg backdrop-blur-md"
+      className="shell-pop absolute right-0 top-[calc(100%+10px)] z-[80] w-64 overflow-hidden rounded-[22px] border border-white/85 bg-[linear-gradient(148deg,rgba(255,255,255,0.78),rgba(255,255,255,0.48))] p-2 text-[var(--text)] shadow-[0_22px_48px_rgba(34,55,78,0.18)] backdrop-blur-[24px] backdrop-saturate-150"
     >
-      <div className="mb-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2.5">
-        <p className="text-sm font-semibold text-white">{meta.name}</p>
-        <p className="text-xs text-white/75">{meta.roleLabel}</p>
+      <div className="pointer-events-none absolute inset-0 rounded-[22px] bg-[linear-gradient(125deg,rgba(255,255,255,0.9),rgba(255,255,255,0.42)_44%,rgba(255,255,255,0.16)_82%)]" />
+      <div className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/95" />
+
+      <div className="relative">
+        <div className="mb-2 rounded-xl border border-white/70 bg-white/52 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+          <p className="text-sm font-semibold text-[var(--green-900)]">{meta.name}</p>
+          <p className="text-xs text-[var(--muted)]">{meta.roleLabel}</p>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-white/70 bg-white/38">
+          {profileMenu.map((item) => {
+            const Icon = item.icon;
+            const className = cx(
+              "soft-focus flex w-full items-center gap-2 px-3 py-2 text-sm font-medium transition-colors",
+              item.tone === "danger"
+                ? "text-[#8f2f2f] hover:bg-[#ffe8e8]/92"
+                : "text-[var(--green-900)] hover:bg-white/65",
+            );
+
+            const dangerClassName =
+              "soft-focus flex h-10 w-full items-center gap-2 border-t border-[#efd3d3]/90 bg-[#fff2f2]/84 px-3 text-sm font-medium text-[#8f2f2f] transition-colors duration-200 hover:bg-[#ffe7e7]";
+
+            if (item.href) {
+              return (
+                <Link key={item.label} href={item.href} className={cx(item.tone === "danger" ? dangerClassName : className, item.tone !== "danger" && "border-t border-[rgba(19,40,31,0.08)] first:border-t-0")}>
+                  <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[#b14949]" : "text-[var(--green-700)]")} />
+                  {item.label}
+                </Link>
+              );
+            }
+
+            return (
+              <button key={item.label} className={cx(className, "border-t border-[rgba(19,40,31,0.08)] first:border-t-0")} type="button">
+                <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[#b14949]" : "text-[var(--green-700)]")} />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
-
-      {profileMenu.map((item) => {
-        const Icon = item.icon;
-        const className = cx(
-          "soft-focus flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors",
-          item.tone === "danger"
-            ? "text-[#ffd4d4] hover:bg-[#4f1818]/45"
-            : "text-white/90 hover:bg-white/10",
-        );
-
-        const dangerClassName =
-          "soft-focus flex h-10 w-full items-center gap-2 rounded-xl border border-[#f3b6b6]/50 bg-[#3b1111]/30 px-3 text-sm font-medium text-[#ffd4d4] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#4e1515]/45";
-
-        if (item.href) {
-          return (
-            <Link key={item.label} href={item.href} className={item.tone === "danger" ? dangerClassName : className}>
-              <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[#ffc2c2]" : "text-white/70")} />
-              {item.label}
-            </Link>
-          );
-        }
-
-        return (
-          <button key={item.label} className={className} type="button">
-            <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[#ffc2c2]" : "text-white/70")} />
-            {item.label}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -287,9 +295,12 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [navLoading, setNavLoading] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const desktopProfileRef = useRef<HTMLDivElement>(null);
   const mobileProfileRef = useRef<HTMLDivElement>(null);
+  const navLoadingStartedAtRef = useRef(0);
+  const navLoadingTimeoutRef = useRef<number | null>(null);
   const meta = shellMeta[role];
 
   useEffect(() => {
@@ -311,6 +322,29 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
     setMobileOpen(false);
     setProfileOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!navLoading) return;
+
+    const elapsed = Date.now() - navLoadingStartedAtRef.current;
+    const remaining = Math.max(0, 320 - elapsed);
+    if (navLoadingTimeoutRef.current) {
+      window.clearTimeout(navLoadingTimeoutRef.current);
+    }
+
+    navLoadingTimeoutRef.current = window.setTimeout(() => {
+      setNavLoading(false);
+      navLoadingTimeoutRef.current = null;
+    }, remaining);
+  }, [pathname]);
+
+  useEffect(() => {
+    return () => {
+      if (navLoadingTimeoutRef.current) {
+        window.clearTimeout(navLoadingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const onDown = (event: MouseEvent) => {
@@ -371,14 +405,25 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
   const currentDate = dateFormatter.format(now);
   const shellLayoutStyle = { ["--sidebar-width" as string]: `${collapsed ? 92 : 258}px` } as React.CSSProperties;
 
+  const startNavTransition = (href: string) => {
+    if (href === pathname) return;
+    navLoadingStartedAtRef.current = Date.now();
+    if (navLoadingTimeoutRef.current) {
+      window.clearTimeout(navLoadingTimeoutRef.current);
+      navLoadingTimeoutRef.current = null;
+    }
+    setNavLoading(true);
+    setProfileOpen(false);
+  };
+
   return (
-    <div className="relative min-h-screen bg-transparent" style={shellLayoutStyle}>
+    <div className="relative h-[100dvh] overflow-hidden bg-transparent" style={shellLayoutStyle}>
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-width)] px-3 py-4 transition-[width] duration-300 ease-out md:block">
         <div className="flex h-full flex-col rounded-[24px] border border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.96)_0%,rgba(245,250,245,0.94)_100%)] p-3 shadow-[0_14px_38px_rgba(18,45,32,0.08)] backdrop-blur-md">
           <SidebarBrand collapsed={collapsed} role={role} onCollapse={() => setCollapsed(true)} onExpand={() => setCollapsed(false)} />
 
-          <div className="mt-5 flex-1">
-            <SidebarNav pathname={pathname} collapsed={collapsed} role={role} />
+          <div className="scroll-thin mt-5 flex-1 overflow-y-auto overscroll-y-contain pr-1">
+            <SidebarNav pathname={pathname} collapsed={collapsed} role={role} onNavigate={startNavTransition} />
           </div>
 
           <div className="mt-auto space-y-2.5">
@@ -440,7 +485,15 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
             </button>
           </div>
 
-          <SidebarNav pathname={pathname} collapsed={false} role={role} onNavigate={() => setMobileOpen(false)} />
+          <SidebarNav
+            pathname={pathname}
+            collapsed={false}
+            role={role}
+            onNavigate={(href) => {
+              startNavTransition(href);
+              setMobileOpen(false);
+            }}
+          />
 
           <div className="mt-4 rounded-2xl border border-[#d8e7d8] bg-white/85 p-3">
             <div className="flex items-center justify-between">
@@ -463,7 +516,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
         </aside>
       </div>
 
-      <div className="relative z-10 min-h-screen min-w-0 overflow-y-auto overscroll-y-contain scroll-smooth px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-3 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:px-7 md:pt-6">
+      <div className="relative z-10 h-full min-w-0 overflow-y-auto overscroll-y-contain scroll-smooth px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-3 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:px-7 md:pt-6">
         <header className="sticky top-3 z-50 mb-6 rounded-[22px] border border-[#d8e7d9] bg-[color:rgba(251,253,251,0.84)] px-3 py-3 shadow-[0_10px_28px_rgba(18,45,32,0.08)] backdrop-blur-md sm:px-4">
           <div className="hidden items-center gap-3 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto]">
             <div className="flex items-center gap-2.5">
@@ -553,7 +606,22 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
           <p className="mt-2 hidden text-right text-[11px] text-[var(--muted)] md:block">{currentDate}</p>
         </header>
 
-        <div className="relative z-0">{children}</div>
+        <div className="relative z-0">
+          <div className={cx("transition-[filter,opacity] duration-200", navLoading && "pointer-events-none blur-[3px] saturate-75")}>{children}</div>
+
+          {navLoading && (
+            <div className="absolute inset-0 z-[55] flex items-center justify-center px-3 sm:px-4">
+              <div className="absolute inset-0 bg-[color:rgba(240,247,241,0.36)] backdrop-blur-md" />
+              <div className="relative">
+                <AgriBrandLoader
+                  mode="panel"
+                  title="Chargement de section"
+                  subtitle="Mise a jour des donnees d'exploitation..."
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

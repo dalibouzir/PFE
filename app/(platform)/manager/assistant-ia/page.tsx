@@ -181,7 +181,7 @@ export default function AssistantIAPage() {
             <span className="rounded-full bg-[var(--green-200)] px-2.5 py-1 text-[11px] font-semibold text-[var(--green-800)]">Assistant IA</span>
           </div>
 
-          <div className="h-[430px] rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-3 sm:p-4">
+          <div className="h-[min(62dvh,430px)] rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-3 sm:h-[430px] sm:p-4">
             {messages.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center text-center">
                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#d9ecd8] text-lg">IA</div>
