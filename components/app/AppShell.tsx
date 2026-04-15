@@ -514,12 +514,15 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
         </div>
       </aside>
 
-      <div className={cx("fixed inset-0 z-[70] md:hidden transition-opacity duration-200", mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0")}>
+      <div
+        className={cx("fixed inset-x-0 bottom-0 z-40 md:hidden transition-opacity duration-200", mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0")}
+        style={{ top: `${loaderTop}px` }}
+      >
         <button className="absolute inset-0 bg-[#0f2f22]/45 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-label="Fermer le menu" />
 
         <aside
           className={cx(
-            "scroll-thin absolute left-0 top-0 h-[100svh] w-[min(86vw,290px)] overflow-y-auto overscroll-y-contain border-r border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.98)_0%,rgba(245,250,245,0.96)_100%)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_24px_48px_rgba(15,43,31,0.22)] touch-pan-y transition-transform duration-300",
+            "scroll-thin absolute left-0 top-0 h-full w-[min(86vw,290px)] overflow-y-auto overscroll-y-contain rounded-r-[28px] border border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.98)_0%,rgba(245,250,245,0.96)_100%)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_24px_48px_rgba(15,43,31,0.22)] touch-pan-y transition-transform duration-300",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
@@ -567,8 +570,14 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
         </aside>
       </div>
 
-      <div className="relative z-10 min-h-[100svh] min-w-0 overflow-x-clip px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-3 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:min-h-[100dvh] md:px-7 md:pt-6">
-        <header ref={headerRef} className="sticky top-3 z-50 mb-6 rounded-[22px] border border-[#d8e7d9] bg-[color:rgba(251,253,251,0.84)] px-3 py-3 shadow-[0_10px_28px_rgba(18,45,32,0.08)] backdrop-blur-md sm:px-4">
+      <div className="relative z-10 min-h-[100svh] min-w-0 px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-0 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:min-h-[100dvh] md:px-7 md:pt-6">
+        <header
+          ref={headerRef}
+          className={cx(
+            "fixed inset-x-3 top-3 z-50 mb-6 rounded-[22px] border border-[#d8e7d9] bg-[color:rgba(251,253,251,0.84)] px-3 py-3 shadow-[0_10px_28px_rgba(18,45,32,0.08)] backdrop-blur-md sm:inset-x-5 sm:px-4 md:sticky md:inset-x-auto md:top-3",
+            mobileOpen && "pointer-events-none",
+          )}
+        >
           <div className="hidden items-center gap-3 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto]">
             <div className="flex items-center gap-2.5">
               <span className="inline-flex h-9 items-center rounded-full border border-[#d9e7da] bg-white px-2.5 text-sm shadow-[0_4px_10px_rgba(18,45,32,0.06)]">🇸🇳</span>
@@ -656,6 +665,8 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
 
           <p className="mt-2 hidden text-right text-[11px] text-[var(--muted)] md:block">{currentDate}</p>
         </header>
+
+        <div className="md:hidden" aria-hidden="true" style={{ height: `${loaderTop}px` }} />
 
         <div className="relative z-0">
           <div className={cx("transition-[filter,opacity] duration-200", navLoading && "pointer-events-none blur-[5px] saturate-[0.72] opacity-45")}>{children}</div>
