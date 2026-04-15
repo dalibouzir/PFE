@@ -670,7 +670,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(241,247,242,0.82)_0%,rgba(239,245,240,0.74)_28%,rgba(238,244,239,0.56)_72%,rgba(238,244,239,0.18)_100%)] backdrop-blur-[16px] [mask-image:linear-gradient(180deg,black,black_72%,transparent)]" />
           <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.72),rgba(255,255,255,0))]" />
 
-          <div className="relative flex justify-center px-3 pt-2 sm:px-5 sm:pt-3 md:px-7">
+          <div className="relative flex h-full items-center justify-center px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-5 md:px-7">
             <AgriBrandLoader
               mode="panel"
               title="Chargement de section"
