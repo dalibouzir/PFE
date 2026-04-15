@@ -519,7 +519,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
 
         <aside
           className={cx(
-            "scroll-thin absolute left-0 top-0 h-[100svh] w-[min(86vw,290px)] overflow-y-auto overscroll-y-contain rounded-r-[28px] border border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.98)_0%,rgba(245,250,245,0.96)_100%)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_24px_48px_rgba(15,43,31,0.22)] touch-pan-y transition-transform duration-300",
+            "scroll-thin absolute inset-y-0 left-0 w-[min(86vw,290px)] overflow-y-auto overscroll-y-contain border-r border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.98)_0%,rgba(245,250,245,0.96)_100%)] px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))] shadow-[0_24px_48px_rgba(15,43,31,0.22)] touch-pan-y transition-transform duration-300",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
