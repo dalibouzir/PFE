@@ -514,15 +514,12 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
         </div>
       </aside>
 
-      <div
-        className={cx("fixed inset-x-0 bottom-0 z-40 md:hidden transition-opacity duration-200", mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0")}
-        style={{ top: `${loaderTop}px` }}
-      >
+      <div className={cx("fixed inset-0 z-[70] md:hidden transition-opacity duration-200", mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0")}>
         <button className="absolute inset-0 bg-[#0f2f22]/45 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-label="Fermer le menu" />
 
         <aside
           className={cx(
-            "scroll-thin absolute left-0 top-0 h-full w-[min(86vw,290px)] overflow-y-auto overscroll-y-contain rounded-r-[28px] border border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.98)_0%,rgba(245,250,245,0.96)_100%)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_24px_48px_rgba(15,43,31,0.22)] touch-pan-y transition-transform duration-300",
+            "scroll-thin absolute left-0 top-0 h-[100svh] w-[min(86vw,290px)] overflow-y-auto overscroll-y-contain rounded-r-[28px] border border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.98)_0%,rgba(245,250,245,0.96)_100%)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_24px_48px_rgba(15,43,31,0.22)] touch-pan-y transition-transform duration-300",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
