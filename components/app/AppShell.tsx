@@ -297,6 +297,8 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
   const [profileOpen, setProfileOpen] = useState(false);
   const [navLoading, setNavLoading] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  const [loaderTop, setLoaderTop] = useState(108);
+  const headerRef = useRef<HTMLElement>(null);
   const desktopProfileRef = useRef<HTMLDivElement>(null);
   const mobileProfileRef = useRef<HTMLDivElement>(null);
   const navLoadingStartedAtRef = useRef(0);
@@ -376,11 +378,60 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
   useEffect(() => {
     if (typeof document === "undefined") return;
 
-    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = mobileOpen ? "hidden" : previousBodyOverflow;
+    document.documentElement.style.overflow = mobileOpen ? "hidden" : previousHtmlOverflow;
+
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
     };
   }, [mobileOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let frame = 0;
+    const headerElement = headerRef.current;
+    const updateLoaderTop = () => {
+      frame = 0;
+      const rect = headerRef.current?.getBoundingClientRect();
+      const nextTop = rect ? Math.round(rect.bottom + (window.innerWidth >= 640 ? 18 : 12)) : 108;
+
+      setLoaderTop((previousTop) => (previousTop === nextTop ? previousTop : nextTop));
+    };
+
+    const queueUpdate = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(updateLoaderTop);
+    };
+
+    queueUpdate();
+
+    window.addEventListener("resize", queueUpdate);
+    window.addEventListener("scroll", queueUpdate, { passive: true });
+
+    const observer =
+      typeof ResizeObserver !== "undefined" && headerElement
+        ? new ResizeObserver(queueUpdate)
+        : null;
+
+    if (observer && headerElement) {
+      observer.observe(headerElement);
+    }
+
+    return () => {
+      window.removeEventListener("resize", queueUpdate);
+      window.removeEventListener("scroll", queueUpdate);
+      observer?.disconnect();
+
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [collapsed, pathname]);
 
   const timeFormatter = useMemo(
     () =>
@@ -417,7 +468,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
   };
 
   return (
-    <div className="relative h-[100dvh] overflow-hidden bg-transparent" style={shellLayoutStyle}>
+    <div className="relative min-h-[100svh] bg-transparent md:min-h-[100dvh]" style={shellLayoutStyle}>
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-width)] px-3 py-4 transition-[width] duration-300 ease-out md:block">
         <div className="flex h-full flex-col rounded-[24px] border border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.96)_0%,rgba(245,250,245,0.94)_100%)] p-3 shadow-[0_14px_38px_rgba(18,45,32,0.08)] backdrop-blur-md">
           <SidebarBrand collapsed={collapsed} role={role} onCollapse={() => setCollapsed(true)} onExpand={() => setCollapsed(false)} />
@@ -468,7 +519,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
 
         <aside
           className={cx(
-            "absolute left-0 top-0 h-[100dvh] w-[min(86vw,290px)] overflow-y-auto overscroll-y-contain border-r border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.98)_0%,rgba(245,250,245,0.96)_100%)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_24px_48px_rgba(15,43,31,0.22)] touch-pan-y transition-transform duration-300",
+            "scroll-thin absolute left-0 top-0 h-[100svh] w-[min(86vw,290px)] overflow-y-auto overscroll-y-contain border-r border-[#d7e7d9] bg-[linear-gradient(180deg,rgba(251,253,251,0.98)_0%,rgba(245,250,245,0.96)_100%)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_24px_48px_rgba(15,43,31,0.22)] touch-pan-y transition-transform duration-300",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
@@ -516,8 +567,8 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
         </aside>
       </div>
 
-      <div className="relative z-10 h-full min-w-0 overflow-y-auto overscroll-y-contain scroll-smooth px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-3 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:px-7 md:pt-6">
-        <header className="sticky top-3 z-50 mb-6 rounded-[22px] border border-[#d8e7d9] bg-[color:rgba(251,253,251,0.84)] px-3 py-3 shadow-[0_10px_28px_rgba(18,45,32,0.08)] backdrop-blur-md sm:px-4">
+      <div className="relative z-10 min-h-[100svh] min-w-0 overflow-x-clip px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-3 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:min-h-[100dvh] md:px-7 md:pt-6">
+        <header ref={headerRef} className="sticky top-3 z-50 mb-6 rounded-[22px] border border-[#d8e7d9] bg-[color:rgba(251,253,251,0.84)] px-3 py-3 shadow-[0_10px_28px_rgba(18,45,32,0.08)] backdrop-blur-md sm:px-4">
           <div className="hidden items-center gap-3 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto]">
             <div className="flex items-center gap-2.5">
               <span className="inline-flex h-9 items-center rounded-full border border-[#d9e7da] bg-white px-2.5 text-sm shadow-[0_4px_10px_rgba(18,45,32,0.06)]">🇸🇳</span>
@@ -607,22 +658,27 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
         </header>
 
         <div className="relative z-0">
-          <div className={cx("transition-[filter,opacity] duration-200", navLoading && "pointer-events-none blur-[3px] saturate-75")}>{children}</div>
-
-          {navLoading && (
-            <div className="absolute inset-0 z-[55] flex items-start justify-center px-3 pt-4 sm:px-4 sm:pt-8">
-              <div className="absolute inset-0 bg-[color:rgba(240,247,241,0.36)] backdrop-blur-md" />
-              <div className="relative sticky top-3 sm:top-6">
-                <AgriBrandLoader
-                  mode="panel"
-                  title="Chargement de section"
-                  subtitle="Mise a jour des donnees d'exploitation..."
-                />
-              </div>
-            </div>
-          )}
+          <div className={cx("transition-[filter,opacity] duration-200", navLoading && "pointer-events-none blur-[5px] saturate-[0.72] opacity-45")}>{children}</div>
         </div>
       </div>
+
+      {navLoading && (
+        <div
+          className="pointer-events-none fixed bottom-0 left-0 right-0 z-[45] md:left-[var(--sidebar-width)]"
+          style={{ top: `${loaderTop}px` }}
+        >
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(241,247,242,0.82)_0%,rgba(239,245,240,0.74)_28%,rgba(238,244,239,0.56)_72%,rgba(238,244,239,0.18)_100%)] backdrop-blur-[16px] [mask-image:linear-gradient(180deg,black,black_72%,transparent)]" />
+          <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.72),rgba(255,255,255,0))]" />
+
+          <div className="relative flex justify-center px-3 pt-2 sm:px-5 sm:pt-3 md:px-7">
+            <AgriBrandLoader
+              mode="panel"
+              title="Chargement de section"
+              subtitle="Mise a jour des donnees d'exploitation..."
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
