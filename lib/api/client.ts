@@ -1,6 +1,20 @@
 const DEFAULT_API_URL = "http://127.0.0.1:8000";
 const TOKEN_KEY = "weefarm_token";
-const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
+function isLocalHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function shouldUseDemoMode() {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return true;
+  if (typeof window === "undefined") return false;
+
+  const configuredApi = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configuredApi) return false;
+
+  // On hosted previews/prod without a configured backend URL, force demo mode.
+  return !isLocalHost(window.location.hostname);
+}
 
 export type ApiErrorPayload = {
   message: string;
@@ -74,7 +88,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     }
   }
 
-  if (DEMO_MODE && typeof window !== "undefined") {
+  if (shouldUseDemoMode() && typeof window !== "undefined") {
     const { mockApiFetch } = await import("@/lib/api/mock");
     return mockApiFetch<T>(path, {
       ...options,
