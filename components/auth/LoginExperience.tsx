@@ -18,7 +18,6 @@ export function LoginExperience() {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { isSubmitting },
   } = useForm<LoginForm>({
     defaultValues: {
@@ -36,11 +35,6 @@ export function LoginExperience() {
       setFormError(error instanceof Error ? error.message : "Connexion impossible.");
     }
   });
-
-  const fillDemo = () => {
-    setValue("email", "admin@weefarm.local");
-    setValue("password", "Admin123!");
-  };
 
   return (
     <main className="wf-login-page relative min-h-[100dvh] overflow-x-clip px-4 py-4 sm:px-[6vw] sm:py-5">
@@ -73,7 +67,7 @@ export function LoginExperience() {
                     Pilotage operations cooperative, de la collecte au bilan matiere.
                   </h1>
                   <p className="max-w-[520px] text-[14px] leading-relaxed text-[#23483a]/90">
-                    Interface demo pour administrer les cooperatives, suivre les membres, les lots, les stocks et les
+                    Interface pour administrer les cooperatives, suivre les membres, les lots, les stocks et les
                     transformations post-recolte.
                   </p>
                 </div>
@@ -96,7 +90,7 @@ export function LoginExperience() {
                     <Image src="/logo.png" alt="Logo WeeFarm" width={180} height={70} className="h-auto w-[160px] object-contain" priority />
                   </div>
                   <h3 className="mt-5 text-center text-[20px] font-medium text-[#18382d]">Connexion</h3>
-                  <p className="mt-1 text-center text-[13px] text-[#4e635b]">Acces demo role-based</p>
+                  <p className="mt-1 text-center text-[13px] text-[#4e635b]">Acces role-based</p>
 
                   <form className="mt-6 space-y-3.5" onSubmit={submitForm}>
                     <label className="block text-[14px] font-medium text-[#243730]">
@@ -135,24 +129,6 @@ export function LoginExperience() {
                       </p>
                     )}
                   </form>
-
-                  <div className="mt-5 flex items-center gap-3">
-                    <div className="h-px flex-1 bg-[#c9d5cf]" />
-                    <span className="text-[11px] uppercase tracking-[0.1em] text-[#6a7d75]">Demonstration</span>
-                    <div className="h-px flex-1 bg-[#c9d5cf]" />
-                  </div>
-
-                  <div className="mt-3 grid gap-2">
-                    <button
-                      type="button"
-                      onClick={fillDemo}
-                      className="block w-full rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-4 py-2.5 text-center text-[14px] font-medium text-[var(--text)] transition hover:border-[var(--primary)] hover:bg-[#eef7f1]"
-                    >
-                      Utiliser le demo Admin
-                    </button>
-                  </div>
-
-                  <div className="mt-4 text-center text-[12px] text-[#6a7d75]">Donnees locales de demonstration</div>
                 </div>
               </aside>
             </div>
@@ -164,7 +140,7 @@ export function LoginExperience() {
             <Image src="/logo.png" alt="Logo WeeFarm" width={24} height={24} className="h-5 w-6 object-contain" />
             <span className="font-medium tracking-[0.04em]">WEEFARM</span>
           </div>
-          <span className="whitespace-nowrap text-white/75">Demo locale WeeFarm</span>
+          <span className="whitespace-nowrap text-white/75">Plateforme WeeFarm</span>
         </footer>
       </div>
     </main>

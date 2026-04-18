@@ -109,7 +109,7 @@ export default function AdminSettingsPage() {
               <p className="text-sm font-semibold text-[var(--text)]">-</p>
             </div>
             <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
-              <p className="text-xs text-[var(--muted)]">Membres demo</p>
+              <p className="text-xs text-[var(--muted)]">Membres coopérative</p>
               <p className="text-sm font-semibold text-[var(--text)]">-</p>
             </div>
           </div>

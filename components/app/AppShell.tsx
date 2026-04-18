@@ -566,7 +566,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
                   </span>
                 </div>
                 <p className="mt-2 text-xs text-[#A9B4AD]">Derniere synchro: {currentTime}</p>
-                <p className="mt-1 text-[11px] text-[#A9B4AD]">Mode demo local</p>
+                <p className="mt-1 text-[11px] text-[#A9B4AD]">Mode production</p>
               </div>
             )}
 

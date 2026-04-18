@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import { AuthInput } from "@/components/auth/AuthInput";
 
 export function LoginCard() {
@@ -43,9 +42,7 @@ export function LoginCard() {
           <a href="#" className="text-emerald-100/85 transition hover:text-white hover:underline">
             Mot de passe oublié ?
           </a>
-          <Link href="/manager/dashboard" className="font-medium text-emerald-200 transition hover:text-white hover:underline">
-            Entrer en mode demo
-          </Link>
+          <span className="font-medium text-emerald-200">Connexion sécurisée</span>
         </div>
       </div>
     </section>

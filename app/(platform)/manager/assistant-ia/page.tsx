@@ -7,10 +7,8 @@ import {
   Bot,
   CalendarRange,
   CheckCheck,
-  ChevronDown,
   Copy,
   Lightbulb,
-  MessageSquare,
   Paperclip,
   Plus,
   Send,
@@ -23,6 +21,7 @@ import { PageIntro } from "@/components/ui/PageIntro";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
 import type { AssistantChatResponse } from "@/lib/api/types";
+import { useDashboard } from "@/hooks/useDashboard";
 
 type Tone = "normal" | "critical";
 
@@ -45,13 +44,6 @@ type RequestAnchorItem = {
   time: string;
 };
 
-type PreviousChatSummary = {
-  id: string;
-  title: string;
-  time: string;
-  messageCount: number;
-};
-
 type ConversationMessage = {
   id: string;
   role: "user" | "assistant";
@@ -71,6 +63,9 @@ type ChatMessageAIProps = {
   text: string;
   time: string;
   response?: AssistantChatResponse;
+  stageData: StageDatum[];
+  qtyIn: number;
+  qtyOut: number;
 };
 
 type MetricsCardSectionProps = {
@@ -104,23 +99,6 @@ type ChatComposerProps = {
   onChange: (value: string) => void;
   onSend: () => void;
 };
-
-type PreviousChatsMenuProps = {
-  items: PreviousChatSummary[];
-};
-
-const STAGE_DATA: StageDatum[] = [
-  { label: "Nettoyage", value: 8 },
-  { label: "Séchage", value: 18, tone: "critical" },
-  { label: "Tri", value: 9 },
-  { label: "Emballage", value: 4 },
-];
-
-const PREVIOUS_CHATS: PreviousChatSummary[] = [
-  { id: "chat-1", title: "Analyse pertes post-récolte semaine 16", time: "Aujourd'hui · 23:32", messageCount: 7 },
-  { id: "chat-2", title: "État des stocks critiques par produit", time: "Aujourd'hui · 21:48", messageCount: 5 },
-  { id: "chat-3", title: "Rendement oignon — comparaison inter-lots", time: "Hier · 20:15", messageCount: 9 },
-];
 
 function getNowTime() {
   return new Intl.DateTimeFormat("fr-SN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
@@ -274,12 +252,10 @@ function SourceChips({ items }: SourceChipsProps) {
   );
 }
 
-function ChatMessageAI({ id, text, time, response }: ChatMessageAIProps) {
+function ChatMessageAI({ id, text, time, response, stageData, qtyIn, qtyOut }: ChatMessageAIProps) {
   const dashboard = response?.dashboard;
   const lossPct = dashboard?.loss_rate ?? 18;
   const efficiencyPct = dashboard?.efficiency_rate ?? 82;
-  const qtyIn = 1000;
-  const qtyOut = Math.max(Math.round((qtyIn * efficiencyPct) / 100), 0);
   const recommendation = buildRecommendation(text);
   const sources = buildSourceChips(response);
 
@@ -308,7 +284,7 @@ function ChatMessageAI({ id, text, time, response }: ChatMessageAIProps) {
 
         <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_1.45fr_1fr]">
           <MetricsCardSection lossPct={lossPct} efficiencyPct={efficiencyPct} qtyIn={qtyIn} qtyOut={qtyOut} />
-          <StageComparisonChart data={STAGE_DATA} />
+          <StageComparisonChart data={stageData} />
           <RecommendationCardSection text={recommendation} />
         </div>
 
@@ -372,58 +348,6 @@ function RequestAnchorRail({ items, activeId, onSelect }: RequestAnchorRailProps
   );
 }
 
-function PreviousChatsMenu({ items }: PreviousChatsMenuProps) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onDown = (event: MouseEvent) => {
-      const node = event.target as Node;
-      if (!containerRef.current?.contains(node)) setOpen(false);
-    };
-
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, []);
-
-  return (
-    <div className="relative" ref={containerRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--text)] shadow-[0_4px_12px_rgba(35,30,21,0.06)] transition-colors hover:bg-[var(--surface-soft)]"
-      >
-        <MessageSquare className="h-4 w-4 text-[var(--muted)]" />
-        Chats précédents
-        <ChevronDown className={`h-4 w-4 text-[var(--muted)] transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-
-      {open && (
-        <div className="absolute right-0 z-30 mt-2 w-96 max-w-[80vw] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-2 shadow-[0_16px_36px_rgba(35,30,21,0.16)]">
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm font-semibold text-[var(--text)] transition-colors hover:bg-[var(--surface-soft)]"
-          >
-            <Plus className="h-4 w-4" />
-            Nouvelle conversation
-          </button>
-
-          <div className="mt-2 max-h-72 space-y-1 overflow-y-auto">
-            {items.map((item) => (
-              <button key={item.id} type="button" className="w-full rounded-xl px-3 py-2 text-left transition-colors hover:bg-[var(--surface-soft)]">
-                <p className="truncate text-sm font-semibold text-[var(--text)]">{item.title}</p>
-                <p className="mt-0.5 text-xs text-[var(--muted)]">
-                  {item.time} · {item.messageCount} messages
-                </p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ChatComposer({ value, pending, onChange, onSend }: ChatComposerProps) {
   return (
     <div className="shrink-0 space-y-3 rounded-[24px] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 shadow-[0_12px_26px_rgba(35,30,21,0.1)]">
@@ -463,6 +387,7 @@ function ChatComposer({ value, pending, onChange, onSend }: ChatComposerProps) {
 
 export default function AssistantIAPage() {
   const [draft, setDraft] = useState("");
+  const { data: dashboardData } = useDashboard();
   const [messages, setMessages] = useState<ConversationMessage[]>([
     {
       id: "assistant-welcome",
@@ -474,6 +399,57 @@ export default function AssistantIAPage() {
   const [activeRequestId, setActiveRequestId] = useState("");
   const streamEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(false);
+
+  const stageData = useMemo<StageDatum[]>(() => {
+    const steps = dashboardData?.recent_process_steps ?? [];
+    const grouped = new Map<string, { value: number; count: number }>();
+
+    for (const step of steps) {
+      const normalized = step.type.toLowerCase();
+      const label =
+        normalized.includes("sechage") || normalized.includes("séchage")
+          ? "Séchage"
+          : normalized.includes("nettoyage")
+            ? "Nettoyage"
+            : normalized.includes("tri")
+              ? "Tri"
+              : normalized.includes("conditionnement") || normalized.includes("emballage")
+                ? "Emballage"
+                : "Autre";
+
+      const current = grouped.get(label) ?? { value: 0, count: 0 };
+      grouped.set(label, { value: current.value + Math.max(step.loss_pct, 0), count: current.count + 1 });
+    }
+
+    const mapped = Array.from(grouped.entries()).map(([label, bucket]) => ({
+      label,
+      value: bucket.count > 0 ? Number((bucket.value / bucket.count).toFixed(1)) : 0,
+      tone: label === "Séchage" ? ("critical" as const) : ("normal" as const),
+    }));
+
+    if (!mapped.length) {
+      return [
+        { label: "Nettoyage", value: 0, tone: "normal" },
+        { label: "Séchage", value: 0, tone: "critical" },
+        { label: "Tri", value: 0, tone: "normal" },
+        { label: "Emballage", value: 0, tone: "normal" },
+      ];
+    }
+
+    return mapped;
+  }, [dashboardData?.recent_process_steps]);
+
+  const qtyIn = useMemo(() => {
+    const steps = dashboardData?.recent_process_steps ?? [];
+    if (!steps.length) return 0;
+    return Math.round(steps.reduce((sum, step) => sum + Math.max(step.qty_in, 0), 0) / steps.length);
+  }, [dashboardData?.recent_process_steps]);
+
+  const qtyOut = useMemo(() => {
+    const steps = dashboardData?.recent_process_steps ?? [];
+    if (!steps.length) return 0;
+    return Math.round(steps.reduce((sum, step) => sum + Math.max(step.qty_out, 0), 0) / steps.length);
+  }, [dashboardData?.recent_process_steps]);
 
   const askMutation = useMutation({
     mutationFn: (message: string) =>
@@ -552,10 +528,6 @@ export default function AssistantIAPage() {
     <main className="pb-4">
       <PageIntro title="Assistant IA" subtitle="Posez vos questions sur vos données. Je m'appuie sur les données de votre coopérative." />
 
-      <div className="-mt-1 mb-3 flex items-center justify-end">
-        <PreviousChatsMenu items={PREVIOUS_CHATS} />
-      </div>
-
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_56px]">
         <div className="min-w-0">
           <div className="flex h-[calc(100dvh-20.25rem)] min-h-[520px] flex-col gap-3">
@@ -564,7 +536,16 @@ export default function AssistantIAPage() {
                 entry.role === "user" ? (
                   <ChatMessageUser key={entry.id} id={entry.id} text={entry.text} time={entry.time} />
                 ) : (
-                  <ChatMessageAI key={entry.id} id={entry.id} text={entry.text} time={entry.time} response={entry.response} />
+                  <ChatMessageAI
+                    key={entry.id}
+                    id={entry.id}
+                    text={entry.text}
+                    time={entry.time}
+                    response={entry.response}
+                    stageData={stageData}
+                    qtyIn={qtyIn}
+                    qtyOut={qtyOut}
+                  />
                 ),
               )}
 
