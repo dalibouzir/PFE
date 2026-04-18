@@ -6,11 +6,11 @@ export function SimpleTable({ rows }: { rows: Row[] }) {
   return (
     <div className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "70ms" }}>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-left">
-          <thead className="bg-[var(--surface-soft)] text-xs uppercase tracking-wide text-[var(--muted)]">
+        <table className="wf-table min-w-full text-left">
+          <thead>
             <tr>
               {headers.map((header) => (
-                <th key={header} className="px-4 py-3 font-medium">
+                <th key={header} className="px-5 py-3.5 font-medium">
                   {header}
                 </th>
               ))}
@@ -18,9 +18,9 @@ export function SimpleTable({ rows }: { rows: Row[] }) {
           </thead>
           <tbody className="text-sm text-[var(--text)]">
             {rows.map((row, index) => (
-              <tr key={index} className="border-t border-[var(--line)] hover:bg-[var(--surface-soft)]/70">
+              <tr key={index}>
                 {headers.map((header) => (
-                  <td key={header} className="px-4 py-3">
+                  <td key={header} className="px-5 py-4">
                     {row[header]}
                   </td>
                 ))}

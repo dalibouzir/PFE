@@ -1,0 +1,75 @@
+export const endpoints = {
+  auth: {
+    login: "/auth/login",
+    me: "/auth/me",
+    updateMe: "/auth/me",
+  },
+  admin: {
+    cooperatives: "/admin/cooperatives",
+    managers: "/admin/managers",
+    users: "/admin/users",
+    disableUser: (userId: string) => `/admin/users/${userId}/disable`,
+    enableUser: (userId: string) => `/admin/users/${userId}/enable`,
+    deleteUser: (userId: string) => `/admin/users/${userId}`,
+  },
+  members: {
+    list: "/members",
+    detail: (id: string) => `/members/${id}`,
+    update: (id: string) => `/members/${id}`,
+    delete: (id: string) => `/members/${id}`,
+    contact: (id: string) => `/members/${id}/contact`,
+  },
+  fields: {
+    list: "/fields",
+    detail: (id: string) => `/fields/${id}`,
+    update: (id: string) => `/fields/${id}`,
+    delete: (id: string) => `/fields/${id}`,
+  },
+  products: {
+    list: "/products",
+    detail: (id: string) => `/products/${id}`,
+    update: (id: string) => `/products/${id}`,
+    delete: (id: string) => `/products/${id}`,
+  },
+  inputs: {
+    list: "/inputs",
+    detail: (id: string) => `/inputs/${id}`,
+    update: (id: string) => `/inputs/${id}`,
+    delete: (id: string) => `/inputs/${id}`,
+  },
+  stocks: {
+    list: "/stocks",
+    detail: (id: string) => `/stocks/${id}`,
+    update: (id: string) => `/stocks/${id}`,
+    increase: (id: string) => `/stocks/${id}/increase`,
+    decrease: (id: string) => `/stocks/${id}/decrease`,
+    delete: (id: string) => `/stocks/${id}`,
+  },
+  batches: {
+    list: "/batches",
+    detail: (id: string) => `/batches/${id}`,
+    update: (id: string) => `/batches/${id}`,
+    updateStatus: (id: string) => `/batches/${id}/status`,
+    delete: (id: string) => `/batches/${id}`,
+  },
+  processSteps: {
+    list: "/process-steps",
+    detail: (id: string) => `/process-steps/${id}`,
+    update: (id: string) => `/process-steps/${id}`,
+    complete: (id: string) => `/process-steps/${id}/complete`,
+    delete: (id: string) => `/process-steps/${id}`,
+  },
+  analytics: {
+    dashboard: "/analytics/dashboard",
+    batchMetrics: (id: string) => `/analytics/batches/${id}/metrics`,
+    batchAnomaly: (id: string) => `/analytics/batches/${id}/anomaly`,
+    batchRecommendation: (id: string) => `/analytics/batches/${id}/recommendation`,
+  },
+  chat: {
+    ask: "/chat",
+  },
+  reference: {
+    metrics: "/reference/metrics",
+    knowledge: "/reference/knowledge",
+  },
+};

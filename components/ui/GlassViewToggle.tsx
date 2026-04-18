@@ -18,7 +18,7 @@ export function GlassViewToggle({
   return (
     <div
       className={cx(
-        "inline-flex items-center gap-1 rounded-full border border-white/80 bg-white/45 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_6px_14px_rgba(21,44,33,0.08)] backdrop-blur-sm",
+        "inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface-soft)] p-1",
         className,
       )}
       aria-label="Affichage des donnees"
@@ -27,10 +27,10 @@ export function GlassViewToggle({
         type="button"
         onClick={() => onChange("table")}
         className={cx(
-          "soft-focus rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
+          "soft-focus rounded-full px-3 py-1.5 text-xs font-semibold transition",
           value === "table"
-            ? "bg-[var(--green-900)] text-white shadow-[0_8px_16px_rgba(20,61,43,0.26)]"
-            : "text-[var(--green-900)] hover:bg-white/65",
+            ? "bg-[var(--primary)] text-white"
+            : "text-[var(--text)] hover:bg-white",
         )}
       >
         Tableau
@@ -40,10 +40,10 @@ export function GlassViewToggle({
         type="button"
         onClick={() => onChange("cards")}
         className={cx(
-          "soft-focus rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
+          "soft-focus rounded-full px-3 py-1.5 text-xs font-semibold transition",
           value === "cards"
-            ? "bg-[var(--green-900)] text-white shadow-[0_8px_16px_rgba(20,61,43,0.26)]"
-            : "text-[var(--green-900)] hover:bg-white/65",
+            ? "bg-[var(--primary)] text-white"
+            : "text-[var(--text)] hover:bg-white",
         )}
       >
         Cartes

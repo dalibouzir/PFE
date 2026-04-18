@@ -8,7 +8,7 @@ export function LoginCard() {
       <div className="auth-card card-pop w-full max-w-md rounded-[24px] p-7 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
           <Image
-            src="/wefarm-logo.png"
+            src="/logo.png"
             alt="Logo WeFarm"
             width={36}
             height={36}

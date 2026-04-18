@@ -1,637 +1,917 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useForm } from "react-hook-form";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { LotAnalyticsPanel } from "@/components/workspace/LotAnalyticsPanel";
+import { LotActiveSidebar, type ActiveLotItem } from "@/components/workspace/LotActiveSidebar";
+import { LotHeroBanner } from "@/components/workspace/LotHeroBanner";
+import { LotProcessTable, type ProcessTableRow } from "@/components/workspace/LotProcessTable";
+import { LotProcessTimeline, type TimelineStage } from "@/components/workspace/LotProcessTimeline";
+import { LotRecommendationPanel, type LotRecommendationItem } from "@/components/workspace/LotRecommendationPanel";
+import { LotWorkspaceTabs, type LotWorkspaceTab } from "@/components/workspace/LotWorkspaceTabs";
+import { useBatches, useCreateBatch, useDeleteBatch, useUpdateBatch, useUpdateBatchStatus } from "@/hooks/useBatches";
+import { useDashboard } from "@/hooks/useDashboard";
+import { useCreateProcessStep, useDeleteProcessStep, useProcessSteps, useUpdateProcessStep } from "@/hooks/useProcessSteps";
+import { useProducts } from "@/hooks/useProducts";
+import type { Batch, BatchCreate, BatchStatusUpdate, ProcessStep, ProcessStepCreate, Recommendation } from "@/lib/api/types";
 import {
-  gradeFilters,
-  lotStageHistoryByCode,
-  lots,
-  productFilters,
-  type Grade,
-  type LotRecord,
-  type LotStageHistory,
-  type LotStatus,
-  type ProductName,
-  type StageName,
-} from "@/lib/mock-data";
+  LOT_WORKFLOW_STAGES,
+  buildSeasonFromDate,
+  phaseLabel,
+  stageFromType,
+  stageLabelFromType,
+  stageLossKg,
+  type WorkflowStageDef,
+} from "@/lib/ui/lot-workflow";
 
-const statusTone: Record<LotStatus, "success" | "warning" | "info" | "danger"> = {
-  Collecte: "info",
-  "En transformation": "warning",
-  Pret: "success",
-  Bloque: "danger",
+const batchStatusTone: Record<string, "success" | "warning" | "info" | "danger"> = {
+  created: "info",
+  in_progress: "warning",
+  completed: "success",
+  archived: "danger",
 };
 
-const stageTone: Record<LotStageHistory["state"], "success" | "warning" | "info"> = {
-  termine: "success",
-  "en cours": "warning",
-  "a venir": "info",
+const batchStatusLabel: Record<string, string> = {
+  created: "Cree",
+  in_progress: "En cours",
+  completed: "Termine",
+  archived: "Archive",
 };
 
-const stageLabel: Record<StageName, string> = {
-  nettoyage: "Nettoyage",
-  sechage: "Sechage",
-  tri: "Tri",
-  emballage: "Emballage",
-};
+const todayIso = new Date().toISOString().slice(0, 10);
 
-const productCode: Record<ProductName, string> = {
-  Mangue: "MG",
-  Arachide: "AR",
-  Mil: "ML",
-};
+type StagePreset = Pick<WorkflowStageDef, "key" | "label" | "icon" | "typeTag">;
 
-type LotFormState = {
-  date: string;
-  produit: ProductName;
-  memberNom: string;
-  gradeDominant: Grade;
-  initialQuantityKg: string;
-  status: LotStatus;
-};
-
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
+function normalizeTab(raw: string | null): LotWorkspaceTab {
+  if (raw === "overview") return "overview";
+  if (raw === "analytics") return "analytics";
+  if (raw === "recommendations") return "recommendations";
+  if (raw === "history") return "history";
+  return "process";
 }
 
-function buildForm(): LotFormState {
-  return {
-    date: todayIsoDate(),
-    produit: "Mangue",
-    memberNom: "",
-    gradeDominant: "A",
-    initialQuantityKg: "1200",
-    status: "Collecte",
-  };
+function recommendationPriority(item: Recommendation): LotRecommendationItem["priority"] {
+  if (item.risk_level.toLowerCase() === "high" || item.anomaly_score >= 70 || item.loss_pct >= 16) return "critical";
+  if (item.risk_level.toLowerCase() === "medium" || item.anomaly_score >= 35 || item.loss_pct >= 10) return "warning";
+  return "optimization";
 }
 
-function formatStageStatus(state: LotStageHistory["state"]) {
-  if (state === "termine") return "Termine";
-  if (state === "en cours") return "En cours";
-  return "A venir";
+function parseImpactedStep(item: Recommendation): string {
+  const text = `${item.rationale} ${item.suggested_action}`.toLowerCase();
+  const workflowStage = LOT_WORKFLOW_STAGES.find((stage) => stage.aliases.some((alias) => text.includes(alias)));
+  return workflowStage?.label ?? "Process global";
 }
 
-function createInitialHistory(status: LotStatus): LotStageHistory[] {
-  if (status === "Collecte") return [];
-
-  const base: LotStageHistory[] = [
-    { stage: "nettoyage", startedAt: "-", endedAt: null, state: "a venir", rendementPct: 0 },
-    { stage: "sechage", startedAt: "-", endedAt: null, state: "a venir", rendementPct: 0 },
-    { stage: "tri", startedAt: "-", endedAt: null, state: "a venir", rendementPct: 0 },
-    { stage: "emballage", startedAt: "-", endedAt: null, state: "a venir", rendementPct: 0 },
-  ];
-
-  if (status === "Bloque") {
-    return base.map((step, index) => {
-      if (index === 0) return { ...step, startedAt: "Aujourd hui, 08:30", endedAt: null, state: "en cours", rendementPct: 86.4 };
-      return step;
-    });
-  }
-
-  if (status === "Pret") {
-    return base.map((step, index) => ({
-      ...step,
-      startedAt: `Jour ${index + 1}, 08:00`,
-      endedAt: `Jour ${index + 1}, 12:00`,
-      state: "termine",
-      rendementPct: Number((95.8 - index * 1.2).toFixed(1)),
-    }));
-  }
-
-  return base.map((step, index) => {
-    if (index === 0) {
-      return { ...step, startedAt: "Aujourd hui, 08:10", endedAt: "Aujourd hui, 09:00", state: "termine", rendementPct: 96.2 };
-    }
-
-    if (index === 1) {
-      return { ...step, startedAt: "Aujourd hui, 09:20", endedAt: null, state: "en cours", rendementPct: 91.3 };
-    }
-
-    return step;
-  });
-}
-
-function advanceHistory(history: LotStageHistory[]): LotStageHistory[] {
-  if (history.length === 0) return createInitialHistory("En transformation");
-
-  const next = history.map((step) => ({ ...step }));
-  const currentIndex = next.findIndex((step) => step.state === "en cours");
-
-  if (currentIndex >= 0) {
-    next[currentIndex] = {
-      ...next[currentIndex],
-      state: "termine",
-      endedAt: "Aujourd hui",
-      rendementPct: Number(Math.max(next[currentIndex].rendementPct, 88.5).toFixed(1)),
-    };
-
-    if (currentIndex + 1 < next.length) {
-      next[currentIndex + 1] = {
-        ...next[currentIndex + 1],
-        state: "en cours",
-        startedAt: "Maintenant",
-        endedAt: null,
-        rendementPct: Number(Math.max(next[currentIndex + 1].rendementPct, 89.2).toFixed(1)),
-      };
-    }
-
-    return next;
-  }
-
-  const firstUpcomingIndex = next.findIndex((step) => step.state === "a venir");
-  if (firstUpcomingIndex >= 0) {
-    next[firstUpcomingIndex] = {
-      ...next[firstUpcomingIndex],
-      state: "en cours",
-      startedAt: "Maintenant",
-      endedAt: null,
-      rendementPct: Number(Math.max(next[firstUpcomingIndex].rendementPct, 90).toFixed(1)),
-    };
-  }
-
-  return next;
+function resolveStageStatus(step?: ProcessStep): "done" | "pending" | "warning" {
+  if (!step) return "pending";
+  return step.warning ? "warning" : "done";
 }
 
 export default function LotsPage() {
-  const [records, setRecords] = useState<LotRecord[]>(lots);
-  const [historyByCode, setHistoryByCode] = useState<Record<string, LotStageHistory[]>>(lotStageHistoryByCode);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryTab = searchParams.get("tab");
+  const queryLot = searchParams.get("lot");
+
+  const { data: batches = [] } = useBatches();
+  const { data: products = [] } = useProducts();
+  const { data: steps = [] } = useProcessSteps();
+  const { data: dashboard } = useDashboard();
+
+  const createBatch = useCreateBatch();
+  const updateBatch = useUpdateBatch();
+  const updateBatchStatus = useUpdateBatchStatus();
+  const deleteBatch = useDeleteBatch();
+  const createStep = useCreateProcessStep();
+  const updateStep = useUpdateProcessStep();
+  const deleteStep = useDeleteProcessStep();
+
+  const [activeTab, setActiveTab] = useState<LotWorkspaceTab>(() => normalizeTab(queryTab));
   const [query, setQuery] = useState("");
-  const [product, setProduct] = useState<"Tous" | ProductName>("Tous");
-  const [status, setStatus] = useState<"Tous" | LotStatus>("Tous");
-  const [viewMode, setViewMode] = useState<DataViewMode>("table");
-  const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [openCreateModal, setOpenCreateModal] = useState(false);
-  const [form, setForm] = useState<LotFormState>(buildForm());
-  const [formError, setFormError] = useState("");
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(queryLot);
 
-  const filtered = useMemo(() => {
-    return records.filter((item) => {
-      const byProduct = product === "Tous" || item.produit === product;
-      const byStatus = status === "Tous" || item.status === status;
-      const byText = `${item.code} ${item.memberNom} ${item.produit}`.toLowerCase().includes(query.toLowerCase());
-      return byProduct && byStatus && byText;
+  const [lotFormOpen, setLotFormOpen] = useState(false);
+  const [stepFormOpen, setStepFormOpen] = useState(false);
+  const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
+  const [editingStep, setEditingStep] = useState<ProcessStep | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const [lotSeason, setLotSeason] = useState("");
+  const [lotSurfaceHa, setLotSurfaceHa] = useState("1");
+  const [stepPreset, setStepPreset] = useState<StagePreset | null>(null);
+
+  const lotForm = useForm<BatchCreate>({
+    defaultValues: { product_id: "", code: "", creation_date: todayIso, initial_qty: 0 },
+  });
+  const stepForm = useForm<ProcessStepCreate>({
+    defaultValues: {
+      batch_id: "",
+      type: "",
+      date: todayIso,
+      qty_in: 0,
+      qty_out: 0,
+      waste_qty: 0,
+      notes: "",
+      status: "completed",
+      duration_minutes: undefined,
+    },
+  });
+
+  const watchQtyIn = Number(stepForm.watch("qty_in") ?? 0);
+  const watchWaste = Number(stepForm.watch("waste_qty") ?? 0);
+  const computedNet = Math.max(watchQtyIn - watchWaste, 0);
+  const computedLossPct = watchQtyIn > 0 ? (watchWaste / watchQtyIn) * 100 : 0;
+
+  const productLookup = useMemo(() => new Map(products.map((p) => [p.id, p.name])), [products]);
+
+  const filteredBatches = useMemo(() => {
+    const base = [...batches].sort((a, b) => b.creation_date.localeCompare(a.creation_date));
+    return base.filter((item) => {
+      const productName = productLookup.get(item.product_id) ?? "";
+      const text = `${item.code} ${item.product_id} ${productName}`.toLowerCase();
+      return text.includes(query.toLowerCase());
     });
-  }, [records, product, status, query]);
+  }, [batches, query, productLookup]);
 
-  const selectedLot = useMemo(() => records.find((item) => item.code === selectedCode) ?? null, [records, selectedCode]);
-  const selectedHistory = selectedLot ? historyByCode[selectedLot.code] ?? [] : [];
+  const selectedBatch = useMemo(() => {
+    if (selectedBatchId) {
+      const match = filteredBatches.find((item) => item.id === selectedBatchId);
+      if (match) return match;
+    }
+    return filteredBatches[0] ?? null;
+  }, [filteredBatches, selectedBatchId]);
 
-  const totalCurrentKg = filtered.reduce((sum, item) => sum + item.currentQuantityKg, 0);
-  const blockedCount = filtered.filter((item) => item.status === "Bloque").length;
-  const inTransformCount = filtered.filter((item) => item.status === "En transformation").length;
+  useEffect(() => {
+    setActiveTab(normalizeTab(queryTab));
+  }, [queryTab]);
 
-  const openLotDetails = (lot: LotRecord) => setSelectedCode(lot.code);
+  useEffect(() => {
+    if (queryLot) setSelectedBatchId(queryLot);
+  }, [queryLot]);
 
-  const handleStartTransformation = (code: string) => {
-    setRecords((prev) =>
-      prev.map((item) => {
-        if (item.code !== code) return item;
-        if (item.status === "Pret") return item;
+  useEffect(() => {
+    if (!selectedBatch && filteredBatches.length > 0) {
+      setSelectedBatchId(filteredBatches[0].id);
+    }
+  }, [filteredBatches, selectedBatch]);
 
-        return {
-          ...item,
-          status: item.status === "Bloque" ? "Bloque" : "En transformation",
-          progressionPct: Math.max(item.progressionPct, 34),
-        };
-      }),
+  const stepsByBatch = useMemo(() => {
+    const grouped = new Map<string, ProcessStep[]>();
+    for (const step of steps) {
+      const list = grouped.get(step.batch_id) ?? [];
+      list.push(step);
+      grouped.set(step.batch_id, list);
+    }
+    for (const [batchId, list] of grouped.entries()) {
+      grouped.set(
+        batchId,
+        list.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+      );
+    }
+    return grouped;
+  }, [steps]);
+
+  const selectedSteps = useMemo(() => {
+    if (!selectedBatch) return [];
+    return stepsByBatch.get(selectedBatch.id) ?? [];
+  }, [stepsByBatch, selectedBatch]);
+
+  const selectedRecommendations = useMemo(() => {
+    if (!selectedBatch) return [];
+    return (dashboard?.recent_recommendations ?? []).filter((item) => item.batch_id === selectedBatch.id);
+  }, [dashboard?.recent_recommendations, selectedBatch]);
+
+  const recommendationCards = useMemo<LotRecommendationItem[]>(() => {
+    return selectedRecommendations.map((item) => {
+      const priority = recommendationPriority(item);
+      return {
+        id: `${item.batch_id}-${item.anomaly_score}-${item.loss_pct}`,
+        title:
+          priority === "critical"
+            ? `Priorite critique lot ${item.batch_id.slice(0, 8)}`
+            : priority === "warning"
+              ? `Correction recommandee lot ${item.batch_id.slice(0, 8)}`
+              : `Optimisation lot ${item.batch_id.slice(0, 8)}`,
+        priority,
+        rationale: item.reasons[0] ?? item.rationale,
+        impactedStep: parseImpactedStep(item),
+        expectedEffect: `Perte cible < ${Math.max(item.loss_pct - 2, 0).toFixed(1)}%`,
+        action: item.suggested_action || "Poursuivre le monitoring avec un point de controle terrain.",
+      };
+    });
+  }, [selectedRecommendations]);
+
+  const lotTotals = useMemo(() => {
+    const qtyIn = selectedSteps.reduce((sum, step) => sum + step.qty_in, 0);
+    const qtyOut = selectedSteps.reduce((sum, step) => sum + step.qty_out, 0);
+    const lossKg = selectedSteps.reduce((sum, step) => sum + stageLossKg(step), 0);
+    const efficiencyPct = qtyIn > 0 ? (qtyOut / qtyIn) * 100 : 0;
+    return { qtyIn, qtyOut, lossKg, efficiencyPct };
+  }, [selectedSteps]);
+
+  const stageMetrics = useMemo(() => {
+    const grouped = new Map<
+      string,
+      { qtyIn: number; qtyOut: number; loss: number; efficiency: number; count: number; anomalies: number }
+    >();
+    selectedSteps.forEach((step) => {
+      const key = stageLabelFromType(step.type);
+      const current = grouped.get(key) ?? { qtyIn: 0, qtyOut: 0, loss: 0, efficiency: 0, count: 0, anomalies: 0 };
+      current.qtyIn += step.qty_in;
+      current.qtyOut += step.qty_out;
+      current.loss += step.loss_pct;
+      current.efficiency += step.efficiency_pct;
+      current.count += 1;
+      if (step.warning || step.loss_pct >= 12) current.anomalies += 1;
+      grouped.set(key, current);
+    });
+
+    return Array.from(grouped.entries()).map(([stage, values]) => ({
+      stage,
+      qtyIn: values.qtyIn,
+      qtyOut: values.qtyOut,
+      lossPct: values.count > 0 ? values.loss / values.count : 0,
+      efficiencyPct: values.count > 0 ? values.efficiency / values.count : 0,
+      anomalies: values.anomalies,
+    }));
+  }, [selectedSteps]);
+
+  const workflowRows = useMemo<ProcessTableRow[]>(() => {
+    const stageStep = new Map<string, ProcessStep>();
+    const customRows: ProcessTableRow[] = [];
+
+    selectedSteps.forEach((step) => {
+      const mapped = stageFromType(step.type);
+      if (!mapped) {
+        customRows.push({
+          key: `custom-${step.id}`,
+          label: stageLabelFromType(step.type),
+          icon: "🧩",
+          typeTag: "personnalise",
+          phase: "post_harvest",
+          status: resolveStageStatus(step),
+          step,
+        });
+        return;
+      }
+      stageStep.set(mapped.key, step);
+    });
+
+    const ordered = LOT_WORKFLOW_STAGES.map<ProcessTableRow>((stage) => ({
+      key: stage.key,
+      label: stage.label,
+      icon: stage.icon,
+      typeTag: stage.typeTag,
+      phase: stage.phase,
+      step: stageStep.get(stage.key),
+      status: resolveStageStatus(stageStep.get(stage.key)),
+    }));
+
+    return [...ordered, ...customRows];
+  }, [selectedSteps]);
+
+  const timelineRows = useMemo<TimelineStage[]>(
+    () =>
+      workflowRows
+        .filter((row) => !row.key.startsWith("custom-"))
+        .map((row) => ({
+          key: row.key,
+          label: row.label,
+          icon: row.icon,
+          typeTag: row.typeTag,
+          phase: row.phase,
+          status: row.status,
+          qtyOut: row.step?.qty_out,
+          lossKg: row.step ? stageLossKg(row.step) : undefined,
+        })),
+    [workflowRows],
+  );
+
+  const lotSidebarItems = useMemo<ActiveLotItem[]>(() => {
+    return filteredBatches.map((batch) => {
+      const lotSteps = stepsByBatch.get(batch.id) ?? [];
+      const matched = lotSteps.map((step) => stageFromType(step.type)).filter((item): item is WorkflowStageDef => Boolean(item));
+      const uniqueDone = new Set(matched.map((item) => item.key)).size;
+      const latest = matched[matched.length - 1];
+      const progressPct = (uniqueDone / LOT_WORKFLOW_STAGES.length) * 100;
+      return {
+        id: batch.id,
+        code: batch.code,
+        productName: productLookup.get(batch.product_id) ?? batch.product_id.slice(0, 8),
+        seasonLabel: buildSeasonFromDate(batch.creation_date),
+        phaseLabel: phaseLabel(latest?.phase ?? "pre_harvest"),
+        stepsDone: uniqueDone,
+        stepsTotal: LOT_WORKFLOW_STAGES.length,
+        currentQty: batch.current_qty,
+        progressPct,
+        statusLabel: batchStatusLabel[batch.status] ?? batch.status,
+        statusTone: batchStatusTone[batch.status] ?? "info",
+      };
+    });
+  }, [filteredBatches, stepsByBatch, productLookup]);
+
+  const anomalyCount = selectedSteps.filter((step) => step.warning || step.loss_pct >= 12).length;
+  const latestRecommendation = recommendationCards[0] ?? null;
+  const selectedSeason = selectedBatch ? buildSeasonFromDate(selectedBatch.creation_date) : "";
+  const selectedLossPct = selectedBatch?.initial_qty
+    ? Math.max(((selectedBatch.initial_qty - selectedBatch.current_qty) / selectedBatch.initial_qty) * 100, 0)
+    : 0;
+
+  const historyItems = useMemo(() => {
+    if (!selectedBatch) return [];
+    const stepItems = selectedSteps
+      .map((step) => ({
+        id: step.id,
+        title: stageLabelFromType(step.type),
+        detail: `In ${step.qty_in.toFixed(1)} kg · Out ${step.qty_out.toFixed(1)} kg · Perte ${step.loss_pct.toFixed(1)}%`,
+        date: step.date,
+      }))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return [
+      {
+        id: `batch-${selectedBatch.id}`,
+        title: `Lot ${selectedBatch.code} cree`,
+        detail: `Quantite initiale ${selectedBatch.initial_qty.toFixed(1)} kg`,
+        date: selectedBatch.creation_date,
+      },
+      ...stepItems,
+    ];
+  }, [selectedBatch, selectedSteps]);
+
+  const updateQuery = (nextTab: LotWorkspaceTab, nextLotId?: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", nextTab);
+    const lotValue = typeof nextLotId === "string" ? nextLotId : selectedBatch?.id;
+    if (lotValue) params.set("lot", lotValue);
+    else params.delete("lot");
+    router.replace(`/manager/lots?${params.toString()}`, { scroll: false });
+  };
+
+  const handleSwitchTab = (tab: LotWorkspaceTab) => {
+    setActiveTab(tab);
+    updateQuery(tab);
+  };
+
+  const handleSelectLot = (lotId: string) => {
+    setSelectedBatchId(lotId);
+    updateQuery(activeTab, lotId);
+  };
+
+  const openCreateLot = () => {
+    setEditingBatch(null);
+    lotForm.reset({ product_id: products[0]?.id ?? "", code: "", creation_date: todayIso, initial_qty: 0 });
+    setLotSeason(buildSeasonFromDate(todayIso));
+    setLotSurfaceHa("1");
+    setFormError(null);
+    setLotFormOpen(true);
+  };
+
+  const openEditLot = (batch: Batch) => {
+    setEditingBatch(batch);
+    lotForm.reset({
+      product_id: batch.product_id,
+      code: batch.code,
+      creation_date: batch.creation_date,
+      initial_qty: batch.initial_qty,
+    });
+    setLotSeason(buildSeasonFromDate(batch.creation_date));
+    setLotSurfaceHa("1");
+    setFormError(null);
+    setLotFormOpen(true);
+  };
+
+  const openCreateStep = (preset?: StagePreset) => {
+    setEditingStep(null);
+    setStepPreset(preset ?? null);
+    stepForm.reset({
+      batch_id: selectedBatch?.id ?? batches[0]?.id ?? "",
+      type: preset?.label ?? "",
+      date: todayIso,
+      qty_in: 0,
+      qty_out: 0,
+      waste_qty: 0,
+      notes: "",
+      status: "completed",
+      duration_minutes: undefined,
+    });
+    setFormError(null);
+    setStepFormOpen(true);
+  };
+
+  const openEditStep = (step: ProcessStep) => {
+    const mapped = stageFromType(step.type);
+    setEditingStep(step);
+    setStepPreset(
+      mapped
+        ? {
+            key: mapped.key,
+            label: mapped.label,
+            icon: mapped.icon,
+            typeTag: mapped.typeTag,
+          }
+        : null,
     );
+    stepForm.reset({
+      batch_id: step.batch_id,
+      type: step.type,
+      date: step.date,
+      qty_in: step.qty_in,
+      qty_out: step.qty_out,
+      waste_qty: stageLossKg(step),
+      notes: step.notes ?? "",
+      status: step.status,
+      duration_minutes: step.duration_minutes ?? undefined,
+    });
+    setFormError(null);
+    setStepFormOpen(true);
+  };
 
-    setHistoryByCode((prev) => {
-      const current = prev[code] ?? [];
-      if (current.length > 0) return prev;
-      return { ...prev, [code]: createInitialHistory("En transformation") };
+  const closeForms = () => {
+    setLotFormOpen(false);
+    setStepFormOpen(false);
+    setFormError(null);
+    setStepPreset(null);
+  };
+
+  const submitLot = lotForm.handleSubmit(async (values) => {
+    setFormError(null);
+    try {
+      const payload: BatchCreate = {
+        product_id: values.product_id,
+        code: values.code.trim(),
+        creation_date: values.creation_date,
+        initial_qty: Number(values.initial_qty),
+      };
+
+      if (editingBatch) {
+        await updateBatch.mutateAsync({ id: editingBatch.id, payload });
+      } else {
+        const created = await createBatch.mutateAsync(payload);
+        setSelectedBatchId(created.id);
+      }
+      closeForms();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible d'enregistrer le lot.");
+    }
+  });
+
+  const submitStep = stepForm.handleSubmit(async (values) => {
+    setFormError(null);
+    try {
+      const qtyIn = Number(values.qty_in);
+      const wasteQty = Math.max(Number(values.waste_qty ?? 0), 0);
+      const qtyOut = Math.max(qtyIn - wasteQty, 0);
+
+      const payload: ProcessStepCreate = {
+        batch_id: values.batch_id,
+        type: (values.type?.trim() || stepPreset?.label || "Etape personnalisee").trim(),
+        date: values.date,
+        qty_in: qtyIn,
+        qty_out: qtyOut,
+        waste_qty: wasteQty,
+        notes: values.notes?.trim() || null,
+        status: values.status || "completed",
+        duration_minutes: values.duration_minutes ? Number(values.duration_minutes) : undefined,
+      };
+
+      if (editingStep) {
+        await updateStep.mutateAsync({ id: editingStep.id, payload });
+      } else {
+        await createStep.mutateAsync(payload);
+      }
+      closeForms();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible d'enregistrer l'etape.");
+    }
+  });
+
+  const handleDeleteLot = async (batch: Batch) => {
+    if (!window.confirm("Supprimer ce lot ?")) return;
+    try {
+      await deleteBatch.mutateAsync(batch.id);
+      if (selectedBatch?.id === batch.id) {
+        setSelectedBatchId(null);
+      }
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible de supprimer le lot.");
+    }
+  };
+
+  const handleDeleteStep = async (step: ProcessStep) => {
+    if (!window.confirm("Supprimer cette etape ?")) return;
+    try {
+      await deleteStep.mutateAsync(step.id);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible de supprimer l'etape.");
+    }
+  };
+
+  const handleBatchStatusChange = async (batch: Batch, status: string) => {
+    try {
+      const payload: BatchStatusUpdate = { status };
+      await updateBatchStatus.mutateAsync({ id: batch.id, payload });
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible de modifier le statut.");
+    }
+  };
+
+  const handleOpenCustomStep = () => {
+    if (activeTab !== "process") handleSwitchTab("process");
+    openCreateStep();
+  };
+
+  const handleEnterStage = (row: ProcessTableRow) => {
+    openCreateStep({
+      key: row.key,
+      label: row.label,
+      icon: row.icon,
+      typeTag: row.typeTag,
     });
   };
 
-  const handleAdvanceLot = (code: string) => {
-    setRecords((prev) =>
-      prev.map((item) => {
-        if (item.code !== code) return item;
-        if (item.status === "Pret") return item;
-
-        const nextProgress = Math.min(100, item.progressionPct + 12);
-        const lossRatio = Math.max(0.07, (100 - nextProgress) / 500 + 0.06);
-        const nextCurrent = Math.round(item.initialQuantityKg * (1 - lossRatio));
-
-        return {
-          ...item,
-          progressionPct: nextProgress,
-          currentQuantityKg: Math.max(0, nextCurrent),
-          status: nextProgress >= 100 ? "Pret" : "En transformation",
-        };
-      }),
-    );
-
-    setHistoryByCode((prev) => ({
-      ...prev,
-      [code]: advanceHistory(prev[code] ?? []),
-    }));
-  };
-
-  const openCreate = () => {
-    setForm(buildForm());
-    setFormError("");
-    setOpenCreateModal(true);
-  };
-
-  const closeCreate = () => {
-    setOpenCreateModal(false);
-    setFormError("");
-  };
-
-  const submitCreate = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!form.memberNom.trim()) {
-      setFormError("Le nom du membre source est requis.");
-      return;
-    }
-
-    const initialQuantityKg = Number(form.initialQuantityKg);
-    if (!Number.isFinite(initialQuantityKg) || initialQuantityKg <= 0) {
-      setFormError("La quantite initiale doit etre superieure a 0.");
-      return;
-    }
-
-    const sameProductCount = records.filter((item) => item.produit === form.produit).length + 1;
-    const yymm = `${form.date.slice(2, 4)}${form.date.slice(5, 7)}`;
-    const nextCode = `LT-${productCode[form.produit]}-${yymm}-${String(sameProductCount).padStart(2, "0")}`;
-
-    const progressionByStatus: Record<LotStatus, number> = {
-      Collecte: 12,
-      "En transformation": 42,
-      Pret: 100,
-      Bloque: 28,
-    };
-
-    const currentQuantityKg =
-      form.status === "Pret"
-        ? Math.round(initialQuantityKg * 0.88)
-        : form.status === "En transformation"
-          ? Math.round(initialQuantityKg * 0.94)
-          : initialQuantityKg;
-
-    const created: LotRecord = {
-      id: `LOT-${String(records.length + 1).padStart(3, "0")}`,
-      code: nextCode,
-      produit: form.produit,
-      createdAt: form.date,
-      initialQuantityKg,
-      currentQuantityKg,
-      status: form.status,
-      progressionPct: progressionByStatus[form.status],
-      gradeDominant: form.gradeDominant,
-      memberNom: form.memberNom.trim(),
-    };
-
-    setRecords((prev) => [created, ...prev]);
-    setHistoryByCode((prev) => ({
-      ...prev,
-      [created.code]: createInitialHistory(created.status),
-    }));
-
-    setSelectedCode(created.code);
-    closeCreate();
-  };
+  const stepModalTitle = editingStep
+    ? `Saisir - ${stepPreset?.label ?? stageLabelFromType(editingStep.type)}`
+    : `Saisir - ${stepPreset?.label ?? "Etape personnalisee"}`;
 
   return (
-    <main>
-      <PageIntro title="Lots" subtitle="Suivi avance des lots avec actions locales, progression dynamique et modals glass." />
+    <main className="min-w-0 overflow-x-hidden">
+      <PageIntro
+        title="Flux matiere"
+        subtitle="Workspace lot-centrique: suivi des etapes, pertes, analytique et recommandations dans un seul ecran."
+      />
 
-      <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
-        <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_auto]">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="soft-focus rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
-            placeholder="Rechercher un lot ou membre..."
-          />
-
-          <select
-            value={product}
-            onChange={(event) => setProduct(event.target.value as "Tous" | ProductName)}
-            className="soft-focus rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
-          >
-            <option>Tous produits</option>
-            {productFilters.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-
-          <select
-            value={status}
-            onChange={(event) => setStatus(event.target.value as "Tous" | LotStatus)}
-            className="soft-focus rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
-          >
-            <option>Tous statuts</option>
-            <option>Collecte</option>
-            <option>En transformation</option>
-            <option>Pret</option>
-            <option>Bloque</option>
-          </select>
-
-          <button onClick={openCreate} className="soft-focus rounded-xl bg-[var(--green-900)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--green-800)]">
-            Creer lot
-          </button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="grid grow gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
-              <p className="text-xs text-[var(--muted)]">Lots visibles</p>
-              <p className="text-lg font-semibold text-[var(--green-900)]">{filtered.length}</p>
-            </div>
-            <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
-              <p className="text-xs text-[var(--muted)]">Volume actuel</p>
-              <p className="text-lg font-semibold text-[var(--green-900)]">{totalCurrentKg.toLocaleString("fr-FR")} kg</p>
-            </div>
-            <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
-              <p className="text-xs text-[var(--muted)]">En risque / actif</p>
-              <p className="text-lg font-semibold text-[var(--green-900)]">
-                {blockedCount} bloques · {inTransformCount} en transfo
-              </p>
-            </div>
+      <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "30ms" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={openCreateLot} className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold">
+              + Nouveau lot
+            </button>
+            <button type="button" onClick={handleOpenCustomStep} className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold">
+              + Etape personnalisee
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSwitchTab("recommendations")}
+              className="soft-focus rounded-xl border border-[#D0C4FF] bg-[#F3EEFF] px-4 py-2 text-sm font-semibold text-[#6A4DE0] hover:brightness-95"
+            >
+              Conseils IA
+            </button>
           </div>
 
-          <GlassViewToggle value={viewMode} onChange={setViewMode} className="shrink-0" />
+          <div className="w-full sm:w-[320px]">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="soft-focus wf-input w-full px-3 py-2.5 text-sm"
+              placeholder="Rechercher un lot..."
+            />
+          </div>
         </div>
       </section>
 
-      {filtered.length === 0 ? (
-        <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "90ms" }}>
-          <p className="text-sm text-[var(--muted)]">Aucun lot ne correspond aux filtres.</p>
-        </section>
-      ) : viewMode === "table" ? (
-        <section className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "90ms" }}>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-[var(--surface-soft)] text-xs uppercase tracking-wide text-[var(--muted)]">
-                <tr>
-                  <th className="px-4 py-3">Code lot</th>
-                  <th className="px-4 py-3">Produit</th>
-                  <th className="px-4 py-3">Creation</th>
-                  <th className="px-4 py-3">Initial</th>
-                  <th className="px-4 py-3">Actuel</th>
-                  <th className="px-4 py-3">Statut</th>
-                  <th className="px-4 py-3">Progression</th>
-                  <th className="px-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((item) => (
-                  <tr key={item.id} className="border-t border-[var(--line)] hover:bg-[var(--surface-soft)]/70">
-                    <td className="px-4 py-3 font-medium text-[var(--text)]">{item.code}</td>
-                    <td className="px-4 py-3">{item.produit}</td>
-                    <td className="px-4 py-3">{item.createdAt}</td>
-                    <td className="px-4 py-3">{item.initialQuantityKg.toLocaleString("fr-FR")} kg</td>
-                    <td className="px-4 py-3">{item.currentQuantityKg.toLocaleString("fr-FR")} kg</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge label={item.status} tone={statusTone[item.status]} />
-                    </td>
-                    <td className="min-w-[160px] px-4 py-3">
-                      <div className="h-2 rounded-full bg-[#e2ede4]">
-                        <div className="h-2 rounded-full bg-[var(--green-700)]" style={{ width: `${item.progressionPct}%` }} />
-                      </div>
-                      <p className="mt-1 text-[11px] text-[var(--muted)]">{item.progressionPct}%</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5 text-xs">
-                        <button className="rounded-full border border-[var(--line)] px-2.5 py-1 font-semibold text-[var(--green-700)] hover:border-[var(--green-500)]" onClick={() => openLotDetails(item)}>
-                          Details
-                        </button>
-                        <button
-                          className="rounded-full border border-[var(--line)] px-2.5 py-1 text-[var(--muted)] hover:text-[var(--green-700)]"
-                          onClick={() => handleStartTransformation(item.code)}
-                        >
-                          Demarrer
-                        </button>
-                        <button className="rounded-full border border-[var(--line)] px-2.5 py-1 text-[var(--muted)] hover:text-[var(--green-700)]" onClick={() => handleAdvanceLot(item.code)}>
-                          + Etape
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {!selectedBatch ? (
+        <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "60ms" }}>
+          <p className="text-sm text-[var(--muted)]">Aucun lot disponible. Creez un lot pour demarrer le pilotage.</p>
         </section>
       ) : (
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((item, index) => (
-            <article key={item.id} className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: `${90 + index * 30}ms` }}>
-              <div className="flex items-start justify-between gap-2">
+        <section className="min-w-0 grid gap-4 xl:grid-cols-[300px_1fr]">
+          <LotActiveSidebar
+            items={lotSidebarItems}
+            selectedId={selectedBatch.id}
+            onSelect={handleSelectLot}
+            onCreateLot={openCreateLot}
+          />
+
+          <div className="min-w-0 space-y-4">
+            <LotHeroBanner
+              lotCode={selectedBatch.code}
+              productName={productLookup.get(selectedBatch.product_id) ?? selectedBatch.product_id.slice(0, 8)}
+              seasonLabel={selectedSeason}
+              initialQty={selectedBatch.initial_qty}
+              currentQty={selectedBatch.current_qty}
+              lossPct={selectedLossPct}
+              statusLabel={batchStatusLabel[selectedBatch.status] ?? selectedBatch.status}
+              statusTone={batchStatusTone[selectedBatch.status] ?? "info"}
+              onEditLot={() => openEditLot(selectedBatch)}
+            />
+
+            <LotWorkspaceTabs activeTab={activeTab} onChange={handleSwitchTab} includeHistory />
+
+            {activeTab === "process" && (
+              <section className="min-w-0 space-y-4">
+                <LotProcessTimeline stages={timelineRows} />
+                <LotProcessTable rows={workflowRows} onEnterStage={handleEnterStage} onEditStep={openEditStep} />
+              </section>
+            )}
+
+            {activeTab === "overview" && (
+              <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+                <article className="premium-card reveal rounded-2xl p-5" style={{ ["--delay" as string]: "90ms" }}>
+                  <h3 className="text-base font-semibold text-[var(--text)]">Vue d&apos;ensemble lot</h3>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+                      <p className="text-[11px] text-[var(--muted)]">Etapes executees</p>
+                      <p className="text-sm font-semibold text-[var(--text)]">{selectedSteps.length}</p>
+                    </div>
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+                      <p className="text-[11px] text-[var(--muted)]">Anomalies</p>
+                      <p className={`text-sm font-semibold ${anomalyCount > 0 ? "text-[var(--danger)]" : "text-[var(--info)]"}`}>{anomalyCount}</p>
+                    </div>
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+                      <p className="text-[11px] text-[var(--muted)]">Efficacite globale</p>
+                      <p className="text-sm font-semibold text-[var(--text)]">{lotTotals.efficiencyPct.toFixed(1)}%</p>
+                    </div>
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+                      <p className="text-[11px] text-[var(--muted)]">Statut lot</p>
+                      <select
+                        value={selectedBatch.status}
+                        onChange={(event) => handleBatchStatusChange(selectedBatch, event.target.value)}
+                        className="wf-input mt-1 w-full px-2 py-1 text-xs"
+                      >
+                        <option value="created">Cree</option>
+                        <option value="in_progress">En cours</option>
+                        <option value="completed">Termine</option>
+                        <option value="archived">Archive</option>
+                      </select>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="premium-card reveal rounded-2xl p-5" style={{ ["--delay" as string]: "110ms" }}>
+                  <h3 className="text-base font-semibold text-[var(--text)]">Derniere recommandation IA</h3>
+                  {latestRecommendation ? (
+                    <div className="mt-3 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-[var(--text)]">{latestRecommendation.title}</p>
+                        <StatusBadge
+                          label={latestRecommendation.priority === "critical" ? "Prioritaire" : latestRecommendation.priority === "warning" ? "Important" : "Optimisation"}
+                          tone={latestRecommendation.priority === "critical" ? "danger" : latestRecommendation.priority === "warning" ? "warning" : "ai"}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs text-[var(--muted)]">{latestRecommendation.rationale}</p>
+                      <p className="mt-2 text-xs font-semibold text-[var(--ai-accent)]">{latestRecommendation.expectedEffect}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchTab("recommendations")}
+                        className="mt-3 text-xs font-semibold text-[var(--ai-accent)] hover:underline"
+                      >
+                        Voir toutes les recommandations
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm text-[var(--muted)]">Aucune recommandation specifique pour ce lot.</p>
+                  )}
+                </article>
+              </section>
+            )}
+
+            {activeTab === "analytics" && (
+              <LotAnalyticsPanel
+                stageMetrics={stageMetrics}
+                totals={{
+                  qtyIn: lotTotals.qtyIn,
+                  qtyOut: lotTotals.qtyOut,
+                  lossKg: lotTotals.lossKg,
+                  efficiencyPct: lotTotals.efficiencyPct,
+                }}
+                anomalyCount={anomalyCount}
+              />
+            )}
+
+            {activeTab === "recommendations" && <LotRecommendationPanel items={recommendationCards} />}
+
+            {activeTab === "history" && (
+              <article className="premium-card reveal rounded-2xl p-5" style={{ ["--delay" as string]: "110ms" }}>
+                <h3 className="text-base font-semibold text-[var(--text)]">Historique lot</h3>
+                <div className="mt-3 space-y-2">
+                  {historyItems.length === 0 ? (
+                    <p className="text-sm text-[var(--muted)]">Aucun historique disponible.</p>
+                  ) : (
+                    historyItems.map((item) => (
+                      <div key={item.id} className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium text-[var(--text)]">{item.title}</p>
+                          <p className="text-[11px] text-[var(--muted)]">{item.date}</p>
+                        </div>
+                        <p className="text-xs text-[var(--muted)]">{item.detail}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </article>
+            )}
+
+            <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "140ms" }}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-[var(--green-900)]">{item.code}</p>
-                  <p className="text-xs text-[var(--muted)]">{item.produit} · {item.memberNom}</p>
+                  <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Gestion lot</p>
+                  <p className="text-sm font-medium text-[var(--text)]">
+                    Lot {selectedBatch.code} · {productLookup.get(selectedBatch.product_id) ?? selectedBatch.product_id.slice(0, 8)}
+                  </p>
                 </div>
-                <StatusBadge label={item.status} tone={statusTone[item.status]} />
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-2.5 py-2">
-                  <p className="text-[var(--muted)]">Initial</p>
-                  <p className="font-semibold text-[var(--green-900)]">{item.initialQuantityKg.toLocaleString("fr-FR")} kg</p>
+                <div className="flex items-center gap-3">
+                  <button type="button" className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => openEditLot(selectedBatch)}>
+                    Modifier lot
+                  </button>
+                  <button type="button" className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => handleDeleteLot(selectedBatch)}>
+                    Supprimer lot
+                  </button>
                 </div>
-                <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-2.5 py-2">
-                  <p className="text-[var(--muted)]">Actuel</p>
-                  <p className="font-semibold text-[var(--green-900)]">{item.currentQuantityKg.toLocaleString("fr-FR")} kg</p>
-                </div>
-              </div>
-
-              <div className="mt-3 h-2 rounded-full bg-[#e2ede4]">
-                <div className="h-2 rounded-full bg-[var(--green-700)]" style={{ width: `${item.progressionPct}%` }} />
-              </div>
-              <p className="mt-1 text-[11px] text-[var(--muted)]">Progression {item.progressionPct}%</p>
-
-              <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
-                <button className="rounded-full border border-[var(--line)] px-2.5 py-1 font-semibold text-[var(--green-700)] hover:border-[var(--green-500)]" onClick={() => openLotDetails(item)}>
-                  Details
-                </button>
-                <button className="rounded-full border border-[var(--line)] px-2.5 py-1 text-[var(--muted)] hover:text-[var(--green-700)]" onClick={() => handleStartTransformation(item.code)}>
-                  Demarrer
-                </button>
-                <button className="rounded-full border border-[var(--line)] px-2.5 py-1 text-[var(--muted)] hover:text-[var(--green-700)]" onClick={() => handleAdvanceLot(item.code)}>
-                  + Etape
-                </button>
               </div>
             </article>
-          ))}
+          </div>
         </section>
       )}
 
       <LiquidGlassModal
-        open={openCreateModal}
-        onClose={closeCreate}
-        title="Creer un lot"
-        subtitle="Creation locale avec generation automatique du code lot."
-        size="lg"
+        open={lotFormOpen}
+        onClose={closeForms}
+        title={editingBatch ? "Modifier lot - Flux de matiere" : "Nouveau lot - Flux de matiere"}
+        subtitle="Le lot reste la racine de toutes les vues operationnelles."
+        closeLabel="✕"
+        size="md"
         footer={
-          <div className="flex flex-wrap justify-end gap-2">
-            <button className="soft-focus w-full rounded-xl border border-white/85 bg-white/55 px-4 py-2 text-sm text-[var(--green-900)] hover:bg-white/75 sm:w-auto" onClick={closeCreate} type="button">
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold" onClick={closeForms}>
               Annuler
             </button>
-            <button className="soft-focus w-full rounded-xl bg-[var(--green-900)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--green-800)] sm:w-auto" form="lot-form" type="submit">
-              Creer lot
+            <button type="submit" form="lot-form" className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold" disabled={lotForm.formState.isSubmitting}>
+              {lotForm.formState.isSubmitting ? "Enregistrement..." : editingBatch ? "Mettre a jour lot" : "Creer le lot"}
             </button>
           </div>
         }
       >
-        <form id="lot-form" onSubmit={submitCreate} className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm text-[var(--muted)]">
-            Date creation
+        <form id="lot-form" onSubmit={submitLot} className="space-y-3">
+          <input type="hidden" {...lotForm.register("creation_date", { required: "Date requise." })} />
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Reference du lot
             <input
-              type="date"
-              value={form.date}
-              onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))}
-              className="soft-focus mt-1 w-full rounded-xl border border-white/85 bg-white/65 px-3 py-2.5 text-sm"
+              {...lotForm.register("code", { required: "Code requis." })}
+              className="wf-input mt-2 h-11 w-full px-3 text-sm"
+              placeholder="LOT-MO4LMN8P"
             />
           </label>
 
-          <label className="text-sm text-[var(--muted)]">
-            Produit
-            <select
-              value={form.produit}
-              onChange={(event) => setForm((prev) => ({ ...prev, produit: event.target.value as ProductName }))}
-              className="soft-focus mt-1 w-full rounded-xl border border-white/85 bg-white/65 px-3 py-2.5 text-sm"
-            >
-              {productFilters.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Culture
+              <select {...lotForm.register("product_id", { required: "Produit requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+                <option value="" disabled>
+                  Selectionner
+                </option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="text-sm text-[var(--muted)] sm:col-span-2">
-            Membre source
-            <input
-              value={form.memberNom}
-              onChange={(event) => setForm((prev) => ({ ...prev, memberNom: event.target.value }))}
-              className="soft-focus mt-1 w-full rounded-xl border border-white/85 bg-white/65 px-3 py-2.5 text-sm"
-              placeholder="Ex: Awa Diop"
-            />
-          </label>
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Saison
+              <input
+                value={lotSeason}
+                onChange={(event) => setLotSeason(event.target.value)}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+                placeholder="2024-2025"
+              />
+            </label>
 
-          <label className="text-sm text-[var(--muted)]">
-            Quantite initiale (kg)
-            <input
-              type="number"
-              min={1}
-              value={form.initialQuantityKg}
-              onChange={(event) => setForm((prev) => ({ ...prev, initialQuantityKg: event.target.value }))}
-              className="soft-focus mt-1 w-full rounded-xl border border-white/85 bg-white/65 px-3 py-2.5 text-sm"
-            />
-          </label>
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Surface (ha)
+              <input
+                value={lotSurfaceHa}
+                onChange={(event) => setLotSurfaceHa(event.target.value)}
+                type="number"
+                min="0"
+                step="0.1"
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+              />
+            </label>
 
-          <label className="text-sm text-[var(--muted)]">
-            Grade dominant
-            <select
-              value={form.gradeDominant}
-              onChange={(event) => setForm((prev) => ({ ...prev, gradeDominant: event.target.value as Grade }))}
-              className="soft-focus mt-1 w-full rounded-xl border border-white/85 bg-white/65 px-3 py-2.5 text-sm"
-            >
-              {gradeFilters.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Qte initiale prevue (kg)
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                {...lotForm.register("initial_qty", { required: "Quantite requise.", valueAsNumber: true })}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+              />
+            </label>
+          </div>
 
-          <label className="text-sm text-[var(--muted)] sm:col-span-2">
-            Statut initial
-            <select
-              value={form.status}
-              onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as LotStatus }))}
-              className="soft-focus mt-1 w-full rounded-xl border border-white/85 bg-white/65 px-3 py-2.5 text-sm"
-            >
-              <option>Collecte</option>
-              <option>En transformation</option>
-              <option>Bloque</option>
-              <option>Pret</option>
-            </select>
-          </label>
+          <div className="rounded-xl border border-[#BDD6FB] bg-[#EEF5FF] px-3 py-2 text-xs text-[#2F80ED]">
+            12 etapes standards disponibles: 4 pre-recolte + 8 post-recolte.
+          </div>
 
-          {formError && <p className="sm:col-span-2 rounded-xl border border-[#ecc9c9] bg-[#fff1f1]/90 px-3 py-2 text-xs text-[#8d3d3d]">{formError}</p>}
+          {formError && <p className="rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">{formError}</p>}
         </form>
       </LiquidGlassModal>
 
       <LiquidGlassModal
-        open={Boolean(selectedLot)}
-        onClose={() => setSelectedCode(null)}
-        title={selectedLot ? `Detail ${selectedLot.code}` : "Detail lot"}
-        subtitle={selectedLot ? `${selectedLot.produit} · ${selectedLot.memberNom}` : ""}
-        size="xl"
+        open={stepFormOpen}
+        onClose={closeForms}
+        title={stepModalTitle}
+        subtitle={selectedBatch ? `Lot ${selectedBatch.code}` : "Selectionnez un lot"}
+        closeLabel="✕"
+        size="md"
         footer={
-          <div className="flex flex-wrap justify-end gap-2">
-            {selectedLot && selectedLot.status !== "Pret" && (
-              <button
-                className="soft-focus w-full rounded-xl border border-white/85 bg-white/55 px-4 py-2 text-sm text-[var(--green-900)] hover:bg-white/75 sm:w-auto"
-                onClick={() => handleAdvanceLot(selectedLot.code)}
-                type="button"
-              >
-                Avancer d&apos;une etape
-              </button>
-            )}
-            <button className="soft-focus w-full rounded-xl bg-[var(--green-900)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--green-800)] sm:w-auto" onClick={() => setSelectedCode(null)} type="button">
-              Fermer
+          <div className="flex items-center justify-between gap-3">
+            <button type="submit" form="step-form" className="soft-focus wf-btn-primary flex-1 px-4 py-2 text-sm font-semibold" disabled={stepForm.formState.isSubmitting}>
+              {stepForm.formState.isSubmitting ? "Enregistrement..." : "Enregistrer"}
+            </button>
+            <button type="button" className="soft-focus wf-btn-secondary flex-1 px-4 py-2 text-sm font-semibold" onClick={closeForms}>
+              Annuler
             </button>
           </div>
         }
       >
-        {selectedLot && (
-          <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-white/75 bg-white/52 p-3">
-                <p className="text-xs text-[var(--muted)]">Produit</p>
-                <p className="text-sm font-semibold text-[var(--green-900)]">{selectedLot.produit}</p>
-              </div>
-              <div className="rounded-xl border border-white/75 bg-white/52 p-3">
-                <p className="text-xs text-[var(--muted)]">Grade dominant</p>
-                <p className="text-sm font-semibold text-[var(--green-900)]">{selectedLot.gradeDominant}</p>
-              </div>
-              <div className="rounded-xl border border-white/75 bg-white/52 p-3">
-                <p className="text-xs text-[var(--muted)]">Membre source</p>
-                <p className="text-sm font-semibold text-[var(--green-900)]">{selectedLot.memberNom}</p>
-              </div>
-              <div className="rounded-xl border border-white/75 bg-white/52 p-3">
-                <p className="text-xs text-[var(--muted)]">Rendement actuel</p>
-                <p className="text-sm font-semibold text-[var(--green-900)]">{((selectedLot.currentQuantityKg / selectedLot.initialQuantityKg) * 100).toFixed(1)}%</p>
-              </div>
-            </div>
+        <form id="step-form" onSubmit={submitStep} className="space-y-3">
+          <input type="hidden" {...stepForm.register("batch_id", { required: "Lot requis." })} />
+          <input type="hidden" {...stepForm.register("status")} />
 
-            <div className="rounded-xl border border-white/75 bg-white/52 p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-[var(--green-900)]">Progression lot</p>
-                <StatusBadge label={selectedLot.status} tone={statusTone[selectedLot.status]} />
-              </div>
-              <div className="h-2 rounded-full bg-[#dceadb]">
-                <div className="h-2 rounded-full bg-[var(--green-700)]" style={{ width: `${selectedLot.progressionPct}%` }} />
-              </div>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                {selectedLot.progressionPct}% · {selectedLot.currentQuantityKg.toLocaleString("fr-FR")} kg / {selectedLot.initialQuantityKg.toLocaleString("fr-FR")} kg
-              </p>
-            </div>
+          {stepPreset ? (
+            <input type="hidden" {...stepForm.register("type", { required: "Type requis." })} />
+          ) : (
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Nom de l&apos;etape
+              <input
+                {...stepForm.register("type", { required: "Type requis." })}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+                placeholder="Etape personnalisee"
+              />
+            </label>
+          )}
 
-            <div>
-              <h4 className="text-sm font-semibold text-[var(--green-900)]">Historique etapes</h4>
-              <div className="mt-2 space-y-2">
-                {selectedHistory.length === 0 && <p className="rounded-xl border border-white/75 bg-white/52 px-3 py-2 text-sm text-[var(--muted)]">Aucune etape enregistree pour ce lot.</p>}
-                {selectedHistory.map((step) => (
-                  <div key={step.stage} className="rounded-xl border border-white/75 bg-white/52 px-3 py-2.5 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-medium text-[var(--green-900)]">{stageLabel[step.stage]}</p>
-                      <StatusBadge label={formatStageStatus(step.state)} tone={stageTone[step.state]} />
-                    </div>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      Debut: {step.startedAt} · Fin: {step.endedAt ?? "-"} · Rendement: {step.rendementPct.toFixed(1)}%
-                    </p>
-                  </div>
-                ))}
+          <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">{stepPreset?.icon ?? "🧩"}</span>
+              <div>
+                <p className="text-sm font-semibold text-[var(--text)]">{stepPreset?.label ?? (stepForm.watch("type") || "Etape personnalisee")}</p>
+                <p className="text-xs text-[var(--muted)]">{stepPreset?.typeTag ?? "personnalise"}</p>
               </div>
             </div>
           </div>
-        )}
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Quantite (kg)
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              {...stepForm.register("qty_in", { required: "Quantite requise.", valueAsNumber: true })}
+              className="wf-input mt-2 h-11 w-full px-3 text-sm"
+            />
+          </label>
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Pertes (kg)
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              {...stepForm.register("waste_qty", { valueAsNumber: true })}
+              className="wf-input mt-2 h-11 w-full px-3 text-sm"
+            />
+          </label>
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Date de realisation
+            <input
+              type="date"
+              {...stepForm.register("date", { required: "Date requise." })}
+              className="wf-input mt-2 h-11 w-full px-3 text-sm"
+            />
+          </label>
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Notes / Observations
+            <textarea {...stepForm.register("notes")} className="wf-input mt-2 min-h-[84px] w-full px-3 py-2 text-sm" placeholder="Observations sur cette etape..." />
+          </label>
+
+          <div className="rounded-xl border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs font-medium text-[#b23b3b]">
+            Taux de perte: {computedLossPct.toFixed(1)}% · Quantite nette: {computedNet.toFixed(1)} kg
+          </div>
+
+          {editingStep && (
+            <button
+              type="button"
+              onClick={() => handleDeleteStep(editingStep)}
+              className="text-xs font-semibold text-[var(--danger)] hover:underline"
+            >
+              Supprimer cette etape
+            </button>
+          )}
+
+          {formError && <p className="rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">{formError}</p>}
+        </form>
       </LiquidGlassModal>
     </main>
   );
