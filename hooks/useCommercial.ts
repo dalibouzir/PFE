@@ -58,6 +58,20 @@ export function useSetCatalogProductStatus() {
   });
 }
 
+export function useDeleteCatalogProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<CatalogProduct>(endpoints.commercial.catalogDelete(id), {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["commercial", "catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+    },
+  });
+}
+
 export function useCommercialOrders(params?: { status?: CommercialOrderStatus | "all"; search?: string }) {
   return useQuery({
     queryKey: ["commercial", "orders", params ?? {}],

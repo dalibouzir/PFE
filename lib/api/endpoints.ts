@@ -86,6 +86,7 @@ export const endpoints = {
   },
   commercial: {
     catalog: "/commercial/catalog",
+    catalogDelete: (id: string) => `/commercial/catalog/${id}`,
     catalogStatus: (id: string, status: "active" | "hidden") => `/commercial/catalog/${id}/status?status=${status}`,
     orders: "/commercial/orders",
     orderStatus: (id: string) => `/commercial/orders/${id}/status`,

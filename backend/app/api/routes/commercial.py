@@ -45,6 +45,11 @@ def update_catalog_status(catalog_product_id: UUID, status: str = Query(..., min
     return commercial_service.set_catalog_status(db, current_manager, catalog_product_id, status)
 
 
+@router.delete("/catalog/{catalog_product_id}", response_model=CatalogProductRead, summary="Delete a catalog product.")
+def delete_catalog(catalog_product_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+    return commercial_service.delete_catalog_product(db, current_manager, catalog_product_id)
+
+
 @router.get("/orders", response_model=List[CommercialOrderRead], summary="List commercial orders.")
 def list_orders(
     status: str | None = Query(default=None),

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { useProducts } from "@/hooks/useProducts";
 import {
@@ -8,6 +9,7 @@ import {
   useCommercialOrderStats,
   useCommercialOrders,
   useCreateCatalogProduct,
+  useDeleteCatalogProduct,
   useSetCatalogProductStatus,
   useUpdateCatalogProduct,
   useUpdateCommercialOrderStatus,
@@ -101,6 +103,7 @@ export default function CommercialisationPage() {
   };
 
   const [tab, setTab] = useState<"catalog" | "orders" | "stats">("catalog");
+  const [catalogViewMode, setCatalogViewMode] = useState<DataViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<"all" | CommercialOrderStatus>("all");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
@@ -123,6 +126,7 @@ export default function CommercialisationPage() {
   const { data: stats } = useCommercialOrderStats();
   const createCatalogProduct = useCreateCatalogProduct();
   const updateCatalogProduct = useUpdateCatalogProduct();
+  const deleteCatalogProduct = useDeleteCatalogProduct();
   const setCatalogProductStatus = useSetCatalogProductStatus();
   const updateOrderStatus = useUpdateCommercialOrderStatus();
 
@@ -211,6 +215,15 @@ export default function CommercialisationPage() {
     await setCatalogProductStatus.mutateAsync({ id: item.id, status: next });
   }
 
+  async function handleDeleteCatalog(item: CatalogProduct) {
+    if (!window.confirm(`Supprimer "${item.name}" du catalogue ?`)) return;
+    try {
+      await deleteCatalogProduct.mutateAsync(item.id);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Impossible de supprimer le produit.");
+    }
+  }
+
   async function handleOrderAction(order: CommercialOrder, nextStatus: CommercialOrderStatus) {
     await updateOrderStatus.mutateAsync({
       id: order.id,
@@ -250,55 +263,132 @@ export default function CommercialisationPage() {
             <button type="button" onClick={openCreateModal} className="soft-focus rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--primary-hover)]">
               + Nouveau produit catalogue
             </button>
-            <p className="text-xs text-[var(--muted)]">Ces produits sont visibles dans l&apos;app consommateur.</p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-[var(--muted)]">Ces produits sont visibles dans l&apos;app consommateur.</p>
+              <GlassViewToggle value={catalogViewMode} onChange={setCatalogViewMode} className="shrink-0" />
+            </div>
           </section>
 
-          {visibleCatalog.length === 0 ? (
-            <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "40ms" }}>
-              <p className="text-sm text-[var(--muted)]">Aucun produit catalogue pour le moment.</p>
-            </section>
+          {catalogViewMode === "cards" ? (
+            <>
+              {visibleCatalog.length === 0 ? (
+                <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "40ms" }}>
+                  <p className="text-sm text-[var(--muted)]">Aucun produit catalogue pour le moment.</p>
+                </section>
+              ) : (
+                <section className="grid gap-4 xl:grid-cols-3">
+                  {visibleCatalog.map((item, index) => (
+                    <article key={item.id} className="premium-card reveal rounded-2xl p-5" style={{ ["--delay" as string]: `${45 + index * 20}ms` }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.status === "active" ? "bg-[#EAF8EE] text-[#0F7A3B]" : "bg-[#FFEDEE] text-[#A83C3C]"}`}>
+                          {item.status === "active" ? "● En stock" : "○ Hors stock / masqué"}
+                        </span>
+                        <span className="text-sm font-semibold text-[var(--muted)]">{item.category}</span>
+                      </div>
+
+                      <h3 className="mt-3 text-xl font-semibold text-[var(--text)]">{item.name}</h3>
+                      <p className="mt-1 line-clamp-2 text-sm text-[var(--muted)]">{item.description || "Aucune description"}</p>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                        <div className="rounded-xl bg-[var(--surface-soft)] px-3 py-2.5">
+                          <p className="text-xs text-[var(--muted)]">Prix vente</p>
+                          <p className="font-semibold text-[var(--success)]">{money(item.sale_price_fcfa)} FCFA / {item.sale_unit}</p>
+                        </div>
+                        <div className="rounded-xl bg-[var(--surface-soft)] px-3 py-2.5">
+                          <p className="text-xs text-[var(--muted)]">Disponibles</p>
+                          <p className="font-semibold text-[var(--text)]">{item.available_stock.toFixed(2)} {item.sale_unit}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between text-xs">
+                        <span className="text-[var(--muted)]">Min commande: {item.min_order_qty} {item.sale_unit}</span>
+                        <span className="rounded-full bg-[#EAF8EE] px-2 py-1 font-semibold text-[#0F7A3B]">Marge {item.margin_percent}%</span>
+                      </div>
+
+                      {item.low_stock && <p className="mt-2 text-xs font-semibold text-[var(--danger)]">Stock bas: pensez à masquer ce produit.</p>}
+
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => openEditModal(item)} className="soft-focus rounded-xl border border-[#A7C3F0] px-3 py-2 text-sm font-semibold text-[#1F5EA8] hover:bg-[#EEF5FF]">
+                          Modifier
+                        </button>
+                        <button type="button" onClick={() => handleToggleCatalog(item)} className={`soft-focus rounded-xl border px-3 py-2 text-sm font-semibold ${item.status === "active" ? "border-[#E0A5A5] text-[#A83C3C] hover:bg-[#FFF0F0]" : "border-[#9DD3AF] text-[#0F7A3B] hover:bg-[#EFFAF2]"}`}>
+                          {item.status === "active" ? "Masquer" : "Activer"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCatalog(item)}
+                          disabled={deleteCatalogProduct.isPending}
+                          className="soft-focus col-span-2 rounded-xl border border-[#E0A5A5] px-3 py-2 text-sm font-semibold text-[#A83C3C] hover:bg-[#FFF0F0] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </section>
+              )}
+            </>
           ) : (
-            <section className="grid gap-4 xl:grid-cols-3">
-              {visibleCatalog.map((item, index) => (
-                <article key={item.id} className="premium-card reveal rounded-2xl p-5" style={{ ["--delay" as string]: `${45 + index * 20}ms` }}>
-                  <div className="flex items-start justify-between gap-2">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.status === "active" ? "bg-[#EAF8EE] text-[#0F7A3B]" : "bg-[#FFEDEE] text-[#A83C3C]"}`}>
-                      {item.status === "active" ? "● En stock" : "○ Hors stock / masqué"}
-                    </span>
-                    <span className="text-sm font-semibold text-[var(--muted)]">{item.category}</span>
-                  </div>
-
-                  <h3 className="mt-3 text-xl font-semibold text-[var(--text)]">{item.name}</h3>
-                  <p className="mt-1 line-clamp-2 text-sm text-[var(--muted)]">{item.description || "Aucune description"}</p>
-
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                    <div className="rounded-xl bg-[var(--surface-soft)] px-3 py-2.5">
-                      <p className="text-xs text-[var(--muted)]">Prix vente</p>
-                      <p className="font-semibold text-[var(--success)]">{money(item.sale_price_fcfa)} FCFA / {item.sale_unit}</p>
-                    </div>
-                    <div className="rounded-xl bg-[var(--surface-soft)] px-3 py-2.5">
-                      <p className="text-xs text-[var(--muted)]">Disponibles</p>
-                      <p className="font-semibold text-[var(--text)]">{item.available_stock.toFixed(2)} {item.sale_unit}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between text-xs">
-                    <span className="text-[var(--muted)]">Min commande: {item.min_order_qty} {item.sale_unit}</span>
-                    <span className="rounded-full bg-[#EAF8EE] px-2 py-1 font-semibold text-[#0F7A3B]">Marge {item.margin_percent}%</span>
-                  </div>
-
-                  {item.low_stock && <p className="mt-2 text-xs font-semibold text-[var(--danger)]">Stock bas: pensez à masquer ce produit.</p>}
-
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => openEditModal(item)} className="soft-focus rounded-xl border border-[#A7C3F0] px-3 py-2 text-sm font-semibold text-[#1F5EA8] hover:bg-[#EEF5FF]">
-                      Modifier
-                    </button>
-                    <button type="button" onClick={() => handleToggleCatalog(item)} className={`soft-focus rounded-xl border px-3 py-2 text-sm font-semibold ${item.status === "active" ? "border-[#E0A5A5] text-[#A83C3C] hover:bg-[#FFF0F0]" : "border-[#9DD3AF] text-[#0F7A3B] hover:bg-[#EFFAF2]"}`}>
-                      {item.status === "active" ? "Masquer" : "Activer"}
-                    </button>
-                  </div>
-                </article>
-              ))}
+            <section className="premium-card overflow-hidden rounded-2xl">
+              <div className="overflow-x-auto">
+                <table className="wf-table min-w-full text-sm">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-3 text-left">Produit</th>
+                      <th className="px-4 py-3 text-left">Catégorie</th>
+                      <th className="px-4 py-3 text-left">Statut</th>
+                      <th className="px-4 py-3 text-left">Disponibles</th>
+                      <th className="px-4 py-3 text-left">Total</th>
+                      <th className="px-4 py-3 text-left">Prix vente</th>
+                      <th className="px-4 py-3 text-left">Marge</th>
+                      <th className="px-4 py-3 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleCatalog.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-4 py-5 text-center text-sm text-[var(--muted)]">
+                          Aucun produit catalogue pour le moment.
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleCatalog.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-4 py-3 font-semibold text-[var(--text)]">{item.name}</td>
+                          <td className="px-4 py-3 text-[var(--muted)]">{item.category}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.status === "active" ? "bg-[#EAF8EE] text-[#0F7A3B]" : "bg-[#FFEDEE] text-[#A83C3C]"}`}>
+                              {item.status === "active" ? "En stock" : "Masqué"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">{item.available_stock.toFixed(2)} {item.sale_unit}</td>
+                          <td className="px-4 py-3">{item.total_stock.toFixed(2)} {item.sale_unit}</td>
+                          <td className="px-4 py-3 font-semibold text-[var(--success)]">{money(item.sale_price_fcfa)} FCFA</td>
+                          <td className="px-4 py-3 font-semibold text-[#0F7A3B]">{item.margin_percent}%</td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              <button type="button" onClick={() => openEditModal(item)} className="soft-focus rounded-xl border border-[#A7C3F0] px-3 py-1.5 text-sm font-semibold text-[#1F5EA8] hover:bg-[#EEF5FF]">
+                                Modifier
+                              </button>
+                              <button type="button" onClick={() => handleToggleCatalog(item)} className={`soft-focus rounded-xl border px-3 py-1.5 text-sm font-semibold ${item.status === "active" ? "border-[#E0A5A5] text-[#A83C3C] hover:bg-[#FFF0F0]" : "border-[#9DD3AF] text-[#0F7A3B] hover:bg-[#EFFAF2]"}`}>
+                                {item.status === "active" ? "Masquer" : "Activer"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCatalog(item)}
+                                disabled={deleteCatalogProduct.isPending}
+                                className="soft-focus rounded-xl border border-[#E0A5A5] px-3 py-1.5 text-sm font-semibold text-[#A83C3C] hover:bg-[#FFF0F0] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </section>
           )}
         </>

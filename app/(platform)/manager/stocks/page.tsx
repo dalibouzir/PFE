@@ -12,6 +12,7 @@ export default function StocksPage() {
   const { data: products = [] } = useProducts();
 
   const [productId, setProductId] = useState<string>("Tous");
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
   const productLookup = useMemo(() => new Map(products.map((p) => [p.id, p.name])), [products]);
 
@@ -49,12 +50,29 @@ export default function StocksPage() {
               </option>
             ))}
           </select>
-          <div className="rounded-xl border border-[#E8B9B9] bg-[#FFEDEE] px-3 py-2 text-sm text-[var(--danger)]">
-            Alertes critiques: <span className="font-semibold">{criticalCount}</span>
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-[#E8B9B9] bg-[#FFEDEE] px-3 py-2 text-sm text-[var(--danger)]">
+              Alertes critiques: <span className="font-semibold">{criticalCount}</span>
+            </div>
+            <div className="flex gap-1 rounded-lg border border-[var(--line)] bg-[var(--surface-soft)] p-1">
+              <button
+                onClick={() => setViewMode("cards")}
+                className={`soft-focus rounded-md px-2.5 py-1.5 text-xs font-semibold ${viewMode === "cards" ? "bg-[var(--primary)] text-white" : "text-[var(--muted)]"}`}
+              >
+                📱
+              </button>
+              <button
+                onClick={() => setViewMode("table")}
+                className={`soft-focus rounded-md px-2.5 py-1.5 text-xs font-semibold ${viewMode === "table" ? "bg-[var(--primary)] text-white" : "text-[var(--muted)]"}`}
+              >
+                📊
+              </button>
+            </div>
           </div>
         </div>
       </section>
 
+      {viewMode === "cards" ? (
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {stockCards.length === 0 ? (
           <article className="premium-card reveal rounded-2xl p-5 sm:col-span-2 xl:col-span-3" style={{ ["--delay" as string]: "70ms" }}>
@@ -104,35 +122,110 @@ export default function StocksPage() {
           })
         )}
       </section>
+      ) : (
+      <section className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "70ms" }}>
+        <div className="overflow-x-auto">
+          <table className="wf-table min-w-full text-left text-sm">
+            <thead>
+              <tr>
+                <th className="px-5 py-3.5">Produit</th>
+                <th className="px-5 py-3.5">Total</th>
+                <th className="px-5 py-3.5">Disponible</th>
+                <th className="px-5 py-3.5">Réservé</th>
+                <th className="px-5 py-3.5">Remplissage</th>
+                <th className="px-5 py-3.5">Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-4 text-center text-sm text-[var(--muted)]">
+                    Aucun stock enregistré à afficher pour ce filtre.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((item) => {
+                  const isCritical = isCriticalStock(item);
+                  const fillRate = item.total_stock > 0 ? (item.available_stock / item.total_stock) * 100 : 0;
+                  return (
+                    <tr key={item.product_id}>
+                      <td className="px-5 py-4 font-semibold text-[var(--text)]">{productLookup.get(item.product_id) ?? item.product_id.slice(0, 8)}</td>
+                      <td className="px-5 py-4">{item.total_stock.toFixed(2)} {item.unit}</td>
+                      <td className="px-5 py-4 font-medium">{item.available_stock.toFixed(2)} {item.unit}</td>
+                      <td className="px-5 py-4 text-[var(--danger)]">{item.reserved_in_lots.toFixed(2)} {item.unit}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-16 rounded-full bg-[#E8E3DB]">
+                            <div 
+                              className={`h-2 rounded-full ${isCritical ? "bg-red-500" : fillRate < 30 ? "bg-amber-500" : "bg-green-500"}`}
+                              style={{ width: `${Math.min(100, fillRate)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-semibold text-[var(--muted)]">{fillRate.toFixed(0)}%</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isCritical ? "bg-[#FFEDEE] text-[#A83C3C]" : "bg-[#EAF8EE] text-[#0F7A3B]"}`}>
+                          {isCritical ? "Critique" : "Stable"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      )}
 
       {filtered.length === 0 ? (
         <section className="premium-card reveal mt-4 rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "90ms" }}>
           <p className="text-sm text-[var(--muted)]">Aucun stock enregistre. Les lignes de stock sont creees automatiquement via les collectes.</p>
         </section>
       ) : (
-        <section className="premium-card reveal mt-4 overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "120ms" }}>
+        <section className="premium-card reveal mt-4 rounded-2xl p-6" style={{ ["--delay" as string]: "120ms" }}>
+          <h3 className="mb-4 text-lg font-semibold text-[var(--text)]">📊 Récemment modifiés</h3>
           <div className="overflow-x-auto">
             <table className="wf-table min-w-full text-left text-sm">
               <thead>
                 <tr>
                   <th className="px-5 py-3.5">Produit</th>
                   <th className="px-5 py-3.5">Disponible</th>
-                  <th className="px-5 py-3.5">Capacite</th>
-                  <th className="px-5 py-3.5">Taux remplissage</th>
+                  <th className="px-5 py-3.5">Total</th>
+                  <th className="px-5 py-3.5">Réservé</th>
+                  <th className="px-5 py-3.5">Dernier changement</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item) => {
-                  const fillRate = item.total_stock > 0 ? (item.available_stock / item.total_stock) * 100 : 0;
-                  return (
-                    <tr key={item.id}>
-                      <td className="px-5 py-4 font-medium text-[var(--text)]">{productLookup.get(item.product_id) ?? item.product_id.slice(0, 8)}</td>
-                      <td className="px-5 py-4">{item.available_stock.toFixed(2)} {item.unit}</td>
-                      <td className="px-5 py-4">{item.total_stock.toFixed(2)} {item.unit}</td>
-                      <td className="px-5 py-4">{fillRate.toFixed(1)}%</td>
-                    </tr>
-                  );
-                })}
+                {filtered
+                  .slice()
+                  .sort((a, b) => new Date(b.last_updated ?? 0).getTime() - new Date(a.last_updated ?? 0).getTime())
+                  .map((item) => {
+                    const lastUpdate = item.last_updated ? new Date(item.last_updated) : new Date();
+                    const now = new Date();
+                    const diffMs = now.getTime() - lastUpdate.getTime();
+                    const diffMins = Math.floor(diffMs / 60000);
+                    const diffHours = Math.floor(diffMs / 3600000);
+                    const diffDays = Math.floor(diffMs / 86400000);
+                    
+                    let timeAgo = "";
+                    if (diffMins < 1) timeAgo = "À l'instant";
+                    else if (diffMins < 60) timeAgo = `${diffMins} min`;
+                    else if (diffHours < 24) timeAgo = `${diffHours}h`;
+                    else if (diffDays < 30) timeAgo = `${diffDays}j`;
+                    else timeAgo = lastUpdate.toLocaleDateString("fr-FR");
+
+                    return (
+                      <tr key={item.id}>
+                        <td className="px-5 py-4 font-semibold text-[var(--text)]">{productLookup.get(item.product_id) ?? item.product_id.slice(0, 8)}</td>
+                        <td className="px-5 py-4">{item.available_stock.toFixed(2)} {item.unit}</td>
+                        <td className="px-5 py-4">{item.total_stock.toFixed(2)} {item.unit}</td>
+                        <td className="px-5 py-4 text-[var(--danger)]">{item.reserved_in_lots.toFixed(2)} {item.unit}</td>
+                        <td className="px-5 py-4 text-xs text-[var(--muted)]">{timeAgo}</td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>

@@ -266,6 +266,38 @@ def set_catalog_status(db: Session, manager: User, catalog_product_id, status: s
     return _serialize_catalog(item)
 
 
+def delete_catalog_product(db: Session, manager: User, catalog_product_id) -> CatalogProductRead:
+    cooperative_id = get_manager_cooperative_id(manager)
+    item = _require_catalog_product(db, cooperative_id, catalog_product_id)
+
+    linked_lines = db.scalar(
+        select(func.count(CommercialOrderLine.id)).where(
+            CommercialOrderLine.catalog_product_id == item.id
+        )
+    )
+    if int(linked_lines or 0) > 0:
+        raise ValidationError("Suppression impossible: ce produit est deja lie a des commandes.")
+
+    if item.reserved_stock_kg > 0:
+        raise ValidationError("Suppression impossible: une partie du stock est reservee.")
+
+    source_product = item.source_product
+    restock_kg = round_metric(max(item.total_stock_kg, 0.0))
+    if source_product is not None and restock_kg > 0:
+        apply_total_stock_delta(
+            db,
+            cooperative_id,
+            source_product,
+            restock_kg,
+            create_if_missing=True,
+        )
+
+    snapshot = _serialize_catalog(item)
+    db.delete(item)
+    db.commit()
+    return snapshot
+
+
 def intake_order(db: Session, manager: User, payload) -> CommercialOrderRead:
     cooperative_id = get_manager_cooperative_id(manager)
     if not payload.lines:
