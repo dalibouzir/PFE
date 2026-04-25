@@ -18,6 +18,21 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "prisma/seed.ts"]
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "hooks/**/*.ts",
+    "hooks/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "context/**/*.ts",
+    "context/**/*.tsx",
+    "*.d.ts",
+    "next.config.ts"
+  ],
+  "exclude": ["node_modules", "prisma/seed.ts", "src/**", "backend/**"]
 }
