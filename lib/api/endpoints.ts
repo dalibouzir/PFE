@@ -84,6 +84,16 @@ export const endpoints = {
     sessions: "/chat/sessions",
     messages: (sessionId: string) => `/chat/sessions/${sessionId}/messages`,
   },
+  commercial: {
+    catalog: "/commercial/catalog",
+    catalogStatus: (id: string, status: "active" | "hidden") => `/commercial/catalog/${id}/status?status=${status}`,
+    orders: "/commercial/orders",
+    orderStatus: (id: string) => `/commercial/orders/${id}/status`,
+    orderStats: "/commercial/orders/stats",
+    invoices: "/commercial/invoices",
+    invoiceStats: "/commercial/invoices/stats",
+    invoiceDetail: (id: string) => `/commercial/invoices/${id}`,
+  },
   reference: {
     metrics: "/reference/metrics",
     knowledge: "/reference/knowledge",

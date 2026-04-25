@@ -33,3 +33,15 @@ class Cooperative(TimestampMixin, Base):
     treasury_transactions: Mapped[List["TreasuryTransaction"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")
     stocks: Mapped[List["Stock"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")
     batches: Mapped[List["Batch"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")
+    catalog_products: Mapped[List["CommercialCatalogProduct"]] = relationship(
+        back_populates="cooperative",
+        cascade="all, delete-orphan",
+    )
+    commercial_orders: Mapped[List["CommercialOrder"]] = relationship(
+        back_populates="cooperative",
+        cascade="all, delete-orphan",
+    )
+    commercial_invoices: Mapped[List["CommercialInvoice"]] = relationship(
+        back_populates="cooperative",
+        cascade="all, delete-orphan",
+    )

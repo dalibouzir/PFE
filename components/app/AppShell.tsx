@@ -62,6 +62,8 @@ const navByRole: Record<AppRole, NavItem[]> = {
     { href: "/manager/inputs", label: "Collecte", icon: InputsIcon },
     { href: "/manager/stocks", label: "Stocks", icon: StocksIcon },
     { href: "/manager/lots", label: "Flux matiere / lots", icon: LotsIcon },
+    { href: "/manager/commercialisation", label: "Commercialisation", icon: LotsIcon },
+    { href: "/manager/facturation", label: "Facturation", icon: AnalyticsIcon },
     { href: "/manager/tresorerie", label: "Tresorerie", icon: AnalyticsIcon },
     { href: "/manager/assistant-ia", label: "AI Assistant", icon: ChatIcon },
   ],

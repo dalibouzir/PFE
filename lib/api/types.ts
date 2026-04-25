@@ -537,3 +537,168 @@ export type ChatMessage = {
 export type ChatMessageCreate = {
   message: string;
 };
+
+export type CatalogStatus = "active" | "hidden";
+export type CommercialOrderStatus =
+  | "received"
+  | "confirmed"
+  | "preparing"
+  | "ready"
+  | "delivered"
+  | "paid"
+  | "refused";
+export type CommercialInvoiceStatus = "pending" | "paid";
+
+export type CatalogProduct = {
+  id: string;
+  cooperative_id: string;
+  source_product_id?: string | null;
+  source_product_name?: string | null;
+  name: string;
+  description?: string | null;
+  category: string;
+  sale_unit: "kg" | "ton";
+  icon?: string | null;
+  sale_price_fcfa: number;
+  cost_price_fcfa: number;
+  min_order_qty: number;
+  total_stock: number;
+  reserved_stock: number;
+  available_stock: number;
+  total_stock_kg: number;
+  reserved_stock_kg: number;
+  available_stock_kg: number;
+  margin_percent: number;
+  status: CatalogStatus;
+  low_stock: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CatalogProductCreate = {
+  source_product_id: string;
+  name: string;
+  description?: string | null;
+  category: string;
+  sale_unit: "kg" | "ton";
+  icon?: string | null;
+  sale_price_fcfa: number;
+  cost_price_fcfa: number;
+  min_order_qty: number;
+  allocated_quantity: number;
+};
+
+export type CatalogProductUpdate = Partial<
+  Omit<CatalogProductCreate, "source_product_id" | "allocated_quantity">
+>;
+
+export type CommercialOrderLine = {
+  id: string;
+  catalog_product_id: string;
+  product_name: string;
+  unit: "kg" | "ton";
+  quantity: number;
+  unit_price_fcfa: number;
+  line_total_fcfa: number;
+};
+
+export type CommercialOrder = {
+  id: string;
+  cooperative_id: string;
+  order_number: string;
+  customer_name: string;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  customer_address?: string | null;
+  payment_method?: string | null;
+  notes?: string | null;
+  status: CommercialOrderStatus;
+  subtotal_fcfa: number;
+  tax_rate: number;
+  tax_amount_fcfa: number;
+  total_amount_fcfa: number;
+  source: string;
+  locked: boolean;
+  received_at: string;
+  confirmed_at?: string | null;
+  preparing_at?: string | null;
+  ready_at?: string | null;
+  delivered_at?: string | null;
+  paid_at?: string | null;
+  refused_at?: string | null;
+  refused_reason?: string | null;
+  lines: CommercialOrderLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CommercialOrderIntake = {
+  customer_name: string;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  customer_address?: string | null;
+  payment_method?: string | null;
+  notes?: string | null;
+  lines: Array<{
+    catalog_product_id: string;
+    quantity: number;
+  }>;
+};
+
+export type CommercialOrderStatusUpdate = {
+  status: CommercialOrderStatus;
+  refused_reason?: string | null;
+};
+
+export type CommercialOrderStats = {
+  total: number;
+  received: number;
+  confirmed: number;
+  preparing: number;
+  ready: number;
+  delivered: number;
+  paid: number;
+  refused: number;
+  new_count: number;
+  in_progress_count: number;
+  paid_this_month_fcfa: number;
+};
+
+export type CommercialInvoiceLine = {
+  id: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  unit_price_fcfa: number;
+  line_total_fcfa: number;
+};
+
+export type CommercialInvoice = {
+  id: string;
+  cooperative_id: string;
+  order_id: string;
+  order_number: string;
+  invoice_number: string;
+  issue_date: string;
+  due_date?: string | null;
+  status: CommercialInvoiceStatus;
+  customer_name: string;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  customer_address?: string | null;
+  subtotal_fcfa: number;
+  tax_rate: number;
+  tax_amount_fcfa: number;
+  total_amount_fcfa: number;
+  paid_at?: string | null;
+  lines: CommercialInvoiceLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CommercialInvoiceStats = {
+  total_invoiced_fcfa: number;
+  paid_fcfa: number;
+  pending_fcfa: number;
+  paid_rate_percent: number;
+};

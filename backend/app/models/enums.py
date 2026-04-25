@@ -61,3 +61,23 @@ class RiskLevel(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+
+class CommercialCatalogStatus(str, Enum):
+    ACTIVE = "active"
+    HIDDEN = "hidden"
+
+
+class CommercialOrderStatus(str, Enum):
+    RECEIVED = "received"
+    CONFIRMED = "confirmed"
+    PREPARING = "preparing"
+    READY = "ready"
+    DELIVERED = "delivered"
+    PAID = "paid"
+    REFUSED = "refused"
+
+
+class InvoiceStatus(str, Enum):
+    PENDING = "pending"
+    PAID = "paid"

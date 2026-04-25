@@ -9,6 +9,9 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.models.batch import Batch
 from app.models.chat import ChatMessage, ChatSession  # noqa: F401
+from app.models.commercial_catalog_product import CommercialCatalogProduct  # noqa: F401
+from app.models.commercial_invoice import CommercialInvoice, CommercialInvoiceLine  # noqa: F401
+from app.models.commercial_order import CommercialOrder, CommercialOrderLine  # noqa: F401
 from app.models.cooperative import Cooperative
 from app.models.enums import BatchStatus, ProcessStepStatus, UserRole, UserStatus
 from app.models.process_step import ProcessStep

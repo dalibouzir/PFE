@@ -6,6 +6,7 @@ from app.api.routes import (
     auth,
     batches,
     chat,
+    commercial,
     farmer_advances,
     fields,
     inputs,
@@ -35,3 +36,4 @@ api_router.include_router(analytics.router)
 api_router.include_router(chat.router)
 api_router.include_router(reference.router)
 api_router.include_router(ml.router)
+api_router.include_router(commercial.router)
