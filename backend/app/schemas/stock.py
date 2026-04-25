@@ -9,9 +9,9 @@ from app.schemas.base import ORMModel
 
 class StockCreate(BaseModel):
     product_id: UUID
-    quantity: float = Field(ge=0)
+    quantity: float = Field(default=0, ge=0)
     threshold: float = Field(ge=0)
-    unit: str = Field(min_length=1, max_length=40)
+    unit: str = Field(default="kg", min_length=1, max_length=40)
 
 
 class StockUpdate(BaseModel):
@@ -29,6 +29,15 @@ class StockRead(ORMModel):
     product_id: UUID
     quantity: float
     threshold: float
+    total_stock: float
+    available_stock: float
+    reserved_in_lots: float
+    processed_output: float
+    total_stock_kg: float
+    available_stock_kg: float
+    reserved_in_lots_kg: float
+    processed_output_kg: float
+    threshold_kg: float
     unit: str
     last_updated: datetime
     created_at: datetime
@@ -42,3 +51,4 @@ class StockAlertRead(BaseModel):
     threshold: float
     unit: str
     deficit: float
+    deficit_kg: float

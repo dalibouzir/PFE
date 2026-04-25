@@ -100,9 +100,9 @@ export default function ManagerDashboardPage() {
   const steps = useMemo(() => data?.recent_process_steps ?? [], [data?.recent_process_steps]);
   const stocksCritiques = useMemo(() => data?.stock_alerts ?? [], [data?.stock_alerts]);
 
-  const totalStock = stocks.reduce((sum, item) => sum + item.quantity, 0);
+  const totalStock = stocks.reduce((sum, item) => sum + item.available_stock_kg, 0);
 
-  const stockSeries = padSeries(stocks.map((item) => item.quantity), totalStock || 0);
+  const stockSeries = padSeries(stocks.map((item) => item.available_stock_kg), totalStock || 0);
   const membersSeries = padSeries([members.length], members.length || 0);
   const productsSeries = padSeries([products.length], products.length || 0);
   const perteSeries = padSeries(steps.map((item) => item.loss_pct), data?.loss_rate ?? 0);
@@ -281,13 +281,31 @@ export default function ManagerDashboardPage() {
         )}
       </section>
 
-      <section className="mt-4 grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-        <article className="premium-card rounded-2xl p-5">
+      <section className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+        <article className="premium-card min-w-0 rounded-2xl p-5">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-base font-semibold text-[var(--text)]">Activite recente</h3>
             <p className="text-xs text-[var(--muted)]">{recentRows.length} elements</p>
           </div>
-          <div className="mt-3 max-h-[420px] overflow-auto rounded-xl border border-[var(--line)]">
+          <div className="mt-3 space-y-2 sm:hidden">
+            {recentRows.length === 0 ? (
+              <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-4 text-sm text-[var(--muted)]">Aucune activite recente.</div>
+            ) : (
+              recentRows.map((row) => (
+                <article key={row.id} className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-[var(--text)]">{row.operation}</p>
+                    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(row.statut)}`}>{row.statut}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                    <p>{row.date}</p>
+                    <p className="font-semibold text-[var(--text)]">{row.quantite}</p>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+          <div className="scroll-thin mt-3 hidden max-h-[420px] overflow-y-auto rounded-xl border border-[var(--line)] sm:block">
             <table className="min-w-full text-left text-sm">
               <thead className="sticky top-0 border-b border-[var(--line)] bg-[var(--surface)] text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
                 <tr>
@@ -315,8 +333,8 @@ export default function ManagerDashboardPage() {
           </div>
         </article>
 
-        <div className="grid gap-4">
-          <article className="premium-card rounded-2xl p-5">
+        <div className="grid min-w-0 gap-4">
+          <article className="premium-card min-w-0 rounded-2xl p-5">
             <h3 className="text-base font-semibold text-[var(--text)]">Repartition des pertes</h3>
             <p className="mt-1 text-sm text-[var(--muted)]">Par etape de transformation</p>
             {lossSegments.length === 0 ? (

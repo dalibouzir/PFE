@@ -7,7 +7,6 @@ from app.models.enums import ProcessStepStatus, RiskLevel, UserRole
 from app.models.input import Input
 from app.models.process_step import ProcessStep
 from app.models.recommendation import Recommendation
-from app.models.stock import Stock
 from app.models.user import User
 from app.schemas.analytics import AnomalyResponse, DashboardResponse, RecommendationResponse
 from app.schemas.batch import BatchMetricsSummary
@@ -41,12 +40,14 @@ def get_batch_for_user(db: Session, user: User, batch_id) -> Batch:
 
 
 def compute_process_metrics(process_step: ProcessStep):
-    waste_qty = process_step.waste_qty
+    waste_qty = process_step.normalized_loss_value
+    if waste_qty is None:
+        waste_qty = process_step.waste_qty
     if waste_qty is None:
         waste_qty = max(process_step.qty_in - process_step.qty_out, 0.0)
-    loss_pct = ((process_step.qty_in - process_step.qty_out) / process_step.qty_in) * 100.0
+    loss_pct = (waste_qty / process_step.qty_in) * 100.0 if process_step.qty_in else 0.0
     efficiency_pct = (process_step.qty_out / process_step.qty_in) * 100.0
-    warning = process_step.qty_out > process_step.qty_in
+    warning = waste_qty > process_step.qty_in
     return {
         "waste_qty": round_metric(waste_qty),
         "loss_pct": round_metric(loss_pct),
@@ -60,13 +61,18 @@ def serialize_process_step(process_step: ProcessStep) -> ProcessStepRead:
     return ProcessStepRead(
         id=process_step.id,
         batch_id=process_step.batch_id,
+        sequence_order=process_step.sequence_order,
         type=process_step.type,
         date=process_step.date,
+        loss_value=round_metric(process_step.loss_value),
+        loss_unit=process_step.loss_unit,
+        normalized_loss_value=round_metric(process_step.normalized_loss_value),
         qty_in=round_metric(process_step.qty_in),
         qty_out=round_metric(process_step.qty_out),
         waste_qty=metrics["waste_qty"],
         notes=process_step.notes,
         status=process_step.status.value,
+        executed_at=process_step.executed_at,
         duration_minutes=process_step.duration_minutes,
         created_at=process_step.created_at,
         updated_at=process_step.updated_at,
@@ -86,7 +92,8 @@ def compute_batch_metrics(db: Session, batch_id) -> BatchMetricsSummary:
         raise NotFoundError("Batch not found.")
 
     completed_steps = [
-        step for step in sorted(batch.process_steps, key=lambda item: (item.date, item.created_at, item.id))
+        step
+        for step in sorted(batch.process_steps, key=lambda item: (item.sequence_order, item.date, item.created_at, item.id))
         if step.status in COMPLETED_STEP_STATUSES
     ]
     latest_completed = completed_steps[-1] if completed_steps else None
@@ -176,10 +183,8 @@ def _recommendation_payload_for_batch(db: Session, batch: Batch):
         actions.append("Audit the full stage sequence and review raw material quality grade.")
         rationale_bits.append("Overall batch efficiency is below 85%.")
 
-    low_stock = db.scalars(
-        select(Stock).where(Stock.cooperative_id == batch.cooperative_id, Stock.quantity < Stock.threshold)
-    ).all()
-    if low_stock:
+    low_stock_alerts = list_low_stock_alerts(db, batch.cooperative_id)
+    if low_stock_alerts:
         actions.append("Reorder or collect more inputs for products below stock threshold.")
         rationale_bits.append("Current stock alerts indicate replenishment risk.")
 

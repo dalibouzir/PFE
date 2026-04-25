@@ -13,20 +13,39 @@ import { LotProcessTable, type ProcessTableRow } from "@/components/workspace/Lo
 import { LotProcessTimeline, type TimelineStage } from "@/components/workspace/LotProcessTimeline";
 import { LotRecommendationPanel, type LotRecommendationItem } from "@/components/workspace/LotRecommendationPanel";
 import { LotWorkspaceTabs, type LotWorkspaceTab } from "@/components/workspace/LotWorkspaceTabs";
-import { useBatches, useCreateBatch, useDeleteBatch, useUpdateBatch, useUpdateBatchStatus } from "@/hooks/useBatches";
+import {
+  useBatchReferencePreview,
+  useBatches,
+  useCreateBatch,
+  useDeleteBatch,
+} from "@/hooks/useBatches";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useCreateProcessStep, useDeleteProcessStep, useProcessSteps, useUpdateProcessStep } from "@/hooks/useProcessSteps";
 import { useProducts } from "@/hooks/useProducts";
-import type { Batch, BatchCreate, BatchStatusUpdate, ProcessStep, ProcessStepCreate, Recommendation } from "@/lib/api/types";
+import { useStocks } from "@/hooks/useStocks";
+import type {
+  Batch,
+  BatchCreate,
+  ProcessStep,
+  ProcessStepCreate,
+  ProcessStepUpdate,
+  Recommendation,
+} from "@/lib/api/types";
 import {
   LOT_WORKFLOW_STAGES,
   buildSeasonFromDate,
   phaseLabel,
   stageFromType,
   stageLabelFromType,
-  stageLossKg,
   type WorkflowStageDef,
 } from "@/lib/ui/lot-workflow";
+
+const KG_PER_TON = 1000;
+const todayIso = new Date().toISOString().slice(0, 10);
+const defaultSteps = ["Nettoyage", "Sechage", "Tri", "Emballage"];
+
+type MassUnit = "kg" | "ton";
+type StagePreset = Pick<WorkflowStageDef, "key" | "label" | "icon" | "typeTag">;
 
 const batchStatusTone: Record<string, "success" | "warning" | "info" | "danger"> = {
   created: "info",
@@ -42,16 +61,22 @@ const batchStatusLabel: Record<string, string> = {
   archived: "Archive",
 };
 
-const todayIso = new Date().toISOString().slice(0, 10);
-
-type StagePreset = Pick<WorkflowStageDef, "key" | "label" | "icon" | "typeTag">;
-
 function normalizeTab(raw: string | null): LotWorkspaceTab {
   if (raw === "overview") return "overview";
   if (raw === "analytics") return "analytics";
   if (raw === "recommendations") return "recommendations";
   if (raw === "history") return "history";
   return "process";
+}
+
+function toKg(value: number, unit: MassUnit) {
+  if (unit === "kg") return value;
+  return value * KG_PER_TON;
+}
+
+function fromKg(valueKg: number, unit: MassUnit) {
+  if (unit === "kg") return valueKg;
+  return valueKg / KG_PER_TON;
 }
 
 function recommendationPriority(item: Recommendation): LotRecommendationItem["priority"] {
@@ -66,11 +91,6 @@ function parseImpactedStep(item: Recommendation): string {
   return workflowStage?.label ?? "Process global";
 }
 
-function resolveStageStatus(step?: ProcessStep): "done" | "pending" | "warning" {
-  if (!step) return "pending";
-  return step.warning ? "warning" : "done";
-}
-
 export default function LotsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -79,12 +99,11 @@ export default function LotsPage() {
 
   const { data: batches = [] } = useBatches();
   const { data: products = [] } = useProducts();
+  const { data: stocks = [] } = useStocks();
   const { data: steps = [] } = useProcessSteps();
   const { data: dashboard } = useDashboard();
 
   const createBatch = useCreateBatch();
-  const updateBatch = useUpdateBatch();
-  const updateBatchStatus = useUpdateBatchStatus();
   const deleteBatch = useDeleteBatch();
   const createStep = useCreateProcessStep();
   const updateStep = useUpdateProcessStep();
@@ -96,35 +115,39 @@ export default function LotsPage() {
 
   const [lotFormOpen, setLotFormOpen] = useState(false);
   const [stepFormOpen, setStepFormOpen] = useState(false);
-  const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
   const [editingStep, setEditingStep] = useState<ProcessStep | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const [lotSeason, setLotSeason] = useState("");
-  const [lotSurfaceHa, setLotSurfaceHa] = useState("1");
+  const [plannedStepsDraft, setPlannedStepsDraft] = useState<string[]>(defaultSteps);
+  const [stepToAdd, setStepToAdd] = useState("");
+  const [customStepInput, setCustomStepInput] = useState("");
+
   const [stepPreset, setStepPreset] = useState<StagePreset | null>(null);
 
   const lotForm = useForm<BatchCreate>({
-    defaultValues: { product_id: "", code: "", creation_date: todayIso, initial_qty: 0 },
+    defaultValues: {
+      product_id: "",
+      creation_date: todayIso,
+      initial_qty: 0,
+      unit: "kg",
+      process_steps: defaultSteps,
+    },
   });
   const stepForm = useForm<ProcessStepCreate>({
     defaultValues: {
       batch_id: "",
       type: "",
       date: todayIso,
-      qty_in: 0,
-      qty_out: 0,
-      waste_qty: 0,
+      loss_value: 0,
+      loss_unit: "kg",
       notes: "",
-      status: "completed",
       duration_minutes: undefined,
     },
   });
 
-  const watchQtyIn = Number(stepForm.watch("qty_in") ?? 0);
-  const watchWaste = Number(stepForm.watch("waste_qty") ?? 0);
-  const computedNet = Math.max(watchQtyIn - watchWaste, 0);
-  const computedLossPct = watchQtyIn > 0 ? (watchWaste / watchQtyIn) * 100 : 0;
+  const watchedProductId = lotForm.watch("product_id");
+  const watchedLotUnit = (lotForm.watch("unit") || "kg") as MassUnit;
+  const previewReference = useBatchReferencePreview(watchedProductId || null);
 
   const productLookup = useMemo(() => new Map(products.map((p) => [p.id, p.name])), [products]);
 
@@ -169,7 +192,7 @@ export default function LotsPage() {
     for (const [batchId, list] of grouped.entries()) {
       grouped.set(
         batchId,
-        list.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+        list.slice().sort((a, b) => (a.sequence_order - b.sequence_order) || new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
       );
     }
     return grouped;
@@ -208,7 +231,7 @@ export default function LotsPage() {
   const lotTotals = useMemo(() => {
     const qtyIn = selectedSteps.reduce((sum, step) => sum + step.qty_in, 0);
     const qtyOut = selectedSteps.reduce((sum, step) => sum + step.qty_out, 0);
-    const lossKg = selectedSteps.reduce((sum, step) => sum + stageLossKg(step), 0);
+    const lossKg = selectedSteps.reduce((sum, step) => sum + step.normalized_loss_value, 0);
     const efficiencyPct = qtyIn > 0 ? (qtyOut / qtyIn) * 100 : 0;
     return { qtyIn, qtyOut, lossKg, efficiencyPct };
   }, [selectedSteps]);
@@ -241,72 +264,90 @@ export default function LotsPage() {
   }, [selectedSteps]);
 
   const workflowRows = useMemo<ProcessTableRow[]>(() => {
-    const stageStep = new Map<string, ProcessStep>();
-    const customRows: ProcessTableRow[] = [];
+    if (!selectedBatch) return [];
+    const ordered = selectedBatch.ordered_process_steps ?? [];
+    const executedByOrder = new Map<number, ProcessStep>();
+    for (const step of selectedSteps) {
+      executedByOrder.set(step.sequence_order, step);
+    }
 
-    selectedSteps.forEach((step) => {
-      const mapped = stageFromType(step.type);
-      if (!mapped) {
-        customRows.push({
-          key: `custom-${step.id}`,
-          label: stageLabelFromType(step.type),
-          icon: "🧩",
-          typeTag: "personnalise",
-          phase: "post_harvest",
-          status: resolveStageStatus(step),
-          step,
-        });
-        return;
-      }
-      stageStep.set(mapped.key, step);
+    const nextExecutableOrder = selectedSteps.length < ordered.length ? selectedSteps.length + 1 : null;
+
+    const rows: ProcessTableRow[] = ordered.map((stepName, index) => {
+      const order = index + 1;
+      const step = executedByOrder.get(order);
+      const mapped = stageFromType(stepName) ?? stageFromType(step?.type ?? stepName);
+      const status: ProcessTableRow["status"] = step
+        ? step.warning
+          ? "warning"
+          : "done"
+        : nextExecutableOrder === order
+          ? "current"
+          : "pending";
+
+      return {
+        key: `planned-${order}`,
+        order,
+        label: stepName,
+        icon: mapped?.icon ?? "🧩",
+        typeTag: mapped?.typeTag ?? "process",
+        phase: mapped?.phase ?? "post_harvest",
+        status,
+        isExecutable: !step && nextExecutableOrder === order,
+        step,
+      };
     });
 
-    const ordered = LOT_WORKFLOW_STAGES.map<ProcessTableRow>((stage) => ({
-      key: stage.key,
-      label: stage.label,
-      icon: stage.icon,
-      typeTag: stage.typeTag,
-      phase: stage.phase,
-      step: stageStep.get(stage.key),
-      status: resolveStageStatus(stageStep.get(stage.key)),
-    }));
+    const extras = selectedSteps
+      .filter((step) => step.sequence_order > ordered.length)
+      .map<ProcessTableRow>((step) => ({
+        key: `extra-${step.id}`,
+        order: step.sequence_order,
+        label: step.type,
+        icon: "🧩",
+        typeTag: "personnalise",
+        phase: "post_harvest",
+        status: step.warning ? "warning" : "done",
+        step,
+      }));
 
-    return [...ordered, ...customRows];
-  }, [selectedSteps]);
+    return [...rows, ...extras];
+  }, [selectedBatch, selectedSteps]);
 
   const timelineRows = useMemo<TimelineStage[]>(
     () =>
-      workflowRows
-        .filter((row) => !row.key.startsWith("custom-"))
-        .map((row) => ({
-          key: row.key,
-          label: row.label,
-          icon: row.icon,
-          typeTag: row.typeTag,
-          phase: row.phase,
-          status: row.status,
-          qtyOut: row.step?.qty_out,
-          lossKg: row.step ? stageLossKg(row.step) : undefined,
-        })),
+      workflowRows.map((row) => ({
+        key: row.key,
+        order: row.order,
+        label: row.label,
+        icon: row.icon,
+        typeTag: row.typeTag,
+        phase: row.phase,
+        status: row.status,
+        qtyOut: row.step?.qty_out,
+        lossKg: row.step?.normalized_loss_value,
+      })),
     [workflowRows],
   );
 
   const lotSidebarItems = useMemo<ActiveLotItem[]>(() => {
     return filteredBatches.map((batch) => {
       const lotSteps = stepsByBatch.get(batch.id) ?? [];
-      const matched = lotSteps.map((step) => stageFromType(step.type)).filter((item): item is WorkflowStageDef => Boolean(item));
-      const uniqueDone = new Set(matched.map((item) => item.key)).size;
-      const latest = matched[matched.length - 1];
-      const progressPct = (uniqueDone / LOT_WORKFLOW_STAGES.length) * 100;
+      const total = Math.max(batch.ordered_process_steps.length, 1);
+      const done = Math.min(lotSteps.length, total);
+      const latest = lotSteps[lotSteps.length - 1];
+      const latestStage = latest ? stageFromType(latest.type) : null;
+      const progressPct = (done / total) * 100;
       return {
         id: batch.id,
         code: batch.code,
         productName: productLookup.get(batch.product_id) ?? batch.product_id.slice(0, 8),
         seasonLabel: buildSeasonFromDate(batch.creation_date),
-        phaseLabel: phaseLabel(latest?.phase ?? "pre_harvest"),
-        stepsDone: uniqueDone,
-        stepsTotal: LOT_WORKFLOW_STAGES.length,
+        phaseLabel: phaseLabel(latestStage?.phase ?? "post_harvest"),
+        stepsDone: done,
+        stepsTotal: total,
         currentQty: batch.current_qty,
+        unit: batch.unit,
         progressPct,
         statusLabel: batchStatusLabel[batch.status] ?? batch.status,
         statusTone: batchStatusTone[batch.status] ?? "info",
@@ -321,13 +362,21 @@ export default function LotsPage() {
     ? Math.max(((selectedBatch.initial_qty - selectedBatch.current_qty) / selectedBatch.initial_qty) * 100, 0)
     : 0;
 
+  const selectedProductStock = useMemo(() => {
+    if (!watchedProductId) return null;
+    return stocks.find((stock) => stock.product_id === watchedProductId) ?? null;
+  }, [stocks, watchedProductId]);
+
+  const availableStockKg = selectedProductStock?.available_stock_kg ?? 0;
+  const availableStockDisplay = fromKg(availableStockKg, watchedLotUnit);
+
   const historyItems = useMemo(() => {
     if (!selectedBatch) return [];
     const stepItems = selectedSteps
       .map((step) => ({
         id: step.id,
-        title: stageLabelFromType(step.type),
-        detail: `In ${step.qty_in.toFixed(1)} kg · Out ${step.qty_out.toFixed(1)} kg · Perte ${step.loss_pct.toFixed(1)}%`,
+        title: `${step.sequence_order}. ${stageLabelFromType(step.type)}`,
+        detail: `In ${step.qty_in.toFixed(2)} kg · Perte ${step.normalized_loss_value.toFixed(2)} kg · Out ${step.qty_out.toFixed(2)} kg`,
         date: step.date,
       }))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -336,7 +385,7 @@ export default function LotsPage() {
       {
         id: `batch-${selectedBatch.id}`,
         title: `Lot ${selectedBatch.code} cree`,
-        detail: `Quantite initiale ${selectedBatch.initial_qty.toFixed(1)} kg`,
+        detail: `Quantite initiale ${selectedBatch.initial_qty.toFixed(2)} ${selectedBatch.unit}`,
         date: selectedBatch.creation_date,
       },
       ...stepItems,
@@ -363,40 +412,36 @@ export default function LotsPage() {
   };
 
   const openCreateLot = () => {
-    setEditingBatch(null);
-    lotForm.reset({ product_id: products[0]?.id ?? "", code: "", creation_date: todayIso, initial_qty: 0 });
-    setLotSeason(buildSeasonFromDate(todayIso));
-    setLotSurfaceHa("1");
-    setFormError(null);
-    setLotFormOpen(true);
-  };
-
-  const openEditLot = (batch: Batch) => {
-    setEditingBatch(batch);
     lotForm.reset({
-      product_id: batch.product_id,
-      code: batch.code,
-      creation_date: batch.creation_date,
-      initial_qty: batch.initial_qty,
+      product_id: products[0]?.id ?? "",
+      creation_date: todayIso,
+      initial_qty: 0,
+      unit: "kg",
+      process_steps: defaultSteps,
     });
-    setLotSeason(buildSeasonFromDate(batch.creation_date));
-    setLotSurfaceHa("1");
+    setPlannedStepsDraft(defaultSteps);
+    setStepToAdd("");
+    setCustomStepInput("");
     setFormError(null);
     setLotFormOpen(true);
   };
 
-  const openCreateStep = (preset?: StagePreset) => {
+  const openCreateStep = (row?: ProcessTableRow) => {
+    if (!selectedBatch) return;
+    const target = row ?? workflowRows.find((item) => item.isExecutable);
+    if (!target) {
+      setFormError("Aucune etape executable pour ce lot.");
+      return;
+    }
     setEditingStep(null);
-    setStepPreset(preset ?? null);
+    setStepPreset({ key: target.key, label: target.label, icon: target.icon, typeTag: target.typeTag });
     stepForm.reset({
-      batch_id: selectedBatch?.id ?? batches[0]?.id ?? "",
-      type: preset?.label ?? "",
+      batch_id: selectedBatch.id,
+      type: target.label,
       date: todayIso,
-      qty_in: 0,
-      qty_out: 0,
-      waste_qty: 0,
+      loss_value: 0,
+      loss_unit: selectedBatch.unit,
       notes: "",
-      status: "completed",
       duration_minutes: undefined,
     });
     setFormError(null);
@@ -420,11 +465,9 @@ export default function LotsPage() {
       batch_id: step.batch_id,
       type: step.type,
       date: step.date,
-      qty_in: step.qty_in,
-      qty_out: step.qty_out,
-      waste_qty: stageLossKg(step),
+      loss_value: step.loss_value,
+      loss_unit: step.loss_unit,
       notes: step.notes ?? "",
-      status: step.status,
       duration_minutes: step.duration_minutes ?? undefined,
     });
     setFormError(null);
@@ -438,22 +481,48 @@ export default function LotsPage() {
     setStepPreset(null);
   };
 
+  const addPlannedStep = (label: string) => {
+    const value = label.trim();
+    if (!value) return;
+    setPlannedStepsDraft((current) => [...current, value]);
+  };
+
+  const movePlannedStep = (index: number, direction: -1 | 1) => {
+    setPlannedStepsDraft((current) => {
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= current.length) return current;
+      const clone = [...current];
+      const [item] = clone.splice(index, 1);
+      clone.splice(nextIndex, 0, item);
+      return clone;
+    });
+  };
+
   const submitLot = lotForm.handleSubmit(async (values) => {
     setFormError(null);
     try {
+      if (plannedStepsDraft.length === 0) {
+        setFormError("Selectionnez au moins une etape de process pour ce lot.");
+        return;
+      }
+      const lotUnit = (values.unit || "kg") as MassUnit;
+      const requestedQty = Number(values.initial_qty);
+      const requestedQtyKg = toKg(requestedQty, lotUnit);
+      if (requestedQtyKg > availableStockKg) {
+        setFormError("Impossible de creer ce lot : quantite demandee superieure au stock disponible.");
+        return;
+      }
+
       const payload: BatchCreate = {
         product_id: values.product_id,
-        code: values.code.trim(),
         creation_date: values.creation_date,
-        initial_qty: Number(values.initial_qty),
+        initial_qty: requestedQty,
+        unit: lotUnit,
+        process_steps: plannedStepsDraft,
       };
 
-      if (editingBatch) {
-        await updateBatch.mutateAsync({ id: editingBatch.id, payload });
-      } else {
-        const created = await createBatch.mutateAsync(payload);
-        setSelectedBatchId(created.id);
-      }
+      const created = await createBatch.mutateAsync(payload);
+      setSelectedBatchId(created.id);
       closeForms();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Impossible d'enregistrer le lot.");
@@ -463,25 +532,30 @@ export default function LotsPage() {
   const submitStep = stepForm.handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const qtyIn = Number(values.qty_in);
-      const wasteQty = Math.max(Number(values.waste_qty ?? 0), 0);
-      const qtyOut = Math.max(qtyIn - wasteQty, 0);
-
-      const payload: ProcessStepCreate = {
-        batch_id: values.batch_id,
-        type: (values.type?.trim() || stepPreset?.label || "Etape personnalisee").trim(),
-        date: values.date,
-        qty_in: qtyIn,
-        qty_out: qtyOut,
-        waste_qty: wasteQty,
-        notes: values.notes?.trim() || null,
-        status: values.status || "completed",
-        duration_minutes: values.duration_minutes ? Number(values.duration_minutes) : undefined,
-      };
+      if (!selectedBatch) {
+        setFormError("Selectionnez un lot.");
+        return;
+      }
 
       if (editingStep) {
+        const payload: ProcessStepUpdate = {
+          date: values.date,
+          loss_value: Number(values.loss_value),
+          loss_unit: values.loss_unit,
+          notes: values.notes?.trim() || null,
+          duration_minutes: values.duration_minutes ? Number(values.duration_minutes) : undefined,
+        };
         await updateStep.mutateAsync({ id: editingStep.id, payload });
       } else {
+        const payload: ProcessStepCreate = {
+          batch_id: selectedBatch.id,
+          type: stepPreset?.label,
+          date: values.date,
+          loss_value: Number(values.loss_value),
+          loss_unit: values.loss_unit,
+          notes: values.notes?.trim() || null,
+          duration_minutes: values.duration_minutes ? Number(values.duration_minutes) : undefined,
+        };
         await createStep.mutateAsync(payload);
       }
       closeForms();
@@ -506,43 +580,26 @@ export default function LotsPage() {
     if (!window.confirm("Supprimer cette etape ?")) return;
     try {
       await deleteStep.mutateAsync(step.id);
+      closeForms();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Impossible de supprimer l'etape.");
     }
   };
 
-  const handleBatchStatusChange = async (batch: Batch, status: string) => {
-    try {
-      const payload: BatchStatusUpdate = { status };
-      await updateBatchStatus.mutateAsync({ id: batch.id, payload });
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Impossible de modifier le statut.");
-    }
-  };
-
-  const handleOpenCustomStep = () => {
-    if (activeTab !== "process") handleSwitchTab("process");
-    openCreateStep();
-  };
-
   const handleEnterStage = (row: ProcessTableRow) => {
-    openCreateStep({
-      key: row.key,
-      label: row.label,
-      icon: row.icon,
-      typeTag: row.typeTag,
-    });
+    if (!row.isExecutable) return;
+    openCreateStep(row);
   };
 
   const stepModalTitle = editingStep
-    ? `Saisir - ${stepPreset?.label ?? stageLabelFromType(editingStep.type)}`
-    : `Saisir - ${stepPreset?.label ?? "Etape personnalisee"}`;
+    ? `Modifier - ${stepPreset?.label ?? stageLabelFromType(editingStep.type)}`
+    : `Executer - ${stepPreset?.label ?? "Etape"}`;
 
   return (
     <main className="min-w-0 overflow-x-hidden">
       <PageIntro
         title="Flux matiere"
-        subtitle="Workspace lot-centrique: suivi des etapes, pertes, analytique et recommandations dans un seul ecran."
+        subtitle="Creation lot, reservation stock, execution sequentielle des etapes et tracabilite des pertes."
       />
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "30ms" }}>
@@ -551,8 +608,8 @@ export default function LotsPage() {
             <button type="button" onClick={openCreateLot} className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold">
               + Nouveau lot
             </button>
-            <button type="button" onClick={handleOpenCustomStep} className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold">
-              + Etape personnalisee
+            <button type="button" onClick={() => openCreateStep()} className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold" disabled={!selectedBatch}>
+              + Executer etape
             </button>
             <button
               type="button"
@@ -592,12 +649,13 @@ export default function LotsPage() {
               lotCode={selectedBatch.code}
               productName={productLookup.get(selectedBatch.product_id) ?? selectedBatch.product_id.slice(0, 8)}
               seasonLabel={selectedSeason}
+              unit={selectedBatch.unit}
               initialQty={selectedBatch.initial_qty}
               currentQty={selectedBatch.current_qty}
               lossPct={selectedLossPct}
               statusLabel={batchStatusLabel[selectedBatch.status] ?? selectedBatch.status}
               statusTone={batchStatusTone[selectedBatch.status] ?? "info"}
-              onEditLot={() => openEditLot(selectedBatch)}
+              onEditLot={openCreateLot}
             />
 
             <LotWorkspaceTabs activeTab={activeTab} onChange={handleSwitchTab} includeHistory />
@@ -628,16 +686,12 @@ export default function LotsPage() {
                     </div>
                     <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
                       <p className="text-[11px] text-[var(--muted)]">Statut lot</p>
-                      <select
-                        value={selectedBatch.status}
-                        onChange={(event) => handleBatchStatusChange(selectedBatch, event.target.value)}
-                        className="wf-input mt-1 w-full px-2 py-1 text-xs"
-                      >
-                        <option value="created">Cree</option>
-                        <option value="in_progress">En cours</option>
-                        <option value="completed">Termine</option>
-                        <option value="archived">Archive</option>
-                      </select>
+                      <div className="mt-1">
+                        <StatusBadge
+                          label={batchStatusLabel[selectedBatch.status] ?? selectedBatch.status}
+                          tone={batchStatusTone[selectedBatch.status] ?? "info"}
+                        />
+                      </div>
                     </div>
                   </div>
                 </article>
@@ -715,9 +769,6 @@ export default function LotsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button type="button" className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => openEditLot(selectedBatch)}>
-                    Modifier lot
-                  </button>
                   <button type="button" className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => handleDeleteLot(selectedBatch)}>
                     Supprimer lot
                   </button>
@@ -731,8 +782,8 @@ export default function LotsPage() {
       <LiquidGlassModal
         open={lotFormOpen}
         onClose={closeForms}
-        title={editingBatch ? "Modifier lot - Flux de matiere" : "Nouveau lot - Flux de matiere"}
-        subtitle="Le lot reste la racine de toutes les vues operationnelles."
+        title="Nouveau lot - Flux de matiere"
+        subtitle="Le lot reserve le stock disponible et conserve la sequence ordonnee des etapes."
         closeLabel="✕"
         size="md"
         footer={
@@ -741,7 +792,7 @@ export default function LotsPage() {
               Annuler
             </button>
             <button type="submit" form="lot-form" className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold" disabled={lotForm.formState.isSubmitting}>
-              {lotForm.formState.isSubmitting ? "Enregistrement..." : editingBatch ? "Mettre a jour lot" : "Creer le lot"}
+              {lotForm.formState.isSubmitting ? "Enregistrement..." : "Creer le lot"}
             </button>
           </div>
         }
@@ -750,17 +801,18 @@ export default function LotsPage() {
           <input type="hidden" {...lotForm.register("creation_date", { required: "Date requise." })} />
 
           <label className="block text-sm font-medium text-[var(--text)]">
-            Reference du lot
+            Reference du lot (auto)
             <input
-              {...lotForm.register("code", { required: "Code requis." })}
+              value={previewReference.data?.code ?? "..."}
+              readOnly
               className="wf-input mt-2 h-11 w-full px-3 text-sm"
-              placeholder="LOT-MO4LMN8P"
+              placeholder="LOT-XXXX-001"
             />
           </label>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm font-medium text-[var(--text)]">
-              Culture
+              Produit
               <select {...lotForm.register("product_id", { required: "Produit requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
                 <option value="" disabled>
                   Selectionner
@@ -774,32 +826,18 @@ export default function LotsPage() {
             </label>
 
             <label className="block text-sm font-medium text-[var(--text)]">
-              Saison
-              <input
-                value={lotSeason}
-                onChange={(event) => setLotSeason(event.target.value)}
-                className="wf-input mt-2 h-11 w-full px-3 text-sm"
-                placeholder="2024-2025"
-              />
+              Unite
+              <select {...lotForm.register("unit", { required: "Unite requise." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+                <option value="kg">kg</option>
+                <option value="ton">ton</option>
+              </select>
             </label>
 
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Surface (ha)
-              <input
-                value={lotSurfaceHa}
-                onChange={(event) => setLotSurfaceHa(event.target.value)}
-                type="number"
-                min="0"
-                step="0.1"
-                className="wf-input mt-2 h-11 w-full px-3 text-sm"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Qte initiale prevue (kg)
+            <label className="block text-sm font-medium text-[var(--text)] sm:col-span-2">
+              Quantite demandee
               <input
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 {...lotForm.register("initial_qty", { required: "Quantite requise.", valueAsNumber: true })}
                 className="wf-input mt-2 h-11 w-full px-3 text-sm"
@@ -808,7 +846,82 @@ export default function LotsPage() {
           </div>
 
           <div className="rounded-xl border border-[#BDD6FB] bg-[#EEF5FF] px-3 py-2 text-xs text-[#2F80ED]">
-            12 etapes standards disponibles: 4 pre-recolte + 8 post-recolte.
+            Stock disponible: {availableStockDisplay.toFixed(2)} {watchedLotUnit}
+            {selectedProductStock ? ` (=${availableStockKg.toFixed(2)} kg)` : ""}
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
+            <p className="text-sm font-semibold text-[var(--text)]">Etapes ordonnees</p>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <select value={stepToAdd} onChange={(event) => setStepToAdd(event.target.value)} className="wf-input h-10 w-full px-3 text-sm">
+                <option value="">Choisir une etape standard</option>
+                {LOT_WORKFLOW_STAGES.map((stage) => (
+                  <option key={stage.key} value={stage.label}>
+                    {stage.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="soft-focus wf-btn-secondary px-3 py-2 text-sm font-semibold"
+                onClick={() => {
+                  if (!stepToAdd) return;
+                  addPlannedStep(stepToAdd);
+                  setStepToAdd("");
+                }}
+              >
+                Ajouter
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input
+                value={customStepInput}
+                onChange={(event) => setCustomStepInput(event.target.value)}
+                className="wf-input h-10 w-full px-3 text-sm"
+                placeholder="Ajouter une etape personnalisee"
+              />
+              <button
+                type="button"
+                className="soft-focus wf-btn-secondary px-3 py-2 text-sm font-semibold"
+                onClick={() => {
+                  const value = customStepInput.trim();
+                  if (!value) return;
+                  addPlannedStep(value);
+                  setCustomStepInput("");
+                }}
+              >
+                Ajouter perso
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              {plannedStepsDraft.length === 0 ? (
+                <p className="text-xs text-[var(--muted)]">Aucune etape selectionnee.</p>
+              ) : (
+                plannedStepsDraft.map((stepName, index) => (
+                  <div key={`${stepName}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--line)] bg-white px-2 py-1.5">
+                    <p className="text-xs text-[var(--text)]">
+                      {index + 1}. {stepName}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button type="button" className="text-xs font-semibold text-[var(--primary)]" onClick={() => movePlannedStep(index, -1)}>
+                        ↑
+                      </button>
+                      <button type="button" className="text-xs font-semibold text-[var(--primary)]" onClick={() => movePlannedStep(index, 1)}>
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-[var(--danger)]"
+                        onClick={() => setPlannedStepsDraft((current) => current.filter((_, i) => i !== index))}
+                      >
+                        Retirer
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           {formError && <p className="rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">{formError}</p>}
@@ -835,58 +948,43 @@ export default function LotsPage() {
       >
         <form id="step-form" onSubmit={submitStep} className="space-y-3">
           <input type="hidden" {...stepForm.register("batch_id", { required: "Lot requis." })} />
-          <input type="hidden" {...stepForm.register("status")} />
-
-          {stepPreset ? (
-            <input type="hidden" {...stepForm.register("type", { required: "Type requis." })} />
-          ) : (
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Nom de l&apos;etape
-              <input
-                {...stepForm.register("type", { required: "Type requis." })}
-                className="wf-input mt-2 h-11 w-full px-3 text-sm"
-                placeholder="Etape personnalisee"
-              />
-            </label>
-          )}
 
           <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-3">
             <div className="flex items-center gap-2">
               <span className="text-lg">{stepPreset?.icon ?? "🧩"}</span>
               <div>
-                <p className="text-sm font-semibold text-[var(--text)]">{stepPreset?.label ?? (stepForm.watch("type") || "Etape personnalisee")}</p>
+                <p className="text-sm font-semibold text-[var(--text)]">{stepPreset?.label ?? (stepForm.watch("type") || "Etape")}</p>
                 <p className="text-xs text-[var(--muted)]">{stepPreset?.typeTag ?? "personnalise"}</p>
               </div>
             </div>
           </div>
 
-          <label className="block text-sm font-medium text-[var(--text)]">
-            Quantite (kg)
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              {...stepForm.register("qty_in", { required: "Quantite requise.", valueAsNumber: true })}
-              className="wf-input mt-2 h-11 w-full px-3 text-sm"
-            />
-          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Perte
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                {...stepForm.register("loss_value", { required: "Perte requise.", valueAsNumber: true })}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Unite perte
+              <select {...stepForm.register("loss_unit")} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+                <option value="kg">kg</option>
+                <option value="ton">ton</option>
+              </select>
+            </label>
+          </div>
 
           <label className="block text-sm font-medium text-[var(--text)]">
-            Pertes (kg)
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              {...stepForm.register("waste_qty", { valueAsNumber: true })}
-              className="wf-input mt-2 h-11 w-full px-3 text-sm"
-            />
-          </label>
-
-          <label className="block text-sm font-medium text-[var(--text)]">
-            Date de realisation
+            Date d&apos;execution
             <input
               type="date"
-              {...stepForm.register("date", { required: "Date requise." })}
+              {...stepForm.register("date")}
               className="wf-input mt-2 h-11 w-full px-3 text-sm"
             />
           </label>
@@ -895,10 +993,6 @@ export default function LotsPage() {
             Notes / Observations
             <textarea {...stepForm.register("notes")} className="wf-input mt-2 min-h-[84px] w-full px-3 py-2 text-sm" placeholder="Observations sur cette etape..." />
           </label>
-
-          <div className="rounded-xl border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs font-medium text-[#b23b3b]">
-            Taux de perte: {computedLossPct.toFixed(1)}% · Quantite nette: {computedNet.toFixed(1)} kg
-          </div>
 
           {editingStep && (
             <button

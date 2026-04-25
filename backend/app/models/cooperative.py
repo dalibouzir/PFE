@@ -29,5 +29,7 @@ class Cooperative(TimestampMixin, Base):
     fields: Mapped[List["Field"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")
     products: Mapped[List["Product"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")
     inputs: Mapped[List["Input"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")
+    farmer_advances: Mapped[List["FarmerAdvance"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")
+    treasury_transactions: Mapped[List["TreasuryTransaction"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")
     stocks: Mapped[List["Stock"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")
     batches: Mapped[List["Batch"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")

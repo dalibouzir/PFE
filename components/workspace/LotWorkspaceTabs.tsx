@@ -23,7 +23,7 @@ export function LotWorkspaceTabs({
 
   return (
     <section className="mt-4">
-      <div className="scroll-thin flex gap-2 overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-1.5">
+      <div className="flex flex-wrap gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-1.5">
         {visibleTabs.map((item) => {
           const active = item.id === activeTab;
           return (

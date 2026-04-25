@@ -15,6 +15,7 @@ class InputCreate(BaseModel):
     field_id: Optional[UUID] = None
     date: date
     quantity: float = Field(gt=0)
+    unit: Optional[str] = Field(default=None, min_length=1, max_length=16)
     grade: str = Field(min_length=1, max_length=40)
     estimated_value: Optional[float] = Field(default=None, ge=0)
     status: str = Field(default="pending")

@@ -6,11 +6,13 @@ import type { WorkflowPhase } from "@/lib/ui/lot-workflow";
 
 export type ProcessTableRow = {
   key: string;
+  order: number;
   label: string;
   icon: string;
   typeTag: string;
   phase: WorkflowPhase;
-  status: "done" | "pending" | "warning";
+  status: "done" | "pending" | "warning" | "current";
+  isExecutable?: boolean;
   step?: ProcessStep;
 };
 
@@ -50,17 +52,19 @@ export function LotProcessTable({
           <tbody>
             {rows.map((row) => {
               const step = row.step;
-              const lossKg = step ? Math.max(step.waste_qty, step.qty_in - step.qty_out, 0) : null;
-              const actionLabel = step ? "Modifier" : "Saisir";
+              const lossKg = step ? step.normalized_loss_value : null;
+              const actionLabel = step ? "Modifier" : row.isExecutable ? "Executer" : "En attente";
               const actionClass = step
                 ? "rounded-xl border border-[var(--info)] bg-[#EEF5FF] px-3 py-1.5 text-xs font-semibold text-[var(--info)] hover:brightness-95"
-                : "rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-95";
+                : row.isExecutable
+                  ? "rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-95"
+                  : "cursor-not-allowed rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]";
 
               return (
                 <tr key={row.key}>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5 whitespace-nowrap">
                     <p className="font-semibold text-[var(--text)]">
-                      {row.icon} {row.label}
+                      {row.order}. {row.icon} {row.label}
                     </p>
                   </td>
                   <td className="px-5 py-3.5">
@@ -77,18 +81,19 @@ export function LotProcessTable({
                       }
                     />
                   </td>
-                  <td className="px-5 py-3.5">{step ? `${step.qty_in.toFixed(0)} kg` : "-"}</td>
+                  <td className="px-5 py-3.5">{step ? `${step.qty_in.toFixed(2)} kg` : "-"}</td>
                   <td className={`px-5 py-3.5 ${step && row.status === "warning" ? "font-semibold text-[var(--danger)]" : ""}`}>
-                    {step && lossKg !== null ? `-${lossKg.toFixed(0)} kg` : "-"}
+                    {step && lossKg !== null ? `-${lossKg.toFixed(2)} kg` : "-"}
                   </td>
-                  <td className="px-5 py-3.5 font-semibold text-[var(--text)]">{step ? `${step.qty_out.toFixed(0)} kg` : "-"}</td>
+                  <td className="px-5 py-3.5 font-semibold text-[var(--text)]">{step ? `${step.qty_out.toFixed(2)} kg` : "-"}</td>
                   <td className="px-5 py-3.5">{step ? step.date : "-"}</td>
                   <td className="px-5 py-3.5 text-xs text-[var(--muted)]">{step?.notes?.trim() || "-"}</td>
                   <td className="px-5 py-3.5">
                     <button
                       type="button"
-                      onClick={() => (step ? onEditStep(step) : onEnterStage(row))}
+                      onClick={() => (step ? onEditStep(step) : row.isExecutable ? onEnterStage(row) : null)}
                       className={actionClass}
+                      disabled={!step && !row.isExecutable}
                     >
                       {actionLabel}
                     </button>

@@ -3,9 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --primary: #007e2f;
-  --primary-hover: #006c28;
-  --primary-light: #e8f4ec;
+  --brand-rgb: 0 126 47;
+  --brand-50: #e9f7ee;
+  --brand-100: #d3efde;
+  --brand-200: #a8debc;
+  --brand-300: #7ccd9b;
+  --brand-400: #3fad6f;
+  --brand-500: #007e2f;
+  --brand-600: #006f2a;
+  --brand-700: #005f24;
+  --brand-800: #0f4d26;
+  --brand-900: #113f23;
+
+  --primary: var(--brand-500);
+  --primary-hover: var(--brand-600);
+  --primary-light: var(--brand-50);
 
   --secondary: #4fa3c7;
   --secondary-light: #eaf5fb;
@@ -21,14 +33,14 @@
   --surface-soft: #f8f4ea;
   --line: #e4dccf;
   --text: #1f2a24;
-  --muted: #6e6759;
+  --muted: #625d53;
 
   /* Backward-compat aliases used by existing classes */
-  --green-900: #007e2f;
-  --green-800: #006c28;
-  --green-700: #0f8f3f;
-  --green-500: #33a358;
-  --green-200: #e8f4ec;
+  --green-900: var(--brand-900);
+  --green-800: var(--brand-800);
+  --green-700: var(--brand-700);
+  --green-500: var(--brand-500);
+  --green-200: var(--brand-200);
 }
 
 * {
@@ -129,6 +141,25 @@ h6 {
 .soft-focus:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--primary) 65%, white 35%);
   outline-offset: 2px;
+}
+
+.wf-logo-chip {
+  border: 1px solid color-mix(in srgb, var(--line) 74%, white 26%);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--surface) 88%, white 12%);
+  box-shadow: 0 6px 14px rgba(20, 46, 34, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.wf-logo-chip-dark {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 20px rgba(8, 22, 16, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.wf-logo-chip-ghost {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 16px rgba(13, 44, 31, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.32);
 }
 
 .wf-btn-primary {
@@ -332,33 +363,33 @@ h6 {
 }
 
 .wf-input:focus {
-  border-color: #1f6f54;
+  border-color: var(--brand-700);
   background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 0 0 4px rgba(31, 111, 84, 0.16);
+  box-shadow: 0 0 0 4px rgba(var(--brand-rgb), 0.16);
 }
 
 .wf-login-btn {
-  background: #1f6f54;
+  background: var(--brand-700);
   box-shadow: 0 10px 20px rgba(17, 58, 43, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.18);
   transition: transform 170ms ease, box-shadow 170ms ease, background-color 170ms ease, filter 170ms ease;
 }
 
 .wf-login-btn:hover {
   transform: translateY(-1px);
-  background: #298060;
+  background: var(--brand-600);
   filter: brightness(1.02);
   box-shadow: 0 14px 24px rgba(17, 58, 43, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .wf-login-btn:active {
   transform: translateY(0);
-  background: #195741;
+  background: var(--brand-800);
 }
 
 .auth-shell {
   background:
     radial-gradient(circle at 35% 50%, rgba(128, 183, 148, 0.18) 0%, rgba(128, 183, 148, 0) 38%),
-    linear-gradient(130deg, #0f3d2e 0%, #15553f 45%, #1f6f54 100%);
+    linear-gradient(130deg, var(--brand-900) 0%, var(--brand-800) 45%, var(--brand-700) 100%);
 }
 
 .auth-noise {
@@ -505,20 +536,20 @@ h6 {
 }
 
 .auth-input:focus {
-  border-color: rgba(111, 216, 163, 0.82);
+  border-color: color-mix(in srgb, var(--primary) 62%, white 38%);
   background: rgba(255, 255, 255, 0.28);
-  box-shadow: 0 0 0 4px rgba(116, 211, 161, 0.2);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 22%, transparent);
   outline: none;
 }
 
 .auth-cta {
-  background: #0f3d2e;
+  background: var(--brand-900);
   transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
 }
 
 .auth-cta:hover {
   transform: translateY(-2px);
-  background: #15523b;
+  background: var(--brand-800);
   box-shadow: 0 12px 24px rgba(9, 39, 28, 0.32);
 }
 
@@ -1057,6 +1088,18 @@ h6 {
   }
   50% {
     transform: translate3d(0, -16px, 0);
+  }
+}
+
+@keyframes wf-route-progress {
+  0% {
+    transform: translateX(-120%);
+  }
+  60% {
+    transform: translateX(190%);
+  }
+  100% {
+    transform: translateX(260%);
   }
 }
 

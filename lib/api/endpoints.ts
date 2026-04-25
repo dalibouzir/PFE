@@ -37,6 +37,19 @@ export const endpoints = {
     update: (id: string) => `/inputs/${id}`,
     delete: (id: string) => `/inputs/${id}`,
   },
+  farmerAdvances: {
+    summary: "/farmer-advances/summary",
+    byFarmer: (farmerId: string) => `/farmer-advances/farmer/${farmerId}`,
+    list: "/farmer-advances",
+    update: (id: string) => `/farmer-advances/${id}`,
+    cancel: (id: string) => `/farmer-advances/${id}/cancel`,
+  },
+  treasury: {
+    list: "/treasury",
+    stats: "/treasury/stats",
+    update: (id: string) => `/treasury/${id}`,
+    cancel: (id: string) => `/treasury/${id}/cancel`,
+  },
   stocks: {
     list: "/stocks",
     detail: (id: string) => `/stocks/${id}`,
@@ -47,6 +60,7 @@ export const endpoints = {
   },
   batches: {
     list: "/batches",
+    previewReference: (productId: string) => `/batches/reference-preview?product_id=${productId}`,
     detail: (id: string) => `/batches/${id}`,
     update: (id: string) => `/batches/${id}`,
     updateStatus: (id: string) => `/batches/${id}/status`,
@@ -67,6 +81,8 @@ export const endpoints = {
   },
   chat: {
     ask: "/chat",
+    sessions: "/chat/sessions",
+    messages: (sessionId: string) => `/chat/sessions/${sessionId}/messages`,
   },
   reference: {
     metrics: "/reference/metrics",

@@ -1,0 +1,29 @@
+{
+  "model_version": "20260422143351",
+  "targets": {
+    "precision_at_1": 0.7,
+    "harmful_rate": 0.02,
+    "calibration_error": 0.05,
+    "mean_loss_reduction_after_action": 0.0,
+    "feedback_rows": 200,
+    "holdout_ratio": 0.2
+  },
+  "metrics": {
+    "impact_model_ready": false,
+    "feedback_rows": 16,
+    "holdout_rows": 4,
+    "holdout_ratio": 0.25,
+    "real_feedback_rows": 0,
+    "proxy_feedback_rows": 16,
+    "precision_at_1": 0.0,
+    "harmful_rate": 1.0,
+    "calibration_error": 1.0,
+    "mean_loss_reduction_after_action": 0.0,
+    "coverage": 0.0,
+    "recommended_rows": 0,
+    "targets_met": false,
+    "used_auto_backfill": true
+  },
+  "experiments": [],
+  "timestamp": "2026-04-22T14:33:51.798908+00:00"
+}

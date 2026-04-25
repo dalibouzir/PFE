@@ -1,0 +1,691 @@
+Modified Diffs
+
+```diff
+--- backend/app/ml/utils/feature_prep.py
++++ backend/app/ml/utils/feature_prep.py
+@@ -10,12 +10,11 @@
+ 
+ CATEGORICAL_FEATURES = ["product", "process_type", "season"]
+ 
+-REGRESSION_FEATURES = [
++PREDICTIVE_REGRESSION_FEATURES = [
+     "product",
+     "process_type",
+     "season",
+     "qty_in",
+-    "qty_out",
+     "batch_size",
+     "stock_level",
+     "month",
+@@ -30,10 +29,11 @@
+     "date_ordinal",
+ ]
+ 
+-CLASSIFICATION_FEATURES = list(REGRESSION_FEATURES)
++PREDICTIVE_CLASSIFICATION_FEATURES = list(PREDICTIVE_REGRESSION_FEATURES)
+ 
+-ANOMALY_FEATURES = [
+-    *REGRESSION_FEATURES[:-1],
++ASSESSMENT_ANOMALY_FEATURES = [
++    *PREDICTIVE_REGRESSION_FEATURES[:-1],
++    "qty_out",
+     "loss_pct",
+     "efficiency_pct",
+     "date_ordinal",
+@@ -54,9 +54,9 @@
+     working = working.drop(columns=["date"])
+ 
+     feature_sets = {
+-        "regression_features": list(REGRESSION_FEATURES),
+-        "classification_features": list(CLASSIFICATION_FEATURES),
+-        "anomaly_features": list(ANOMALY_FEATURES),
++        "predictive_regression_features": list(PREDICTIVE_REGRESSION_FEATURES),
++        "predictive_classification_features": list(PREDICTIVE_CLASSIFICATION_FEATURES),
++        "assessment_anomaly_features": list(ASSESSMENT_ANOMALY_FEATURES),
+     }
+ ```
+
+```diff
+--- backend/app/ml/training/trainer.py
++++ backend/app/ml/training/trainer.py
+@@ -69,9 +69,9 @@
+ 
+     y_loss = prepared["loss_pct"]
+     y_risk = prepared["risk_level"]
+-    regression_features = feature_groups["regression_features"]
+-    classification_features = feature_groups["classification_features"]
+-    anomaly_features = feature_groups["anomaly_features"]
++    regression_features = feature_groups["predictive_regression_features"]
++    classification_features = feature_groups["predictive_classification_features"]
++    anomaly_features = feature_groups["assessment_anomaly_features"]
+@@ -160,9 +160,9 @@
+     metadata = {
+         "model_version": model_version,
+         "trained_at": datetime.now(timezone.utc).isoformat(),
+-        "regression_features": regression_features,
+-        "classification_features": classification_features,
+-        "anomaly_features": anomaly_features,
++        "predictive_regression_features": regression_features,
++        "predictive_classification_features": classification_features,
++        "assessment_anomaly_features": anomaly_features,
+         "metrics": metrics,
+     }
+ ```
+
+```diff
+--- backend/app/ml/utils/model_store.py
++++ backend/app/ml/utils/model_store.py
+@@ -18,9 +18,9 @@
+     risk_classifier: object
+     anomaly_detector: object
+     metadata: Dict
+-    regression_features: List[str]
+-    classification_features: List[str]
+-    anomaly_features: List[str]
++    predictive_regression_features: List[str]
++    predictive_classification_features: List[str]
++    assessment_anomaly_features: List[str]
+@@ -42,7 +42,11 @@
+     except (OSError, json.JSONDecodeError) as exc:
+         raise _artifact_error() from exc
+ 
+-    required_metadata = ("regression_features", "classification_features", "anomaly_features")
++    required_metadata = (
++        "predictive_regression_features",
++        "predictive_classification_features",
++        "assessment_anomaly_features",
++    )
+@@ -58,9 +62,9 @@
+         risk_classifier=risk_classifier,
+         anomaly_detector=anomaly_detector,
+         metadata=metadata,
+-        regression_features=list(metadata["regression_features"]),
+-        classification_features=list(metadata["classification_features"]),
+-        anomaly_features=list(metadata["anomaly_features"]),
++        predictive_regression_features=list(metadata["predictive_regression_features"]),
++        predictive_classification_features=list(metadata["predictive_classification_features"]),
++        assessment_anomaly_features=list(metadata["assessment_anomaly_features"]),
+     )
+ ```
+
+```diff
+--- backend/app/ml/inference/predictor.py
++++ backend/app/ml/inference/predictor.py
+@@ -9,7 +9,7 @@
+ 
+ from app.ml.features.engineer import build_features
+ from app.ml.recommendations.rule_engine import derive_prediction_signals
+-from app.ml.utils.feature_prep import prepare_feature_frame
++from app.ml.utils.feature_prep import assign_risk_level, prepare_feature_frame
+@@ -18,6 +18,12 @@
+ 
+ def _sigmoid(value: float) -> float:
+     return float(1 / (1 + np.exp(-value)))
++
++
++def _safe_ratio(numerator: float, denominator: float) -> float:
++    if denominator <= 0:
++        return 0.0
++    return numerator / denominator
+@@ -32,6 +38,35 @@
+     return normalized
+ 
+ 
++def _prepare_assessment_features(features: pd.DataFrame) -> pd.DataFrame:
++    working = features.copy()
++    if "qty_out" not in working.columns:
++        raise ValidationError("Assessment mode requires qty_out.")
++
++    if "loss_pct" not in working.columns:
++        working["loss_pct"] = ((working["qty_in"] - working["qty_out"]) / working["qty_in"]) * 100.0
++    else:
++        missing_loss = working["loss_pct"].isna()
++        working.loc[missing_loss, "loss_pct"] = (
++            (working.loc[missing_loss, "qty_in"] - working.loc[missing_loss, "qty_out"])
++            / working.loc[missing_loss, "qty_in"]
++        ) * 100.0
++
++    if "efficiency_pct" not in working.columns:
++        working["efficiency_pct"] = working.apply(
++            lambda row: _safe_ratio(float(row["qty_out"]), float(row["qty_in"])),
++            axis=1,
++        )
++    else:
++        missing_efficiency = working["efficiency_pct"].isna()
++        working.loc[missing_efficiency, "efficiency_pct"] = working.loc[missing_efficiency].apply(
++            lambda row: _safe_ratio(float(row["qty_out"]), float(row["qty_in"])),
++            axis=1,
++        )
++
++    return working
++
++
+ def predict_from_features(
+@@ -43,31 +78,25 @@
+     bundle = load_model_bundle()
+     prepared, _ = prepare_feature_frame(features)
+ 
+-    loss_predictions = bundle.loss_regressor.predict(prepared[bundle.regression_features])
+-    risk_predictions = bundle.risk_classifier.predict(prepared[bundle.classification_features])
+-    anomaly_scores = bundle.anomaly_detector.decision_function(prepared[bundle.anomaly_features])
+-    anomaly_flags = bundle.anomaly_detector.predict(prepared[bundle.anomaly_features])
++    loss_predictions = bundle.loss_regressor.predict(prepared[bundle.predictive_regression_features])
++    risk_predictions = bundle.risk_classifier.predict(prepared[bundle.predictive_classification_features])
+ 
+     critical_index = int(np.argmax(loss_predictions))
+     critical_row = prepared.iloc[critical_index]
+ 
+     predicted_loss_pct = float(loss_predictions[critical_index])
+-    expected_efficiency_pct = max(0.0, 1.0 - predicted_loss_pct / 100.0)
++    predicted_efficiency_pct = max(0.0, 1.0 - predicted_loss_pct / 100.0)
+     risk_level = str(risk_predictions[critical_index])
+-    anomaly_score = _sigmoid(float(-anomaly_scores[critical_index]))
+-    is_anomalous = anomaly_flags[critical_index] == -1
+-
+     top_signals = derive_prediction_signals(predicted_loss_pct, critical_row)
+ 
+     output = {
++        "mode": "predictive",
+         "batch_id": str(batch_id) if batch_id else None,
+         "product": str(critical_row["product"]),
+         "critical_stage": str(critical_row["process_type"]),
+         "predicted_loss_pct": round(predicted_loss_pct, 2),
+-        "expected_efficiency_pct": round(expected_efficiency_pct, 3),
++        "predicted_efficiency_pct": round(predicted_efficiency_pct, 3),
+         "risk_level": risk_level,
+-        "anomaly_score": round(anomaly_score, 3),
+-        "is_anomalous": bool(is_anomalous),
+         "top_signals": top_signals,
+     }
+@@ -86,10 +115,10 @@
+         product=output["product"],
+         critical_stage=output["critical_stage"],
+         predicted_loss_pct=output["predicted_loss_pct"],
+-        expected_efficiency_pct=output["expected_efficiency_pct"],
++        expected_efficiency_pct=output["predicted_efficiency_pct"],
+         risk_level=RiskLevel(risk_level) if risk_level in RiskLevel._value2member_map_ else None,
+-        anomaly_score=output["anomaly_score"],
+-        is_anomalous=output["is_anomalous"],
++        anomaly_score=None,
++        is_anomalous=None,
+         input_snapshot=input_snapshot,
+         output_snapshot=output,
+     )
+@@ -99,8 +128,48 @@
+     return output
+ 
+ 
+-def predict_for_batch(db: Session, batch_id: str) -> Dict:
++def assess_from_features(
++    features: pd.DataFrame,
++    batch_id: Optional[str] = None,
++) -> Dict:
++    if features.empty:
++        raise ValidationError("No features available for assessment.")
++
++    bundle = load_model_bundle()
++    assessment_features = _prepare_assessment_features(features)
++    prepared, _ = prepare_feature_frame(assessment_features)
++
++    observed_losses = prepared["loss_pct"].to_numpy()
++    benchmark_loss_predictions = bundle.loss_regressor.predict(prepared[bundle.predictive_regression_features])
++    anomaly_scores = bundle.anomaly_detector.decision_function(prepared[bundle.assessment_anomaly_features])
++    anomaly_flags = bundle.anomaly_detector.predict(prepared[bundle.assessment_anomaly_features])
++
++    critical_index = int(np.argmax(observed_losses))
++    critical_row = prepared.iloc[critical_index]
++
++    observed_loss_pct = float(observed_losses[critical_index])
++    observed_efficiency_pct = float(critical_row["efficiency_pct"])
++    anomaly_score = _sigmoid(float(-anomaly_scores[critical_index]))
++    is_anomalous = bool(anomaly_flags[critical_index] == -1)
++    top_signals = derive_prediction_signals(observed_loss_pct, critical_row)
++
++    return {
++        "mode": "assessment",
++        "batch_id": str(batch_id) if batch_id else None,
++        "product": str(critical_row["product"]),
++        "critical_stage": str(critical_row["process_type"]),
++        "observed_loss_pct": round(observed_loss_pct, 2),
++        "observed_efficiency_pct": round(observed_efficiency_pct, 3),
++        "benchmark_predicted_loss_pct": round(float(benchmark_loss_predictions[critical_index]), 2),
++        "risk_level": assign_risk_level(observed_loss_pct),
++        "anomaly_score": round(anomaly_score, 3),
++        "is_anomalous": is_anomalous,
++        "top_signals": top_signals,
++    }
++
++
++def assess_for_batch(db: Session, batch_id: str) -> Dict:
+     feature_set = build_features(db, batch_id)
+     if feature_set.features.empty:
+-        raise ValidationError("Batch does not have enough process data to predict.")
+-    return predict_from_features(db, feature_set.features, batch_id=batch_id)
++        raise ValidationError("Batch does not have enough process data to assess.")
++    return assess_from_features(feature_set.features, batch_id=batch_id)
+```
+
+```diff
+--- backend/app/services/ml.py
++++ backend/app/services/ml.py
+@@ -8,13 +8,13 @@
+ from sqlalchemy.orm import Session
+ 
+ from app.ml.features.engineer import build_features
+-from app.ml.inference.predictor import predict_for_batch, predict_from_features
++from app.ml.inference.predictor import assess_for_batch, assess_from_features, predict_from_features
+ from app.ml.llm.provider import generate_explanation
+ from app.ml.recommendations.rule_engine import build_recommendation
+ from app.ml.training.trainer import train_models
+ from app.ml.utils.model_store import artifacts_status, load_model_bundle
+ from app.models.ml import MLRecommendationLog, MLTrainingRun
+-from app.schemas.ml import FeaturePayload
++from app.schemas.ml import AssessmentFeaturePayload, PredictiveFeaturePayload
+@@ -31,28 +31,66 @@
+ 
+ def predict(
+     db: Session,
+-    batch_id: Optional[UUID] = None,
+-    features: Optional[List[FeaturePayload]] = None,
++    features: List[PredictiveFeaturePayload],
+     include_explanation: bool = False,
+ ) -> Dict:
+-    if batch_id:
+-        prediction = predict_for_batch(db, str(batch_id))
+-        feature_set = build_features(db, batch_id)
+-        feature_records = feature_set.raw
+-    elif features:
+-        df = pd.DataFrame([item.model_dump() for item in features])
+-        prediction = predict_from_features(db, df)
+-        feature_records = df.to_dict(orient="records")
+-    else:
+-        raise ValidationError("Provide batch_id or feature payload.")
+-
++    df = pd.DataFrame([item.model_dump() for item in features])
++    prediction = predict_from_features(db, df)
++    feature_records = df.to_dict(orient="records")
+     recommendation = build_recommendation(prediction)
+ 
+     explanation = None
+     if include_explanation:
+         explanation = generate_explanation(
+             {
++                "mode": "predictive",
+                 "prediction": prediction,
++                "recommendation": recommendation,
++                "features": feature_records[:3],
++            }
++        )
++
++    recommendation_log = MLRecommendationLog(
++        batch_id=None,
++        structured_recommendation=recommendation,
++        llm_explanation=explanation,
++    )
++    db.add(recommendation_log)
++    db.commit()
++
++    return {
++        "prediction": prediction,
++        "recommendation": recommendation,
++        "explanation": explanation,
++        "recommendation_log_id": recommendation_log.id,
++    }
++
++
++def assess(
++    db: Session,
++    batch_id: Optional[UUID] = None,
++    features: Optional[List[AssessmentFeaturePayload]] = None,
++    include_explanation: bool = False,
++) -> Dict:
++    if batch_id:
++        assessment = assess_for_batch(db, str(batch_id))
++        feature_set = build_features(db, batch_id)
++        feature_records = feature_set.raw
++    elif features:
++        df = pd.DataFrame([item.model_dump() for item in features])
++        assessment = assess_from_features(df)
++        feature_records = df.to_dict(orient="records")
++    else:
++        raise ValidationError("Provide batch_id or assessment feature payload.")
++
++    recommendation = build_recommendation(assessment)
++
++    explanation = None
++    if include_explanation:
++        explanation = generate_explanation(
++            {
++                "mode": "assessment",
++                "assessment": assessment,
+                 "recommendation": recommendation,
+                 "features": feature_records[:3],
+             }
+@@ -67,7 +105,7 @@
+     db.commit()
+ 
+     return {
+-        "prediction": prediction,
++        "assessment": assessment,
+         "recommendation": recommendation,
+         "explanation": explanation,
+         "recommendation_log_id": recommendation_log.id,
+@@ -75,8 +113,9 @@
+ 
+ 
+ def get_recommendation(db: Session, batch_id: UUID, include_explanation: bool = False) -> Dict:
+-    payload = predict(db, batch_id=batch_id, include_explanation=include_explanation)
++    payload = assess(db, batch_id=batch_id, include_explanation=include_explanation)
+     return {
++        "assessment": payload["assessment"],
+         "recommendation": payload["recommendation"],
+         "explanation": payload.get("explanation"),
+         "recommendation_log_id": payload.get("recommendation_log_id"),
+```
+
+```diff
+--- backend/app/api/routes/ml.py
++++ backend/app/api/routes/ml.py
+@@ -6,6 +6,8 @@
+ from app.api.deps import get_current_manager
+ from app.db.session import get_db
+ from app.schemas.ml import (
++    MLAssessRequest,
++    MLAssessResponse,
+     MLFeaturesResponse,
+     MLHealthResponse,
+     MLPredictRequest,
+@@ -33,11 +35,10 @@
+     )
+ 
+ 
+-@router.post("/predict", response_model=MLPredictResponse, summary="Predict loss/risk and generate recommendations.")
++@router.post("/predict", response_model=MLPredictResponse, summary="Predict stage loss/risk before stage completion.")
+ def predict(payload: MLPredictRequest, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+     result = ml_service.predict(
+         db,
+-        batch_id=payload.batch_id,
+         features=payload.features,
+         include_explanation=payload.include_explanation,
+     )
+@@ -48,22 +49,38 @@
+     )
+ 
+ 
++@router.post("/assess", response_model=MLAssessResponse, summary="Assess completed stage outcomes and anomaly signals.")
++def assess(payload: MLAssessRequest, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
++    result = ml_service.assess(
++        db,
++        batch_id=payload.batch_id,
++        features=payload.features,
++        include_explanation=payload.include_explanation,
++    )
++    return MLAssessResponse(
++        assessment=result["assessment"],
++        recommendation=result["recommendation"],
++        explanation=result.get("explanation"),
++    )
++
++
+ @router.get("/health", response_model=MLHealthResponse, summary="Return ML model availability and training status.")
+ def health(db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+     return ml_service.health(db)
+ 
+ 
+-@router.get("/features/{batch_id}", response_model=MLFeaturesResponse, summary="Return engineered features for a batch.")
++@router.get("/features/{batch_id}", response_model=MLFeaturesResponse, summary="Return engineered assessment features for a batch.")
+ def features(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+     features_payload = ml_service.get_features(db, batch_id)
+     return MLFeaturesResponse(batch_id=batch_id, features=features_payload)
+ 
+ 
+-@router.get("/recommendation/{batch_id}", response_model=MLRecommendationResponse, summary="Return structured recommendation and explanation.")
++@router.get("/recommendation/{batch_id}", response_model=MLRecommendationResponse, summary="Return recommendation from assessed batch outcomes.")
+ def recommendation(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+     payload = ml_service.get_recommendation(db, batch_id, include_explanation=True)
+     return MLRecommendationResponse(
+         batch_id=batch_id,
++        assessment=payload["assessment"],
+         recommendation=payload["recommendation"],
+         explanation=payload.get("explanation"),
+     )
+```
+
+```diff
+--- backend/app/schemas/ml.py
++++ backend/app/schemas/ml.py
+@@ -30,11 +30,10 @@
+     completed_at: datetime
+ 
+ 
+-class FeaturePayload(BaseModel):
++class PredictiveFeaturePayload(BaseModel):
+     product: str
+     process_type: str
+     qty_in: float
+-    qty_out: float
+     batch_size: float
+     stock_level: float
+     date: datetime
+@@ -48,26 +47,44 @@
+     previous_batch_loss: float
+     rolling_loss_last_n_batches: float
+     rolling_efficiency_last_n_batches: float
+-    loss_pct: float
+-    efficiency_pct: float
++
++
++class AssessmentFeaturePayload(PredictiveFeaturePayload):
++    qty_out: float
++    loss_pct: Optional[float] = None
++    efficiency_pct: Optional[float] = None
+ 
+ 
+ class MLPredictRequest(BaseModel):
+-    batch_id: Optional[UUID] = None
+-    features: Optional[List[FeaturePayload]] = None
++    features: List[PredictiveFeaturePayload]
+     include_explanation: bool = False
+ 
+ 
+-class MLSignal(BaseModel):
+-    label: str
++class MLAssessRequest(BaseModel):
++    batch_id: Optional[UUID] = None
++    features: Optional[List[AssessmentFeaturePayload]] = None
++    include_explanation: bool = False
+ 
+ 
+ class MLPredictionOutput(BaseModel):
++    mode: str
+     batch_id: Optional[str]
+     product: str
+     critical_stage: str
+     predicted_loss_pct: float
+-    expected_efficiency_pct: float
++    predicted_efficiency_pct: float
++    risk_level: str
++    top_signals: List[str]
++
++
++class MLAssessmentOutput(BaseModel):
++    mode: str
++    batch_id: Optional[str]
++    product: str
++    critical_stage: str
++    observed_loss_pct: float
++    observed_efficiency_pct: float
++    benchmark_predicted_loss_pct: float
+     risk_level: str
+     anomaly_score: float
+     is_anomalous: bool
+@@ -88,6 +105,12 @@
+     explanation: Optional[str] = None
+ 
+ 
++class MLAssessResponse(BaseModel):
++    assessment: MLAssessmentOutput
++    recommendation: RecommendationOutput
++    explanation: Optional[str] = None
++
++
+ class MLHealthResponse(BaseModel):
+     models_ready: bool
+     model_version: Optional[str]
+@@ -97,11 +120,12 @@
+ 
+ class MLFeaturesResponse(BaseModel):
+     batch_id: UUID
+-    features: List[FeaturePayload]
++    features: List[AssessmentFeaturePayload]
+ 
+ 
+ class MLRecommendationResponse(BaseModel):
+     batch_id: UUID
++    assessment: MLAssessmentOutput
+     recommendation: RecommendationOutput
+     explanation: Optional[str] = None
+```
+
+New Feature Lists
+
+```python
+predictive_regression_features = [
+    "product",
+    "process_type",
+    "season",
+    "qty_in",
+    "batch_size",
+    "stock_level",
+    "month",
+    "week_of_year",
+    "historical_avg_loss_same_product",
+    "historical_avg_loss_same_stage",
+    "historical_avg_efficiency_same_stage",
+    "deviation_from_stage_avg",
+    "previous_batch_loss",
+    "rolling_loss_last_n_batches",
+    "rolling_efficiency_last_n_batches",
+    "date_ordinal",
+]
+
+predictive_classification_features = [
+    "product",
+    "process_type",
+    "season",
+    "qty_in",
+    "batch_size",
+    "stock_level",
+    "month",
+    "week_of_year",
+    "historical_avg_loss_same_product",
+    "historical_avg_loss_same_stage",
+    "historical_avg_efficiency_same_stage",
+    "deviation_from_stage_avg",
+    "previous_batch_loss",
+    "rolling_loss_last_n_batches",
+    "rolling_efficiency_last_n_batches",
+    "date_ordinal",
+]
+
+assessment_anomaly_features = [
+    "product",
+    "process_type",
+    "season",
+    "qty_in",
+    "batch_size",
+    "stock_level",
+    "month",
+    "week_of_year",
+    "historical_avg_loss_same_product",
+    "historical_avg_loss_same_stage",
+    "historical_avg_efficiency_same_stage",
+    "deviation_from_stage_avg",
+    "previous_batch_loss",
+    "rolling_loss_last_n_batches",
+    "rolling_efficiency_last_n_batches",
+    "qty_out",
+    "loss_pct",
+    "efficiency_pct",
+    "date_ordinal",
+]
+```
+
+Updated Metrics
+
+```json
+{
+  "run_id": "d3affc67-033f-451f-98f3-2cd5ac8881ed",
+  "run_name": "seed-train-predictive-mode-fix",
+  "trained_rows": 240,
+  "model_version": "20260415172643",
+  "metrics": {
+    "regression_mae": 0.2572673947103159,
+    "regression_rmse": 0.4270624143016615,
+    "classification_accuracy": 0.9791666666666666,
+    "classification_f1": 0.9688596491228071,
+    "anomaly_ratio": 0.14583333333333334,
+    "recommendation_action_coverage": 1.0,
+    "recommendation_issue_alignment": 1.0
+  }
+}
+```
+
+One Example Payload For Predictive Mode
+
+```json
+{
+  "features": [
+    {
+      "product": "millet",
+      "process_type": "cleaning",
+      "qty_in": 886.4,
+      "batch_size": 886.4,
+      "stock_level": 427.89,
+      "date": "2025-11-16T00:00:00",
+      "month": 11,
+      "week_of_year": 46,
+      "season": "dry",
+      "historical_avg_loss_same_product": 4.23012800200262,
+      "historical_avg_loss_same_stage": 4.464421110602376,
+      "historical_avg_efficiency_same_stage": 0.9553557888939762,
+      "deviation_from_stage_avg": 0.0,
+      "previous_batch_loss": 4.464421110602376,
+      "rolling_loss_last_n_batches": 4.077161832510494,
+      "rolling_efficiency_last_n_batches": 0.9592283816748951
+    }
+  ],
+  "include_explanation": false
+}
+```
+
+One Example Payload For Assessment Mode
+
+```json
+{
+  "features": [
+    {
+      "product": "millet",
+      "process_type": "cleaning",
+      "qty_in": 886.4,
+      "qty_out": 848.84,
+      "batch_size": 886.4,
+      "stock_level": 427.89,
+      "date": "2025-11-16T00:00:00",
+      "month": 11,
+      "week_of_year": 46,
+      "season": "dry",
+      "historical_avg_loss_same_product": 4.23012800200262,
+      "historical_avg_loss_same_stage": 4.464421110602376,
+      "historical_avg_efficiency_same_stage": 0.9553557888939762,
+      "deviation_from_stage_avg": 0.0,
+      "previous_batch_loss": 4.464421110602376,
+      "rolling_loss_last_n_batches": 4.077161832510494,
+      "rolling_efficiency_last_n_batches": 0.9592283816748951,
+      "loss_pct": 4.237364620938623,
+      "efficiency_pct": 0.9576263537906138
+    }
+  ],
+  "include_explanation": false
+}
+```

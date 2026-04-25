@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from typing import List
 
-from sqlalchemy import Date, Enum, Float, ForeignKey, String
+from sqlalchemy import JSON, Date, Enum, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -24,7 +24,11 @@ class Batch(TimestampMixin, Base):
     product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
     code: Mapped[str] = mapped_column(String(80), nullable=False, unique=True, index=True)
     creation_date: Mapped[date] = mapped_column(Date, nullable=False)
+    unit: Mapped[str] = mapped_column(String(16), nullable=False, default="kg")
+    ordered_process_steps: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    # Stored in kg (normalized).
     initial_qty: Mapped[float] = mapped_column(Float, nullable=False)
+    # Stored in kg (normalized).
     current_qty: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[BatchStatus] = mapped_column(
         Enum(BatchStatus, native_enum=False),

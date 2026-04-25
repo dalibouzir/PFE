@@ -9,6 +9,7 @@ export function useDashboard() {
   return useQuery({
     queryKey: ["dashboard"],
     queryFn: () => apiFetch<DashboardResponse>(endpoints.analytics.dashboard),
-    refetchInterval: 30000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }

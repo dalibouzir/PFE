@@ -1,0 +1,56 @@
+Hardships Log
+
+Use this file to record technical and project difficulties for the final report.
+
+Entry Template
+- Date:
+- Area:
+- Hardship:
+- Impact:
+- What caused it:
+- What we tried:
+- Current workaround:
+- Final resolution:
+- Lessons learned:
+
+Entries
+
+- Date: April 17, 2026
+- Area: ML reliability and production-readiness gates
+- Hardship: The impact recommendation model is operational, but reliability targets are not fully met yet in runtime status.
+- Impact: We cannot claim "production-ready" confidence despite strong baseline metrics.
+- What caused it: The current offline reliability check still reports `targets_met=false`, mainly due to calibration error above target and weak recommendation coverage.
+- What we tried: Rebuilt and retrained through Docker startup pipeline, then validated `/ml/health` and `/ml/reliability` endpoints using manager auth.
+- Current workaround: Keep the system in MVP/preproduction mode and enforce abstain/manual-review fallback when confidence is low.
+- Final resolution: Partial. MVP/preprod readiness is achieved, but final production gate remains open.
+- Lessons learned: "Model available" is not the same as "model production-ready"; reliability gates must be enforced with hard thresholds.
+
+- Date: April 17, 2026
+- Area: Feedback loop quality (real-world learning)
+- Hardship: The feedback dataset is mostly auto-backfilled proxy data, with no real operator feedback rows yet.
+- Impact: Offline metrics look strong in parts, but trust in real-world decision quality remains limited.
+- What caused it: Feedback collection UI/process is not yet producing enough accepted/executed/outcome-labeled field data.
+- What we tried: Confirmed schema and endpoint support for full recommendation feedback (`accepted`, `executed`, `loss_before`, `loss_after`, `delta_loss`, reasons, confidence fields) and validated reliability payloads.
+- Current workaround: Keep rule-based fallback active and treat ML recommendation confidence as advisory in preprod.
+- Final resolution: Not fully resolved. Technical pipeline is ready; operational data collection is the remaining blocker.
+- Lessons learned: Real cooperative feedback volume and quality are the main drivers of trustworthy recommendation performance.
+
+- Date: April 17, 2026
+- Area: Dashboard/analytics integration correctness
+- Hardship: Dashboard and analytics pages consume real backend analytics data, but recommendations shown there are still primarily derived from analytics rule logic, and some UI blocks use fallback placeholders when data is sparse.
+- Impact: Decision UI is functional and useful, but not yet a pure reflection of calibrated ML recommendation outputs in all states.
+- What caused it: Frontend pages currently depend on `/analytics/dashboard` payload shaping and local derived insight builders; direct ML endpoint usage is not fully wired into manager views.
+- What we tried: Audited manager dashboard and analytics flows end-to-end and verified data source paths and fallback behavior.
+- Current workaround: Continue using current hierarchy for MVP while documenting where values are computed, inferred, or fallback-generated.
+- Final resolution: Partially resolved. Layout and hierarchy are improved, but full ML-first decision rendering is pending.
+- Lessons learned: For trust, every high-impact UI recommendation should have a clear provenance path (rule vs ML vs fallback).
+
+- Date: April 17, 2026
+- Area: Dockerized deployment readiness
+- Hardship: Needed to ensure the backend stack is reproducibly rebuildable and bootstraps ML artifacts automatically.
+- Impact: Without this, preprod demos and validation could drift from local environments.
+- What caused it: Dependency on startup sequence (migrations, seed, training, API startup) and potential runtime warnings.
+- What we tried: Ran `docker compose up -d --build`, checked container health, inspected logs for alembic + seed + ML training completion, and verified API docs endpoint.
+- Current workaround: None required for MVP; warnings observed are non-blocking.
+- Final resolution: Resolved for preprod backend scope.
+- Lessons learned: Rebuild verification must include both service health and model pipeline completion, not container status alone.

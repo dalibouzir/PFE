@@ -1,22 +1,59 @@
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from typing import List
+from uuid import UUID
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user
+from app.db.session import get_db
+from app.schemas.chat import ChatMessageCreate, ChatMessageRead, ChatRequest, ChatResponse, ChatSessionCreate, ChatSessionRead
+from app.services import assistant as assistant_service
 
 
-router = APIRouter(tags=["Chat"])
+router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
-class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=1000)
+@router.post("", response_model=ChatResponse, summary="Send a manager message and receive an assistant response.")
+def chat(
+    payload: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return assistant_service.generate_chat_reply(
+        db,
+        current_user=current_user,
+        message=payload.message,
+        session_id=payload.session_id,
+        top_k=payload.top_k,
+    )
 
 
-class ChatResponse(BaseModel):
-    success: bool
-    message: str
+@router.get("/sessions", response_model=List[ChatSessionRead], summary="List chat sessions for the current user.")
+def list_sessions(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    return assistant_service.list_chat_sessions(db, current_user)
 
 
-@router.post("/chat", response_model=ChatResponse, summary="Placeholder chatbot endpoint while the RAG backend is pending.")
-def chat_placeholder(payload: ChatRequest):
-    return ChatResponse(
-        success=True,
-        message="Chat/RAG backend is not implemented yet. The operational API is ready, but conversational retrieval is still pending.",
+@router.post("/sessions", response_model=ChatSessionRead, summary="Create a new chat session.")
+def create_session(payload: ChatSessionCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    return assistant_service.create_chat_session(db, current_user, title=payload.title)
+
+
+@router.get("/sessions/{session_id}/messages", response_model=List[ChatMessageRead], summary="List all messages in one chat session.")
+def list_messages(session_id: UUID, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    return assistant_service.list_chat_messages(db, current_user, session_id)
+
+
+@router.post("/sessions/{session_id}/messages", response_model=ChatResponse, summary="Send a message to an existing chat session.")
+def send_message_to_session(
+    session_id: UUID,
+    payload: ChatMessageCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return assistant_service.generate_chat_reply(
+        db,
+        current_user=current_user,
+        session_id=session_id,
+        message=payload.message,
+        top_k=4,
     )

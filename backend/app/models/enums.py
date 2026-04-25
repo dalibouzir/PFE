@@ -29,6 +29,21 @@ class InputStatus(str, Enum):
     VALIDATED = "validated"
 
 
+class FarmerAdvanceStatus(str, Enum):
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+
+
+class TreasuryTransactionType(str, Enum):
+    INCOME = "income"
+    EXPENSE = "expense"
+
+
+class TreasuryTransactionStatus(str, Enum):
+    RECORDED = "recorded"
+    CANCELLED = "cancelled"
+
+
 class BatchStatus(str, Enum):
     CREATED = "created"
     IN_PROGRESS = "in_progress"

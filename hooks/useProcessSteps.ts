@@ -16,7 +16,11 @@ export function useCreateProcessStep() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: ProcessStepCreate) => apiFetch<ProcessStep>(endpoints.processSteps.list, { method: "POST", body: payload }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["process-steps"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["process-steps"] });
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
@@ -25,14 +29,22 @@ export function useUpdateProcessStep() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: ProcessStepUpdate }) =>
       apiFetch<ProcessStep>(endpoints.processSteps.update(id), { method: "PATCH", body: payload }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["process-steps"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["process-steps"] });
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
 export function useDeleteProcessStep() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiFetch<ProcessStep>(endpoints.processSteps.delete(id), { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["process-steps"] }),
+    mutationFn: (id: string) => apiFetch<void>(endpoints.processSteps.delete(id), { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["process-steps"] });
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }

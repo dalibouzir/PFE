@@ -164,6 +164,7 @@ export type InputCreate = {
   field_id?: string | null;
   date: string;
   quantity: number;
+  unit?: "kg" | "ton";
   grade: string;
   estimated_value?: number | null;
   status?: string;
@@ -171,12 +172,126 @@ export type InputCreate = {
 
 export type InputUpdate = Partial<InputCreate>;
 
+export type FarmerAdvanceStatus = "active" | "cancelled";
+
+export type FarmerAdvance = {
+  id: string;
+  cooperative_id: string;
+  farmer_id: string;
+  amount_fcfa: number;
+  reason: string;
+  advance_date: string;
+  note?: string | null;
+  status: FarmerAdvanceStatus;
+  treasury_transaction_id?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FarmerAdvanceCreate = {
+  farmer_id: string;
+  amount_fcfa: number;
+  reason: string;
+  advance_date: string;
+  note?: string | null;
+};
+
+export type FarmerAdvanceUpdate = Partial<FarmerAdvanceCreate>;
+
+export type FarmerAdvanceSummaryRow = {
+  farmer_id: string;
+  farmer_name: string;
+  total_collected_quantity: number;
+  total_amount_given: number;
+  cost_per_kg?: number | null;
+  last_modified: string;
+  number_of_advances: number;
+};
+
+export type FarmerAdvanceSummaryStats = {
+  total_advanced: number;
+  total_advances_count: number;
+  affected_farmers_count: number;
+  average_cost_per_kg?: number | null;
+};
+
+export type FarmerAdvanceSummaryResponse = {
+  items: FarmerAdvanceSummaryRow[];
+  stats: FarmerAdvanceSummaryStats;
+};
+
+export type FarmerAdvanceFarmerSummary = {
+  farmer_id: string;
+  farmer_name: string;
+  total_collected_quantity: number;
+  total_amount_given: number;
+  cost_per_kg?: number | null;
+  last_modified: string;
+  number_of_advances: number;
+};
+
+export type FarmerAdvanceFarmerDetailResponse = {
+  summary: FarmerAdvanceFarmerSummary;
+  advances: FarmerAdvance[];
+};
+
+export type TreasuryTransactionType = "income" | "expense";
+export type TreasuryTransactionStatus = "recorded" | "cancelled";
+
+export type TreasuryTransaction = {
+  id: string;
+  cooperative_id: string;
+  reference: string;
+  transaction_date: string;
+  type: TreasuryTransactionType;
+  category: string;
+  label: string;
+  amount_fcfa: number;
+  note?: string | null;
+  status: TreasuryTransactionStatus;
+  source_type: string;
+  source_id?: string | null;
+  farmer_id?: string | null;
+  farmer_name?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TreasuryTransactionCreate = {
+  transaction_date: string;
+  type: TreasuryTransactionType;
+  category: string;
+  label: string;
+  amount_fcfa: number;
+  note?: string | null;
+  source_type?: string;
+  farmer_id?: string | null;
+};
+
+export type TreasuryTransactionUpdate = Partial<TreasuryTransactionCreate>;
+
+export type TreasuryStats = {
+  total_given: number;
+  total_expenses: number;
+  total_income: number;
+  current_balance: number;
+};
+
 export type Stock = {
   id: string;
   cooperative_id: string;
   product_id: string;
   quantity: number;
   threshold: number;
+  total_stock: number;
+  available_stock: number;
+  reserved_in_lots: number;
+  processed_output: number;
+  total_stock_kg: number;
+  available_stock_kg: number;
+  reserved_in_lots_kg: number;
+  processed_output_kg: number;
+  threshold_kg: number;
   unit: string;
   last_updated: string;
   created_at: string;
@@ -185,9 +300,9 @@ export type Stock = {
 
 export type StockCreate = {
   product_id: string;
-  quantity: number;
+  quantity?: number;
   threshold: number;
-  unit: string;
+  unit: "kg" | "ton";
 };
 
 export type StockUpdate = {
@@ -205,8 +320,12 @@ export type Batch = {
   product_id: string;
   code: string;
   creation_date: string;
+  unit: "kg" | "ton";
+  ordered_process_steps: string[];
   initial_qty: number;
   current_qty: number;
+  initial_qty_display: number;
+  current_qty_display: number;
   status: string;
   created_by_user_id: string;
   created_at: string;
@@ -215,12 +334,15 @@ export type Batch = {
 
 export type BatchCreate = {
   product_id: string;
-  code: string;
   creation_date: string;
   initial_qty: number;
+  unit: "kg" | "ton";
+  process_steps: string[];
 };
 
-export type BatchUpdate = Partial<BatchCreate>;
+export type BatchUpdate = {
+  process_steps?: string[];
+};
 
 export type BatchStatusUpdate = {
   status: string;
@@ -233,18 +355,24 @@ export type StockAlert = {
   threshold: number;
   unit: string;
   deficit: number;
+  deficit_kg: number;
 };
 
 export type ProcessStep = {
   id: string;
   batch_id: string;
+  sequence_order: number;
   type: string;
   date: string;
+  loss_value: number;
+  loss_unit: "kg" | "ton";
+  normalized_loss_value: number;
   qty_in: number;
   qty_out: number;
   waste_qty: number;
   notes?: string | null;
   status: string;
+  executed_at?: string | null;
   duration_minutes?: number | null;
   created_at: string;
   updated_at: string;
@@ -255,17 +383,19 @@ export type ProcessStep = {
 
 export type ProcessStepCreate = {
   batch_id: string;
-  type: string;
-  date: string;
-  qty_in: number;
-  qty_out: number;
-  waste_qty?: number | null;
+  type?: string;
+  date?: string;
+  loss_value: number;
+  loss_unit: "kg" | "ton";
   notes?: string | null;
-  status?: string;
   duration_minutes?: number | null;
 };
 
 export type ProcessStepUpdate = Partial<ProcessStepCreate>;
+
+export type BatchReferencePreview = {
+  code: string;
+};
 
 export type Recommendation = {
   batch_id: string;
@@ -356,12 +486,16 @@ export type ChatDashboardSnapshot = {
 };
 
 export type AssistantChatRequest = {
+  session_id?: string;
   message: string;
   top_k?: number;
 };
 
 export type AssistantChatResponse = {
   success: boolean;
+  session_id: string;
+  user_message_id?: string | null;
+  assistant_message_id?: string | null;
   message: string;
   grounded: boolean;
   mode: string;
@@ -370,4 +504,36 @@ export type AssistantChatResponse = {
   citations: ChatCitation[];
   context_metrics: ChatMetricFact[];
   dashboard?: ChatDashboardSnapshot | null;
+};
+
+export type ChatSession = {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+  last_message_preview?: string | null;
+  last_message_at?: string | null;
+};
+
+export type ChatSessionCreate = {
+  title?: string | null;
+};
+
+export type ChatMessage = {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  created_at: string;
+  mode?: string | null;
+  llm_provider?: string | null;
+  llm_model?: string | null;
+  citations: ChatCitation[];
+  context_metrics: ChatMetricFact[];
+  dashboard?: ChatDashboardSnapshot | null;
+};
+
+export type ChatMessageCreate = {
+  message: string;
 };

@@ -11,6 +11,7 @@ export type ActiveLotItem = {
   stepsDone: number;
   stepsTotal: number;
   currentQty: number;
+  unit: string;
   progressPct: number;
   statusLabel: string;
   statusTone: "success" | "warning" | "danger" | "info";
@@ -28,13 +29,16 @@ export function LotActiveSidebar({
   onCreateLot: () => void;
 }) {
   return (
-    <aside className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
+    <aside
+      className="premium-card reveal flex max-h-[70svh] flex-col overflow-hidden rounded-2xl p-4 xl:max-h-[calc(100svh-10rem)]"
+      style={{ ["--delay" as string]: "40ms" }}
+    >
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-xl font-semibold text-[var(--text)]">Lots actifs</h3>
         <p className="text-xs text-[var(--muted)]">{items.length}</p>
       </div>
 
-      <div className="mt-3 space-y-2.5">
+      <div className="scroll-thin mt-3 flex-1 space-y-2.5 overflow-y-auto pr-1">
         {items.length === 0 ? (
           <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-3 text-sm text-[var(--muted)]">
             Aucun lot actif.
@@ -67,7 +71,7 @@ export function LotActiveSidebar({
                   <span>
                     {item.stepsDone}/{item.stepsTotal} etapes
                   </span>
-                  <span>{item.currentQty.toFixed(0)} kg</span>
+                  <span>{item.currentQty.toFixed(2)} {item.unit}</span>
                 </div>
               </button>
             );

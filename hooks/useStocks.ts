@@ -16,7 +16,10 @@ export function useCreateStock() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: StockCreate) => apiFetch<Stock>(endpoints.stocks.list, { method: "POST", body: payload }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["stocks"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
@@ -25,7 +28,10 @@ export function useUpdateStock() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: StockUpdate }) =>
       apiFetch<Stock>(endpoints.stocks.update(id), { method: "PATCH", body: payload }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["stocks"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
@@ -44,7 +50,10 @@ export function useAdjustStock() {
 export function useDeleteStock() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiFetch<Stock>(endpoints.stocks.delete(id), { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["stocks"] }),
+    mutationFn: (id: string) => apiFetch<void>(endpoints.stocks.delete(id), { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }

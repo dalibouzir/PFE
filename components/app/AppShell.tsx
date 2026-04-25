@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AnalyticsIcon,
   BellIcon,
   ChatIcon,
   ChevronDownIcon,
@@ -22,6 +23,7 @@ import {
   SearchIcon,
   SettingsIcon,
   StocksIcon,
+  TransformIcon,
   UsersIcon,
   WeatherIcon,
 } from "@/components/app/icons";
@@ -56,9 +58,11 @@ const navByRole: Record<AppRole, NavItem[]> = {
   manager: [
     { href: "/manager/dashboard", label: "Dashboard", icon: DashboardIcon },
     { href: "/manager/membres", label: "Membres", icon: UsersIcon },
-    { href: "/manager/inputs", label: "Collecte", icon: InputsIcon },
+    { href: "/manager/avances-producteurs", label: "Avances Producteurs", icon: TransformIcon },
     { href: "/manager/stocks", label: "Stocks", icon: StocksIcon },
     { href: "/manager/lots", label: "Flux matiere / Lots", icon: LotsIcon },
+    { href: "/manager/inputs", label: "Collecte", icon: InputsIcon },
+    { href: "/manager/tresorerie", label: "Trésorerie", icon: AnalyticsIcon },
     { href: "/manager/assistant-ia", label: "Assistant IA", icon: ChatIcon },
   ],
 };
@@ -137,7 +141,7 @@ function SidebarNav({
                 ? "bg-[var(--primary)] text-white shadow-[0_8px_18px_rgba(0,126,47,0.28)]"
                 : "text-[#B7C0BA] hover:bg-[rgba(255,255,255,0.08)] hover:text-white",
             )}
-            style={active ? { boxShadow: "0 0 12px rgba(34, 197, 94, 0.3), 0 8px 18px rgba(0,126,47,0.28)" } : undefined}
+            style={active ? { boxShadow: "0 0 12px rgba(0,126,47,0.34), 0 8px 18px rgba(0,126,47,0.28)" } : undefined}
           >
             <span className={cx("grid place-items-center transition-all duration-200", collapsed ? "w-11" : "w-[18px]")}>
               <Icon className={cx("shrink-0 transition-all duration-200", collapsed ? "h-[21px] w-[21px]" : "h-[17px] w-[17px]")} />
@@ -269,7 +273,7 @@ function SidebarBrand({
         </button>
 
         <div className={cx("transition-all duration-300", collapsed ? "order-2 flex flex-col items-center gap-1" : "order-1 flex items-center gap-3")}>
-          <Image src="/logo.png" alt="Logo WeeFarm" width={44} height={44} className="h-11 w-11 object-contain transition-all duration-300" priority />
+          <Image src="/logo.png" alt="Logo WeeFarm" width={44} height={44} className="wf-logo-chip wf-logo-chip-dark h-11 w-11 object-contain p-1.5 transition-all duration-300" priority />
 
           <div
             className={cx(
@@ -305,7 +309,6 @@ function SidebarBrand({
 }
 
 export function AppShell({ children, role }: { children: React.ReactNode; role: AppRole }) {
-  const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
@@ -375,7 +378,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
     }
 
     const elapsed = Date.now() - navLoadingStartedAtRef.current;
-    const minimumVisible = 120;
+    const minimumVisible = 180;
     const settleDelay = 40;
     const remaining = Math.max(settleDelay, minimumVisible - elapsed);
 
@@ -389,12 +392,6 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
       }
     }, remaining);
   }, [navLoading, pathname]);
-
-  useEffect(() => {
-    for (const item of navByRole[role]) {
-      router.prefetch(item.href);
-    }
-  }, [role, router]);
 
   useEffect(() => {
     return () => {
@@ -515,11 +512,11 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
   const currentDate = dateFormatter.format(now);
   const shellLayoutStyle = { ["--sidebar-width" as string]: `${collapsed ? 92 : 258}px` } as React.CSSProperties;
 
-  const startNavTransition = (href: string) => {
-    if (href === pathname) return;
-    router.prefetch(href);
+  const startNavTransition = useCallback((href: string) => {
+    const target = href.split("?")[0].split("#")[0];
+    if (!target || target === pathname) return;
     navLoadingStartedAtRef.current = Date.now();
-    pendingPathRef.current = href;
+    pendingPathRef.current = target;
     if (navLoadingTimeoutRef.current) {
       window.clearTimeout(navLoadingTimeoutRef.current);
       navLoadingTimeoutRef.current = null;
@@ -533,11 +530,37 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
       setNavLoading(false);
       pendingPathRef.current = null;
       navLoadingFailSafeRef.current = null;
-    }, 6000);
+    }, 3500);
 
     setNavLoading(true);
     setProfileOpen(false);
-  };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const onInternalLinkClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const targetNode = event.target as HTMLElement | null;
+      const anchor = targetNode?.closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      if (anchor.target && anchor.target !== "_self") return;
+
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
+
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      if (url.pathname === pathname) return;
+
+      startNavTransition(url.pathname);
+    };
+
+    document.addEventListener("click", onInternalLinkClick, true);
+    return () => document.removeEventListener("click", onInternalLinkClick, true);
+  }, [pathname, startNavTransition]);
 
   return (
     <div className="relative min-h-[100svh] overflow-x-clip bg-transparent md:min-h-[100dvh]" style={shellLayoutStyle}>
@@ -566,7 +589,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
                   </span>
                 </div>
                 <p className="mt-2 text-xs text-[#A9B4AD]">Derniere synchro: {currentTime}</p>
-                <p className="mt-1 text-[11px] text-[#A9B4AD]">Mode demo local</p>
+                <p className="mt-1 text-[11px] text-[#A9B4AD]">Mode production</p>
               </div>
             )}
 
@@ -598,7 +621,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
         >
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <Image src="/logo.png" alt="Logo WeeFarm" width={40} height={40} className="h-10 w-10 rounded-lg border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.08)] p-1 object-contain" />
+              <Image src="/logo.png" alt="Logo WeeFarm" width={40} height={40} className="wf-logo-chip wf-logo-chip-dark h-10 w-10 object-contain p-1.5" />
               <div>
                 <p className="text-sm font-semibold text-white">WeeFarm</p>
                 <p className="text-[11px] text-[#AAB4AE]">{meta.roleLabel}</p>
@@ -749,8 +772,8 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
           className="pointer-events-none fixed bottom-0 left-0 right-0 z-[45] md:left-[var(--sidebar-width)]"
           style={{ top: `${loaderTop}px` }}
         >
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(249,246,239,0.86)_0%,rgba(249,246,239,0.7)_32%,rgba(249,246,239,0.45)_72%,rgba(249,246,239,0.14)_100%)] backdrop-blur-[12px] [mask-image:linear-gradient(180deg,black,black_72%,transparent)]" />
-          <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.8),rgba(255,255,255,0))]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(249,246,239,0.84)_0%,rgba(249,246,239,0.66)_32%,rgba(249,246,239,0.42)_72%,rgba(249,246,239,0.14)_100%)] backdrop-blur-[8px] [mask-image:linear-gradient(180deg,black,black_70%,transparent)]" />
+          <div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.72),rgba(255,255,255,0))]" />
 
           <div className="relative flex h-full items-center justify-center px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-5 md:px-7">
             <AgriBrandLoader

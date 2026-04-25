@@ -1,0 +1,11 @@
+.git
+.next
+node_modules
+.venv
+backend/__pycache__
+backend/.pytest_cache
+backend/weefarm.db
+backend/weefarm_ml.db
+backend/*.db
+backend/artifacts/*.joblib
+tmp

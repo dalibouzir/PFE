@@ -234,16 +234,19 @@ def ensure_stock_thresholds(db, cooperative, products):
 
 
 def ensure_batch_and_steps(db, manager, products):
-    batch = db.scalar(select(Batch).where(Batch.code == "BATCH-MANG-001"))
+    batch = db.scalar(
+        select(Batch).where(Batch.product_id == products["Mangue"].id).order_by(Batch.created_at.asc())
+    )
     if batch is None:
         batch = batch_service.create_batch(
             db,
             manager,
             BatchCreate(
                 product_id=products["Mangue"].id,
-                code="BATCH-MANG-001",
                 creation_date=date.today() - timedelta(days=2),
                 initial_qty=250.0,
+                unit="kg",
+                process_steps=["cleaning", "drying"],
             ),
         )
 
@@ -254,35 +257,25 @@ def ensure_batch_and_steps(db, manager, products):
                 batch_id=batch.id,
                 type="cleaning",
                 date=date.today() - timedelta(days=2),
-                qty_in=250.0,
-                qty_out=230.0,
-                waste_qty=None,
+                loss_value=20.0,
+                loss_unit="kg",
                 notes="Initial cleaning and sorting.",
-                status="completed",
                 duration_minutes=120,
             ),
         )
 
-        drying_step = process_step_service.create_process_step(
+        process_step_service.create_process_step(
             db,
             manager,
             ProcessStepCreate(
                 batch_id=batch.id,
                 type="drying",
                 date=date.today() - timedelta(days=1),
-                qty_in=230.0,
-                qty_out=192.0,
-                waste_qty=None,
+                loss_value=38.0,
+                loss_unit="kg",
                 notes="Controlled tray drying after cleaning.",
-                status="pending",
                 duration_minutes=420,
             ),
-        )
-        process_step_service.complete_process_step(
-            db,
-            manager,
-            drying_step.id,
-            ProcessStepCompleteRequest(mark_batch_completed=True).mark_batch_completed,
         )
     else:
         cleaning_step = db.scalar(
@@ -296,11 +289,9 @@ def ensure_batch_and_steps(db, manager, products):
                     batch_id=batch.id,
                     type="cleaning",
                     date=date.today() - timedelta(days=2),
-                    qty_in=250.0,
-                    qty_out=230.0,
-                    waste_qty=None,
+                    loss_value=20.0,
+                    loss_unit="kg",
                     notes="Initial cleaning and sorting.",
-                    status="completed",
                     duration_minutes=120,
                 ),
             )
@@ -316,11 +307,9 @@ def ensure_batch_and_steps(db, manager, products):
                     batch_id=batch.id,
                     type="drying",
                     date=date.today() - timedelta(days=1),
-                    qty_in=230.0,
-                    qty_out=192.0,
-                    waste_qty=None,
+                    loss_value=38.0,
+                    loss_unit="kg",
                     notes="Controlled tray drying after cleaning.",
-                    status="pending",
                     duration_minutes=420,
                 ),
             )

@@ -1,0 +1,41 @@
+source_id,country,region,crop,metric,period,value,unit,notes
+sen_agridata_mil,Senegal,national,millet,production,2019,807044.07,t,Official DAPSA yearly production series
+sen_agridata_mil,Senegal,national,millet,production,2020,1144854.92,t,Official DAPSA yearly production series
+sen_agridata_mil,Senegal,national,millet,production,2021,1039859.75,t,Official DAPSA yearly production series
+sen_agridata_mil,Senegal,national,millet,production,2022,1097033.18,t,Official DAPSA yearly production series
+sen_agridata_mil,Senegal,national,millet,production,2023,1260709.44,t,Official DAPSA yearly production series
+sen_agridata_groundnut,Senegal,national,groundnut,production,2019,1421288.11,t,Official DAPSA yearly production series
+sen_agridata_groundnut,Senegal,national,groundnut,production,2020,1797486.11,t,Official DAPSA yearly production series
+sen_agridata_groundnut,Senegal,national,groundnut,production,2021,1677803.56,t,Official DAPSA yearly production series
+sen_agridata_groundnut,Senegal,national,groundnut,production,2022,1501498.40,t,Official DAPSA yearly production series
+sen_agridata_groundnut,Senegal,national,groundnut,production,2023,1675328.82,t,Official DAPSA yearly production series
+sen_anacim_aug_2023,Senegal,Saint-Louis,multi,rainfall_normal_by_31_aug,1991-2020,143.6,mm,From ANACIM late-August 2023 bulletin
+sen_anacim_aug_2023,Senegal,Bambey,multi,rainfall_normal_by_31_aug,1991-2020,341.4,mm,From ANACIM late-August 2023 bulletin
+sen_anacim_aug_2023,Senegal,Kaolack,multi,rainfall_normal_by_31_aug,1991-2020,390.4,mm,From ANACIM late-August 2023 bulletin
+sen_anacim_aug_2023,Senegal,Kaffrine,multi,rainfall_normal_by_31_aug,1991-2020,427.1,mm,From ANACIM late-August 2023 bulletin
+sen_anacim_aug_2023,Senegal,Kolda,multi,rainfall_normal_by_31_aug,1991-2020,718.8,mm,From ANACIM late-August 2023 bulletin
+sen_anacim_aug_2023,Senegal,Ziguinchor,multi,rainfall_normal_by_31_aug,1991-2020,909.2,mm,From ANACIM late-August 2023 bulletin
+sen_anacim_aug_2023,Senegal,Cap Skirring,multi,rainfall_normal_by_31_aug,1991-2020,848.1,mm,From ANACIM late-August 2023 bulletin
+sen_anacim_aug_2023,Senegal,national,millet,market_price_reference_late_aug_2023,2023-08,445,F_CFA_per_kg,Historical bulletin reference only not current pricing
+sen_anacim_aug_2023,Senegal,national,groundnut_in_shell,market_price_reference_late_aug_2023,2023-08,590,F_CFA_per_kg,Historical bulletin reference only not current pricing
+sen_anacim_aug_2023,Senegal,national,shelled_groundnut,market_price_reference_late_aug_2023,2023-08,1075,F_CFA_per_kg,Historical bulletin reference only not current pricing
+sen_rvo_mango,Senegal,Center_and_Niayes,mango,annual_production_estimate,2020,25000,t,Value-chain study estimate
+sen_rvo_mango,Senegal,Casamance,mango,annual_production_estimate_min,2020,40000,t,Value-chain study estimate
+sen_rvo_mango,Senegal,Casamance,mango,annual_production_estimate_max,2020,50000,t,Value-chain study estimate
+sen_rvo_mango,Senegal,national,mango,annual_production_estimate_min,2020,65000,t,Value-chain study estimate
+sen_rvo_mango,Senegal,national,mango,annual_production_estimate_max,2020,75000,t,Value-chain study estimate
+sen_rvo_mango,Senegal,Center_and_Niayes,mango,fresh_exports,2020,16000,t,Most fresh exports come from these zones
+sen_rvo_mango,Senegal,Casamance,mango,exports_via_dakar_estimate,2020,1000,t,Approximate exported volume from Casamance
+sen_fao_mango_ph,generic,generic,mango,ideal_postharvest_storage_temperature,na,12,C,Use as rule prior not Senegal label
+sen_fao_mango_ph,generic,generic,mango,room_temperature_shelf_life_min,na,4,days,Use as rule prior not Senegal label
+sen_fao_mango_ph,generic,generic,mango,room_temperature_shelf_life_max,na,10,days,Use as rule prior not Senegal label
+sen_fao_mango_ph,generic,generic,mango,precooled_storage_temperature_min,na,10,C,Use as rule prior not Senegal label
+sen_fao_mango_ph,generic,generic,mango,precooled_storage_temperature_max,na,12,C,Use as rule prior not Senegal label
+sen_fao_mango_ph,generic,generic,mango,postharvest_loss_range_min,na,25,percent,Use as rule prior not Senegal label
+sen_fao_mango_ph,generic,generic,mango,postharvest_loss_range_max,na,40,percent,Use as rule prior not Senegal label
+sen_fao_millet_losses,Senegal,generic,millet,storage_loss_over_30_months,na,2.2,percent,Traditional granary reference from FAO
+sen_iita_aflasafe,Senegal,Diourbel_and_Kaolack,groundnut,aflatoxin_reduction_min,2010-2014,80,percent,Aflasafe SN01 reduced contamination by more than 80 percent
+sen_iita_aflasafe,Senegal,national,groundnut_oil,aflatoxin_contamination_min,2008,6,ppb,Reported in artisanal oils
+sen_iita_aflasafe,Senegal,national,groundnut_oil,aflatoxin_contamination_max,2008,109,ppb,Reported in artisanal oils
+sen_iita_aflasafe,Senegal,national,groundnut_cake,aflatoxin_contamination_min,2008,18.97,ppb,Reported in groundnut cake
+sen_iita_aflasafe,Senegal,national,groundnut_cake,aflatoxin_contamination_max,2008,389,ppb,Reported in groundnut cake

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import {
   Bot,
@@ -22,7 +22,7 @@ import {
 import { PageIntro } from "@/components/ui/PageIntro";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
-import type { AssistantChatResponse } from "@/lib/api/types";
+import type { AssistantChatResponse, ChatMessage, ChatSession } from "@/lib/api/types";
 
 type Tone = "normal" | "critical";
 
@@ -71,6 +71,7 @@ type ChatMessageAIProps = {
   text: string;
   time: string;
   response?: AssistantChatResponse;
+  showTemplateExample?: boolean;
 };
 
 type MetricsCardSectionProps = {
@@ -107,6 +108,10 @@ type ChatComposerProps = {
 
 type PreviousChatsMenuProps = {
   items: PreviousChatSummary[];
+  activeId: string | null;
+  pendingCreate: boolean;
+  onSelect: (sessionId: string) => void;
+  onCreate: () => void;
 };
 
 const STAGE_DATA: StageDatum[] = [
@@ -116,14 +121,27 @@ const STAGE_DATA: StageDatum[] = [
   { label: "Emballage", value: 4 },
 ];
 
-const PREVIOUS_CHATS: PreviousChatSummary[] = [
-  { id: "chat-1", title: "Analyse pertes post-récolte semaine 16", time: "Aujourd'hui · 23:32", messageCount: 7 },
-  { id: "chat-2", title: "État des stocks critiques par produit", time: "Aujourd'hui · 21:48", messageCount: 5 },
-  { id: "chat-3", title: "Rendement oignon — comparaison inter-lots", time: "Hier · 20:15", messageCount: 9 },
-];
-
 function getNowTime() {
   return new Intl.DateTimeFormat("fr-SN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+}
+
+function formatStoredTime(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return getNowTime();
+  return new Intl.DateTimeFormat("fr-SN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+}
+
+function formatSessionTime(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 }
 
 function trimText(input: string, limit: number) {
@@ -160,6 +178,40 @@ function buildSourceChips(response?: AssistantChatResponse): SourceChipItem[] {
     { id: "source-dashboard", label: "Contexte: Données coopérative en direct", icon: Tag },
     { id: "source-scope", label: "Périmètre: lots / stocks / collecte", icon: Workflow },
   ];
+}
+
+function createWelcomeMessage(): ConversationMessage {
+  return {
+    id: "assistant-welcome",
+    role: "assistant",
+    text: "Conversation test prête. Posez votre question opérationnelle, je réponds avec le contexte de votre coopérative.",
+    time: getNowTime(),
+  };
+}
+
+function fromStoredMessage(message: ChatMessage): ConversationMessage | null {
+  if (message.role !== "user" && message.role !== "assistant") return null;
+  return {
+    id: message.id,
+    role: message.role,
+    text: message.content,
+    time: formatStoredTime(message.created_at),
+    response:
+      message.role === "assistant"
+        ? {
+            success: true,
+            session_id: message.session_id,
+            message: message.content,
+            grounded: message.citations.length > 0,
+            mode: message.mode ?? "mock-fallback",
+            llm_provider: message.llm_provider,
+            llm_model: message.llm_model,
+            citations: message.citations,
+            context_metrics: message.context_metrics,
+            dashboard: message.dashboard,
+          }
+        : undefined,
+  };
 }
 
 function ChatMessageUser({ id, text, time }: ChatMessageUserProps) {
@@ -253,7 +305,7 @@ function SourceChips({ items }: SourceChipsProps) {
   return (
     <div className="mt-4">
       <p className="text-xs font-medium text-[var(--text)]">
-        Sources <span className="font-normal text-[var(--muted)]">(basé sur vos données)</span>
+        Sources <span className="font-normal text-[var(--muted)]">(mock RAG pour l&apos;interface)</span>
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         {items.map((item) => {
@@ -274,7 +326,7 @@ function SourceChips({ items }: SourceChipsProps) {
   );
 }
 
-function ChatMessageAI({ id, text, time, response }: ChatMessageAIProps) {
+function ChatMessageAI({ id, text, time, response, showTemplateExample = false }: ChatMessageAIProps) {
   const dashboard = response?.dashboard;
   const lossPct = dashboard?.loss_rate ?? 18;
   const efficiencyPct = dashboard?.efficiency_rate ?? 82;
@@ -282,6 +334,7 @@ function ChatMessageAI({ id, text, time, response }: ChatMessageAIProps) {
   const qtyOut = Math.max(Math.round((qtyIn * efficiencyPct) / 100), 0);
   const recommendation = buildRecommendation(text);
   const sources = buildSourceChips(response);
+  const hasMockContext = Boolean(response?.citations?.length || response?.context_metrics?.length);
 
   return (
     <div className="flex scroll-mt-28 gap-3" id={id}>
@@ -300,31 +353,37 @@ function ChatMessageAI({ id, text, time, response }: ChatMessageAIProps) {
               </span>
             ) : (
               <span className="rounded-full border border-[var(--line)] bg-[var(--surface-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
-                Fallback
+                Mock fallback
               </span>
             )}
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_1.45fr_1fr]">
-          <MetricsCardSection lossPct={lossPct} efficiencyPct={efficiencyPct} qtyIn={qtyIn} qtyOut={qtyOut} />
-          <StageComparisonChart data={STAGE_DATA} />
-          <RecommendationCardSection text={recommendation} />
-        </div>
+        {showTemplateExample ? (
+          <>
+            <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_1.45fr_1fr]">
+              <MetricsCardSection lossPct={lossPct} efficiencyPct={efficiencyPct} qtyIn={qtyIn} qtyOut={qtyOut} />
+              <StageComparisonChart data={STAGE_DATA} />
+              <RecommendationCardSection text={recommendation} />
+            </div>
 
-        <SourceChips items={sources} />
+            <SourceChips items={sources} />
 
-        <div className="mt-4 flex items-center gap-2 border-t border-[rgba(19,40,31,0.08)] pt-3">
-          <button type="button" className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]" aria-label="Utile">
-            <ThumbsUp className="h-4 w-4" />
-          </button>
-          <button type="button" className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]" aria-label="Peu utile">
-            <ThumbsDown className="h-4 w-4" />
-          </button>
-          <button type="button" className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]" aria-label="Copier">
-            <Copy className="h-4 w-4" />
-          </button>
-        </div>
+            <div className="mt-4 flex items-center gap-2 border-t border-[rgba(19,40,31,0.08)] pt-3">
+              <button type="button" className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]" aria-label="Utile">
+                <ThumbsUp className="h-4 w-4" />
+              </button>
+              <button type="button" className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]" aria-label="Peu utile">
+                <ThumbsDown className="h-4 w-4" />
+              </button>
+              <button type="button" className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]" aria-label="Copier">
+                <Copy className="h-4 w-4" />
+              </button>
+            </div>
+          </>
+        ) : (
+          hasMockContext && <SourceChips items={sources} />
+        )}
       </article>
     </div>
   );
@@ -372,7 +431,7 @@ function RequestAnchorRail({ items, activeId, onSelect }: RequestAnchorRailProps
   );
 }
 
-function PreviousChatsMenu({ items }: PreviousChatsMenuProps) {
+function PreviousChatsMenu({ items, activeId, pendingCreate, onSelect, onCreate }: PreviousChatsMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -402,21 +461,37 @@ function PreviousChatsMenu({ items }: PreviousChatsMenuProps) {
         <div className="absolute right-0 z-30 mt-2 w-96 max-w-[80vw] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-2 shadow-[0_16px_36px_rgba(35,30,21,0.16)]">
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm font-semibold text-[var(--text)] transition-colors hover:bg-[var(--surface-soft)]"
+            onClick={() => {
+              onCreate();
+              setOpen(false);
+            }}
+            disabled={pendingCreate}
+            className="flex w-full items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm font-semibold text-[var(--text)] transition-colors hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Plus className="h-4 w-4" />
-            Nouvelle conversation
+            {pendingCreate ? "Création..." : "Nouvelle conversation"}
           </button>
 
           <div className="mt-2 max-h-72 space-y-1 overflow-y-auto">
             {items.map((item) => (
-              <button key={item.id} type="button" className="w-full rounded-xl px-3 py-2 text-left transition-colors hover:bg-[var(--surface-soft)]">
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  onSelect(item.id);
+                  setOpen(false);
+                }}
+                className={`w-full rounded-xl px-3 py-2 text-left transition-colors ${
+                  activeId === item.id ? "bg-[#EEF7E6]" : "hover:bg-[var(--surface-soft)]"
+                }`}
+              >
                 <p className="truncate text-sm font-semibold text-[var(--text)]">{item.title}</p>
                 <p className="mt-0.5 text-xs text-[var(--muted)]">
                   {item.time} · {item.messageCount} messages
                 </p>
               </button>
             ))}
+            {!items.length && <p className="px-3 py-2 text-xs text-[var(--muted)]">Aucune conversation enregistrée.</p>}
           </div>
         </div>
       )}
@@ -463,25 +538,54 @@ function ChatComposer({ value, pending, onChange, onSend }: ChatComposerProps) {
 
 export default function AssistantIAPage() {
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<ConversationMessage[]>([
-    {
-      id: "assistant-welcome",
-      role: "assistant",
-      text: "Bonjour. Posez votre question opérationnelle, je réponds avec le contexte de votre coopérative.",
-      time: getNowTime(),
-    },
-  ]);
+  const [messages, setMessages] = useState<ConversationMessage[]>([createWelcomeMessage()]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeRequestId, setActiveRequestId] = useState("");
   const streamEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(false);
 
-  const askMutation = useMutation({
-    mutationFn: (message: string) =>
-      apiFetch<AssistantChatResponse>(endpoints.chat.ask, {
+  const sessionsQuery = useQuery({
+    queryKey: ["assistant-chat-sessions"],
+    queryFn: () => apiFetch<ChatSession[]>(endpoints.chat.sessions),
+  });
+
+  const messagesQuery = useQuery({
+    queryKey: ["assistant-chat-messages", activeSessionId],
+    queryFn: () => apiFetch<ChatMessage[]>(endpoints.chat.messages(activeSessionId as string)),
+    enabled: Boolean(activeSessionId),
+  });
+
+  const createSessionMutation = useMutation({
+    mutationFn: (payload: { title?: string }) =>
+      apiFetch<ChatSession>(endpoints.chat.sessions, {
         method: "POST",
-        body: { message, top_k: 4 },
+        body: payload,
       }),
   });
+
+  const askMutation = useMutation({
+    mutationFn: ({ sessionId, message }: { sessionId: string; message: string }) =>
+      apiFetch<AssistantChatResponse>(endpoints.chat.ask, {
+        method: "POST",
+        body: { session_id: sessionId, message, top_k: 2 },
+      }),
+  });
+
+  useEffect(() => {
+    const sessions = sessionsQuery.data ?? [];
+    if (!sessions.length) return;
+    if (activeSessionId && sessions.some((session) => session.id === activeSessionId)) return;
+    setActiveSessionId(sessions[0].id);
+  }, [sessionsQuery.data, activeSessionId]);
+
+  useEffect(() => {
+    const persisted = (messagesQuery.data ?? []).map(fromStoredMessage).filter(Boolean) as ConversationMessage[];
+    if (persisted.length) {
+      setMessages(persisted);
+      return;
+    }
+    setMessages([createWelcomeMessage()]);
+  }, [messagesQuery.data, activeSessionId]);
 
   const requestAnchors = useMemo<RequestAnchorItem[]>(
     () =>
@@ -496,6 +600,17 @@ export default function AssistantIAPage() {
     [messages],
   );
 
+  const previousChats = useMemo<PreviousChatSummary[]>(
+    () =>
+      (sessionsQuery.data ?? []).map((session) => ({
+        id: session.id,
+        title: session.title || "Conversation sans titre",
+        time: formatSessionTime(session.last_message_at ?? session.updated_at ?? session.created_at),
+        messageCount: session.message_count,
+      })),
+    [sessionsQuery.data],
+  );
+
   useEffect(() => {
     if (!activeRequestId && requestAnchors.length) {
       setActiveRequestId(requestAnchors[requestAnchors.length - 1].id);
@@ -506,11 +621,41 @@ export default function AssistantIAPage() {
     if (!shouldAutoScrollRef.current) return;
     streamEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     shouldAutoScrollRef.current = false;
-  }, [messages]);
+  }, [messages, askMutation.isPending]);
+
+  const createNewConversation = async () => {
+    try {
+      const title = previousChats.length === 0 ? "Conversation test" : "Nouvelle conversation";
+      const created = await createSessionMutation.mutateAsync({ title });
+      setActiveSessionId(created.id);
+      setMessages([createWelcomeMessage()]);
+      shouldAutoScrollRef.current = true;
+      await sessionsQuery.refetch();
+    } catch {
+      // ignore menu creation errors to keep interaction lightweight
+    }
+  };
 
   const sendMessage = async () => {
     const message = draft.trim();
     if (!message || askMutation.isPending) return;
+
+    let sessionId = activeSessionId;
+    if (!sessionId) {
+      try {
+        const created = await createSessionMutation.mutateAsync({ title: "Conversation test" });
+        sessionId = created.id;
+        setActiveSessionId(created.id);
+        await sessionsQuery.refetch();
+      } catch (error) {
+        const fallback = error instanceof ApiError ? error.message : "Impossible de créer une conversation.";
+        setMessages((current) => [
+          ...current,
+          { id: `assistant-error-${Date.now()}`, role: "assistant", text: `Erreur assistant: ${fallback}`, time: getNowTime() },
+        ]);
+        return;
+      }
+    }
 
     const userMessageId = `user-${Date.now()}`;
     const userMessage: ConversationMessage = { id: userMessageId, role: "user", text: message, time: getNowTime() };
@@ -520,7 +665,7 @@ export default function AssistantIAPage() {
     setMessages((current) => [...current, userMessage]);
 
     try {
-      const response = await askMutation.mutateAsync(message);
+      const response = await askMutation.mutateAsync({ sessionId, message });
       const assistantMessage: ConversationMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
@@ -530,6 +675,7 @@ export default function AssistantIAPage() {
       };
       shouldAutoScrollRef.current = true;
       setMessages((current) => [...current, assistantMessage]);
+      await sessionsQuery.refetch();
     } catch (error) {
       const fallback = error instanceof ApiError ? error.message : "Le service LLM est indisponible pour le moment.";
       const assistantMessage: ConversationMessage = {
@@ -550,10 +696,19 @@ export default function AssistantIAPage() {
 
   return (
     <main className="pb-4">
-      <PageIntro title="Assistant IA" subtitle="Posez vos questions sur vos données. Je m'appuie sur les données de votre coopérative." />
+      <PageIntro title="Assistant IA" subtitle="Posez vos questions sur vos données. Mémoire conservée uniquement dans la conversation active." />
 
       <div className="-mt-1 mb-3 flex items-center justify-end">
-        <PreviousChatsMenu items={PREVIOUS_CHATS} />
+        <PreviousChatsMenu
+          items={previousChats}
+          activeId={activeSessionId}
+          pendingCreate={createSessionMutation.isPending}
+          onSelect={(sessionId) => {
+            setActiveSessionId(sessionId);
+            shouldAutoScrollRef.current = true;
+          }}
+          onCreate={createNewConversation}
+        />
       </div>
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_56px]">
@@ -564,7 +719,14 @@ export default function AssistantIAPage() {
                 entry.role === "user" ? (
                   <ChatMessageUser key={entry.id} id={entry.id} text={entry.text} time={entry.time} />
                 ) : (
-                  <ChatMessageAI key={entry.id} id={entry.id} text={entry.text} time={entry.time} response={entry.response} />
+                  <ChatMessageAI
+                    key={entry.id}
+                    id={entry.id}
+                    text={entry.text}
+                    time={entry.time}
+                    response={entry.response}
+                    showTemplateExample={entry.id === "assistant-welcome"}
+                  />
                 ),
               )}
 
@@ -574,7 +736,7 @@ export default function AssistantIAPage() {
                     <Bot className="h-5 w-5" />
                   </div>
                   <article className="w-full rounded-[22px] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--muted)] shadow-[0_8px_18px_rgba(35,30,21,0.06)]">
-                    Analyse en cours...
+                    Génération LLM en cours...
                   </article>
                 </div>
               )}

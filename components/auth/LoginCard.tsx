@@ -12,7 +12,7 @@ export function LoginCard() {
             alt="Logo WeFarm"
             width={36}
             height={36}
-            className="h-9 w-9 rounded-lg object-contain"
+            className="wf-logo-chip wf-logo-chip-ghost h-9 w-9 object-contain p-1"
             priority
           />
           <div>

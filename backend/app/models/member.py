@@ -36,3 +36,5 @@ class Member(TimestampMixin, Base):
     cooperative: Mapped["Cooperative"] = relationship(back_populates="members")
     fields: Mapped[List["Field"]] = relationship(back_populates="member", cascade="all, delete-orphan")
     inputs: Mapped[List["Input"]] = relationship(back_populates="member")
+    farmer_advances: Mapped[List["FarmerAdvance"]] = relationship(back_populates="farmer")
+    treasury_transactions: Mapped[List["TreasuryTransaction"]] = relationship(back_populates="farmer")

@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -9,13 +9,20 @@ from app.schemas.base import ORMModel
 
 class BatchCreate(BaseModel):
     product_id: UUID
-    code: str = Field(min_length=2, max_length=80)
     creation_date: date
     initial_qty: float = Field(gt=0)
+    unit: str = Field(default="kg", min_length=1, max_length=16)
+    process_steps: List[str] = Field(min_length=1)
+    note: Optional[str] = Field(default=None, max_length=500)
 
 
 class BatchStatusUpdate(BaseModel):
     status: str
+
+
+class BatchUpdate(BaseModel):
+    process_steps: Optional[List[str]] = Field(default=None, min_length=1)
+    note: Optional[str] = Field(default=None, max_length=500)
 
 
 class BatchRead(ORMModel):
@@ -24,8 +31,12 @@ class BatchRead(ORMModel):
     product_id: UUID
     code: str
     creation_date: date
+    unit: str
+    ordered_process_steps: List[str]
     initial_qty: float
     current_qty: float
+    initial_qty_display: float
+    current_qty_display: float
     status: str
     created_by_user_id: UUID
     created_at: datetime

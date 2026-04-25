@@ -23,7 +23,12 @@ class Stock(TimestampMixin, Base):
         index=True,
     )
     product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    # Stored in kg (normalized).
     quantity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    total_stock_kg: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    reserved_in_lots_kg: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    processed_output_kg: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    # Stored in kg (normalized).
     threshold: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     unit: Mapped[str] = mapped_column(nullable=False)
     last_updated: Mapped[datetime] = mapped_column(

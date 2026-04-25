@@ -22,6 +22,25 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24
     anomaly_loss_threshold: float = 18.0
     step_loss_threshold: float = 12.0
+    ml_artifacts_path: str = "./artifacts"
+    ml_min_rows: int = 120
+    ml_rolling_window: int = 5
+    ml_holdout_ratio: float = 0.2
+    ml_feedback_min_rows: int = 200
+    ml_confidence_high_threshold: float = 0.8
+    ml_confidence_medium_threshold: float = 0.6
+    ml_data_drift_zscore_threshold: float = 2.5
+    ml_data_drift_feature_count_threshold: int = 3
+    ml_calibration_drift_threshold: float = 0.08
+    ml_recommendation_confidence_threshold: float = 0.55
+    ml_harmful_probability_threshold: float = 0.35
+
+    llm_provider: str = "openrouter"
+    llm_model: str = "openai/gpt-4o-mini"
+    llm_timeout_seconds: float = 30.0
+    llm_max_tokens: int = 280
+    openrouter_api_key: str = ""
+    groq_api_key: str = ""
 
     seed_admin_email: str = "admin@weefarm.local"
     seed_admin_password: str = "Admin123!"

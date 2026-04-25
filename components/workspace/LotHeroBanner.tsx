@@ -6,6 +6,7 @@ export function LotHeroBanner({
   lotCode,
   productName,
   seasonLabel,
+  unit,
   initialQty,
   currentQty,
   lossPct,
@@ -16,6 +17,7 @@ export function LotHeroBanner({
   lotCode: string;
   productName: string;
   seasonLabel: string;
+  unit: string;
   initialQty: number;
   currentQty: number;
   lossPct: number;
@@ -35,7 +37,7 @@ export function LotHeroBanner({
             {lotCode} - {productName}
           </h2>
           <p className="mt-1 text-xs text-[#31566E] sm:text-sm">
-            Saison {seasonLabel || "N/A"} · {initialQty.toFixed(0)} kg recolte initiale
+            Saison {seasonLabel || "N/A"} · {initialQty.toFixed(2)} {unit} recolte initiale
           </p>
         </div>
 
@@ -54,11 +56,11 @@ export function LotHeroBanner({
       <div className="mt-3 grid gap-2 sm:grid-cols-3">
         <div className="rounded-xl border border-[#B8D0E0] bg-white/75 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.1em] text-[#3C6178]">Quantite initiale</p>
-          <p className="mt-0.5 text-base font-semibold text-[#17374A]">{initialQty.toFixed(0)} kg</p>
+          <p className="mt-0.5 text-base font-semibold text-[#17374A]">{initialQty.toFixed(2)} {unit}</p>
         </div>
         <div className="rounded-xl border border-[#B8D0E0] bg-white/75 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.1em] text-[#3C6178]">Quantite actuelle</p>
-          <p className="mt-0.5 text-base font-semibold text-[#17374A]">{currentQty.toFixed(0)} kg</p>
+          <p className="mt-0.5 text-base font-semibold text-[#17374A]">{currentQty.toFixed(2)} {unit}</p>
         </div>
         <div className="rounded-xl border border-[#B8D0E0] bg-white/75 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.1em] text-[#3C6178]">Perte cumulee</p>

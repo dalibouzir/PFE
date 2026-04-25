@@ -6,8 +6,8 @@ from app.models.input import Input
 from app.models.member import Member
 from app.models.product import Product
 from app.models.user import User
-from app.services.helpers import get_manager_cooperative_id, parse_enum_value
-from app.services.stocks import apply_stock_delta
+from app.services.helpers import get_manager_cooperative_id, normalize_mass_unit, parse_enum_value, to_kg
+from app.services.stocks import apply_total_stock_delta
 from app.models.enums import InputStatus
 from app.utils.exceptions import NotFoundError
 
@@ -44,14 +44,14 @@ def record_input(db: Session, manager: User, payload) -> Input:
         product_id=product.id,
         field_id=field_id,
         date=payload.date,
-        quantity=payload.quantity,
+        quantity=to_kg(payload.quantity, normalize_mass_unit(payload.unit or product.unit)),
         grade=payload.grade.strip(),
         estimated_value=payload.estimated_value,
         status=parse_enum_value(InputStatus, payload.status, "input status"),
     )
     db.add(input_record)
     db.flush()
-    apply_stock_delta(db, cooperative_id, product, payload.quantity, create_if_missing=True)
+    apply_total_stock_delta(db, cooperative_id, product, input_record.quantity, create_if_missing=True)
     db.commit()
     db.refresh(input_record)
     return input_record
