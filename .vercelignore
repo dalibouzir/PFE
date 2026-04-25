@@ -1,0 +1,10 @@
+backend/
+database/
+docker/
+ai/
+report_notes/
+ml_full_response.txt
+Cahier des charges.pdf
+.venv/
+.pytest_cache/
+*.db

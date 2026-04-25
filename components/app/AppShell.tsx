@@ -57,13 +57,13 @@ const navByRole: Record<AppRole, NavItem[]> = {
   ],
   manager: [
     { href: "/manager/dashboard", label: "Dashboard", icon: DashboardIcon },
-    { href: "/manager/membres", label: "Membres", icon: UsersIcon },
-    { href: "/manager/avances-producteurs", label: "Avances Producteurs", icon: TransformIcon },
-    { href: "/manager/stocks", label: "Stocks", icon: StocksIcon },
-    { href: "/manager/lots", label: "Flux matiere / Lots", icon: LotsIcon },
+    { href: "/manager/membres", label: "Member", icon: UsersIcon },
+    { href: "/manager/avances-producteurs", label: "Avance producteurs", icon: TransformIcon },
     { href: "/manager/inputs", label: "Collecte", icon: InputsIcon },
-    { href: "/manager/tresorerie", label: "Trésorerie", icon: AnalyticsIcon },
-    { href: "/manager/assistant-ia", label: "Assistant IA", icon: ChatIcon },
+    { href: "/manager/stocks", label: "Stocks", icon: StocksIcon },
+    { href: "/manager/lots", label: "Flux matiere / lots", icon: LotsIcon },
+    { href: "/manager/tresorerie", label: "Tresorerie", icon: AnalyticsIcon },
+    { href: "/manager/assistant-ia", label: "AI Assistant", icon: ChatIcon },
   ],
 };
 
