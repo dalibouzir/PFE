@@ -17,6 +17,14 @@ class Settings(BaseSettings):
 
     app_name: str = "WeeFarm Backend API"
     app_env: str = "development"
+    cors_origins: str = ",".join(
+        [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+        ]
+    )
     database_url: str = f"sqlite:///{DEFAULT_SQLITE_PATH}"
     secret_key: str = "change-me-in-production"
     access_token_expire_minutes: int = 60 * 24
