@@ -6,11 +6,26 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
-COPY backend/ ./
+COPY backend/alembic ./alembic
+COPY backend/alembic.ini ./alembic.ini
+COPY backend/app ./app
+COPY backend/scripts/container-start.sh ./scripts/container-start.sh
 COPY docs/ ./docs/
+
+RUN chmod +x ./scripts/container-start.sh \
+    && addgroup --system app \
+    && adduser --system --ingroup app app \
+    && mkdir -p /app/artifacts \
+    && chown -R app:app /app
+
+USER app
 
 EXPOSE 8000
 
-CMD ["/bin/sh", "-c", "alembic upgrade head && python3 -m app.seeds.seed_data && (python3 -m app.ml.training.runner || echo 'ML training skipped at startup due to runtime configuration') && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD python3 -c "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.getenv(\"PORT\", \"8000\")}/health', timeout=3).read()"
+
+ENTRYPOINT ["./scripts/container-start.sh"]

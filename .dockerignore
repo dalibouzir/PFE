@@ -2,10 +2,15 @@
 .next
 node_modules
 .venv
+.env
+.env.*
 backend/__pycache__
 backend/.pytest_cache
+backend/.env
+backend/.env.*
+backend/tests
+backend/test_model_accuracy.py
 backend/weefarm.db
 backend/weefarm_ml.db
 backend/*.db
-backend/artifacts/*.joblib
 tmp

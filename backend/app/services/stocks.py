@@ -1,6 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.input import Input
 from app.models.product import Product
 from app.models.stock import Stock
 from app.models.user import User
@@ -38,6 +39,51 @@ def critical_threshold_kg(stock: Stock) -> float:
 
 def _sync_available_snapshot(stock: Stock):
     stock.quantity = available_stock_kg(stock)
+
+
+def _repair_legacy_stock_row(stock: Stock) -> bool:
+    changed = False
+
+    # Backward compatibility: older rows used `quantity` directly and left `total_stock_kg` at 0.
+    if stock.total_stock_kg <= 0 and stock.quantity > 0:
+        stock.total_stock_kg = round_metric(stock.quantity + max(stock.reserved_in_lots_kg, 0.0))
+        changed = True
+
+    if stock.reserved_in_lots_kg < 0:
+        stock.reserved_in_lots_kg = 0.0
+        changed = True
+
+    if stock.processed_output_kg < 0:
+        stock.processed_output_kg = 0.0
+        changed = True
+
+    if stock.total_stock_kg < stock.reserved_in_lots_kg:
+        stock.total_stock_kg = round_metric(stock.reserved_in_lots_kg)
+        changed = True
+
+    expected_available = available_stock_kg(stock)
+    if abs(stock.quantity - expected_available) > 1e-9:
+        stock.quantity = expected_available
+        changed = True
+
+    return changed
+
+
+def _hydrate_total_from_existing_inputs(db: Session, stock: Stock) -> bool:
+    if stock.total_stock_kg > 0:
+        return False
+    total_from_inputs = db.scalar(
+        select(func.coalesce(func.sum(Input.quantity), 0.0)).where(
+            Input.cooperative_id == stock.cooperative_id,
+            Input.product_id == stock.product_id,
+        )
+    )
+    total_kg = round_metric(total_from_inputs or 0.0)
+    if total_kg <= 0:
+        return False
+    stock.total_stock_kg = total_kg
+    _sync_available_snapshot(stock)
+    return True
 
 
 def _serialize_stock(stock: Stock) -> StockRead:
@@ -101,9 +147,9 @@ def list_stocks(db: Session, manager: User):
     ).all()
     dirty = False
     for stock in stocks:
-        expected = available_stock_kg(stock)
-        if abs(stock.quantity - expected) > 1e-9:
-            stock.quantity = expected
+        changed = _hydrate_total_from_existing_inputs(db, stock)
+        changed = _repair_legacy_stock_row(stock) or changed
+        if changed:
             dirty = True
     if dirty:
         db.commit()
@@ -151,6 +197,9 @@ def apply_total_stock_delta(
         if not create_if_missing:
             raise ValidationError("Stock row not found for the requested product.")
         stock = _create_stock_row(db, cooperative_id, product, unit=product.unit)
+    else:
+        _hydrate_total_from_existing_inputs(db, stock)
+        _repair_legacy_stock_row(stock)
 
     next_total = round_metric(stock.total_stock_kg + float(delta_kg))
     if next_total < 0:
