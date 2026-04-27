@@ -1,16 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useCreateInput, useDeleteInput, useInputs, useUpdateInput } from "@/hooks/useInputs";
-import { useFields } from "@/hooks/useFields";
 import { useMembers } from "@/hooks/useMembers";
 import { useProducts } from "@/hooks/useProducts";
-import type { Input, InputCreate } from "@/lib/api/types";
+import type { Input, InputCreate, InputUpdate } from "@/lib/api/types";
 
 const statusTone: Record<string, "success" | "warning" | "info"> = {
   validated: "success",
@@ -28,11 +27,36 @@ const gradeTone: Record<string, "success" | "info" | "warning"> = {
   C: "warning",
 };
 
+function normalizeToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function parseSpecialtyTokens(value?: string | null) {
+  if (!value) return [];
+  const tokens = value
+    .split(/[;,/|]+/)
+    .map((item) => normalizeToken(item))
+    .filter(Boolean);
+  return Array.from(new Set(tokens));
+}
+
+function mergeMemberProductTokens(mainProduct?: string | null, secondaryProducts?: string | null, specialty?: string | null) {
+  const merged = [
+    ...parseSpecialtyTokens(mainProduct),
+    ...parseSpecialtyTokens(secondaryProducts),
+    ...parseSpecialtyTokens(specialty),
+  ];
+  return Array.from(new Set(merged));
+}
+
 export default function InputsPage() {
   const { data: inputs = [] } = useInputs();
   const { data: members = [] } = useMembers();
   const { data: products = [] } = useProducts();
-  const { data: fields = [] } = useFields();
   const createInput = useCreateInput();
   const updateInput = useUpdateInput();
   const deleteInput = useDeleteInput();
@@ -44,11 +68,10 @@ export default function InputsPage() {
   const [editingInput, setEditingInput] = useState<Input | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { register, handleSubmit, reset, watch, formState } = useForm<InputCreate>({
+  const { register, handleSubmit, reset, setValue, watch, getValues, formState } = useForm<InputCreate>({
     defaultValues: {
       member_id: "",
       product_id: "",
-      field_id: "",
       date: "",
       quantity: 0,
       grade: "",
@@ -74,17 +97,51 @@ export default function InputsPage() {
   const gradeA = filtered.filter((item) => item.grade.toUpperCase() === "A").length;
 
   const selectedMemberId = watch("member_id");
-  const availableFields = useMemo(() => {
+  const selectedMember = useMemo(() => members.find((item) => item.id === selectedMemberId), [members, selectedMemberId]);
+  const selectedMemberSpecialtyTokens = useMemo(
+    () => mergeMemberProductTokens(selectedMember?.main_product, selectedMember?.secondary_products, selectedMember?.specialty),
+    [selectedMember?.main_product, selectedMember?.secondary_products, selectedMember?.specialty],
+  );
+  const productByNormalizedName = useMemo(() => {
+    const map = new Map<string, (typeof products)[number]>();
+    for (const product of products) {
+      const key = normalizeToken(product.name);
+      if (!map.has(key)) {
+        map.set(key, product);
+      }
+    }
+    return map;
+  }, [products]);
+
+  const availableProducts = useMemo(() => {
     if (!selectedMemberId) return [];
-    return fields.filter((field) => field.member_id === selectedMemberId);
-  }, [fields, selectedMemberId]);
+    if (selectedMemberSpecialtyTokens.length === 0) return [];
+    const ordered: (typeof products)[number][] = [];
+    const seen = new Set<string>();
+    for (const token of selectedMemberSpecialtyTokens) {
+      const matched = productByNormalizedName.get(token);
+      if (!matched) continue;
+      if (seen.has(matched.id)) continue;
+      seen.add(matched.id);
+      ordered.push(matched);
+    }
+    return ordered;
+  }, [selectedMemberId, selectedMemberSpecialtyTokens, productByNormalizedName]);
+
+  useEffect(() => {
+    if (!formOpen) return;
+    const currentProductId = getValues("product_id");
+    const stillAvailable = availableProducts.some((product) => product.id === currentProductId);
+    if (!stillAvailable && availableProducts.length > 0) {
+      setValue("product_id", availableProducts[0]?.id ?? "");
+    }
+  }, [availableProducts, formOpen, getValues, setValue]);
 
   const openCreateForm = () => {
     setEditingInput(null);
     reset({
       member_id: members[0]?.id ?? "",
-      product_id: products[0]?.id ?? "",
-      field_id: "",
+      product_id: "",
       date: "",
       quantity: 0,
       grade: "",
@@ -100,7 +157,6 @@ export default function InputsPage() {
     reset({
       member_id: item.member_id,
       product_id: item.product_id,
-      field_id: item.field_id ?? "",
       date: item.date,
       quantity: item.quantity,
       grade: item.grade,
@@ -119,20 +175,34 @@ export default function InputsPage() {
   const submitInput = handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const payload: InputCreate = {
-        member_id: values.member_id,
-        product_id: values.product_id,
-        field_id: values.field_id || null,
-        date: values.date,
-        quantity: Number(values.quantity),
-        grade: values.grade.trim(),
-        status: values.status || "pending",
-        estimated_value: values.estimated_value ? Number(values.estimated_value) : null,
-      };
-
       if (editingInput) {
+        const payload: InputUpdate = {
+          member_id: values.member_id || editingInput.member_id,
+          product_id: values.product_id || editingInput.product_id,
+          field_id: editingInput.field_id ?? null,
+          date: values.date || editingInput.date,
+          quantity: Number(values.quantity),
+          grade: values.grade.trim(),
+          status: values.status || editingInput.status,
+          estimated_value:
+            values.estimated_value !== undefined ? Number(values.estimated_value) : editingInput.estimated_value ?? null,
+        };
         await updateInput.mutateAsync({ id: editingInput.id, payload });
       } else {
+        if (!values.product_id) {
+          setFormError("Produit requis.");
+          return;
+        }
+        const payload: InputCreate = {
+          member_id: values.member_id,
+          product_id: values.product_id,
+          field_id: null,
+          date: values.date,
+          quantity: Number(values.quantity),
+          grade: values.grade.trim(),
+          status: values.status || "pending",
+          estimated_value: values.estimated_value ? Number(values.estimated_value) : null,
+        };
         await createInput.mutateAsync(payload);
       }
       closeForm();
@@ -146,7 +216,9 @@ export default function InputsPage() {
     try {
       await deleteInput.mutateAsync(item.id);
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Impossible de supprimer la collecte.");
+      const message = error instanceof Error ? error.message : "Impossible de supprimer la collecte.";
+      setFormError(message);
+      window.alert(message);
     }
   };
 
@@ -341,23 +413,22 @@ export default function InputsPage() {
           <label className="block text-sm font-medium text-[var(--text)]">
             Produit
             <select {...register("product_id", { required: "Produit requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
-              <option value="" disabled>
-                Selectionner un produit
-              </option>
-              {products.map((product) => (
+              {!selectedMemberId ? (
+                <option value="" disabled>
+                  Selectionner un agriculteur d&apos;abord
+                </option>
+              ) : availableProducts.length === 0 ? (
+                <option value="" disabled>
+                  Aucun produit disponible pour cet agriculteur
+                </option>
+              ) : (
+                <option value="" disabled>
+                  Selectionner un produit
+                </option>
+              )}
+              {availableProducts.map((product) => (
                 <option key={product.id} value={product.id}>
                   {product.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-medium text-[var(--text)]">
-            Parcelle (optionnel)
-            <select {...register("field_id")} className="wf-input mt-2 h-11 w-full px-3 text-sm">
-              <option value="">Aucune</option>
-              {availableFields.map((field) => (
-                <option key={field.id} value={field.id}>
-                  {field.location}
                 </option>
               ))}
             </select>

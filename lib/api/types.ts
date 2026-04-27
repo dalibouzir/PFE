@@ -77,6 +77,7 @@ export type Member = {
   phone: string;
   village?: string | null;
   main_product?: string | null;
+  secondary_products?: string | null;
   parcel_count: number;
   area_hectares: number;
   join_date?: string | null;
@@ -92,6 +93,7 @@ export type MemberCreate = {
   phone: string;
   village?: string | null;
   main_product?: string | null;
+  secondary_products?: string | null;
   parcel_count?: number;
   area_hectares?: number;
   join_date?: string | null;

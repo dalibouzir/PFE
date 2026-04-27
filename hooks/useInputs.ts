@@ -19,7 +19,11 @@ export function useCreateInput() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: InputCreate) => apiFetch<Input>(endpoints.inputs.list, { method: "POST", body: payload }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inputs"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inputs"] });
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
@@ -28,7 +32,11 @@ export function useUpdateInput() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: InputUpdate }) =>
       apiFetch<Input>(endpoints.inputs.update(id), { method: "PATCH", body: payload }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inputs"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inputs"] });
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
@@ -36,6 +44,10 @@ export function useDeleteInput() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiFetch<Input>(endpoints.inputs.delete(id), { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inputs"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inputs"] });
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }

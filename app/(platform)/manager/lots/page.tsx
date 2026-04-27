@@ -18,6 +18,7 @@ import {
   useBatches,
   useCreateBatch,
   useDeleteBatch,
+  useUpdateBatch,
 } from "@/hooks/useBatches";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useCreateProcessStep, useDeleteProcessStep, useProcessSteps, useUpdateProcessStep } from "@/hooks/useProcessSteps";
@@ -104,6 +105,7 @@ export default function LotsPage() {
   const { data: dashboard } = useDashboard();
 
   const createBatch = useCreateBatch();
+  const updateBatch = useUpdateBatch();
   const deleteBatch = useDeleteBatch();
   const createStep = useCreateProcessStep();
   const updateStep = useUpdateProcessStep();
@@ -115,6 +117,7 @@ export default function LotsPage() {
 
   const [lotFormOpen, setLotFormOpen] = useState(false);
   const [stepFormOpen, setStepFormOpen] = useState(false);
+  const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
   const [editingStep, setEditingStep] = useState<ProcessStep | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -412,6 +415,7 @@ export default function LotsPage() {
   };
 
   const openCreateLot = () => {
+    setEditingBatch(null);
     lotForm.reset({
       product_id: products[0]?.id ?? "",
       creation_date: todayIso,
@@ -420,6 +424,22 @@ export default function LotsPage() {
       process_steps: defaultSteps,
     });
     setPlannedStepsDraft(defaultSteps);
+    setStepToAdd("");
+    setCustomStepInput("");
+    setFormError(null);
+    setLotFormOpen(true);
+  };
+
+  const openEditLot = (batch: Batch) => {
+    setEditingBatch(batch);
+    lotForm.reset({
+      product_id: batch.product_id,
+      creation_date: batch.creation_date,
+      initial_qty: batch.initial_qty,
+      unit: (batch.unit || "kg") as MassUnit,
+      process_steps: batch.ordered_process_steps?.length ? batch.ordered_process_steps : defaultSteps,
+    });
+    setPlannedStepsDraft(batch.ordered_process_steps?.length ? batch.ordered_process_steps : defaultSteps);
     setStepToAdd("");
     setCustomStepInput("");
     setFormError(null);
@@ -477,6 +497,7 @@ export default function LotsPage() {
   const closeForms = () => {
     setLotFormOpen(false);
     setStepFormOpen(false);
+    setEditingBatch(null);
     setFormError(null);
     setStepPreset(null);
   };
@@ -505,24 +526,32 @@ export default function LotsPage() {
         setFormError("Selectionnez au moins une etape de process pour ce lot.");
         return;
       }
-      const lotUnit = (values.unit || "kg") as MassUnit;
-      const requestedQty = Number(values.initial_qty);
-      const requestedQtyKg = toKg(requestedQty, lotUnit);
-      if (requestedQtyKg > availableStockKg) {
-        setFormError("Impossible de creer ce lot : quantite demandee superieure au stock disponible.");
-        return;
+      if (editingBatch) {
+        const updated = await updateBatch.mutateAsync({
+          id: editingBatch.id,
+          payload: { process_steps: plannedStepsDraft },
+        });
+        setSelectedBatchId(updated.id);
+      } else {
+        const lotUnit = (values.unit || "kg") as MassUnit;
+        const requestedQty = Number(values.initial_qty);
+        const requestedQtyKg = toKg(requestedQty, lotUnit);
+        if (requestedQtyKg > availableStockKg) {
+          setFormError("Impossible de creer ce lot : quantite demandee superieure au stock disponible.");
+          return;
+        }
+
+        const payload: BatchCreate = {
+          product_id: values.product_id,
+          creation_date: values.creation_date,
+          initial_qty: requestedQty,
+          unit: lotUnit,
+          process_steps: plannedStepsDraft,
+        };
+
+        const created = await createBatch.mutateAsync(payload);
+        setSelectedBatchId(created.id);
       }
-
-      const payload: BatchCreate = {
-        product_id: values.product_id,
-        creation_date: values.creation_date,
-        initial_qty: requestedQty,
-        unit: lotUnit,
-        process_steps: plannedStepsDraft,
-      };
-
-      const created = await createBatch.mutateAsync(payload);
-      setSelectedBatchId(created.id);
       closeForms();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Impossible d'enregistrer le lot.");
@@ -655,7 +684,7 @@ export default function LotsPage() {
               lossPct={selectedLossPct}
               statusLabel={batchStatusLabel[selectedBatch.status] ?? selectedBatch.status}
               statusTone={batchStatusTone[selectedBatch.status] ?? "info"}
-              onEditLot={openCreateLot}
+              onEditLot={() => openEditLot(selectedBatch)}
             />
 
             <LotWorkspaceTabs activeTab={activeTab} onChange={handleSwitchTab} includeHistory />
@@ -782,8 +811,12 @@ export default function LotsPage() {
       <LiquidGlassModal
         open={lotFormOpen}
         onClose={closeForms}
-        title="Nouveau lot - Flux de matiere"
-        subtitle="Le lot reserve le stock disponible et conserve la sequence ordonnee des etapes."
+        title={editingBatch ? `Modifier lot - ${editingBatch.code}` : "Nouveau lot - Flux de matiere"}
+        subtitle={
+          editingBatch
+            ? "Le formulaire est pre-rempli avec les donnees du lot selectionne."
+            : "Le lot reserve le stock disponible et conserve la sequence ordonnee des etapes."
+        }
         closeLabel="✕"
         size="md"
         footer={
@@ -792,7 +825,7 @@ export default function LotsPage() {
               Annuler
             </button>
             <button type="submit" form="lot-form" className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold" disabled={lotForm.formState.isSubmitting}>
-              {lotForm.formState.isSubmitting ? "Enregistrement..." : "Creer le lot"}
+              {lotForm.formState.isSubmitting ? "Enregistrement..." : editingBatch ? "Mettre a jour le lot" : "Creer le lot"}
             </button>
           </div>
         }
@@ -803,7 +836,7 @@ export default function LotsPage() {
           <label className="block text-sm font-medium text-[var(--text)]">
             Reference du lot (auto)
             <input
-              value={previewReference.data?.code ?? "..."}
+              value={editingBatch?.code ?? previewReference.data?.code ?? "..."}
               readOnly
               className="wf-input mt-2 h-11 w-full px-3 text-sm"
               placeholder="LOT-XXXX-001"
@@ -813,7 +846,11 @@ export default function LotsPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm font-medium text-[var(--text)]">
               Produit
-              <select {...lotForm.register("product_id", { required: "Produit requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+              <select
+                {...lotForm.register("product_id", { required: "Produit requis." })}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+                disabled={Boolean(editingBatch)}
+              >
                 <option value="" disabled>
                   Selectionner
                 </option>
@@ -827,7 +864,11 @@ export default function LotsPage() {
 
             <label className="block text-sm font-medium text-[var(--text)]">
               Unite
-              <select {...lotForm.register("unit", { required: "Unite requise." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+              <select
+                {...lotForm.register("unit", { required: "Unite requise." })}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+                disabled={Boolean(editingBatch)}
+              >
                 <option value="kg">kg</option>
                 <option value="ton">ton</option>
               </select>
@@ -841,14 +882,21 @@ export default function LotsPage() {
                 min="0"
                 {...lotForm.register("initial_qty", { required: "Quantite requise.", valueAsNumber: true })}
                 className="wf-input mt-2 h-11 w-full px-3 text-sm"
+                readOnly={Boolean(editingBatch)}
               />
             </label>
           </div>
 
-          <div className="rounded-xl border border-[#BDD6FB] bg-[#EEF5FF] px-3 py-2 text-xs text-[#2F80ED]">
-            Stock disponible: {availableStockDisplay.toFixed(2)} {watchedLotUnit}
-            {selectedProductStock ? ` (=${availableStockKg.toFixed(2)} kg)` : ""}
-          </div>
+          {editingBatch ? (
+            <div className="rounded-xl border border-[#E6D9B8] bg-[#FFF7E7] px-3 py-2 text-xs text-[#8A6B25]">
+              Edition lot: produit, unite et quantite initiale affiches depuis le lot courant.
+            </div>
+          ) : (
+            <div className="rounded-xl border border-[#BDD6FB] bg-[#EEF5FF] px-3 py-2 text-xs text-[#2F80ED]">
+              Stock disponible: {availableStockDisplay.toFixed(2)} {watchedLotUnit}
+              {selectedProductStock ? ` (=${availableStockKg.toFixed(2)} kg)` : ""}
+            </div>
+          )}
 
           <div className="space-y-2 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
             <p className="text-sm font-semibold text-[var(--text)]">Etapes ordonnees</p>

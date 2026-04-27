@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useMemo, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
@@ -22,6 +22,31 @@ const statusLabel: Record<string, string> = {
   seasonal: "Saisonnier",
 };
 
+const SENEGAL_AGRI_PRODUCTS = [
+  "Arachide",
+  "Banane",
+  "Bissap",
+  "Cajou",
+  "Fonio",
+  "Haricot",
+  "Igname",
+  "Maïs",
+  "Mangue",
+  "Manioc",
+  "Mil",
+  "Niébé",
+  "Oignon",
+  "Orange",
+  "Papaye",
+  "Patate douce",
+  "Piment",
+  "Poivron",
+  "Riz",
+  "Sésame",
+  "Sorgho",
+  "Tomate",
+] as const;
+
 type MemberTab = "profil" | "parcelles" | "activite";
 
 type MemberSummary = {
@@ -31,6 +56,7 @@ type MemberSummary = {
   phone: string;
   zone: string;
   culture: string;
+  productLabels: string[];
   parcels: number;
   totalArea: number;
   status: string;
@@ -43,6 +69,7 @@ type MemberFormValues = {
   village: string;
   phone: string;
   main_product: string;
+  secondary_products: string[];
   parcel_count: number;
   area_hectares: number;
   join_date: string;
@@ -51,6 +78,67 @@ type MemberFormValues = {
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
+}
+
+function normalizeProductToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function splitProductLabels(rawValue?: string | null) {
+  if (!rawValue) return [];
+  const labels = rawValue
+    .split(/[;,/|]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const label of labels) {
+    const normalized = normalizeProductToken(label);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    unique.push(label);
+  }
+  return unique;
+}
+
+function mergeProductLabels(primary?: string | null, secondary?: string | null, fallback?: string | null) {
+  const first = splitProductLabels(primary);
+  const second = splitProductLabels(secondary);
+  const third = splitProductLabels(fallback);
+  const merged: string[] = [];
+  const seen = new Set<string>();
+
+  for (const label of [...first, ...second, ...third]) {
+    const normalized = normalizeProductToken(label);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    merged.push(label);
+  }
+  return merged;
+}
+
+function matchCatalogProduct(label: string, catalogNames: string[]) {
+  const normalized = normalizeProductToken(label);
+  return catalogNames.find((name) => normalizeProductToken(name) === normalized) ?? null;
+}
+
+function toCatalogProductSelections(labels: string[], catalogNames: string[]) {
+  const selected: string[] = [];
+  const seen = new Set<string>();
+  for (const label of labels) {
+    const matched = matchCatalogProduct(label, catalogNames);
+    if (!matched) continue;
+    const key = normalizeProductToken(matched);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    selected.push(matched);
+  }
+  return selected;
 }
 
 export default function MembersPage() {
@@ -70,12 +158,13 @@ export default function MembersPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [editingMember, setEditingMember] = useState<MemberSummary | null>(null);
 
-  const { register, handleSubmit, reset, setValue, watch, formState } = useForm<MemberFormValues>({
+  const { register, handleSubmit, reset, setValue, watch, control, formState } = useForm<MemberFormValues>({
     defaultValues: {
       full_name: "",
       village: "",
       phone: "",
       main_product: "",
+      secondary_products: [],
       parcel_count: 1,
       area_hectares: 1,
       join_date: "",
@@ -83,6 +172,22 @@ export default function MembersPage() {
     },
   });
   const selectedStatus = watch("status");
+  const selectedMainProduct = watch("main_product");
+  const watchedSecondaryProducts = watch("secondary_products");
+  const selectedSecondaryProducts = useMemo(() => watchedSecondaryProducts ?? [], [watchedSecondaryProducts]);
+  const catalogProductNames = useMemo(() => [...SENEGAL_AGRI_PRODUCTS], []);
+  const secondaryProductChoices = useMemo(
+    () => catalogProductNames.filter((name) => name !== selectedMainProduct),
+    [catalogProductNames, selectedMainProduct],
+  );
+
+  useEffect(() => {
+    if (!selectedMainProduct || selectedSecondaryProducts.length === 0) return;
+    const next = selectedSecondaryProducts.filter((item) => item !== selectedMainProduct);
+    if (next.length !== selectedSecondaryProducts.length) {
+      setValue("secondary_products", next, { shouldDirty: true });
+    }
+  }, [selectedMainProduct, selectedSecondaryProducts, setValue]);
 
   const summaries = useMemo<MemberSummary[]>(() => {
     const members = membersQuery.data ?? [];
@@ -93,7 +198,8 @@ export default function MembersPage() {
       const fieldsArea = memberFields.reduce((sum, field) => sum + field.area, 0);
       const totalArea = member.area_hectares > 0 ? member.area_hectares : fieldsArea;
       const zone = member.village?.trim() || memberFields[0]?.location || "Zone non renseignee";
-      const culture = member.main_product?.trim() || member.specialty?.trim() || "Non renseigne";
+      const productLabels = mergeProductLabels(member.main_product, member.secondary_products, member.specialty);
+      const culture = productLabels[0] ?? "Non renseigne";
       const parcels = member.parcel_count > 0 ? member.parcel_count : memberFields.length;
 
       return {
@@ -103,6 +209,7 @@ export default function MembersPage() {
         phone: member.phone,
         zone,
         culture,
+        productLabels,
         parcels,
         totalArea,
         status: member.status,
@@ -112,13 +219,17 @@ export default function MembersPage() {
   }, [membersQuery.data, fieldsQuery.data]);
 
   const specialtyOptions = useMemo(() => {
-    const unique = new Set(summaries.map((item) => item.culture).filter((value) => value && value !== "Non renseigne"));
+    const unique = new Set(
+      summaries
+        .flatMap((item) => item.productLabels)
+        .filter((value) => value && value !== "Non renseigne"),
+    );
     return Array.from(unique);
   }, [summaries]);
 
   const filtered = useMemo(() => {
     return summaries.filter((item) => {
-      const byProduct = product === "Tous" || item.culture === product;
+      const byProduct = product === "Tous" || item.productLabels.includes(product);
       const byStatus = status === "Tous" || item.status === status;
       const byText = `${item.fullName} ${item.zone} ${item.phone} ${item.code}`.toLowerCase().includes(query.toLowerCase());
       return byProduct && byStatus && byText;
@@ -169,7 +280,8 @@ export default function MembersPage() {
       full_name: "",
       village: "",
       phone: "",
-      main_product: "",
+      main_product: catalogProductNames[0] ?? "",
+      secondary_products: [],
       parcel_count: 1,
       area_hectares: 1,
       join_date: "",
@@ -181,12 +293,19 @@ export default function MembersPage() {
 
   const openEditForm = (member: MemberSummary) => {
     setEditingMember(member);
+    const productLabels = mergeProductLabels(
+      member.raw.main_product,
+      member.raw.secondary_products,
+      member.raw.specialty,
+    );
+    const selectedFromCatalog = toCatalogProductSelections(productLabels, catalogProductNames);
     reset({
       code: member.code,
       full_name: member.fullName,
       village: member.raw.village ?? "",
       phone: member.phone,
-      main_product: member.raw.main_product ?? member.raw.specialty ?? "",
+      main_product: selectedFromCatalog[0] ?? "",
+      secondary_products: selectedFromCatalog.slice(1),
       parcel_count: member.raw.parcel_count > 0 ? member.raw.parcel_count : member.parcels,
       area_hectares: member.raw.area_hectares > 0 ? member.raw.area_hectares : member.totalArea,
       join_date: member.raw.join_date ?? "",
@@ -204,16 +323,23 @@ export default function MembersPage() {
   const submitMember = handleSubmit(async (values) => {
     setFormError(null);
     try {
+      const primaryProduct = values.main_product.trim();
+      if (!primaryProduct) {
+        setFormError("Produit principal requis.");
+        return;
+      }
+      const secondaryProducts = (values.secondary_products ?? []).filter((item) => item && item !== primaryProduct);
       const payload: MemberCreate = {
         code: values.code?.trim() || undefined,
         full_name: values.full_name.trim(),
         village: values.village.trim(),
         phone: values.phone.trim(),
-        main_product: values.main_product.trim(),
+        main_product: primaryProduct || null,
+        secondary_products: secondaryProducts.length > 0 ? secondaryProducts.join("; ") : null,
         parcel_count: Number(values.parcel_count),
         area_hectares: Number(values.area_hectares),
         join_date: values.join_date || null,
-        specialty: values.main_product.trim() || null,
+        specialty: primaryProduct || null,
         status: values.status,
       };
 
@@ -437,6 +563,12 @@ export default function MembersPage() {
                   <p className="text-sm font-semibold text-[var(--text)]">{selectedMember.culture}</p>
                 </div>
                 <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+                  <p className="text-xs text-[var(--muted)]">Produits secondaires</p>
+                  <p className="text-sm font-semibold text-[var(--text)]">
+                    {selectedMember.productLabels.slice(1).join(", ") || "Aucun"}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
                   <p className="text-xs text-[var(--muted)]">Zone principale</p>
                   <p className="text-sm font-semibold text-[var(--text)]">{selectedMember.zone}</p>
                 </div>
@@ -530,10 +662,51 @@ export default function MembersPage() {
 
             <label className="block text-sm font-medium text-[var(--text)]">
               Produit principal
-              <input
-                {...register("main_product", { required: "Produit principal requis." })}
-                className="wf-input mt-2 h-11 w-full px-3 text-sm"
-                placeholder="Mangue"
+              <select {...register("main_product", { required: "Produit principal requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+                <option value="">Selectionner un produit</option>
+                {catalogProductNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-sm font-medium text-[var(--text)] sm:col-span-2">
+              Produits secondaires (optionnel)
+              <Controller
+                control={control}
+                name="secondary_products"
+                render={({ field }) => (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {secondaryProductChoices.length === 0 ? (
+                      <p className="text-xs text-[var(--muted)]">Aucun autre produit disponible.</p>
+                    ) : (
+                      secondaryProductChoices.map((name) => {
+                        const checked = (field.value ?? []).includes(name);
+                        return (
+                          <button
+                            key={name}
+                            type="button"
+                            onClick={() => {
+                              const current = field.value ?? [];
+                              const next = checked ? current.filter((item) => item !== name) : [...current, name];
+                              field.onChange(next);
+                            }}
+                            className={cx(
+                              "soft-focus rounded-xl border px-3 py-2 text-left text-sm transition-colors",
+                              checked
+                                ? "border-[var(--primary)] bg-[#EAF5FF] text-[var(--primary)]"
+                                : "border-[var(--line)] bg-[var(--surface-soft)] text-[var(--text)]",
+                            )}
+                          >
+                            {name}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               />
             </label>
 
@@ -573,7 +746,7 @@ export default function MembersPage() {
               <input
                 {...register("code")}
                 className="wf-input mt-2 h-11 w-full px-3 text-sm"
-                placeholder="MBR-001"
+                placeholder="Laisser vide pour auto-code (ex: AM-0)"
               />
             </label>
           </div>
