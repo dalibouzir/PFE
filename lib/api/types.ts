@@ -487,6 +487,12 @@ export type ChatDashboardSnapshot = {
   stock_alerts: number;
 };
 
+export type ChatUIBlock = {
+  type: string;
+  title: string;
+  payload: Record<string, unknown>;
+};
+
 export type AssistantChatRequest = {
   session_id?: string;
   message: string;
@@ -506,6 +512,7 @@ export type AssistantChatResponse = {
   citations: ChatCitation[];
   context_metrics: ChatMetricFact[];
   dashboard?: ChatDashboardSnapshot | null;
+  ui_blocks: ChatUIBlock[];
 };
 
 export type ChatSession = {
@@ -534,6 +541,7 @@ export type ChatMessage = {
   citations: ChatCitation[];
   context_metrics: ChatMetricFact[];
   dashboard?: ChatDashboardSnapshot | null;
+  ui_blocks: ChatUIBlock[];
 };
 
 export type ChatMessageCreate = {

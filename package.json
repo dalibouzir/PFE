@@ -1,6 +1,6 @@
 {
   "name": "weefarm-app",
-  "version": "0.1.0",
+  "version": "whoami",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 3001",

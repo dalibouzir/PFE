@@ -1,9 +1,11 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.member import Member
 from app.models.product import Product
 from app.models.user import User
 from app.services.helpers import get_manager_cooperative_id
+from app.services.members import ensure_products_from_member_profile
 from app.utils.exceptions import ConflictError, NotFoundError
 
 
@@ -32,6 +34,24 @@ def create_product(db: Session, manager: User, payload) -> Product:
 
 def list_products(db: Session, manager: User):
     cooperative_id = get_manager_cooperative_id(manager)
+    members = db.scalars(
+        select(Member).where(Member.cooperative_id == cooperative_id)
+    ).all()
+    created_any = False
+    for member in members:
+        created_any = (
+            ensure_products_from_member_profile(
+                db=db,
+                cooperative_id=cooperative_id,
+                main_product=member.main_product,
+                secondary_products=member.secondary_products,
+                specialty=member.specialty,
+            )
+            or created_any
+        )
+    if created_any:
+        db.commit()
+
     return db.scalars(
         select(Product).where(Product.cooperative_id == cooperative_id).order_by(Product.created_at.desc())
     ).all()

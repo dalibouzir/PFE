@@ -1,7 +1,8 @@
 import uuid
+from datetime import date
 from typing import List, Optional
 
-from sqlalchemy import Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Date, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -26,6 +27,12 @@ class Member(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(64), nullable=False)
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
     phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    village: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    main_product: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    secondary_products: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    parcel_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    area_hectares: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    join_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     specialty: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     status: Mapped[MemberStatus] = mapped_column(
         Enum(MemberStatus, native_enum=False),

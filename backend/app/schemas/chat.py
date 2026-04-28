@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -45,6 +45,12 @@ class ChatDashboardSnapshot(BaseModel):
     stock_alerts: int
 
 
+class ChatUIBlock(BaseModel):
+    type: str
+    title: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class ChatResponse(BaseModel):
     success: bool
     session_id: UUID
@@ -58,6 +64,7 @@ class ChatResponse(BaseModel):
     citations: List[ChatCitation]
     context_metrics: List[ChatMetricFact]
     dashboard: Optional[ChatDashboardSnapshot] = None
+    ui_blocks: List[ChatUIBlock] = Field(default_factory=list)
 
 
 class ChatSessionCreate(BaseModel):
@@ -90,3 +97,4 @@ class ChatMessageRead(ORMModel):
     citations: List[ChatCitation] = Field(default_factory=list)
     context_metrics: List[ChatMetricFact] = Field(default_factory=list)
     dashboard: Optional[ChatDashboardSnapshot] = None
+    ui_blocks: List[ChatUIBlock] = Field(default_factory=list)

@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+import re
+from typing import Iterable, Optional
+
+import httpx
+
+from app.core.config import settings
+from app.utils.exceptions import ValidationError
+
+
+EMBEDDING_BATCH_SIZE = 64
+
+
+def embed_texts(texts: list[str]) -> list[list[float]]:
+    provider = settings.rag_embedding_provider.lower().strip()
+    if provider == "openai":
+        if not settings.openai_api_key:
+            raise ValidationError("OPENAI_API_KEY is missing for RAG embeddings.")
+        model = _resolve_embedding_model(settings.rag_embedding_model, provider=provider)
+        return _request_embeddings(
+            base_url="https://api.openai.com/v1/embeddings",
+            api_key=settings.openai_api_key,
+            model=model,
+            texts=texts,
+        )
+    if provider == "openrouter":
+        if not settings.openrouter_api_key:
+            raise ValidationError("OPENROUTER_API_KEY is missing for RAG embeddings.")
+        model = _resolve_embedding_model(settings.rag_embedding_model, provider=provider)
+        return _request_embeddings(
+            base_url="https://openrouter.ai/api/v1/embeddings",
+            api_key=settings.openrouter_api_key,
+            model=model,
+            texts=texts,
+            extra_headers={
+                "HTTP-Referer": "https://weefarm.local",
+                "X-Title": "WeeFarm RAG",
+            },
+        )
+    if provider == "custom":
+        if not settings.rag_embedding_base_url:
+            raise ValidationError("RAG_EMBEDDING_BASE_URL is missing for custom embedding provider.")
+        if not settings.rag_embedding_api_key:
+            raise ValidationError("RAG_EMBEDDING_API_KEY is missing for custom embedding provider.")
+        model = _resolve_embedding_model(settings.rag_embedding_model, provider=provider)
+        return _request_embeddings(
+            base_url=settings.rag_embedding_base_url.rstrip("/"),
+            api_key=settings.rag_embedding_api_key,
+            model=model,
+            texts=texts,
+        )
+    raise ValidationError("Unsupported RAG embedding provider.")
+
+
+def _request_embeddings(
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    texts: list[str],
+    extra_headers: Optional[dict[str, str]] = None,
+) -> list[list[float]]:
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+
+    embeddings: list[list[float]] = []
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            for batch in _batched(texts, EMBEDDING_BATCH_SIZE):
+                payload = {
+                    "model": model,
+                    "input": batch,
+                }
+                response = client.post(base_url, json=payload, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                rows = data.get("data", [])
+                if len(rows) != len(batch):
+                    raise ValidationError("Embedding provider returned an unexpected number of vectors.")
+                embeddings.extend([row.get("embedding", []) for row in rows])
+    except httpx.TimeoutException as exc:
+        raise ValidationError("Embedding request timed out.") from exc
+    except httpx.HTTPStatusError as exc:
+        raise ValidationError(f"Embedding provider returned HTTP {exc.response.status_code}.") from exc
+    except httpx.RequestError as exc:
+        raise ValidationError("Embedding request failed.") from exc
+
+    for vector in embeddings:
+        if len(vector) != settings.rag_embedding_dimensions:
+            raise ValidationError(
+                f"Embedding dimension mismatch. Expected {settings.rag_embedding_dimensions}, got {len(vector)}."
+            )
+    return embeddings
+
+
+def _batched(values: list[str], size: int) -> Iterable[list[str]]:
+    for i in range(0, len(values), size):
+        yield values[i : i + size]
+
+
+def _resolve_embedding_model(model: str, *, provider: str) -> str:
+    cleaned = model.strip()
+    if provider == "openai":
+        return re.sub(r"^[^/]+/", "", cleaned)
+    return cleaned

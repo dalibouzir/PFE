@@ -49,5 +49,6 @@ class ChatMessage(TimestampMixin, Base):
     citations_json: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
     context_metrics_json: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
     dashboard_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    ui_blocks_json: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
 
     session: Mapped["ChatSession"] = relationship(back_populates="messages")

@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 weefarm.db
+weefarm_ml.db
+.pytest_cache/

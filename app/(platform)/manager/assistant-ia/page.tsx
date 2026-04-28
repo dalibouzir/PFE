@@ -22,7 +22,7 @@ import {
 import { PageIntro } from "@/components/ui/PageIntro";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
-import type { AssistantChatResponse, ChatMessage, ChatSession } from "@/lib/api/types";
+import type { AssistantChatResponse, ChatMessage, ChatSession, ChatUIBlock } from "@/lib/api/types";
 
 type Tone = "normal" | "critical";
 
@@ -203,12 +203,13 @@ function fromStoredMessage(message: ChatMessage): ConversationMessage | null {
             session_id: message.session_id,
             message: message.content,
             grounded: message.citations.length > 0,
-            mode: message.mode ?? "mock-fallback",
+            mode: message.mode ?? "fallback",
             llm_provider: message.llm_provider,
             llm_model: message.llm_model,
             citations: message.citations,
             context_metrics: message.context_metrics,
             dashboard: message.dashboard,
+            ui_blocks: message.ui_blocks,
           }
         : undefined,
   };
@@ -304,9 +305,7 @@ function RecommendationCardSection({ text }: RecommendationCardSectionProps) {
 function SourceChips({ items }: SourceChipsProps) {
   return (
     <div className="mt-4">
-      <p className="text-xs font-medium text-[var(--text)]">
-        Sources <span className="font-normal text-[var(--muted)]">(mock RAG pour l&apos;interface)</span>
-      </p>
+      <p className="text-xs font-medium text-[var(--text)]">Sources RAG</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {items.map((item) => {
           const Icon = item.icon;
@@ -326,6 +325,92 @@ function SourceChips({ items }: SourceChipsProps) {
   );
 }
 
+function StructuredBlocks({ blocks }: { blocks: ChatUIBlock[] }) {
+  if (!blocks.length) return null;
+
+  return (
+    <div className="mt-4 grid gap-3">
+      {blocks.map((block, index) => {
+        const payload = block.payload as Record<string, unknown>;
+        if (block.type === "table") {
+          const columns = Array.isArray(payload.columns) ? (payload.columns as string[]) : [];
+          const rows = Array.isArray(payload.rows) ? (payload.rows as Array<Array<string | number>>) : [];
+          return (
+            <section key={`${block.type}-${index}`} className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
+              <h3 className="text-sm font-semibold text-[var(--text)]">{block.title}</h3>
+              <div className="mt-3 overflow-auto">
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-[var(--muted)]">
+                      {columns.map((column) => (
+                        <th key={column} className="px-2 py-1.5 font-medium">{column}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, rowIndex) => (
+                      <tr key={`${block.title}-${rowIndex}`} className="border-t border-[rgba(19,40,31,0.08)] text-[var(--text)]">
+                        {row.map((cell, cellIndex) => (
+                          <td key={`${rowIndex}-${cellIndex}`} className="px-2 py-1.5">{String(cell)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          );
+        }
+
+        if (block.type === "kpi") {
+          return (
+            <section key={`${block.type}-${index}`} className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
+              <h3 className="text-sm font-semibold text-[var(--text)]">{block.title}</h3>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(payload).map(([key, value]) => (
+                  <div key={key} className="rounded-xl border border-[rgba(19,40,31,0.08)] px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-wide text-[var(--muted)]">{key.replaceAll("_", " ")}</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--text)]">{String(value)}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        }
+
+        if (block.type === "bar_chart" || block.type === "line_chart") {
+          const labels = Array.isArray(payload.labels) ? (payload.labels as string[]) : [];
+          const series = Array.isArray(payload.series) ? (payload.series as Array<{ name?: string; data?: number[] }>) : [];
+          const firstSeries = series[0];
+          const data = Array.isArray(firstSeries?.data) ? firstSeries.data : [];
+          return (
+            <section key={`${block.type}-${index}`} className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
+              <h3 className="text-sm font-semibold text-[var(--text)]">{block.title}</h3>
+              <div className="mt-3 space-y-1.5">
+                {labels.map((label, i) => (
+                  <div key={`${label}-${i}`} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="text-[var(--muted)]">{label}</span>
+                    <span className="font-semibold text-[var(--text)]">{typeof data[i] === "number" ? data[i] : "-"}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        }
+
+        return (
+          <section key={`${block.type}-${index}`} className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
+            <h3 className="text-sm font-semibold text-[var(--text)]">{block.title}</h3>
+            <pre className="mt-3 overflow-auto rounded-xl bg-[var(--surface-soft)] p-3 text-xs text-[var(--text)]">
+              {JSON.stringify(payload, null, 2)}
+            </pre>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 function ChatMessageAI({ id, text, time, response, showTemplateExample = false }: ChatMessageAIProps) {
   const dashboard = response?.dashboard;
   const lossPct = dashboard?.loss_rate ?? 18;
@@ -334,7 +419,7 @@ function ChatMessageAI({ id, text, time, response, showTemplateExample = false }
   const qtyOut = Math.max(Math.round((qtyIn * efficiencyPct) / 100), 0);
   const recommendation = buildRecommendation(text);
   const sources = buildSourceChips(response);
-  const hasMockContext = Boolean(response?.citations?.length || response?.context_metrics?.length);
+  const hasContext = Boolean(response?.citations?.length || response?.context_metrics?.length);
 
   return (
     <div className="flex scroll-mt-28 gap-3" id={id}>
@@ -347,13 +432,13 @@ function ChatMessageAI({ id, text, time, response, showTemplateExample = false }
           <p className="max-w-4xl text-sm leading-7 text-[var(--text)]">{text}</p>
           <div className="flex flex-col items-end gap-1.5">
             <span className="text-xs text-[var(--muted)]">{time}</span>
-            {response?.mode === "llm" ? (
+            {response?.mode === "llm" || response?.mode === "llm-rag" ? (
               <span className="rounded-full border border-[#CFE3C8] bg-[#EEF6E7] px-2 py-0.5 text-[10px] font-semibold text-[var(--success)]">
-                LLM · {response.llm_provider ?? "provider"} / {response.llm_model ?? "model"}
+                {response.mode === "llm-rag" ? "LLM + RAG" : "LLM"} · {response.llm_provider ?? "provider"} / {response.llm_model ?? "model"}
               </span>
             ) : (
               <span className="rounded-full border border-[var(--line)] bg-[var(--surface-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
-                Mock fallback
+                Fallback
               </span>
             )}
           </div>
@@ -382,7 +467,10 @@ function ChatMessageAI({ id, text, time, response, showTemplateExample = false }
             </div>
           </>
         ) : (
-          hasMockContext && <SourceChips items={sources} />
+          <>
+            {response?.ui_blocks?.length ? <StructuredBlocks blocks={response.ui_blocks} /> : null}
+            {hasContext && <SourceChips items={sources} />}
+          </>
         )}
       </article>
     </div>

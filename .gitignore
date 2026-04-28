@@ -7,7 +7,14 @@ node_modules/
 out/
 .vercel/
 .env*
+tsconfig.tsbuildinfo
 
 # Logs
 *.log
 .vercel
+
+# Python caches
+.pytest_cache/
+backend/.pytest_cache/
+**/__pycache__/
+*.pyc

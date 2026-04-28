@@ -14,5 +14,18 @@ services:
       - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ../database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
 
+  backend:
+    image: docker-backend:latest
+    container_name: test-backend
+    restart: unless-stopped
+    env_file: ../backend/.env
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:

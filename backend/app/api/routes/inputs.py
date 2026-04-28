@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_manager
 from app.db.session import get_db
-from app.schemas.input import InputCreate, InputRead
+from app.schemas.input import InputCreate, InputRead, InputUpdate
 from app.services import inputs as input_service
 
 
@@ -29,3 +29,20 @@ def list_inputs(db: Session = Depends(get_db), current_manager=Depends(get_curre
 def get_input(input_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
     input_record = input_service.get_input(db, current_manager, input_id)
     return InputRead.model_validate(input_record)
+
+
+@router.patch("/{input_id}", response_model=InputRead, summary="Update a single input record.")
+def update_input(
+    input_id: UUID,
+    payload: InputUpdate,
+    db: Session = Depends(get_db),
+    current_manager=Depends(get_current_manager),
+):
+    input_record = input_service.update_input(db, current_manager, input_id, payload)
+    return InputRead.model_validate(input_record)
+
+
+@router.delete("/{input_id}", response_model=InputRead, summary="Delete a single input record.")
+def delete_input(input_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+    deleted = input_service.delete_input(db, current_manager, input_id)
+    return InputRead.model_validate(deleted)

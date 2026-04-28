@@ -57,10 +57,6 @@ def _repair_legacy_stock_row(stock: Stock) -> bool:
         stock.processed_output_kg = 0.0
         changed = True
 
-    if stock.total_stock_kg < stock.reserved_in_lots_kg:
-        stock.total_stock_kg = round_metric(stock.reserved_in_lots_kg)
-        changed = True
-
     expected_available = available_stock_kg(stock)
     if abs(stock.quantity - expected_available) > 1e-9:
         stock.quantity = expected_available

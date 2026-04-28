@@ -10,6 +10,7 @@ from app.models.input import Input
 from app.models.member import Member
 from app.models.process_step import ProcessStep
 from app.models.product import Product
+from app.models.rag import RAGChunk, RAGDocument
 from app.models.recommendation import Recommendation
 from app.models.stock import Stock
 from app.models.treasury_transaction import TreasuryTransaction
@@ -31,6 +32,8 @@ __all__ = [
     "Member",
     "ProcessStep",
     "Product",
+    "RAGChunk",
+    "RAGDocument",
     "Recommendation",
     "Stock",
     "TreasuryTransaction",

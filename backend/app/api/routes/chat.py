@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.schemas.chat import ChatMessageCreate, ChatMessageRead, ChatRequest, ChatResponse, ChatSessionCreate, ChatSessionRead
+from app.schemas.rag import RAGReindexRequest, RAGReindexResponse
 from app.services import assistant as assistant_service
+from app.services import rag_indexer as rag_indexer_service
 
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -56,4 +58,18 @@ def send_message_to_session(
         session_id=session_id,
         message=payload.message,
         top_k=4,
+    )
+
+
+@router.post("/rag/reindex", response_model=RAGReindexResponse, summary="Reindex cooperative app data into pgvector RAG tables.")
+def reindex_rag(
+    payload: RAGReindexRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return rag_indexer_service.reindex_cooperative(
+        db,
+        current_user=current_user,
+        cooperative_id=payload.cooperative_id,
+        force=payload.force,
     )

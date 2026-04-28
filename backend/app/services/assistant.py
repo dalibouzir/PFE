@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
-from typing import List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 from uuid import UUID
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -22,10 +23,12 @@ from app.schemas.chat import (
     ChatMetricFact,
     ChatResponse,
     ChatSessionRead,
+    ChatUIBlock,
 )
 from app.schemas.reference import KnowledgeChunkListResponse, KnowledgeChunkRead, ReferenceMetricListResponse, ReferenceMetricRead
 from app.services import analytics as analytics_service
 from app.services.helpers import round_metric
+from app.services.rag_embeddings import embed_texts
 from app.utils.exceptions import NotFoundError, ValidationError
 
 TOKEN_PATTERN = re.compile(r"[a-zA-Z0-9_\-']+")
@@ -94,6 +97,21 @@ OPERATIONAL_HINTS = {
     "stock",
     "tri",
 }
+
+
+@dataclass
+class RetrievalHit:
+    chunk_id: str
+    source_table: str
+    source_record_ref: str
+    content: str
+    metadata: dict[str, Any]
+    distance: float
+    keyword_score: float
+    vector_rank: int = 0
+    keyword_rank: int = 0
+    fused_score: float = 0.0
+    rerank_score: float = 0.0
 
 
 def list_reference_metrics(
@@ -225,13 +243,22 @@ def generate_chat_reply(
     manager_snapshot = _build_dashboard_snapshot(db, current_user)
     cooperative = _get_cooperative(db, current_user)
     region_hint = cooperative.region if cooperative else manager_snapshot.region if manager_snapshot else None
-    citations = _build_mock_citations(message, region_hint=region_hint, limit=min(max(top_k, 1), 4))
-    context_metrics = _build_mock_metrics(manager_snapshot, region_hint=region_hint)
+    retrieval_hits: list[RetrievalHit] = []
+    if response_mode != "quick":
+        retrieval_hits = _retrieve_rag_hits(
+            db,
+            current_user=current_user,
+            message=message,
+            limit=min(max(top_k, 1), 8),
+        )
+    citations = _citations_from_hits(retrieval_hits, cooperative=cooperative)
+    context_metrics = _build_context_metrics(manager_snapshot, region_hint=region_hint)
+    ui_blocks = _build_ui_blocks(db, current_user=current_user, message=message, dashboard=manager_snapshot)
 
-    mode = "mock-fallback"
+    mode = "fallback"
     llm_provider: Optional[str] = None
     llm_model: Optional[str] = None
-    answer = _build_mock_fallback_answer(message, manager_snapshot, citations, response_mode=response_mode)
+    answer = _build_fallback_answer(message, manager_snapshot, citations, response_mode=response_mode)
 
     try:
         llm_answer = _build_llm_answer(
@@ -245,7 +272,7 @@ def generate_chat_reply(
         )
         if llm_answer:
             answer = llm_answer
-            mode = "llm"
+            mode = "llm-rag" if citations else "llm"
             llm_provider = settings.llm_provider
             llm_model = settings.llm_model
     except ValidationError:
@@ -261,6 +288,7 @@ def generate_chat_reply(
         citations_json=[citation.model_dump() for citation in citations],
         context_metrics_json=[metric.model_dump() for metric in context_metrics],
         dashboard_json=manager_snapshot.model_dump() if manager_snapshot else None,
+        ui_blocks_json=[block.model_dump() for block in ui_blocks],
     )
     db.add(assistant_message)
     session.updated_at = current_utc()
@@ -281,6 +309,7 @@ def generate_chat_reply(
         citations=citations,
         context_metrics=context_metrics,
         dashboard=manager_snapshot,
+        ui_blocks=ui_blocks,
     )
 
 
@@ -424,8 +453,8 @@ def _build_llm_answer(
             "content": (
                 "You are WeeFarm manager assistant. Reply in French. "
                 "Use only chat memory from this session and the provided context. "
-                "The reference snippets are mock placeholders for UI aesthetics, not retrieved evidence. "
-                "Do not claim external retrieval. "
+                "Reference snippets are retrieved from the cooperative database. "
+                "Do not invent numbers not present in the context. "
                 "Follow the response style guidance exactly. "
                 "If uncertain, state uncertainty and provide a practical next step."
             ),
@@ -444,8 +473,8 @@ def _build_llm_answer(
                 f"Question manager: {message}\n\n"
                 f"Contexte cooperative: { {'name': cooperative.name if cooperative else None, 'region': cooperative.region if cooperative else None} }\n"
                 f"Snapshot dashboard: {dashboard.model_dump() if dashboard else None}\n"
-                f"Mock references UI: {[citation.model_dump() for citation in citations]}\n"
-                f"Mock metrics UI: {[metric.model_dump() for metric in context_metrics]}\n"
+                f"References recuperees: {[citation.model_dump() for citation in citations]}\n"
+                f"Metriques contexte: {[metric.model_dump() for metric in context_metrics]}\n"
                 f"Response mode: {response_mode}\n"
                 f"Style guidance: {style_guidance}"
             ),
@@ -456,7 +485,7 @@ def _build_llm_answer(
     return response.content.strip() if response.content else None
 
 
-def _build_mock_fallback_answer(
+def _build_fallback_answer(
     message: str,
     dashboard: Optional[ChatDashboardSnapshot],
     citations: Sequence[ChatCitation],
@@ -467,48 +496,206 @@ def _build_mock_fallback_answer(
         return "LLM indisponible. Reponse rapide: " + _solve_basic_math_or_echo(message)
 
     if dashboard:
-        base = (
-            f"Je n'ai pas pu joindre le fournisseur LLM. "
-            f"Contexte actuel: pertes {dashboard.loss_rate:.1f}%, efficacite {dashboard.efficiency_rate:.1f}%, "
-            f"production {dashboard.total_production:.1f} kg."
-        )
+        base = f"Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes {dashboard.loss_rate:.1f}%, efficacite {dashboard.efficiency_rate:.1f}%, production {dashboard.total_production:.1f} kg."
     else:
         base = "Je n'ai pas pu joindre le fournisseur LLM pour le moment."
 
     if citations:
-        reference = f"Repere mock utilise: {citations[0].source_id} ({citations[0].topic})."
+        reference = f"Reference disponible: {citations[0].source_id} ({citations[0].topic})."
     else:
-        reference = "Aucun repere mock additionnel disponible."
+        reference = "Aucun extrait RAG disponible."
 
     return f"{base} Requete: {_trim_text(message, 180)}. {reference} Prochaine action: confirmer les donnees terrain du lot concerne."
 
 
-def _build_mock_citations(message: str, *, region_hint: Optional[str], limit: int) -> List[ChatCitation]:
-    tokens = _tokenize(message)
-    topic = _infer_topic(tokens)
-    region = region_hint or "Senegal"
-    base = [
-        ChatCitation(
-            source_id="mock-rag-001",
-            source_url="https://example.local/mock-rag-001",
-            region=region,
-            crop="multi",
-            topic=topic,
-            excerpt=f"Context mock for topic '{topic}' generated from manager prompt.",
-        ),
-        ChatCitation(
-            source_id="mock-rag-002",
-            source_url="https://example.local/mock-rag-002",
-            region=region,
-            crop="multi",
-            topic="operations",
-            excerpt="Mock operational benchmark used for UI rendering only.",
-        ),
-    ]
-    return base[:limit]
+def _retrieve_rag_hits(
+    db: Session,
+    *,
+    current_user: User,
+    message: str,
+    limit: int,
+) -> List[RetrievalHit]:
+    if not settings.rag_enabled:
+        return []
+    if current_user.cooperative_id is None:
+        return []
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "postgresql":
+        return []
+
+    try:
+        query_embedding = embed_texts([message])[0]
+    except ValidationError:
+        return []
+
+    candidate_k = max(limit * 6, 24)
+    vector_stmt = text(
+        """
+        SELECT
+            c.id AS chunk_id,
+            c.content AS content,
+            d.source_table AS source_table,
+            d.source_record_ref AS source_record_ref,
+            d.metadata_json AS metadata_json,
+            (c.embedding <=> CAST(:embedding AS vector)) AS distance
+        FROM rag_chunks c
+        JOIN rag_documents d ON d.id = c.document_id
+        WHERE c.cooperative_id = :cooperative_id
+          AND d.source_type = :source_type
+        ORDER BY c.embedding <=> CAST(:embedding AS vector)
+        LIMIT :k
+        """
+    )
+    try:
+        vector_rows = db.execute(
+            vector_stmt,
+            {
+                "cooperative_id": current_user.cooperative_id,
+                "source_type": "app_data",
+                "embedding": _vector_literal(query_embedding),
+                "k": candidate_k,
+            },
+        ).mappings().all()
+    except Exception:
+        return []
+
+    keyword_stmt = text(
+        """
+        SELECT
+            c.id AS chunk_id,
+            c.content AS content,
+            d.source_table AS source_table,
+            d.source_record_ref AS source_record_ref,
+            d.metadata_json AS metadata_json,
+            ts_rank_cd(to_tsvector('simple', c.content), websearch_to_tsquery('simple', :query)) AS keyword_score
+        FROM rag_chunks c
+        JOIN rag_documents d ON d.id = c.document_id
+        WHERE c.cooperative_id = :cooperative_id
+          AND d.source_type = :source_type
+          AND to_tsvector('simple', c.content) @@ websearch_to_tsquery('simple', :query)
+        ORDER BY keyword_score DESC
+        LIMIT :k
+        """
+    )
+    try:
+        keyword_rows = db.execute(
+            keyword_stmt,
+            {
+                "cooperative_id": current_user.cooperative_id,
+                "source_type": "app_data",
+                "query": message,
+                "k": candidate_k,
+            },
+        ).mappings().all()
+    except Exception:
+        keyword_rows = []
+
+    merged: dict[str, RetrievalHit] = {}
+    for idx, row in enumerate(vector_rows, start=1):
+        chunk_id = str(row.get("chunk_id"))
+        source_table = str(row.get("source_table") or "source")
+        source_record_ref = str(row.get("source_record_ref") or "unknown")
+        metadata = row.get("metadata_json")
+        metadata_map: dict[str, Any] = metadata if isinstance(metadata, dict) else {}
+        merged[chunk_id] = RetrievalHit(
+            chunk_id=chunk_id,
+            source_table=source_table,
+            source_record_ref=source_record_ref,
+            content=str(row.get("content") or ""),
+            metadata=metadata_map,
+            distance=float(row.get("distance") or 1.0),
+            keyword_score=0.0,
+            vector_rank=idx,
+        )
+
+    for idx, row in enumerate(keyword_rows, start=1):
+        chunk_id = str(row.get("chunk_id"))
+        keyword_score = float(row.get("keyword_score") or 0.0)
+        if chunk_id in merged:
+            merged[chunk_id].keyword_score = keyword_score
+            merged[chunk_id].keyword_rank = idx
+            continue
+        source_table = str(row.get("source_table") or "source")
+        source_record_ref = str(row.get("source_record_ref") or "unknown")
+        metadata = row.get("metadata_json")
+        metadata_map: dict[str, Any] = metadata if isinstance(metadata, dict) else {}
+        merged[chunk_id] = RetrievalHit(
+            chunk_id=chunk_id,
+            source_table=source_table,
+            source_record_ref=source_record_ref,
+            content=str(row.get("content") or ""),
+            metadata=metadata_map,
+            distance=1.0,
+            keyword_score=keyword_score,
+            keyword_rank=idx,
+        )
+
+    return _rerank_hits(message=message, hits=list(merged.values()), limit=limit)
 
 
-def _build_mock_metrics(
+def _rerank_hits(*, message: str, hits: list[RetrievalHit], limit: int) -> list[RetrievalHit]:
+    if not hits:
+        return []
+
+    # Reciprocal Rank Fusion over vector and keyword ranks.
+    rrf_k = 60.0
+    query_tokens = set(_tokenize(message))
+    table_boosts = _infer_table_boosts(query_tokens)
+
+    for hit in hits:
+        fused = 0.0
+        if hit.vector_rank > 0:
+            fused += 1.0 / (rrf_k + hit.vector_rank)
+        if hit.keyword_rank > 0:
+            fused += 1.0 / (rrf_k + hit.keyword_rank)
+        hit.fused_score = fused
+
+        chunk_tokens = set(_tokenize(hit.content))
+        lexical_overlap = (len(query_tokens & chunk_tokens) / max(1, len(query_tokens))) if query_tokens else 0.0
+        distance_bonus = max(0.0, 1.0 - min(hit.distance, 2.0))
+        table_boost = table_boosts.get(hit.source_table, 0.0)
+        hit.rerank_score = fused + (0.32 * lexical_overlap) + (0.24 * distance_bonus) + table_boost
+
+    hits.sort(key=lambda item: item.rerank_score, reverse=True)
+    return hits[:limit]
+
+
+def _infer_table_boosts(query_tokens: set[str]) -> dict[str, float]:
+    boosts: dict[str, float] = {}
+    if {"rentable", "marge", "profit", "gagner", "revenu"} & query_tokens or _has_prefix(query_tokens, ("rentab", "profit")):
+        boosts["inputs"] = 0.15
+        boosts["farmer_advances"] = 0.12
+        boosts["treasury_transactions"] = 0.1
+    if {"stock", "rupture", "seuil"} & query_tokens:
+        boosts["stocks"] = 0.16
+        boosts["commercial_catalog_products"] = 0.08
+    if {"perte", "loss", "efficacite", "sechage", "tri"} & query_tokens:
+        boosts["process_steps"] = 0.16
+        boosts["batches"] = 0.1
+    return boosts
+
+
+def _citations_from_hits(hits: Sequence[RetrievalHit], *, cooperative: Optional[Cooperative]) -> List[ChatCitation]:
+    region = cooperative.region if cooperative else "cooperative"
+    citations: list[ChatCitation] = []
+    for hit in hits:
+        metadata_map = hit.metadata
+        topic = str(metadata_map.get("entity") or hit.source_table)
+        crop = str(metadata_map.get("product_name") or metadata_map.get("crop") or "multi")
+        citations.append(
+            ChatCitation(
+                source_id=f"{hit.source_table}:{hit.source_record_ref}",
+                source_url=f"app://{hit.source_table}/{hit.source_record_ref}",
+                region=region,
+                crop=crop,
+                topic=topic,
+                excerpt=_trim_text(hit.content, 220),
+            )
+        )
+    return citations
+
+
+def _build_context_metrics(
     dashboard: Optional[ChatDashboardSnapshot],
     *,
     region_hint: Optional[str],
@@ -524,30 +711,256 @@ def _build_mock_metrics(
                 period="current",
                 value=0.7,
                 unit="ratio",
-                notes="Mock metric for UI only.",
+                notes="No dashboard snapshot available.",
             )
         ]
 
     return [
         ChatMetricFact(
-            source_id="mock-metric-001",
+            source_id="dashboard-loss-rate",
             region=region,
             crop="multi",
             metric="loss_rate",
             period="current",
             value=round_metric(dashboard.loss_rate),
             unit="%",
-            notes="From current manager dashboard snapshot.",
+            notes="From current manager dashboard snapshot",
         ),
         ChatMetricFact(
-            source_id="mock-metric-002",
+            source_id="dashboard-efficiency-rate",
             region=region,
             crop="multi",
             metric="efficiency_rate",
             period="current",
             value=round_metric(dashboard.efficiency_rate),
             unit="%",
-            notes="From current manager dashboard snapshot.",
+            notes="From current manager dashboard snapshot",
+        ),
+    ]
+
+
+def _vector_literal(vector: list[float]) -> str:
+    return "[" + ",".join(f"{float(value):.8f}" for value in vector) + "]"
+
+
+def _build_ui_blocks(
+    db: Session,
+    *,
+    current_user: User,
+    message: str,
+    dashboard: Optional[ChatDashboardSnapshot],
+) -> List[ChatUIBlock]:
+    blocks: list[ChatUIBlock] = []
+    if dashboard:
+        blocks.append(
+            ChatUIBlock(
+                type="kpi",
+                title="Vue d'ensemble coopérative",
+                payload={
+                    "loss_rate": round_metric(dashboard.loss_rate),
+                    "efficiency_rate": round_metric(dashboard.efficiency_rate),
+                    "total_production": round_metric(dashboard.total_production),
+                    "active_batches": dashboard.number_of_active_batches,
+                    "stock_alerts": dashboard.stock_alerts,
+                },
+            )
+        )
+
+    tokens = set(_tokenize(message))
+    if {"rentable", "profit", "marge", "revenu", "gagner"} & tokens or _has_prefix(tokens, ("rentab", "profit")):
+        blocks.extend(_build_member_profitability_blocks(db, current_user=current_user))
+    if {"stock", "seuil", "rupture", "anomalie"} & tokens:
+        blocks.extend(_build_stock_blocks(db, current_user=current_user))
+    if {"perte", "loss", "efficacite", "sechage", "tri", "process"} & tokens:
+        blocks.extend(_build_process_loss_blocks(db, current_user=current_user))
+
+    return blocks[:6]
+
+
+def _has_prefix(tokens: set[str], prefixes: tuple[str, ...]) -> bool:
+    for token in tokens:
+        if any(token.startswith(prefix) for prefix in prefixes):
+            return True
+    return False
+
+
+def _build_member_profitability_blocks(db: Session, *, current_user: User) -> list[ChatUIBlock]:
+    if current_user.cooperative_id is None:
+        return []
+    cooperative_id_param = str(current_user.cooperative_id)
+    stmt = text(
+        """
+        WITH input_agg AS (
+            SELECT
+                member_id,
+                cooperative_id,
+                COALESCE(SUM(estimated_value), 0) AS gross_value_fcfa,
+                COALESCE(SUM(quantity), 0) AS collected_qty
+            FROM inputs
+            WHERE cooperative_id = :cooperative_id
+            GROUP BY member_id, cooperative_id
+        ),
+        advance_agg AS (
+            SELECT
+                farmer_id,
+                cooperative_id,
+                COALESCE(SUM(amount_fcfa), 0) AS advances_fcfa
+            FROM farmer_advances
+            WHERE cooperative_id = :cooperative_id
+              AND status = 'active'
+            GROUP BY farmer_id, cooperative_id
+        )
+        SELECT
+            m.full_name AS member_name,
+            COALESCE(i.gross_value_fcfa, 0) AS gross_value_fcfa,
+            COALESCE(a.advances_fcfa, 0) AS advances_fcfa,
+            COALESCE(i.gross_value_fcfa, 0) - COALESCE(a.advances_fcfa, 0) AS net_value_fcfa,
+            COALESCE(i.collected_qty, 0) AS collected_qty
+        FROM members m
+        LEFT JOIN input_agg i
+            ON i.member_id = m.id
+           AND i.cooperative_id = m.cooperative_id
+        LEFT JOIN advance_agg a
+            ON a.farmer_id = m.id
+           AND a.cooperative_id = m.cooperative_id
+        WHERE m.cooperative_id = :cooperative_id
+        ORDER BY net_value_fcfa DESC
+        LIMIT 5
+        """
+    )
+    rows = db.execute(stmt, {"cooperative_id": cooperative_id_param}).mappings().all()
+    if not rows:
+        return []
+
+    table_rows = [
+        [
+            str(row["member_name"]),
+            round_metric(float(row["gross_value_fcfa"] or 0)),
+            round_metric(float(row["advances_fcfa"] or 0)),
+            round_metric(float(row["net_value_fcfa"] or 0)),
+            round_metric(float(row["collected_qty"] or 0)),
+        ]
+        for row in rows
+    ]
+    chart_labels = [str(row["member_name"]) for row in rows]
+    chart_values = [round_metric(float(row["net_value_fcfa"] or 0)) for row in rows]
+    return [
+        ChatUIBlock(
+            type="table",
+            title="Top membres rentabilité",
+            payload={
+                "columns": ["Membre", "Valeur brute FCFA", "Avances FCFA", "Valeur nette FCFA", "Collecte kg"],
+                "rows": table_rows,
+            },
+        ),
+        ChatUIBlock(
+            type="bar_chart",
+            title="Valeur nette par membre",
+            payload={"labels": chart_labels, "series": [{"name": "Valeur nette FCFA", "data": chart_values}]},
+        ),
+    ]
+
+
+def _build_stock_blocks(db: Session, *, current_user: User) -> list[ChatUIBlock]:
+    if current_user.cooperative_id is None:
+        return []
+    cooperative_id_param = str(current_user.cooperative_id)
+    stmt = text(
+        """
+        SELECT
+            p.name AS product_name,
+            s.total_stock_kg AS total_stock_kg,
+            s.threshold AS threshold_kg,
+            (s.total_stock_kg - s.threshold) AS delta_kg
+        FROM stocks s
+        JOIN products p ON p.id = s.product_id
+        WHERE s.cooperative_id = :cooperative_id
+        ORDER BY delta_kg ASC
+        LIMIT 8
+        """
+    )
+    rows = db.execute(stmt, {"cooperative_id": cooperative_id_param}).mappings().all()
+    if not rows:
+        return []
+
+    table_rows = []
+    labels: list[str] = []
+    values: list[float] = []
+    for row in rows:
+        delta = round_metric(float(row["delta_kg"] or 0))
+        table_rows.append(
+            [
+                str(row["product_name"]),
+                round_metric(float(row["total_stock_kg"] or 0)),
+                round_metric(float(row["threshold_kg"] or 0)),
+                delta,
+                "alerte" if delta < 0 else "ok",
+            ]
+        )
+        labels.append(str(row["product_name"]))
+        values.append(delta)
+
+    return [
+        ChatUIBlock(
+            type="table",
+            title="Anomalies de stock",
+            payload={
+                "columns": ["Produit", "Stock kg", "Seuil kg", "Delta kg", "Statut"],
+                "rows": table_rows,
+            },
+        ),
+        ChatUIBlock(
+            type="bar_chart",
+            title="Delta stock vs seuil",
+            payload={"labels": labels, "series": [{"name": "Delta kg", "data": values}]},
+        ),
+    ]
+
+
+def _build_process_loss_blocks(db: Session, *, current_user: User) -> list[ChatUIBlock]:
+    if current_user.cooperative_id is None:
+        return []
+    cooperative_id_param = str(current_user.cooperative_id)
+    stmt = text(
+        """
+        SELECT
+            ps.type AS step_type,
+            AVG(
+                CASE
+                    WHEN ps.qty_in > 0 THEN ((ps.qty_in - ps.qty_out) / ps.qty_in) * 100
+                    ELSE 0
+                END
+            ) AS avg_loss_pct,
+            COUNT(*) AS step_count
+        FROM process_steps ps
+        JOIN batches b ON b.id = ps.batch_id
+        WHERE b.cooperative_id = :cooperative_id
+        GROUP BY ps.type
+        ORDER BY avg_loss_pct DESC
+        LIMIT 8
+        """
+    )
+    rows = db.execute(stmt, {"cooperative_id": cooperative_id_param}).mappings().all()
+    if not rows:
+        return []
+
+    table_rows = [
+        [str(row["step_type"]), round_metric(float(row["avg_loss_pct"] or 0)), int(row["step_count"] or 0)]
+        for row in rows
+    ]
+    return [
+        ChatUIBlock(
+            type="table",
+            title="Pertes moyennes par étape",
+            payload={"columns": ["Étape", "Perte moyenne %", "Nombre d'étapes"], "rows": table_rows},
+        ),
+        ChatUIBlock(
+            type="line_chart",
+            title="Tendance pertes par étape",
+            payload={
+                "labels": [str(row["step_type"]) for row in rows],
+                "series": [{"name": "Perte moyenne %", "data": [round_metric(float(row["avg_loss_pct"] or 0)) for row in rows]}],
+            },
         ),
     ]
 
@@ -555,6 +968,7 @@ def _build_mock_metrics(
 def _to_message_read(message: ChatMessage) -> ChatMessageRead:
     citations = _safe_parse_citations(message.citations_json)
     context_metrics = _safe_parse_metrics(message.context_metrics_json)
+    ui_blocks = _safe_parse_ui_blocks(message.ui_blocks_json)
     dashboard = None
     if isinstance(message.dashboard_json, dict):
         try:
@@ -575,6 +989,7 @@ def _to_message_read(message: ChatMessage) -> ChatMessageRead:
         citations=citations,
         context_metrics=context_metrics,
         dashboard=dashboard,
+        ui_blocks=ui_blocks,
     )
 
 
@@ -597,6 +1012,18 @@ def _safe_parse_metrics(raw: Optional[list[dict]]) -> List[ChatMetricFact]:
     for item in raw:
         try:
             parsed.append(ChatMetricFact.model_validate(item))
+        except Exception:
+            continue
+    return parsed
+
+
+def _safe_parse_ui_blocks(raw: Optional[list[dict]]) -> List[ChatUIBlock]:
+    if not raw:
+        return []
+    parsed: List[ChatUIBlock] = []
+    for item in raw:
+        try:
+            parsed.append(ChatUIBlock.model_validate(item))
         except Exception:
             continue
     return parsed
@@ -640,18 +1067,6 @@ def _trim_text(text: str, limit: int) -> str:
 
 def _tokenize(text: str) -> List[str]:
     return [token.lower() for token in TOKEN_PATTERN.findall(text.lower()) if len(token) >= 3 and token.lower() not in STOPWORDS]
-
-
-def _infer_topic(tokens: Sequence[str]) -> str:
-    if any(token in {"stock", "stocks", "storage"} for token in tokens):
-        return "stock"
-    if any(token in {"loss", "perte", "losses"} for token in tokens):
-        return "loss-analysis"
-    if any(token in {"drying", "dry", "sechage"} for token in tokens):
-        return "drying"
-    if any(token in {"quality", "qualite", "grade"} for token in tokens):
-        return "quality-control"
-    return "operations"
 
 
 def _classify_response_mode(message: str) -> str:

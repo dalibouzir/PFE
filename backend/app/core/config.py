@@ -49,6 +49,17 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 280
     openrouter_api_key: str = ""
     groq_api_key: str = ""
+    openai_api_key: str = ""
+
+    rag_enabled: bool = True
+    rag_embedding_provider: str = "openrouter"
+    rag_embedding_model: str = "openai/text-embedding-3-small"
+    rag_embedding_base_url: str = ""
+    rag_embedding_api_key: str = ""
+    rag_embedding_dimensions: int = 1536
+    rag_chunk_size: int = 900
+    rag_chunk_overlap: int = 180
+    rag_retrieval_top_k: int = 5
 
     seed_admin_email: str = "admin@weefarm.local"
     seed_admin_password: str = "Admin123!"

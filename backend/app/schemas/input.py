@@ -21,6 +21,18 @@ class InputCreate(BaseModel):
     status: str = Field(default="pending")
 
 
+class InputUpdate(BaseModel):
+    member_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
+    field_id: Optional[UUID] = None
+    date: Optional[date] = None
+    quantity: Optional[float] = Field(default=None, gt=0)
+    unit: Optional[str] = Field(default=None, min_length=1, max_length=16)
+    grade: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    estimated_value: Optional[float] = Field(default=None, ge=0)
+    status: Optional[str] = None
+
+
 class InputRead(ORMModel):
     id: UUID
     cooperative_id: UUID
