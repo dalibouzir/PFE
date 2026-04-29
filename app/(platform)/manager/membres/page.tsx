@@ -366,7 +366,7 @@ export default function MembersPage() {
 
   return (
     <main>
-      <PageIntro title="Membres" subtitle="Vue claire des membres, cultures, parcelles et statut operationnel." />
+      <PageIntro title="Membres" />
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
         <div className="grid gap-3 lg:grid-cols-[1.3fr_1fr_1fr_auto]">

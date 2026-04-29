@@ -163,10 +163,7 @@ export default function StocksPage() {
 
   return (
     <main>
-      <PageIntro
-        title="Stocks"
-        subtitle="Suivi des niveaux: stock total, collecté, en lot et restant. Journal des variations (collecte, lot, commercialisation)."
-      />
+      <PageIntro title="Stocks" />
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
         <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto]">

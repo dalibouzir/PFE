@@ -161,10 +161,7 @@ export default function FarmerAdvancesPage() {
 
   return (
     <main>
-      <PageIntro
-        title="Avances Producteurs"
-        subtitle="Suivi des avances en espèces accordées aux producteurs."
-      />
+      <PageIntro title="Avances Producteurs" />
 
       <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "20ms" }}>

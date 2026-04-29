@@ -28,12 +28,12 @@
   --info: #2f80ed;
   --ai-accent: #7b61ff;
 
-  --bg: #f5f1e8;
-  --surface: #fffdf7;
-  --surface-soft: #f8f4ea;
-  --line: #e4dccf;
+  --bg: #f3f7fb;
+  --surface: #ffffff;
+  --surface-soft: #f7fafe;
+  --line: #dbe5f0;
   --text: #1f2a24;
-  --muted: #625d53;
+  --muted: #607286;
 
   /* Backward-compat aliases used by existing classes */
   --green-900: var(--brand-900);
@@ -57,8 +57,8 @@ body {
   min-height: 100vh;
   min-height: 100svh;
   background:
-    radial-gradient(circle at 8% 12%, rgba(202, 224, 209, 0.34) 0%, rgba(202, 224, 209, 0) 30%),
-    radial-gradient(circle at 92% 90%, rgba(232, 221, 193, 0.4) 0%, rgba(232, 221, 193, 0) 34%),
+    radial-gradient(circle at 8% 12%, rgba(178, 209, 236, 0.34) 0%, rgba(178, 209, 236, 0) 30%),
+    radial-gradient(circle at 92% 90%, rgba(197, 229, 213, 0.28) 0%, rgba(197, 229, 213, 0) 34%),
     var(--bg);
   color: var(--text);
   font-family: var(--font-manrope), sans-serif;
@@ -329,6 +329,15 @@ h6 {
     0 14px 30px rgba(16, 54, 39, 0.14);
   backdrop-filter: blur(14px) saturate(1.2);
   overflow: hidden;
+}
+
+/* Prevent mobile browser auto-zoom on focused form fields (notably iOS Chrome/Safari). */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 .wf-liquid-card::before {

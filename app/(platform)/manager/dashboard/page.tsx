@@ -2,26 +2,47 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { Package } from "lucide-react";
-import { Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer } from "recharts";
-import { useDashboard } from "@/hooks/useDashboard";
+import { AlertTriangle, Package, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { PageIntro } from "@/components/ui/PageIntro";
+import { useDashboard } from "@/hooks/useDashboard";
 import { useMembers } from "@/hooks/useMembers";
 import { useProducts } from "@/hooks/useProducts";
 import { useStocks } from "@/hooks/useStocks";
 
-const stageDefinitions = [
-  { id: "tri", name: "Tri", keys: ["tri", "sort"], color: "#D64545" },
-  { id: "sechage", name: "Sechage", keys: ["sechage", "séchage", "dry"], color: "#D4A017" },
-  { id: "nettoyage", name: "Nettoyage", keys: ["nettoyage", "clean"], color: "#2F80ED" },
-  { id: "conditionnement", name: "Conditionnement", keys: ["conditionnement", "emballage", "pack"], color: "#007E2F" },
-] as const;
+const GREEN = "#007E2F";
+const GREEN_SOFT = "#5FB87F";
+const BLUE = "#3D6EA8";
+const AMBER = "#D39D2F";
+const ROSE = "#CC5B62";
 
 type LossSegment = {
   label: string;
   value: number;
   color: string;
 };
+
+const stageDefinitions = [
+  { id: "tri", name: "Tri", keys: ["tri", "sort"], color: ROSE },
+  { id: "sechage", name: "Sechage", keys: ["sechage", "sech", "dry"], color: AMBER },
+  { id: "nettoyage", name: "Nettoyage", keys: ["nettoyage", "clean"], color: BLUE },
+  { id: "conditionnement", name: "Conditionnement", keys: ["conditionnement", "emballage", "pack"], color: GREEN },
+] as const;
 
 function compactDate(value: string) {
   return value.length >= 10 ? value.slice(0, 10) : value;
@@ -34,60 +55,33 @@ function stageFromType(type: string) {
       id: "autre",
       name: "Autre",
       keys: [],
-      color: "#7A7A7A",
+      color: "#7A869A",
     }
   );
 }
 
-function padSeries(values: number[], fallback: number) {
-  const normalized = values.filter((item) => Number.isFinite(item));
-  if (normalized.length === 0) return Array.from({ length: 7 }, () => fallback);
-  const result = [...normalized];
-  while (result.length < 7) result.unshift(result[0]);
-  return result.slice(-7);
+function statusBadgeClass(status: string) {
+  const normalized = status.toLowerCase();
+  if (normalized.includes("attente")) return "border-[#EADFC0] bg-[#FFFAEE] text-[#946900]";
+  if (normalized.includes("valide") || normalized.includes("ok")) return "border-[#CCE6D6] bg-[#F2FAF6] text-[#0A6D2A]";
+  if (normalized.includes("suivi")) return "border-[#D0D9EA] bg-[#F2F6FD] text-[#315A95]";
+  return "border-[#DBDEE6] bg-[#F8F9FC] text-[#5D6678]";
 }
 
-function computeDelta(series: number[], invert = false) {
-  if (series.length < 2) return 0;
-  const previous = series[series.length - 2];
-  const current = series[series.length - 1];
+function toFixed(value: number, decimals = 1) {
+  return Number.isFinite(value) ? value.toFixed(decimals) : (0).toFixed(decimals);
+}
+
+function computeDelta(current: number, previous: number, invert = false) {
   if (previous <= 0) return 0;
   const raw = ((current - previous) / previous) * 100;
   return invert ? raw * -1 : raw;
 }
 
-function computeMonthDelta(dates: string[]) {
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-  const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-  const previousYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-
-  let currentCount = 0;
-  let previousCount = 0;
-
-  for (const value of dates) {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) continue;
-    if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) currentCount += 1;
-    if (date.getMonth() === previousMonth && date.getFullYear() === previousYear) previousCount += 1;
-  }
-
-  if (previousCount <= 0) return currentCount > 0 ? 100 : 0;
-  return ((currentCount - previousCount) / previousCount) * 100;
-}
-
 function flowBarClass(lossPct: number) {
-  if (lossPct > 10) return "bg-gradient-to-r from-red-400 to-red-600";
-  if (lossPct >= 5) return "bg-gradient-to-r from-amber-400 to-amber-600";
-  return "bg-gradient-to-r from-green-400 to-green-600";
-}
-
-function statusBadgeClass(status: string) {
-  const normalized = status.toLowerCase();
-  if (normalized.includes("attente")) return "border-[#F3D8A5] bg-[#FFF8E8] text-[#9E6A00]";
-  if (normalized.includes("valide")) return "border-[#BFE0CA] bg-[#EEF8F1] text-[#0F7A3B]";
-  return "border-[#C9DBF5] bg-[#EFF5FF] text-[#2F80ED]";
+  if (lossPct > 10) return "from-[#E28A92] to-[#CC5B62]";
+  if (lossPct >= 5) return "from-[#EBC773] to-[#D39D2F]";
+  return "from-[#49A56C] to-[#007E2F]";
 }
 
 export default function ManagerDashboardPage() {
@@ -99,86 +93,49 @@ export default function ManagerDashboardPage() {
   const inputs = useMemo(() => data?.recent_inputs ?? [], [data?.recent_inputs]);
   const steps = useMemo(() => data?.recent_process_steps ?? [], [data?.recent_process_steps]);
   const stocksCritiques = useMemo(() => data?.stock_alerts ?? [], [data?.stock_alerts]);
+  const totalStock = useMemo(() => stocks.reduce((sum, item) => sum + item.available_stock_kg, 0), [stocks]);
 
-  const totalStock = stocks.reduce((sum, item) => sum + item.available_stock_kg, 0);
+  const trendData = useMemo(() => {
+    const grouped = new Map<string, { loss: number[]; efficiency: number[]; output: number }>();
+    for (const step of steps) {
+      const day = compactDate(step.date);
+      const current = grouped.get(day) ?? { loss: [], efficiency: [], output: 0 };
+      current.loss.push(step.loss_pct);
+      current.efficiency.push(step.efficiency_pct);
+      current.output += step.qty_out;
+      grouped.set(day, current);
+    }
 
-  const stockSeries = padSeries(stocks.map((item) => item.available_stock_kg), totalStock || 0);
-  const membersSeries = padSeries([members.length], members.length || 0);
-  const productsSeries = padSeries([products.length], products.length || 0);
-  const perteSeries = padSeries(steps.map((item) => item.loss_pct), data?.loss_rate ?? 0);
-  const efficaciteSeries = padSeries(steps.map((item) => item.efficiency_pct), data?.efficiency_rate ?? 0);
-  const membersDelta = computeMonthDelta(members.map((item) => item.created_at));
-  const productsDelta = computeMonthDelta(products.map((item) => item.created_at));
+    const series = Array.from(grouped.entries())
+      .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+      .map(([date, values]) => ({
+        date,
+        label: date.slice(5),
+        loss: values.loss.length ? values.loss.reduce((sum, item) => sum + item, 0) / values.loss.length : 0,
+        efficiency: values.efficiency.length
+          ? values.efficiency.reduce((sum, item) => sum + item, 0) / values.efficiency.length
+          : 0,
+        output: values.output,
+      }));
 
-  const kpis = [
-    {
-      id: "stock-total",
-      href: "/manager/stocks",
-      label: "Stock disponible",
-      value: totalStock,
-      suffix: " kg",
-      decimals: 1,
-      dotClass: "bg-[var(--success)]",
-      delta: computeDelta(stockSeries),
-      deltaClass: computeDelta(stockSeries) >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]",
-      series: stockSeries,
-    },
-    {
-      id: "membres",
-      href: "/manager/membres",
-      label: "Membres",
-      value: members.length,
-      suffix: "",
-      decimals: 0,
-      dotClass: "bg-[var(--success)]",
-      delta: membersDelta,
-      deltaClass: membersDelta >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]",
-      series: membersSeries,
-    },
-    {
-      id: "produits",
-      href: "/manager/stocks",
-      label: "Produits suivis",
-      value: products.length,
-      suffix: "",
-      decimals: 0,
-      dotClass: "bg-[#2F80ED]",
-      delta: productsDelta,
-      deltaClass: productsDelta >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]",
-      series: productsSeries,
-    },
-    {
-      id: "perte",
-      href: "/manager/lots",
-      label: "Taux de perte",
-      value: data?.loss_rate ?? 0,
-      suffix: "%",
-      decimals: 1,
-      dotClass: (data?.loss_rate ?? 0) > 10 ? "bg-[var(--danger)]" : "bg-[var(--warning)]",
-      delta: computeDelta(perteSeries, true),
-      deltaClass: computeDelta(perteSeries, true) >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]",
-      series: perteSeries,
-    },
-    {
-      id: "efficacite",
-      href: "/manager/lots",
-      label: "Rendement moyen",
-      value: data?.efficiency_rate ?? 0,
-      suffix: "%",
-      decimals: 1,
-      dotClass: (data?.efficiency_rate ?? 0) >= 80 ? "bg-[var(--success)]" : "bg-[var(--warning)]",
-      delta: computeDelta(efficaciteSeries),
-      deltaClass: computeDelta(efficaciteSeries) >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]",
-      series: efficaciteSeries,
-    },
-  ] as const;
+    const safeSeries = series.length ? series : [{ date: "", label: "--", loss: data?.loss_rate ?? 0, efficiency: data?.efficiency_rate ?? 0, output: totalStock }];
+    while (safeSeries.length < 7) {
+      safeSeries.unshift({ ...safeSeries[0], label: safeSeries[0].label === "--" ? "--" : "..." });
+    }
+    return safeSeries.slice(-7);
+  }, [steps, data?.loss_rate, data?.efficiency_rate, totalStock]);
+
+  const currentPoint = trendData[trendData.length - 1];
+  const previousPoint = trendData[trendData.length - 2] ?? currentPoint;
+  const lossDelta = computeDelta(currentPoint?.loss ?? 0, previousPoint?.loss ?? 0, true);
+  const efficiencyDelta = computeDelta(currentPoint?.efficiency ?? 0, previousPoint?.efficiency ?? 0);
 
   const recentRows = useMemo(() => {
     const inputRows = inputs.map((item) => ({
       id: `input-${item.id}`,
       date: compactDate(item.date),
       operation: `Collecte ${item.product_id.slice(0, 8).toUpperCase()}`,
-      quantite: `${item.quantity.toFixed(1)} kg`,
+      quantite: `${toFixed(item.quantity, 1)} kg`,
       statut: item.status.toLowerCase().includes("pending") ? "En attente" : "Valide",
     }));
 
@@ -186,13 +143,13 @@ export default function ManagerDashboardPage() {
       id: `step-${item.id}`,
       date: compactDate(item.date),
       operation: `Etape ${stageFromType(item.type).name}`,
-      quantite: `${item.qty_out.toFixed(1)} kg`,
+      quantite: `${toFixed(item.qty_out, 1)} kg`,
       statut: item.warning ? "Suivi" : "OK",
     }));
 
     return [...stepRows, ...inputRows]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 6);
+      .slice(0, 7);
   }, [inputs, steps]);
 
   const lossSegments = useMemo<LossSegment[]>(() => {
@@ -210,7 +167,7 @@ export default function ManagerDashboardPage() {
       .sort((a, b) => b.value - a.value);
   }, [steps]);
 
-  const totalLoss = lossSegments.reduce((sum, item) => sum + item.value, 0);
+  const totalLoss = useMemo(() => lossSegments.reduce((sum, item) => sum + item.value, 0), [lossSegments]);
 
   const flowRows = useMemo(() => {
     const raw = stageDefinitions.map((stage) => {
@@ -223,15 +180,57 @@ export default function ManagerDashboardPage() {
     return raw.map((item) => ({ ...item, progress: (item.output / maxOutput) * 100 }));
   }, [steps]);
 
+  const kpiCards = [
+    {
+      id: "active-batches",
+      href: "/manager/lots",
+      label: "Lots actifs",
+      value: data?.number_of_active_batches ?? 0,
+      suffix: "",
+      trend: trendData.map((item) => item.output),
+      tone: "neutral",
+    },
+    {
+      id: "stock",
+      href: "/manager/stocks",
+      label: "Stock disponible",
+      value: totalStock,
+      suffix: " kg",
+      trend: trendData.map((item) => item.output),
+      tone: "positive",
+    },
+    {
+      id: "members",
+      href: "/manager/membres",
+      label: "Membres",
+      value: members.length,
+      suffix: "",
+      trend: trendData.map((item) => item.efficiency),
+      tone: "positive",
+    },
+    {
+      id: "products",
+      href: "/manager/stocks",
+      label: "Produits suivis",
+      value: products.length,
+      suffix: "",
+      trend: trendData.map((item) => item.loss),
+      tone: "neutral",
+    },
+  ] as const;
+
+  const primaryInsight = (data?.loss_rate ?? 0) > 9 ? "Drop detecte sur les etapes aval" : "Tendance stable sur la semaine";
+  const secondaryInsight = (data?.efficiency_rate ?? 0) >= 80 ? "Trend increasing sur le rendement" : "Efficacite sous cible, suivi recommande";
+
   if (isError) {
     return (
       <main>
-        <section className="premium-card rounded-2xl p-6">
+        <section className="premium-card rounded-xl p-6">
           <p className="text-sm text-[var(--danger)]">Erreur de chargement du dashboard.</p>
           <button
             type="button"
             onClick={() => refetch()}
-            className="mt-3 rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white"
+            className="mt-3 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white"
           >
             Reessayer
           </button>
@@ -241,73 +240,125 @@ export default function ManagerDashboardPage() {
   }
 
   return (
-    <main>
-      <PageIntro title="Dashboard" subtitle="Vue simple des operations: collecte, pertes, activite recente et stocks." />
+    <main className="space-y-5">
+      <PageIntro title="Dashboard" />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {(isLoading && !data ? Array.from({ length: 5 }).map((_, i) => ({ id: `s-${i}` })) : kpis).map((kpi) =>
+      <section className="grid gap-4 xl:grid-cols-[1.55fr_0.45fr]">
+          <article className="rounded-xl border border-[#d3dfeb] bg-white p-4 shadow-[0_8px_20px_rgba(18,46,78,0.08)] sm:p-5">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#5c7088]">Monitoring performance</p>
+                <h2 className="mt-1 text-xl font-semibold text-[#10283f]">Vue tendance pertes vs rendement</h2>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#c8e4d2] bg-[#f1faf5] px-3 py-1 text-xs font-semibold text-[#0e6b2b]">
+                <Sparkles className="h-3.5 w-3.5" />
+                {primaryInsight}
+              </span>
+            </div>
+
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trendData} margin={{ top: 10, right: 6, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="effGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={GREEN} stopOpacity={0.22} />
+                      <stop offset="100%" stopColor={GREEN} stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#e8eef5" strokeDasharray="3 4" vertical={false} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#6d7f95", fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fill: "#6d7f95", fontSize: 11 }} width={36} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 10, border: "1px solid #d5e0ec", background: "#ffffff" }}
+                    labelStyle={{ color: "#27435e", fontWeight: 600 }}
+                  />
+                  <Area type="monotone" dataKey="efficiency" stroke="none" fill="url(#effGradient)" />
+                  <Line type="monotone" dataKey="efficiency" stroke={GREEN} strokeWidth={2.4} dot={false} name="Rendement %" />
+                  <Line type="monotone" dataKey="loss" stroke={ROSE} strokeWidth={2.1} dot={false} name="Perte %" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-[#d6e9de] bg-[#f4fbf7] px-3 py-2">
+                <p className="text-[11px] uppercase tracking-[0.1em] text-[#47745a]">AI insight</p>
+                <p className="mt-1 text-sm font-semibold text-[#134730]">{secondaryInsight}</p>
+              </div>
+              <div className="rounded-lg border border-[#ebd8d8] bg-[#fff6f6] px-3 py-2">
+                <p className="text-[11px] uppercase tracking-[0.1em] text-[#7f5157]">Signal</p>
+                <p className="mt-1 text-sm font-semibold text-[#5e2f36]">{(data?.loss_rate ?? 0) > 9 ? "Loss spike sur un segment" : "Aucun spike critique detecte"}</p>
+              </div>
+            </div>
+          </article>
+
+          <div className="grid gap-4">
+            <article className="rounded-xl border border-[#d6e8dc] bg-white p-4 shadow-[0_8px_20px_rgba(18,46,78,0.08)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56706f]">Rendement moyen</p>
+              <p className="mt-2 text-4xl font-semibold text-[#0e2f2a]">{toFixed(data?.efficiency_rate ?? 0, 1)}%</p>
+              <p className={`mt-2 inline-flex items-center gap-1 text-xs font-semibold ${efficiencyDelta >= 0 ? "text-[#0b6f2f]" : "text-[#b44650]"}`}>
+                {efficiencyDelta >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                {efficiencyDelta >= 0 ? "+" : "-"}
+                {toFixed(Math.abs(efficiencyDelta), 1)}% vs point precedent
+              </p>
+            </article>
+
+            <article className="rounded-xl border border-[#ebdcdc] bg-white p-4 shadow-[0_8px_20px_rgba(18,46,78,0.08)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#6f5959]">Taux de perte</p>
+              <p className="mt-2 text-4xl font-semibold text-[#2a333f]">{toFixed(data?.loss_rate ?? 0, 1)}%</p>
+              <p className={`mt-2 inline-flex items-center gap-1 text-xs font-semibold ${lossDelta >= 0 ? "text-[#0b6f2f]" : "text-[#b44650]"}`}>
+                {lossDelta >= 0 ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
+                {lossDelta >= 0 ? "-" : "+"}
+                {toFixed(Math.abs(lossDelta), 1)}% vs point precedent
+              </p>
+            </article>
+          </div>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {(isLoading && !data ? Array.from({ length: 4 }).map((_, i) => ({ id: `s-${i}` })) : kpiCards).map((kpi) =>
           "label" in kpi ? (
             <Link key={kpi.id} href={kpi.href} className="block">
-              <article className="premium-card rounded-2xl p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">{kpi.label}</p>
-                  <span className={`h-2.5 w-2.5 rounded-full ${kpi.dotClass}`} />
-                </div>
-                <p className="mt-2 text-[38px] font-semibold leading-none text-[var(--text)]">
-                  {kpi.value.toFixed(kpi.decimals)}
+              <article className="rounded-xl border border-[#d8e2ee] bg-white p-4 shadow-[0_7px_18px_rgba(15,46,80,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,46,80,0.1)]">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-[#688099]">{kpi.label}</p>
+                <p className="mt-2 text-3xl font-semibold text-[#132f47]">
+                  {kpi.value.toFixed(kpi.suffix ? 1 : 0)}
                   {kpi.suffix}
                 </p>
-                <p className={`mt-2 text-xs font-semibold ${kpi.deltaClass}`}>
-                  {kpi.delta >= 0 ? "↗" : "↘"} {kpi.delta >= 0 ? "+" : "-"}
-                  {Math.abs(kpi.delta).toFixed(1)}% vs mois dernier
-                </p>
-                <div className="mt-3 h-[34px] w-full">
+                <div className="mt-3 h-[42px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={kpi.series.map((value, index) => ({ x: index, y: value }))}>
-                      <Line type="monotone" dataKey="y" stroke="#72736D" strokeWidth={2} dot={false} isAnimationActive={false} />
+                    <LineChart data={kpi.trend.map((value, index) => ({ x: index, y: value }))}>
+                      <Line
+                        type="monotone"
+                        dataKey="y"
+                        stroke={kpi.tone === "positive" ? GREEN : GREEN_SOFT}
+                        strokeWidth={2.1}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               </article>
             </Link>
           ) : (
-            <article key={kpi.id} className="premium-card rounded-2xl p-4">
-              <div className="h-3 w-28 animate-pulse rounded bg-[var(--line)]" />
-              <div className="mt-3 h-8 w-24 animate-pulse rounded bg-[var(--line)]" />
-              <div className="mt-2 h-3 w-32 animate-pulse rounded bg-[var(--line)]" />
-              <div className="mt-3 h-7 animate-pulse rounded bg-[var(--surface-soft)]" />
+            <article key={kpi.id} className="rounded-xl border border-[#d8e2ee] bg-white p-4 shadow-[0_7px_18px_rgba(15,46,80,0.06)]">
+              <div className="h-3 w-28 animate-pulse rounded bg-[#dfe8f2]" />
+              <div className="mt-3 h-8 w-20 animate-pulse rounded bg-[#dfe8f2]" />
+              <div className="mt-3 h-8 animate-pulse rounded bg-[#edf3f9]" />
             </article>
           ),
         )}
       </section>
 
-      <section className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-        <article className="premium-card min-w-0 rounded-2xl p-5">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-base font-semibold text-[var(--text)]">Activite recente</h3>
-            <p className="text-xs text-[var(--muted)]">{recentRows.length} elements</p>
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <article className="rounded-xl border border-[#d8e2ee] bg-white p-5 shadow-[0_8px_20px_rgba(18,46,78,0.08)]">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3 className="text-base font-semibold text-[#122d44]">Operations recentes</h3>
+            <p className="text-xs text-[#6f8398]">{recentRows.length} lignes</p>
           </div>
-          <div className="mt-3 space-y-2 sm:hidden">
-            {recentRows.length === 0 ? (
-              <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-4 text-sm text-[var(--muted)]">Aucune activite recente.</div>
-            ) : (
-              recentRows.map((row) => (
-                <article key={row.id} className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold text-[var(--text)]">{row.operation}</p>
-                    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(row.statut)}`}>{row.statut}</span>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
-                    <p>{row.date}</p>
-                    <p className="font-semibold text-[var(--text)]">{row.quantite}</p>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-          <div className="scroll-thin mt-3 hidden max-h-[420px] overflow-y-auto rounded-xl border border-[var(--line)] sm:block">
-            <table className="min-w-full text-left text-sm">
-              <thead className="sticky top-0 border-b border-[var(--line)] bg-[var(--surface)] text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
+          <div className="scroll-thin overflow-x-auto rounded-lg border border-[#dce4ef]">
+            <table className="wf-table min-w-full text-left text-sm">
+              <thead>
                 <tr>
                   <th className="px-3 py-3 font-semibold">Date</th>
                   <th className="px-3 py-3 font-semibold">Operation</th>
@@ -316,43 +367,45 @@ export default function ManagerDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {recentRows.map((row) => (
-                  <tr key={row.id} className="border-b border-[var(--line)] last:border-b-0">
-                    <td className="px-3 py-3 text-[var(--muted)]">{row.date}</td>
-                    <td className="px-3 py-3 font-medium text-[var(--text)]">{row.operation}</td>
-                    <td className="px-3 py-3 text-[var(--text)]">{row.quantite}</td>
-                    <td className="px-3 py-3">
-                      <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(row.statut)}`}>
-                        {row.statut}
-                      </span>
+                {recentRows.length === 0 ? (
+                  <tr>
+                    <td className="px-3 py-5 text-sm text-[#6f8398]" colSpan={4}>
+                      Aucune activite recente.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  recentRows.map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-3 py-3 text-[#6f8398]">{row.date}</td>
+                      <td className="px-3 py-3 font-medium text-[#162f45]">{row.operation}</td>
+                      <td className="px-3 py-3 text-[#1b3a54]">{row.quantite}</td>
+                      <td className="px-3 py-3">
+                        <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(row.statut)}`}>
+                          {row.statut}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </article>
 
-        <div className="grid min-w-0 gap-4">
-          <article className="premium-card min-w-0 rounded-2xl p-5">
-            <h3 className="text-base font-semibold text-[var(--text)]">Repartition des pertes</h3>
-            <p className="mt-1 text-sm text-[var(--muted)]">Par etape de transformation</p>
+        <div className="grid gap-4">
+          <article className="rounded-xl border border-[#d8e2ee] bg-white p-5 shadow-[0_8px_20px_rgba(18,46,78,0.08)]">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-[#122d44]">Repartition des pertes</h3>
+              <span className="rounded-full bg-[#eff8f2] px-2.5 py-1 text-[11px] font-semibold text-[#0f6a2b]">AI tracked</span>
+            </div>
             {lossSegments.length === 0 ? (
-              <p className="mt-4 text-sm text-[var(--muted)]">Aucune perte recente detectee.</p>
+              <p className="mt-3 text-sm text-[#6f8398]">Aucune perte recente detectee.</p>
             ) : (
-              <div className="mt-3 grid gap-3 sm:grid-cols-[180px_1fr] xl:grid-cols-1">
-                <div className="relative h-[180px]">
+              <div className="mt-3 grid gap-3 sm:grid-cols-[170px_1fr]">
+                <div className="relative h-[170px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie
-                        data={lossSegments}
-                        dataKey="value"
-                        nameKey="label"
-                        innerRadius={50}
-                        outerRadius={78}
-                        paddingAngle={2}
-                        isAnimationActive={false}
-                      >
+                      <Pie data={lossSegments} dataKey="value" nameKey="label" innerRadius={45} outerRadius={72} paddingAngle={2} isAnimationActive={false}>
                         {lossSegments.map((entry) => (
                           <Cell key={entry.label} fill={entry.color} />
                         ))}
@@ -360,80 +413,95 @@ export default function ManagerDashboardPage() {
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">Pertes</p>
-                    <p className="text-xl font-semibold text-[var(--text)]">{totalLoss.toFixed(1)} kg</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-[#5f7288]">Pertes</p>
+                    <p className="text-lg font-semibold text-[#13314a]">{toFixed(totalLoss, 1)} kg</p>
                   </div>
                 </div>
+
                 <div className="space-y-2">
-                  {lossSegments.map((item) => {
-                    const pct = totalLoss > 0 ? (item.value / totalLoss) * 100 : 0;
-                    return (
-                      <div key={item.label} className="flex items-center justify-between rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
-                        <p className="flex items-center gap-2 text-sm font-medium text-[var(--text)]">
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                          {item.label}
-                        </p>
-                        <p className="text-xs font-semibold text-[var(--muted)]">
-                          {item.value.toFixed(1)} kg ({pct.toFixed(0)}%)
-                        </p>
-                      </div>
-                    );
-                  })}
+                  {lossSegments.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between rounded-lg border border-[#dde6f0] bg-[#f9fbfe] px-3 py-2">
+                      <p className="flex items-center gap-2 text-sm font-medium text-[#173850]">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                        {item.label}
+                      </p>
+                      <p className="text-xs font-semibold text-[#5d7289]">{toFixed(item.value, 1)} kg</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
           </article>
-        </div>
-      </section>
 
-      <section className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <article className="premium-card rounded-2xl p-5">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-base font-semibold text-[var(--text)]">Flux matiere actifs</h3>
-            <p className="text-xs text-[var(--muted)]">Progression par etape</p>
-          </div>
-          <div className="mt-4 space-y-3">
-            {flowRows.map((row) => (
-              <div key={row.id}>
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-[var(--text)]">{row.label}</p>
-                  <p className="text-xs text-[var(--muted)]">
-                    {row.output.toFixed(1)} kg · perte {row.avgLoss.toFixed(1)}%
-                  </p>
-                </div>
-                <div className="h-2.5 rounded-full bg-[#E8E3DB]">
-                  <div className={`h-2.5 rounded-full ${flowBarClass(row.avgLoss)}`} style={{ width: `${Math.max(6, row.progress)}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="premium-card rounded-2xl p-5">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-base font-semibold text-[var(--text)]">Etat stocks critiques</h3>
-            <p className="text-xs text-[var(--muted)]">{stocksCritiques.length} alerte(s)</p>
-          </div>
-          {stocksCritiques.length === 0 ? (
-            <div className="mt-4 flex min-h-[164px] flex-col items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--surface-soft)]">
-              <Package className="h-8 w-8 text-[var(--muted)]" />
-              <p className="mt-3 text-lg font-semibold text-[var(--text)]">Tout est sous controle</p>
-              <p className="text-sm text-[var(--muted)]">Aucun stock critique detecte</p>
+          <article className="rounded-xl border border-[#d8e2ee] bg-white p-5 shadow-[0_8px_20px_rgba(18,46,78,0.08)]">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-[#122d44]">Flux matiere</h3>
+              <p className="text-xs text-[#6f8398]">Sortie nette par etape</p>
             </div>
-          ) : (
-            <div className="mt-4 space-y-2">
-              {stocksCritiques.map((item) => (
-                <div key={item.stock_id} className="rounded-xl border border-[#F1CECE] bg-[#FFF4F4] px-3 py-2.5">
-                  <p className="text-sm font-semibold text-[var(--text)]">Produit {item.product_id.slice(0, 8)}</p>
-                  <p className="text-xs text-[var(--muted)]">
-                    Quantite {item.quantity.toFixed(1)} {item.unit} · seuil {item.threshold.toFixed(1)} {item.unit}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-[var(--danger)]">Deficit: {item.deficit.toFixed(1)} {item.unit}</p>
+
+            <div className="h-[170px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={flowRows} margin={{ top: 8, right: 0, left: -16, bottom: 0 }}>
+                  <CartesianGrid stroke="#edf2f8" vertical={false} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#6c8198", fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fill: "#6c8198", fontSize: 11 }} width={34} />
+                  <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #d8e2ee", background: "#fff" }} />
+                  <Bar dataKey="output" radius={[8, 8, 0, 0]}>
+                    {flowRows.map((row) => (
+                      <Cell key={row.id} fill={row.avgLoss > 10 ? ROSE : GREEN} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {flowRows.map((row) => (
+                <div key={row.id}>
+                  <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                    <p className="font-medium text-[#1f3f59]">{row.label}</p>
+                    <p className="text-[#63788f]">{toFixed(row.output, 1)} kg · perte {toFixed(row.avgLoss, 1)}%</p>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-[#e9eff7]">
+                    <div className={`h-2.5 rounded-full bg-gradient-to-r ${flowBarClass(row.avgLoss)}`} style={{ width: `${Math.max(7, row.progress)}%` }} />
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </article>
+          </article>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-[#dbe5f0] bg-white p-4 shadow-[0_10px_24px_rgba(15,48,87,0.07)]">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-base font-semibold text-[#13314a]">Alertes critiques de stock</h3>
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-[#355a84]">{stocksCritiques.length} alerte(s)</span>
+        </div>
+
+        {stocksCritiques.length === 0 ? (
+          <div className="mt-3 flex min-h-[120px] items-center justify-center rounded-lg border border-[#d5e1ee] bg-white">
+            <div className="text-center">
+              <Package className="mx-auto h-7 w-7 text-[#67829f]" />
+              <p className="mt-2 text-sm font-semibold text-[#1d3f5d]">Aucune rupture imminente</p>
+              <p className="text-xs text-[#6e8298]">Le niveau de stock est actuellement stable.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {stocksCritiques.map((item) => (
+              <div key={item.stock_id} className="rounded-lg border border-[#e8d6d7] bg-white px-3 py-2.5">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-[#21415f]">
+                  <AlertTriangle className="h-4 w-4 text-[#c55a62]" />
+                  Produit {item.product_id.slice(0, 8)}
+                </p>
+                <p className="mt-1 text-xs text-[#687e95]">
+                  Quantite {toFixed(item.quantity, 1)} {item.unit} · seuil {toFixed(item.threshold, 1)} {item.unit}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-[#bb4d56]">Deficit: {toFixed(item.deficit, 1)} {item.unit}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );

@@ -626,10 +626,7 @@ export default function LotsPage() {
 
   return (
     <main className="min-w-0 overflow-x-hidden">
-      <PageIntro
-        title="Flux matiere"
-        subtitle="Creation lot, reservation stock, execution sequentielle des etapes et tracabilite des pertes."
-      />
+      <PageIntro title="Flux matiere" />
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "30ms" }}>
         <div className="flex flex-wrap items-center justify-between gap-3">

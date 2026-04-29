@@ -224,7 +224,7 @@ export default function InputsPage() {
 
   return (
     <main>
-      <PageIntro title="Collecte" subtitle="Suivi des apports membres avec validation qualite et statut operationnel." />
+      <PageIntro title="Collecte" />
 
       <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "20ms" }}>

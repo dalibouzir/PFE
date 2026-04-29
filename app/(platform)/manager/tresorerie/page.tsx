@@ -163,7 +163,7 @@ export default function TreasuryPage() {
 
   return (
     <main>
-      <PageIntro title="Trésorerie" subtitle="Suivi des dépenses et recettes de la coopérative." />
+      <PageIntro title="Trésorerie" />
 
       <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "20ms" }}>

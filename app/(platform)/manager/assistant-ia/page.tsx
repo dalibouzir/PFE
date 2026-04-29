@@ -479,14 +479,30 @@ function ChatMessageAI({ id, text, time, response, showTemplateExample = false }
 
 function RequestAnchorRail({ items, activeId, onSelect }: RequestAnchorRailProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const visibleItems = items.slice(0, 10);
+  const hiddenItems = items.slice(10);
+
+  useEffect(() => {
+    if (!overflowOpen) return;
+
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!overflowRef.current?.contains(target)) {
+        setOverflowOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [overflowOpen]);
 
   return (
     <aside className="hidden xl:flex xl:justify-center">
-      <div className="sticky top-32 h-fit w-14">
-        <div className="relative mx-auto flex w-full flex-col items-center gap-10 py-3">
-          <span className="pointer-events-none absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-[linear-gradient(180deg,rgba(0,126,47,0.35)_0%,rgba(0,126,47,0.08)_100%)]" />
-
-          {items.map((item) => {
+      <div className="sticky top-1/2 h-fit w-14 -translate-y-1/2">
+        <div className="relative mx-auto flex w-full flex-col items-center gap-1.5 py-3">
+          {visibleItems.map((item) => {
             const isActive = item.id === activeId;
             const isHovered = item.id === hoveredId;
 
@@ -498,14 +514,15 @@ function RequestAnchorRail({ items, activeId, onSelect }: RequestAnchorRailProps
                 onMouseLeave={() => setHoveredId((current) => (current === item.id ? null : current))}
                 onClick={() => onSelect(item)}
                 aria-label={item.preview}
-                className={`group relative z-10 flex h-4 w-4 items-center justify-center rounded-full border transition-all duration-150 ${
+                className={`group relative z-10 flex h-3 w-8 items-center justify-center rounded-md transition-all duration-150 ${
                   isActive
-                    ? "border-[#06883A] bg-[#0BA748] shadow-[0_0_0_4px_rgba(0,126,47,0.14)]"
-                    : "border-[rgba(0,126,47,0.35)] bg-[var(--surface)] hover:border-[#06883A]"
+                    ? "bg-[#0BA748] shadow-[0_0_0_3px_rgba(0,126,47,0.16)]"
+                    : "bg-transparent hover:bg-[#007e2f]/20"
                 }`}
               >
+                <span className={`h-[2px] w-6 rounded-full ${isActive ? "bg-white" : "bg-[#007e2f]/70"}`} />
                 {isHovered && (
-                  <span className="pointer-events-none absolute right-[calc(100%+10px)] top-1/2 w-64 -translate-y-1/2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-left shadow-[0_10px_24px_rgba(35,30,21,0.12)]">
+                  <span className="pointer-events-none absolute right-[calc(100%+12px)] top-1/2 w-64 -translate-y-1/2 rounded-xl border border-[#007e2f]/35 bg-[linear-gradient(138deg,rgba(239,250,245,0.95)_0%,rgba(229,246,236,0.88)_55%,rgba(218,241,229,0.82)_100%)] px-3 py-2 text-left shadow-[0_14px_30px_rgba(0,126,47,0.22)] backdrop-blur-xl">
                     <span className="block truncate text-xs font-medium text-[var(--text)]">{item.preview}</span>
                     <span className="mt-0.5 block text-[11px] text-[var(--muted)]">{item.time}</span>
                   </span>
@@ -513,6 +530,44 @@ function RequestAnchorRail({ items, activeId, onSelect }: RequestAnchorRailProps
               </button>
             );
           })}
+
+          {hiddenItems.length > 0 && (
+            <div className="relative z-20" ref={overflowRef}>
+              <button
+                type="button"
+                onClick={() => setOverflowOpen((current) => !current)}
+                aria-label={`${hiddenItems.length} questions supplémentaires`}
+                className="flex h-6 w-6 items-center justify-center rounded-full border border-[#007e2f]/45 bg-[#007e2f]/16 text-[11px] font-semibold text-[#007e2f] shadow-[0_8px_18px_rgba(0,126,47,0.2)]"
+              >
+                Q
+              </button>
+
+              {overflowOpen && (
+                <div className="absolute right-[calc(100%+12px)] top-1/2 w-72 -translate-y-1/2 overflow-hidden rounded-2xl border border-[#007e2f]/36 bg-[linear-gradient(145deg,rgba(238,250,244,0.95)_0%,rgba(226,244,234,0.86)_52%,rgba(214,238,225,0.8)_100%)] p-2 shadow-[0_16px_36px_rgba(0,126,47,0.24)] backdrop-blur-2xl">
+                  <div className="pointer-events-none absolute inset-x-3 top-0 h-px bg-[rgba(255,255,255,0.88)]" />
+                  <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#0d6a31]">
+                    Questions cachées ({hiddenItems.length})
+                  </p>
+                  <div className="mt-1 max-h-60 space-y-1 overflow-y-auto pr-1">
+                    {hiddenItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          onSelect(item);
+                          setOverflowOpen(false);
+                        }}
+                        className="w-full rounded-lg border border-[#007e2f]/15 bg-white/50 px-2 py-1.5 text-left transition-colors hover:bg-[#007e2f]/18"
+                      >
+                        <p className="truncate text-xs font-medium text-[#0f2d1b]">{item.preview}</p>
+                        <p className="mt-0.5 text-[11px] text-[#2e5b41]/80">{item.time}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </aside>
@@ -546,7 +601,8 @@ function PreviousChatsMenu({ items, activeId, pendingCreate, onSelect, onCreate 
       </button>
 
       {open && (
-        <div className="absolute right-0 z-30 mt-2 w-96 max-w-[80vw] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-2 shadow-[0_16px_36px_rgba(35,30,21,0.16)]">
+        <div className="absolute right-0 z-30 mt-2 w-80 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-[#007e2f]/30 bg-[linear-gradient(145deg,rgba(238,250,244,0.94)_0%,rgba(226,244,234,0.84)_52%,rgba(214,238,225,0.78)_100%)] p-1.5 shadow-[0_10px_24px_rgba(0,126,47,0.18)] backdrop-blur-xl sm:w-[22rem]">
+          <div className="pointer-events-none absolute inset-x-3 top-0 h-px bg-[rgba(255,255,255,0.88)]" />
           <button
             type="button"
             onClick={() => {
@@ -554,13 +610,13 @@ function PreviousChatsMenu({ items, activeId, pendingCreate, onSelect, onCreate 
               setOpen(false);
             }}
             disabled={pendingCreate}
-            className="flex w-full items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm font-semibold text-[var(--text)] transition-colors hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center gap-2 rounded-lg border border-[#007e2f]/24 bg-white/55 px-2.5 py-2 text-sm font-semibold text-[#0f2d1b] transition-colors hover:bg-[#007e2f]/18 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Plus className="h-4 w-4" />
             {pendingCreate ? "Création..." : "Nouvelle conversation"}
           </button>
 
-          <div className="mt-2 max-h-72 space-y-1 overflow-y-auto">
+          <div className="mt-1.5 max-h-64 space-y-1 overflow-y-auto">
             {items.map((item) => (
               <button
                 key={item.id}
@@ -569,17 +625,17 @@ function PreviousChatsMenu({ items, activeId, pendingCreate, onSelect, onCreate 
                   onSelect(item.id);
                   setOpen(false);
                 }}
-                className={`w-full rounded-xl px-3 py-2 text-left transition-colors ${
-                  activeId === item.id ? "bg-[#EEF7E6]" : "hover:bg-[var(--surface-soft)]"
+                className={`w-full rounded-lg border border-transparent px-2.5 py-1.5 text-left transition-colors ${
+                  activeId === item.id ? "border-[#007e2f]/28 bg-[#007e2f]/18" : "hover:bg-[#007e2f]/12"
                 }`}
               >
-                <p className="truncate text-sm font-semibold text-[var(--text)]">{item.title}</p>
-                <p className="mt-0.5 text-xs text-[var(--muted)]">
+                <p className="truncate text-sm font-semibold text-[#0f2d1b]">{item.title}</p>
+                <p className="mt-0.5 text-xs text-[#2e5b41]/85">
                   {item.time} · {item.messageCount} messages
                 </p>
               </button>
             ))}
-            {!items.length && <p className="px-3 py-2 text-xs text-[var(--muted)]">Aucune conversation enregistrée.</p>}
+            {!items.length && <p className="px-3 py-2 text-xs text-[#2e5b41]/85">Aucune conversation enregistrée.</p>}
           </div>
         </div>
       )}
@@ -589,10 +645,10 @@ function PreviousChatsMenu({ items, activeId, pendingCreate, onSelect, onCreate 
 
 function ChatComposer({ value, pending, onChange, onSend }: ChatComposerProps) {
   return (
-    <div className="shrink-0 space-y-3 rounded-[24px] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 shadow-[0_12px_26px_rgba(35,30,21,0.1)]">
-      <div className="flex items-end gap-3">
-        <button type="button" className="rounded-full border border-[var(--line)] bg-[var(--surface-soft)] p-2 text-[var(--muted)] transition-colors hover:text-[var(--text)]" aria-label="Ajouter une pièce jointe">
-          <Paperclip className="h-4 w-4" />
+    <div className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 shadow-[0_2px_8px_rgba(35,30,21,0.05)]">
+      <div className="flex items-center gap-1.5">
+        <button type="button" className="rounded-full border border-[var(--line)] bg-[var(--surface-soft)] p-1 text-[var(--muted)] transition-colors hover:text-[var(--text)]" aria-label="Ajouter une pièce jointe">
+          <Paperclip className="h-3.5 w-3.5" />
         </button>
 
         <textarea
@@ -605,21 +661,19 @@ function ChatComposer({ value, pending, onChange, onSend }: ChatComposerProps) {
             }
           }}
           placeholder="Posez votre question..."
-          className="min-h-[44px] flex-1 resize-none bg-transparent px-1 py-2 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
+          className="h-8 max-h-20 flex-1 resize-none bg-transparent px-1 py-1 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
         />
 
         <button
           type="button"
           onClick={onSend}
           disabled={pending || !value.trim()}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-[0_10px_22px_rgba(0,126,47,0.3)] transition-transform duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-55"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-[0_6px_12px_rgba(0,126,47,0.26)] transition-transform duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-55"
           aria-label="Envoyer"
         >
-          <Send className="h-4 w-4" />
+          <Send className="h-3.5 w-3.5" />
         </button>
       </div>
-
-      <p className="text-center text-xs text-[var(--muted)]">Les réponses peuvent contenir des erreurs. Vérifiez les informations importantes.</p>
     </div>
   );
 }
@@ -783,8 +837,8 @@ export default function AssistantIAPage() {
   };
 
   return (
-    <main className="pb-4">
-      <PageIntro title="Assistant IA" subtitle="Posez vos questions sur vos données. Mémoire conservée uniquement dans la conversation active." />
+    <main className="pb-0">
+      <PageIntro title="Assistant IA" />
 
       <div className="-mt-1 mb-3 flex items-center justify-end">
         <PreviousChatsMenu
@@ -799,10 +853,10 @@ export default function AssistantIAPage() {
         />
       </div>
 
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_56px]">
-        <div className="min-w-0">
-          <div className="flex h-[calc(100dvh-20.25rem)] min-h-[520px] flex-col gap-3">
-            <div className="scroll-thin flex-1 space-y-4 overflow-y-auto pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <section className="grid gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_56px]">
+        <div className="min-h-0 min-w-0">
+          <div className="flex h-[calc(100dvh-16rem)] min-h-0 flex-col gap-2 sm:h-[calc(100dvh-16.75rem)] md:h-[calc(100dvh-19.5rem)] md:min-h-[520px] md:gap-3">
+            <div className="scroll-thin min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               {messages.map((entry) =>
                 entry.role === "user" ? (
                   <ChatMessageUser key={entry.id} id={entry.id} text={entry.text} time={entry.time} />

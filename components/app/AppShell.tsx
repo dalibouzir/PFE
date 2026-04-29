@@ -20,8 +20,10 @@ import {
   ManagerIcon,
   MenuIcon,
   ProfileIcon,
+  ProductsIcon,
   SearchIcon,
   SettingsIcon,
+  SparkIcon,
   StocksIcon,
   TransformIcon,
   UsersIcon,
@@ -29,6 +31,9 @@ import {
 } from "@/components/app/icons";
 import { AgriBrandLoader } from "@/components/ui/AgriBrandLoader";
 import { useAuth } from "@/context/auth/AuthContext";
+
+const THIES_WEATHER_API_URL =
+  "https://api.open-meteo.com/v1/forecast?latitude=14.7886&longitude=-16.9260&current=temperature_2m&timezone=Africa%2FDakar";
 
 type IconRenderer = (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element;
 
@@ -62,9 +67,9 @@ const navByRole: Record<AppRole, NavItem[]> = {
     { href: "/manager/inputs", label: "Collecte", icon: InputsIcon },
     { href: "/manager/stocks", label: "Stocks", icon: StocksIcon },
     { href: "/manager/lots", label: "Flux matiere / lots", icon: LotsIcon },
-    { href: "/manager/commercialisation", label: "Commercialisation", icon: LotsIcon },
+    { href: "/manager/commercialisation", label: "Commercialisation", icon: ProductsIcon },
     { href: "/manager/facturation", label: "Facturation", icon: AnalyticsIcon },
-    { href: "/manager/tresorerie", label: "Tresorerie", icon: AnalyticsIcon },
+    { href: "/manager/tresorerie", label: "Tresorerie", icon: SparkIcon },
     { href: "/manager/assistant-ia", label: "AI Assistant", icon: ChatIcon },
   ],
 };
@@ -74,6 +79,7 @@ const shellMeta: Record<
   {
     name: string;
     roleLabel: string;
+    cooperativeLabel: string;
     navLabel: string;
     locationLabel: string;
     searchPlaceholder: string;
@@ -83,6 +89,7 @@ const shellMeta: Record<
   admin: {
     name: "Mariam Seck",
     roleLabel: "Admin plateforme",
+    cooperativeLabel: "Plateforme WeeFarm",
     navLabel: "Navigation administration",
     locationLabel: "Plateforme Senegal",
     searchPlaceholder: "Rechercher une cooperative, un manager...",
@@ -91,6 +98,7 @@ const shellMeta: Record<
   manager: {
     name: "Aissatou Ndiaye",
     roleLabel: "Manager cooperative",
+    cooperativeLabel: "Cooperative Deggo Thies",
     navLabel: "Navigation cooperative",
     locationLabel: "Thies · 33°C",
     searchPlaceholder: "Rechercher un lot, agriculteur, stock...",
@@ -118,11 +126,15 @@ function SidebarNav({
   collapsed,
   role,
   onNavigate,
+  onTooltipShow,
+  onTooltipHide,
 }: {
   pathname: string;
   collapsed: boolean;
   role: AppRole;
   onNavigate?: (href: string) => void;
+  onTooltipShow?: (label: string, trigger: HTMLElement) => void;
+  onTooltipHide?: () => void;
 }) {
   return (
     <nav className={cx(collapsed ? "space-y-3" : "space-y-2.5")}>
@@ -136,9 +148,26 @@ function SidebarNav({
             href={item.href}
             title={item.label}
             onClick={() => onNavigate?.(item.href)}
+            onMouseEnter={(event) => {
+              if (!collapsed) return;
+              onTooltipShow?.(item.label, event.currentTarget);
+            }}
+            onMouseLeave={() => {
+              if (!collapsed) return;
+              onTooltipHide?.();
+            }}
+            onFocus={(event) => {
+              if (!collapsed) return;
+              onTooltipShow?.(item.label, event.currentTarget);
+            }}
+            onBlur={() => {
+              if (!collapsed) return;
+              onTooltipHide?.();
+            }}
             className={cx(
-              "group relative flex h-11 items-center overflow-hidden rounded-2xl text-[14px] font-semibold transition-all duration-200",
+              "group relative flex h-11 items-center rounded-2xl text-[14px] font-semibold transition-all duration-200",
               collapsed ? "justify-center px-0" : "gap-2.5 px-3",
+              collapsed ? "overflow-visible" : "overflow-hidden",
               active
                 ? "bg-[var(--primary)] text-white shadow-[0_8px_18px_rgba(0,126,47,0.28)]"
                 : "text-[#B7C0BA] hover:bg-[rgba(255,255,255,0.08)] hover:text-white",
@@ -158,11 +187,6 @@ function SidebarNav({
             </span>
             <span className={cx("ml-auto h-1.5 w-1.5 rounded-full bg-white/90 transition-opacity duration-200", collapsed ? "opacity-0" : active ? "opacity-100" : "opacity-0")} />
 
-            {collapsed && (
-              <span className="pointer-events-none absolute left-full z-30 ml-3 hidden whitespace-nowrap rounded-xl border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text)] shadow-md group-hover:block">
-                {item.label}
-              </span>
-            )}
           </Link>
         );
       })}
@@ -182,6 +206,7 @@ function ProfileDropdown({
   meta: {
     name: string;
     roleLabel: string;
+    cooperativeLabel: string;
     navLabel: string;
     locationLabel: string;
     searchPlaceholder: string;
@@ -194,33 +219,35 @@ function ProfileDropdown({
 
   return (
     <div
-      className="shell-pop absolute right-0 top-[calc(100%+10px)] z-[80] w-64 overflow-hidden rounded-[22px] border border-[var(--line)] bg-[var(--surface)] p-2 text-[var(--text)] shadow-[0_16px_34px_rgba(35,30,21,0.14)]"
+      className="shell-pop absolute right-0 top-[calc(100%+10px)] z-[80] w-64 overflow-hidden rounded-[18px] border border-[rgba(200,227,214,0.88)] bg-[linear-gradient(148deg,rgba(245,252,248,0.9)_0%,rgba(232,246,238,0.86)_50%,rgba(222,240,230,0.82)_100%)] p-2 text-[#0f2318] shadow-[0_24px_44px_rgba(24,47,34,0.24)] backdrop-blur-2xl"
     >
-      <div className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/90" />
+      <div className="pointer-events-none absolute -inset-3 -z-10 rounded-[26px] bg-[radial-gradient(circle_at_50%_24%,rgba(223,236,228,0.7)_0%,rgba(223,236,228,0.34)_42%,rgba(223,236,228,0)_72%)] blur-2xl" />
+      <div className="pointer-events-none absolute inset-x-2 top-0 h-px bg-[rgba(255,255,255,0.92)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.4)_0%,rgba(255,255,255,0.12)_38%,rgba(255,255,255,0)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(166deg,rgba(255,255,255,0.18)_0_1px,rgba(255,255,255,0)_1px_7px)] opacity-70" />
+      <div className="pointer-events-none absolute inset-x-4 -bottom-6 h-10 rounded-[999px] bg-[radial-gradient(ellipse_at_center,rgba(208,223,214,0.66)_0%,rgba(208,223,214,0.3)_48%,rgba(208,223,214,0)_100%)] blur-2xl" />
 
-      <div className="relative">
-        <div className="mb-2 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2.5">
-          <p className="text-sm font-semibold text-[var(--text)]">{meta.name}</p>
-          <p className="text-xs text-[var(--muted)]">{meta.roleLabel}</p>
+      <div className="relative px-1">
+        <div className="px-2 py-1.5">
+          <p className="text-sm font-semibold text-[#0f2318]">{meta.name}</p>
+          <p className="text-xs text-[#1b3a2b]/80">{meta.roleLabel}</p>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)]">
+        <div className="overflow-hidden">
           {profileMenu.map((item) => {
             const Icon = item.icon;
             const className = cx(
-              "soft-focus flex w-full items-center gap-2 px-3 py-2 text-sm font-medium transition-colors",
+              "soft-focus group flex h-10 w-full items-center gap-2.5 px-3 text-sm font-medium transition-colors",
               item.tone === "danger"
-                ? "text-[var(--danger)] hover:bg-[#FFEDEE]"
-                : "text-[var(--text)] hover:bg-[var(--surface-soft)]",
+                ? "text-[#7e1e2a] hover:bg-[rgba(255,218,223,0.5)]"
+                : "text-[#0f2318] hover:bg-[rgba(0,96,41,0.58)] hover:text-[#f1fff7]",
             );
-
-            const dangerClassName =
-              "soft-focus flex h-10 w-full items-center gap-2 border-t border-[#f3d3d3] bg-[#FFEDEE] px-3 text-sm font-medium text-[var(--danger)] transition-colors duration-200 hover:bg-[#FFE4E4]";
+            const separatorClass = "border-t border-[rgba(228,250,238,0.36)] first:border-t-0";
 
             if (item.href) {
               return (
-                <Link key={item.label} href={item.href} className={cx(item.tone === "danger" ? dangerClassName : className, item.tone !== "danger" && "border-t border-[rgba(19,40,31,0.08)] first:border-t-0")}>
-                  <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[var(--danger)]" : "text-[var(--primary)]")} />
+                <Link key={item.label} href={item.href} className={cx(className, separatorClass)}>
+                  <Icon className={cx("h-4 w-4 transition-colors", item.tone === "danger" ? "text-[#7e1e2a]" : "text-[#0f3b26] group-hover:text-[#e8fff2]")} />
                   {item.label}
                 </Link>
               );
@@ -229,11 +256,11 @@ function ProfileDropdown({
             return (
               <button
                 key={item.label}
-                className={cx(className, "border-t border-[rgba(19,40,31,0.08)] first:border-t-0")}
+                className={cx(className, separatorClass)}
                 type="button"
                 onClick={item.action}
               >
-                <Icon className={cx("h-4 w-4", item.tone === "danger" ? "text-[var(--danger)]" : "text-[var(--primary)]")} />
+                <Icon className={cx("h-4 w-4 transition-colors", item.tone === "danger" ? "text-[#7e1e2a]" : "text-[#0f3b26] group-hover:text-[#e8fff2]")} />
                 {item.label}
               </button>
             );
@@ -286,15 +313,6 @@ function SidebarBrand({
             <p className="text-[20px] font-semibold leading-tight text-white">WeeFarm</p>
             <p className="text-[11px] tracking-[0.06em] text-[#B6C0B9]">{role === "admin" ? "ADMIN CONSOLE" : "OPERATIONS COOP"}</p>
           </div>
-
-          <p
-            className={cx(
-              "text-[10px] font-semibold tracking-wide text-[#D9E2DC] transition-all duration-300",
-              collapsed ? "opacity-100" : "pointer-events-none -translate-y-1 opacity-0",
-            )}
-          >
-            WF
-          </p>
         </div>
       </div>
 
@@ -304,7 +322,7 @@ function SidebarBrand({
           collapsed ? "max-h-0 -translate-y-1 overflow-hidden opacity-0" : "max-h-8 translate-y-0 opacity-100",
         )}
       >
-        {meta.navLabel}
+        {role === "manager" ? meta.cooperativeLabel : meta.navLabel}
       </p>
     </div>
   );
@@ -318,6 +336,8 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
   const [profileOpen, setProfileOpen] = useState(false);
   const [navLoading, setNavLoading] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  const [thiesTemp, setThiesTemp] = useState<number | null>(null);
+  const [collapsedTooltip, setCollapsedTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
   const [loaderTop, setLoaderTop] = useState(108);
   const headerRef = useRef<HTMLElement>(null);
   const desktopProfileRef = useRef<HTMLDivElement>(null);
@@ -356,10 +376,40 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
     return () => media.removeEventListener("change", sync);
   }, []);
 
+  const fetchThiesTemperature = useCallback(async () => {
+    try {
+      const response = await fetch(THIES_WEATHER_API_URL, { cache: "no-store" });
+      if (!response.ok) return;
+
+      const data = (await response.json()) as { current?: { temperature_2m?: number } };
+      const nextTemperature = data.current?.temperature_2m;
+      if (typeof nextTemperature === "number" && Number.isFinite(nextTemperature)) {
+        setThiesTemp(Math.round(nextTemperature));
+      }
+    } catch {
+      // Keep previous value when weather API is unavailable.
+    }
+  }, []);
+
   useEffect(() => {
+    setNow(new Date());
     const timer = window.setInterval(() => setNow(new Date()), 60000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (role !== "manager") {
+      setThiesTemp(null);
+      return;
+    }
+
+    fetchThiesTemperature();
+    const timer = window.setInterval(() => {
+      fetchThiesTemperature();
+    }, 60000);
+
+    return () => window.clearInterval(timer);
+  }, [fetchThiesTemperature, role]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -501,18 +551,34 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
     [],
   );
 
-  const dateFormatter = useMemo(
-    () =>
-      new Intl.DateTimeFormat("fr-SN", {
-        day: "2-digit",
-        month: "short",
-      }),
-    [],
-  );
-
   const currentTime = timeFormatter.format(now);
-  const currentDate = dateFormatter.format(now);
+  const locationLabel = role === "manager" && typeof thiesTemp === "number" ? `Thies · ${thiesTemp}°C` : meta.locationLabel;
   const shellLayoutStyle = { ["--sidebar-width" as string]: `${collapsed ? 92 : 258}px` } as React.CSSProperties;
+  const collapsedTooltipStyle = collapsedTooltip
+    ? ({
+        top: `${collapsedTooltip.top}px`,
+        left: `${collapsedTooltip.left}px`,
+      } as React.CSSProperties)
+    : undefined;
+
+  const handleCollapsedTooltipShow = useCallback((label: string, trigger: HTMLElement) => {
+    const rect = trigger.getBoundingClientRect();
+    setCollapsedTooltip({
+      label,
+      top: rect.top + rect.height / 2,
+      left: rect.right + 20,
+    });
+  }, []);
+
+  const handleCollapsedTooltipHide = useCallback(() => {
+    setCollapsedTooltip(null);
+  }, []);
+
+  useEffect(() => {
+    if (!collapsed) {
+      setCollapsedTooltip(null);
+    }
+  }, [collapsed]);
 
   const startNavTransition = useCallback((href: string) => {
     const target = href.split("?")[0].split("#")[0];
@@ -566,12 +632,19 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
 
   return (
     <div className="relative min-h-[100svh] overflow-x-clip bg-transparent md:min-h-[100dvh]" style={shellLayoutStyle}>
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-width)] px-3 py-4 transition-[width] duration-300 ease-out md:block">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-width)] bg-[#f3f7fb] px-3 py-4 transition-[width] duration-300 ease-out md:block">
         <div className="flex h-full flex-col rounded-[24px] border border-[rgba(255,255,255,0.08)] bg-[linear-gradient(180deg,#1C2722_0%,#16201B_100%)] p-3 shadow-[0_18px_40px_rgba(20,16,11,0.32)]">
           <SidebarBrand collapsed={collapsed} role={role} onCollapse={() => setCollapsed(true)} onExpand={() => setCollapsed(false)} />
 
           <div className="scroll-thin mt-5 flex-1 overflow-y-auto overscroll-y-contain pr-1">
-            <SidebarNav pathname={pathname} collapsed={collapsed} role={role} onNavigate={startNavTransition} />
+            <SidebarNav
+              pathname={pathname}
+              collapsed={collapsed}
+              role={role}
+              onNavigate={startNavTransition}
+              onTooltipShow={handleCollapsedTooltipShow}
+              onTooltipHide={handleCollapsedTooltipHide}
+            />
           </div>
 
           <div className="mt-auto space-y-2.5">
@@ -611,6 +684,15 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
           </div>
         </div>
       </aside>
+
+      {collapsed && collapsedTooltip && (
+        <div
+          className="pointer-events-none fixed z-[160] flex h-9 w-36 -translate-y-1/2 items-center justify-center whitespace-nowrap rounded-xl border border-[#007e2f]/45 bg-[#007e2f]/14 px-3 text-xs font-semibold text-[#007e2f] shadow-[0_10px_22px_rgba(0,126,47,0.2)] backdrop-blur-md"
+          style={collapsedTooltipStyle}
+        >
+          {collapsedTooltip.label}
+        </div>
+      )}
 
       <div className={cx("fixed inset-0 z-[70] md:hidden transition-opacity duration-200", mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0")}>
         <button className="absolute inset-0 bg-[#1a140c]/50 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-label="Fermer le menu" />
@@ -666,56 +748,64 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
         </aside>
       </div>
 
-      <div className="relative z-10 min-h-[100svh] min-w-0 px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-0 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:min-h-[100dvh] md:px-7 md:pt-6">
+      <div className="relative z-10 min-h-[100svh] min-w-0 bg-[#f3f7fb] px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-0 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:min-h-[100dvh] md:px-7 md:pt-6">
         <header
           ref={headerRef}
           className={cx(
-            "fixed inset-x-3 top-3 z-50 mb-6 rounded-[22px] border border-[var(--line)] border-b border-gray-200 bg-[color:rgba(255,253,247,0.9)] px-3 py-3 shadow-sm backdrop-blur-md sm:inset-x-5 sm:px-4 md:sticky md:inset-x-auto md:top-3",
+            "fixed inset-x-3 top-2 z-50 mb-5 rounded-[18px] border border-[rgba(172,231,194,0.42)] bg-[linear-gradient(135deg,rgba(0,126,47,0.42)_0%,rgba(10,104,47,0.3)_45%,rgba(24,120,62,0.24)_100%)] px-3 py-2.5 shadow-[0_10px_28px_rgba(0,98,42,0.24)] backdrop-blur-xl sm:inset-x-5 sm:px-4 md:sticky md:inset-x-auto md:top-2",
             mobileOpen && "pointer-events-none",
           )}
         >
-          <div className="hidden items-center gap-3 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto]">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(255,255,255,0.38)_0%,rgba(255,255,255,0.08)_34%,rgba(255,255,255,0)_58%)]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[rgba(237,255,245,0.78)]" />
+
+          <div className="relative z-10 hidden items-center gap-3 text-[#0f2318] md:grid md:grid-cols-[auto_minmax(0,1fr)_auto]">
             <div className="flex items-center gap-2.5">
-              <span className="inline-flex h-9 items-center rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 text-sm shadow-[0_4px_10px_rgba(38,32,22,0.05)]">🇸🇳</span>
-              <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--muted)] shadow-[0_4px_10px_rgba(38,32,22,0.05)]">
+              <span className="inline-flex items-center text-sm">🇸🇳</span>
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#163325]">
                 <WeatherIcon className="h-3.5 w-3.5" />
-                {meta.locationLabel}
+                {locationLabel}
               </span>
             </div>
 
-            <div className="mx-auto w-full max-w-2xl">
-              <div className="relative">
-                <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
-                <input
-                  className="soft-focus h-11 w-full rounded-full border border-[var(--line)] bg-[var(--surface)] py-2.5 pl-10 pr-4 text-sm text-[var(--text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_6px_16px_rgba(38,32,22,0.05)] transition-all duration-200 placeholder:text-[color:rgba(110,103,89,0.85)] focus:border-[var(--primary)] focus:shadow-[0_0_0_3px_rgba(0,126,47,0.14)]"
-                  placeholder={meta.searchPlaceholder}
-                />
+            <div className="w-full">
+              <div className="flex items-center gap-3">
+                <span className="max-w-[260px] shrink-0 truncate border-l border-[#1b3a2b]/25 pl-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#123223]/88">
+                  {meta.cooperativeLabel}
+                </span>
+                <div className="relative min-w-0 flex-1">
+                  <SearchIcon className="pointer-events-none absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1b3a2b]/80" />
+                  <input
+                    className="h-10 w-full border-0 border-b border-[#1b3a2b]/30 bg-transparent py-2 pl-7 pr-1 text-sm text-[#0f2318] placeholder:text-[#1b3a2b]/70 focus:border-b-[#1b3a2b]/30 focus:shadow-none focus:outline-none"
+                    placeholder={meta.searchPlaceholder}
+                  />
+                </div>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text)] shadow-[0_4px_10px_rgba(38,32,22,0.05)]">{currentTime}</span>
+              <span className="text-xs font-semibold text-[#0f2318]">{currentTime}</span>
 
-              <button className="soft-focus relative rounded-xl border border-[var(--line)] bg-[var(--surface)] p-2.5 text-[var(--muted)] shadow-[0_4px_10px_rgba(38,32,22,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:text-[var(--primary)]">
+              <button className="soft-focus relative p-1.5 text-[#163325]">
                 <BellIcon className="h-4 w-4" />
                 <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[var(--warning)]" />
               </button>
 
               <div className="relative" ref={desktopProfileRef}>
                 <button
-                  className="soft-focus group flex items-center gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-left shadow-[0_4px_12px_rgba(38,32,22,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#CFC5B4]"
+                  className="soft-focus group flex min-w-[180px] items-center justify-end gap-2.5 px-2 py-1.5 text-left"
                   onClick={() => setProfileOpen((prev) => !prev)}
                   aria-haspopup="menu"
                   aria-expanded={profileOpen}
                 >
                   <span className="hidden flex-col leading-tight xl:flex">
-                    <span className="text-sm font-semibold text-[var(--text)]">{meta.name}</span>
-                    <span className="text-[11px] text-[var(--muted)]">{meta.roleLabel}</span>
+                    <span className="text-sm font-semibold text-[#0f2318]">{meta.name}</span>
+                    <span className="text-[11px] text-[#1b3a2b]/80">{meta.roleLabel}</span>
                   </span>
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-[11px] font-semibold text-white shadow-[0_6px_12px_rgba(0,126,47,0.28)]">
+                  <span className="text-[12px] font-semibold text-[#0f2318]">
                     {meta.initials}
                   </span>
-                  <ChevronDownIcon className={cx("h-3.5 w-3.5 text-[var(--muted)] transition-transform duration-200", profileOpen && "rotate-180")} />
+                  <ChevronDownIcon className={cx("h-3.5 w-3.5 text-[#1b3a2b]/80 transition-transform duration-200", profileOpen && "rotate-180")} />
                 </button>
 
                 <ProfileDropdown open={profileOpen} role={role} onLogout={logout} meta={meta} />
@@ -723,28 +813,28 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
             </div>
           </div>
 
-          <div className="space-y-3 md:hidden">
+          <div className="relative z-10 space-y-3 text-[#0f2318] md:hidden">
             <div className="flex items-center gap-2">
-              <button className="soft-focus rounded-xl border border-[var(--line)] bg-[var(--surface)] p-2 text-[var(--muted)] shadow-[0_4px_10px_rgba(38,32,22,0.05)]" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu">
+              <button className="soft-focus p-1 text-[#163325]" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu">
                 <MenuIcon className="h-5 w-5" />
               </button>
 
-              <span className="inline-flex h-8 items-center rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 text-xs shadow-[0_4px_10px_rgba(38,32,22,0.05)]">🇸🇳</span>
-              <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 text-xs text-[var(--muted)] shadow-[0_4px_10px_rgba(38,32,22,0.05)]">
+              <span className="inline-flex items-center text-xs">🇸🇳</span>
+              <span className="inline-flex items-center gap-1.5 text-xs text-[#163325]">
                 <WeatherIcon className="h-3.5 w-3.5" />
-                {role === "admin" ? "Plateforme" : "Thies"}
+                {locationLabel}
               </span>
 
               <div className="ml-auto flex items-center gap-1.5">
-                <span className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-[11px] font-medium text-[var(--text)]">{currentTime}</span>
+                <span className="text-[11px] font-medium text-[#0f2318]">{currentTime}</span>
 
-                <button className="soft-focus relative rounded-xl border border-[var(--line)] bg-[var(--surface)] p-2 text-[var(--muted)] shadow-[0_4px_10px_rgba(38,32,22,0.05)]">
+                <button className="soft-focus relative p-1.5 text-[#163325]">
                   <BellIcon className="h-4 w-4" />
                   <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--warning)]" />
                 </button>
 
                 <div className="relative" ref={mobileProfileRef}>
-                  <button className="soft-focus flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-[11px] font-semibold text-white shadow-[0_6px_12px_rgba(0,126,47,0.22)]" onClick={() => setProfileOpen((prev) => !prev)} aria-haspopup="menu" aria-expanded={profileOpen}>
+                  <button className="soft-focus px-1 text-[11px] font-semibold text-[#0f2318]" onClick={() => setProfileOpen((prev) => !prev)} aria-haspopup="menu" aria-expanded={profileOpen}>
                     {meta.initials}
                   </button>
 
@@ -753,13 +843,15 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
               </div>
             </div>
 
-            <div className="relative">
-              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
-              <input className="soft-focus h-10 w-full rounded-full border border-[var(--line)] bg-[var(--surface)] py-2 pl-9 pr-3 text-sm shadow-[0_4px_10px_rgba(38,32,22,0.05)] placeholder:text-[color:rgba(110,103,89,0.85)] focus:border-[var(--primary)]" placeholder={meta.searchPlaceholder} />
+            <div className="flex items-center gap-2">
+              <span className="max-w-[145px] shrink-0 truncate border-l border-[#1b3a2b]/25 pl-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#123223]/88">{meta.cooperativeLabel}</span>
+              <div className="relative min-w-0 flex-1">
+                <SearchIcon className="pointer-events-none absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1b3a2b]/80" />
+                <input className="h-9 w-full border-0 border-b border-[#1b3a2b]/30 bg-transparent py-2 pl-7 pr-1 text-sm text-[#0f2318] placeholder:text-[#1b3a2b]/70 focus:border-b-[#1b3a2b]/30 focus:shadow-none focus:outline-none" placeholder={meta.searchPlaceholder} />
+              </div>
             </div>
           </div>
 
-          <p className="mt-2 hidden text-right text-[11px] text-[var(--muted)] md:block">{currentDate}</p>
         </header>
 
         <div className="md:hidden" aria-hidden="true" style={{ height: `${loaderTop}px` }} />

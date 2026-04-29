@@ -236,7 +236,7 @@ export default function CommercialisationPage() {
 
   return (
     <main>
-      <PageIntro title="Commercialisation" subtitle="Catalogue, commandes clients et suivi des statuts de vente." />
+      <PageIntro title="Commercialisation" />
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "20ms" }}>
         <div className="flex flex-wrap items-center gap-3">
