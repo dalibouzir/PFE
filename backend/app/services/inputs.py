@@ -12,6 +12,25 @@ from app.models.enums import InputStatus
 from app.utils.exceptions import NotFoundError, ValidationError
 
 
+def _normalize_member_product_token(value: str) -> str:
+    return value.strip().lower()
+
+
+def _validate_member_product_mapping(member: Member, product: Product):
+    allowed_tokens = {
+        _normalize_member_product_token(item)
+        for item in member.products
+        if item and item.strip()
+    }
+    if not allowed_tokens:
+        return
+    product_token = _normalize_member_product_token(product.name)
+    if product_token not in allowed_tokens:
+        raise ValidationError(
+            "Selected product is not assigned to this member. Update the member products first."
+        )
+
+
 def record_input(db: Session, manager: User, payload) -> Input:
     cooperative_id = get_manager_cooperative_id(manager)
     member = db.scalar(
@@ -25,6 +44,7 @@ def record_input(db: Session, manager: User, payload) -> Input:
     )
     if product is None:
         raise NotFoundError("Product not found in the current cooperative.")
+    _validate_member_product_mapping(member, product)
 
     field_id = payload.field_id
     if field_id is not None:
@@ -95,6 +115,7 @@ def update_input(db: Session, manager: User, input_id, payload) -> Input:
     )
     if product is None:
         raise NotFoundError("Product not found in the current cooperative.")
+    _validate_member_product_mapping(member, product)
 
     next_field_id = data.get("field_id", input_record.field_id)
     if next_field_id is not None:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
@@ -64,14 +64,11 @@ type MemberSummary = {
 };
 
 type MemberFormValues = {
-  code?: string;
   full_name: string;
   village: string;
   phone: string;
-  main_product: string;
-  secondary_products: string[];
-  parcel_count: number;
-  area_hectares: number;
+  products: string[];
+  notes: string;
   join_date: string;
   status: "active" | "inactive" | "seasonal";
 };
@@ -106,14 +103,15 @@ function splitProductLabels(rawValue?: string | null) {
   return unique;
 }
 
-function mergeProductLabels(primary?: string | null, secondary?: string | null, fallback?: string | null) {
-  const first = splitProductLabels(primary);
-  const second = splitProductLabels(secondary);
-  const third = splitProductLabels(fallback);
+function mergeProductLabels(products?: string[] | null, primary?: string | null, secondary?: string | null, fallback?: string | null) {
+  const first = (products ?? []).map((item) => item.trim()).filter(Boolean);
+  const second = splitProductLabels(primary);
+  const third = splitProductLabels(secondary);
+  const fourth = splitProductLabels(fallback);
   const merged: string[] = [];
   const seen = new Set<string>();
 
-  for (const label of [...first, ...second, ...third]) {
+  for (const label of [...first, ...second, ...third, ...fourth]) {
     const normalized = normalizeProductToken(label);
     if (seen.has(normalized)) continue;
     seen.add(normalized);
@@ -163,31 +161,16 @@ export default function MembersPage() {
       full_name: "",
       village: "",
       phone: "",
-      main_product: "",
-      secondary_products: [],
-      parcel_count: 1,
-      area_hectares: 1,
+      products: [],
+      notes: "",
       join_date: "",
       status: "active",
     },
   });
   const selectedStatus = watch("status");
-  const selectedMainProduct = watch("main_product");
-  const watchedSecondaryProducts = watch("secondary_products");
-  const selectedSecondaryProducts = useMemo(() => watchedSecondaryProducts ?? [], [watchedSecondaryProducts]);
+  const watchedProducts = watch("products");
+  const selectedProducts = useMemo(() => watchedProducts ?? [], [watchedProducts]);
   const catalogProductNames = useMemo(() => [...SENEGAL_AGRI_PRODUCTS], []);
-  const secondaryProductChoices = useMemo(
-    () => catalogProductNames.filter((name) => name !== selectedMainProduct),
-    [catalogProductNames, selectedMainProduct],
-  );
-
-  useEffect(() => {
-    if (!selectedMainProduct || selectedSecondaryProducts.length === 0) return;
-    const next = selectedSecondaryProducts.filter((item) => item !== selectedMainProduct);
-    if (next.length !== selectedSecondaryProducts.length) {
-      setValue("secondary_products", next, { shouldDirty: true });
-    }
-  }, [selectedMainProduct, selectedSecondaryProducts, setValue]);
 
   const summaries = useMemo<MemberSummary[]>(() => {
     const members = membersQuery.data ?? [];
@@ -198,7 +181,7 @@ export default function MembersPage() {
       const fieldsArea = memberFields.reduce((sum, field) => sum + field.area, 0);
       const totalArea = member.area_hectares > 0 ? member.area_hectares : fieldsArea;
       const zone = member.village?.trim() || memberFields[0]?.location || "Zone non renseignee";
-      const productLabels = mergeProductLabels(member.main_product, member.secondary_products, member.specialty);
+      const productLabels = mergeProductLabels(member.products, member.main_product, member.secondary_products, member.specialty);
       const culture = productLabels[0] ?? "Non renseigne";
       const parcels = member.parcel_count > 0 ? member.parcel_count : memberFields.length;
 
@@ -276,14 +259,11 @@ export default function MembersPage() {
   const openCreateForm = () => {
     setEditingMember(null);
     reset({
-      code: "",
       full_name: "",
       village: "",
       phone: "",
-      main_product: catalogProductNames[0] ?? "",
-      secondary_products: [],
-      parcel_count: 1,
-      area_hectares: 1,
+      products: [],
+      notes: "",
       join_date: "",
       status: "active",
     });
@@ -294,20 +274,18 @@ export default function MembersPage() {
   const openEditForm = (member: MemberSummary) => {
     setEditingMember(member);
     const productLabels = mergeProductLabels(
+      member.raw.products,
       member.raw.main_product,
       member.raw.secondary_products,
       member.raw.specialty,
     );
     const selectedFromCatalog = toCatalogProductSelections(productLabels, catalogProductNames);
     reset({
-      code: member.code,
       full_name: member.fullName,
       village: member.raw.village ?? "",
       phone: member.phone,
-      main_product: selectedFromCatalog[0] ?? "",
-      secondary_products: selectedFromCatalog.slice(1),
-      parcel_count: member.raw.parcel_count > 0 ? member.raw.parcel_count : member.parcels,
-      area_hectares: member.raw.area_hectares > 0 ? member.raw.area_hectares : member.totalArea,
+      products: selectedFromCatalog,
+      notes: member.raw.notes ?? "",
       join_date: member.raw.join_date ?? "",
       status: member.raw.status,
     });
@@ -323,23 +301,21 @@ export default function MembersPage() {
   const submitMember = handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const primaryProduct = values.main_product.trim();
-      if (!primaryProduct) {
-        setFormError("Produit principal requis.");
+      const memberProducts = (values.products ?? []).map((item) => item.trim()).filter(Boolean);
+      if (memberProducts.length === 0) {
+        setFormError("Au moins un produit est requis.");
         return;
       }
-      const secondaryProducts = (values.secondary_products ?? []).filter((item) => item && item !== primaryProduct);
       const payload: MemberCreate = {
-        code: values.code?.trim() || undefined,
         full_name: values.full_name.trim(),
         village: values.village.trim(),
         phone: values.phone.trim(),
-        main_product: primaryProduct || null,
-        secondary_products: secondaryProducts.length > 0 ? secondaryProducts.join("; ") : null,
-        parcel_count: Number(values.parcel_count),
-        area_hectares: Number(values.area_hectares),
+        notes: values.notes.trim() || null,
+        products: memberProducts,
+        main_product: memberProducts[0] ?? null,
+        secondary_products: memberProducts.length > 1 ? memberProducts.slice(1).join("; ") : null,
         join_date: values.join_date || null,
-        specialty: primaryProduct || null,
+        specialty: memberProducts[0] ?? null,
         status: values.status,
       };
 
@@ -660,76 +636,41 @@ export default function MembersPage() {
               />
             </label>
 
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Produit principal
-              <select {...register("main_product", { required: "Produit principal requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
-                <option value="">Selectionner un produit</option>
-                {catalogProductNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
             <label className="block text-sm font-medium text-[var(--text)] sm:col-span-2">
-              Produits secondaires (optionnel)
+              Produits de l&apos;agriculteur
               <Controller
                 control={control}
-                name="secondary_products"
+                name="products"
                 render={({ field }) => (
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    {secondaryProductChoices.length === 0 ? (
-                      <p className="text-xs text-[var(--muted)]">Aucun autre produit disponible.</p>
-                    ) : (
-                      secondaryProductChoices.map((name) => {
-                        const checked = (field.value ?? []).includes(name);
-                        return (
-                          <button
-                            key={name}
-                            type="button"
-                            onClick={() => {
-                              const current = field.value ?? [];
-                              const next = checked ? current.filter((item) => item !== name) : [...current, name];
-                              field.onChange(next);
-                            }}
-                            className={cx(
-                              "soft-focus rounded-xl border px-3 py-2 text-left text-sm transition-colors",
-                              checked
-                                ? "border-[var(--primary)] bg-[#EAF5FF] text-[var(--primary)]"
-                                : "border-[var(--line)] bg-[var(--surface-soft)] text-[var(--text)]",
-                            )}
-                          >
-                            {name}
-                          </button>
-                        );
-                      })
-                    )}
+                    {catalogProductNames.map((name) => {
+                      const checked = (field.value ?? []).includes(name);
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => {
+                            const current = field.value ?? [];
+                            const next = checked ? current.filter((item) => item !== name) : [...current, name];
+                            field.onChange(next);
+                          }}
+                          className={cx(
+                            "soft-focus rounded-xl border px-3 py-2 text-left text-sm transition-colors",
+                            checked
+                              ? "border-[var(--primary)] bg-[#EAF5FF] text-[var(--primary)]"
+                              : "border-[var(--line)] bg-[var(--surface-soft)] text-[var(--text)]",
+                          )}
+                        >
+                          {name}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               />
-            </label>
-
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Nb de parcelles
-              <input
-                type="number"
-                min="0"
-                step="1"
-                {...register("parcel_count", { required: "Nombre de parcelles requis.", valueAsNumber: true })}
-                className="wf-input mt-2 h-11 w-full px-3 text-sm"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Superficie (ha)
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                {...register("area_hectares", { required: "Superficie requise.", valueAsNumber: true })}
-                className="wf-input mt-2 h-11 w-full px-3 text-sm"
-              />
+              <p className="mt-2 text-xs text-[var(--muted)]">
+                Selection obligatoire: au moins un produit ({selectedProducts.length} selectionne{selectedProducts.length > 1 ? "s" : ""}).
+              </p>
             </label>
 
             <label className="block text-sm font-medium text-[var(--text)]">
@@ -741,12 +682,12 @@ export default function MembersPage() {
               />
             </label>
 
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Code interne (optionnel)
-              <input
-                {...register("code")}
-                className="wf-input mt-2 h-11 w-full px-3 text-sm"
-                placeholder="Laisser vide pour auto-code (ex: AM-0)"
+            <label className="block text-sm font-medium text-[var(--text)] sm:col-span-2">
+              Notes (optionnel)
+              <textarea
+                {...register("notes")}
+                className="wf-input mt-2 w-full px-3 py-2.5 text-sm"
+                placeholder="Informations utiles sur l'agriculteur..."
               />
             </label>
           </div>

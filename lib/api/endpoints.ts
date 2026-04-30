@@ -19,6 +19,30 @@ export const endpoints = {
     delete: (id: string) => `/members/${id}`,
     contact: (id: string) => `/members/${id}/contact`,
   },
+  farmers: {
+    list: "/farmers",
+    detail: (id: string) => `/farmers/${id}`,
+    parcels: (id: string) => `/parcels?farmer_id=${id}`,
+    charges: (id: string) => `/farmers/${id}/global-charges`,
+  },
+  parcels: {
+    list: "/parcels",
+    detail: (id: string) => `/parcels/${id}`,
+    update: (id: string) => `/parcels/${id}`,
+    delete: (id: string) => `/parcels/${id}`,
+    preHarvest: (id: string) => `/parcels/${id}/pre-harvest`,
+    preHarvestInit: (id: string) => `/parcels/${id}/pre-harvest/init`,
+  },
+  preHarvestEvents: {
+    update: (id: string, parcelId: string) => `/pre-harvest-events/${id}?parcel_id=${parcelId}`,
+    complete: (id: string, parcelId: string) => `/pre-harvest-events/${id}/complete?parcel_id=${parcelId}`,
+  },
+  charges: {
+    list: "/charges",
+    detail: (id: string) => `/charges/${id}`,
+    update: (id: string) => `/charges/${id}`,
+    delete: (id: string) => `/charges/${id}`,
+  },
   fields: {
     list: "/fields",
     detail: (id: string) => `/fields/${id}`,
@@ -78,6 +102,11 @@ export const endpoints = {
     batchMetrics: (id: string) => `/analytics/batches/${id}/metrics`,
     batchAnomaly: (id: string) => `/analytics/batches/${id}/anomaly`,
     batchRecommendation: (id: string) => `/analytics/batches/${id}/recommendation`,
+    preHarvestSummary: "/analytics/pre-harvest/summary",
+    preHarvestCostsByFarmer: "/analytics/pre-harvest/costs-by-farmer",
+    preHarvestCostsByParcel: "/analytics/pre-harvest/costs-by-parcel",
+    preHarvestCostsByCrop: "/analytics/pre-harvest/costs-by-crop",
+    preHarvestCostsByHectare: "/analytics/pre-harvest/costs-by-hectare",
   },
   chat: {
     ask: "/chat",

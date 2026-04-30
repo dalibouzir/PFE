@@ -3,7 +3,9 @@ from enum import Enum
 
 class UserRole(str, Enum):
     ADMIN = "admin"
+    OWNER = "owner"
     MANAGER = "manager"
+    VIEWER = "viewer"
 
 
 class UserStatus(str, Enum):
@@ -55,6 +57,11 @@ class ProcessStepStatus(str, Enum):
     PENDING = "pending"
     COMPLETED = "completed"
     FLAGGED = "flagged"
+
+
+class PreHarvestStepStatus(str, Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
 
 
 class RiskLevel(str, Enum):

@@ -629,6 +629,85 @@ Post-Deployment:
 
 ---
 
+## Challenge #6: Alembic Revision Drift Between Supabase and Deployed Docker Image
+
+**Date:** April 28, 2026  
+**Severity:** 🔴 Critical  
+**Area:** Backend Deployment (Docker + Alembic + Azure Container Apps)
+
+### The Problem
+
+Backend startup failed in Azure with:
+
+```
+FAILED: Can't locate revision identified by '7c9d2e4a1b3f'
+```
+
+At the same time:
+- Supabase `alembic_version` already pointed to `7c9d2e4a1b3f`
+- Local migration file existed: `backend/alembic/versions/7c9d2e4a1b3f_add_chat_ui_blocks.py`
+
+**Important clarification:** this was **not** caused by pgvector changing IDs.  
+It was a **code/database migration state mismatch**.
+
+### Root Cause Analysis
+
+1. **DB ahead of deployed image**
+   - Migration was already applied to Supabase.
+   - Running container image did not include that migration revision file.
+
+2. **Alembic dual-state contract violated**
+   - Alembic requires both:
+     - revision file in code image
+     - revision value in DB table
+   - If either side is missing/outdated, startup migration fails.
+
+3. **Platform packaging nuance**
+   - First republished image was ARM-only from local machine.
+   - Azure required `linux/amd64`, causing an additional deploy failure until rebuilt with amd64.
+
+### What We Tried
+
+✓ Verified migration file exists locally  
+✓ Verified Supabase `alembic_version = 7c9d2e4a1b3f`  
+✓ Rebuilt image from project root context  
+✓ Added in-image verification for migration file before push  
+✓ Rebuilt with `--platform linux/amd64` and redeployed to Azure
+
+### Final Resolution Status
+
+✅ **Resolved** - New immutable image includes migration file and runs successfully in Azure  
+✅ `/health` endpoint returns `200 OK`
+
+### Lessons Learned
+
+1. **Never treat Alembic as DB-only state**
+   - Migration files in image must always match DB revision chain.
+
+2. **Deploy image + migration as one release unit**
+   - If DB is migrated but image is old, startup can fail immediately.
+
+3. **Add image-level migration verification gate**
+   - Before push/deploy, validate critical revision files exist inside `/app/alembic/versions`.
+
+4. **Pin target runtime architecture**
+   - Azure Container Apps expects `linux/amd64` in this setup.
+   - Building from ARM laptop requires explicit `--platform linux/amd64`.
+
+### Prevention Actions
+
+```
+Deployment Guardrails:
+├─ Build from project root context (for backend/Dockerfile COPY paths)
+├─ Build immutable tag (never use latest)
+├─ Build for linux/amd64
+├─ Verify required migration file inside built image
+├─ Push only if verification passes
+└─ Then update Azure revision
+```
+
+---
+
 ## Summary: Challenges Overcome
 
 | Challenge | Severity | Area | Status | Key Lesson |
@@ -638,6 +717,7 @@ Post-Deployment:
 | Analytics Integration | 🟠 Major | Frontend | Partial ✅ | Provenance matters |
 | Docker Readiness | 🟡 Medium | DevOps | Resolved ✅ | Multiple layer verification |
 | Production Deployment | 🔴 Critical | Infrastructure | Resolved ✅ | Configuration parity critical |
+| Alembic Revision Drift | 🔴 Critical | Deployment | Resolved ✅ | Code+DB migration state must stay aligned |
 
 ---
 

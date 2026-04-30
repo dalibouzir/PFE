@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import List
 from uuid import UUID
 
@@ -36,3 +38,25 @@ class DashboardResponse(BaseModel):
     recent_inputs: List[InputRead]
     recent_process_steps: List[ProcessStepRead]
     recent_recommendations: List[RecommendationResponse]
+
+
+class PreHarvestSummaryResponse(BaseModel):
+    total_pre_harvest_cost_fcfa: float
+    completed_steps_count: int
+    pending_steps_count: int
+    most_expensive_farmer_id: UUID | None
+    most_expensive_farmer_name: str | None
+    most_expensive_parcel_id: UUID | None
+    most_expensive_parcel_name: str | None
+
+
+class CostBreakdownRow(BaseModel):
+    id: UUID | None
+    label: str
+    amount_fcfa: float
+    area_hectares: float | None = None
+    cost_per_hectare_fcfa: float | None = None
+
+
+class PreHarvestCostBreakdownResponse(BaseModel):
+    items: List[CostBreakdownRow]

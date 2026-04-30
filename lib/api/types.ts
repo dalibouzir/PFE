@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "manager";
+export type UserRole = "admin" | "owner" | "manager" | "viewer";
 
 export type UserStatus = "active" | "disabled";
 
@@ -73,11 +73,14 @@ export type Member = {
   id: string;
   cooperative_id: string;
   code: string;
+  internal_code?: string;
   full_name: string;
   phone: string;
   village?: string | null;
+  notes?: string | null;
   main_product?: string | null;
   secondary_products?: string | null;
+  products?: string[] | null;
   parcel_count: number;
   area_hectares: number;
   join_date?: string | null;
@@ -88,14 +91,13 @@ export type Member = {
 };
 
 export type MemberCreate = {
-  code?: string;
   full_name: string;
   phone: string;
   village?: string | null;
+  notes?: string | null;
   main_product?: string | null;
   secondary_products?: string | null;
-  parcel_count?: number;
-  area_hectares?: number;
+  products?: string[] | null;
   join_date?: string | null;
   specialty?: string | null;
   status?: MemberStatus;
@@ -124,6 +126,97 @@ export type FieldCreate = {
 };
 
 export type FieldUpdate = Partial<FieldCreate>;
+
+export type Parcel = {
+  id: string;
+  cooperative_id: string;
+  member_id: string;
+  name: string;
+  surface_ha: number;
+  main_culture: string;
+  variety?: string | null;
+  tree_count?: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ParcelCreate = {
+  farmer_id: string;
+  name: string;
+  surface_ha: number;
+  main_culture: string;
+  variety?: string | null;
+  tree_count?: number | null;
+};
+
+export type ParcelUpdate = Partial<Omit<ParcelCreate, "farmer_id">>;
+
+export type PreHarvestStepStatus = "pending" | "completed";
+
+export type PreHarvestStep = {
+  id: string;
+  cooperative_id: string;
+  parcel_id: string;
+  member_id: string;
+  step_order: number;
+  step_key: string;
+  category: string;
+  label: string;
+  icon: string;
+  status: PreHarvestStepStatus;
+  quantity_value?: number | null;
+  quantity_unit?: string | null;
+  operation_cost_fcfa?: number | null;
+  realization_date?: string | null;
+  observations?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PreHarvestStepUpdate = {
+  quantity_value?: number | null;
+  quantity_unit?: string | null;
+  operation_cost_fcfa?: number | null;
+  realization_date: string;
+  observations?: string | null;
+};
+
+export type GlobalCharge = {
+  id: string;
+  cooperative_id: string;
+  member_id: string;
+  parcel_id?: string | null;
+  pre_harvest_step_id?: string | null;
+  batch_id?: string | null;
+  process_step_id?: string | null;
+  charge_type: string;
+  label: string;
+  amount_fcfa: number;
+  date: string;
+  notes?: string | null;
+  source_type: string;
+  treasury_transaction_id?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GlobalChargeCreate = {
+  farmer_id: string;
+  parcel_id?: string | null;
+  charge_type: string;
+  label: string;
+  amount_fcfa: number;
+  date: string;
+  notes?: string | null;
+};
+
+export type GlobalChargeUpdate = Partial<Omit<GlobalChargeCreate, "farmer_id">>;
+
+export type FarmerChargesResponse = {
+  total_amount_fcfa: number;
+  items: GlobalCharge[];
+};
 
 export type Product = {
   id: string;

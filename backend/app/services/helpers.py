@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 import unicodedata
 from enum import Enum
@@ -13,6 +15,7 @@ from app.utils.exceptions import ForbiddenError, ValidationError
 MASS_UNIT_KG = "kg"
 MASS_UNIT_TON = "ton"
 SUPPORTED_MASS_UNITS = {MASS_UNIT_KG, MASS_UNIT_TON}
+COOPERATIVE_ROLES = {UserRole.OWNER, UserRole.MANAGER, UserRole.VIEWER}
 
 PRODUCT_CODE_OVERRIDES = {
     "mango": "MANG",
@@ -29,12 +32,45 @@ def parse_enum_value(enum_class: Type[Enum], raw_value: str, field_name: str):
         raise ValidationError(f"Invalid {field_name}. Expected one of: {allowed}.")
 
 
-def get_manager_cooperative_id(user: User):
-    if user.role != UserRole.MANAGER:
-        raise ForbiddenError("This action is only available to managers.")
+def ensure_can_read(user: User):
+    if user.role == UserRole.ADMIN:
+        return
+    if user.role not in COOPERATIVE_ROLES:
+        raise ForbiddenError("Read access is not allowed for this role.")
+
+
+def ensure_can_write(user: User):
+    if user.role == UserRole.ADMIN:
+        return
+    if user.role not in {UserRole.OWNER, UserRole.MANAGER}:
+        raise ForbiddenError("Write access is not allowed for this role.")
+
+
+def ensure_can_delete(user: User):
+    if user.role == UserRole.ADMIN:
+        return
+    if user.role != UserRole.OWNER:
+        raise ForbiddenError("Delete access is not allowed for this role.")
+
+
+def resolve_cooperative_scope(user: User, requested_cooperative_id=None):
+    if user.role == UserRole.ADMIN:
+        if requested_cooperative_id is not None:
+            return requested_cooperative_id
+        if user.cooperative_id is not None:
+            return user.cooperative_id
+        raise ForbiddenError("Admin must provide cooperative_id for this operation.")
+
+    ensure_can_read(user)
     if user.cooperative_id is None:
-        raise ForbiddenError("Manager account is not linked to a cooperative.")
+        raise ForbiddenError("User is not linked to a cooperative.")
+    if requested_cooperative_id is not None and requested_cooperative_id != user.cooperative_id:
+        raise ForbiddenError("Cross-cooperative access is forbidden.")
     return user.cooperative_id
+
+
+def get_manager_cooperative_id(user: User):
+    return resolve_cooperative_scope(user)
 
 
 def require_entity_for_user(db: Session, model: Type[Any], object_id: Any, user: User, label: str):

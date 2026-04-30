@@ -13,7 +13,11 @@ from app.models.commercial_catalog_product import CommercialCatalogProduct  # no
 from app.models.commercial_invoice import CommercialInvoice, CommercialInvoiceLine  # noqa: F401
 from app.models.commercial_order import CommercialOrder, CommercialOrderLine  # noqa: F401
 from app.models.cooperative import Cooperative
+from app.models.global_charge import GlobalCharge  # noqa: F401
 from app.models.enums import BatchStatus, ProcessStepStatus, UserRole, UserStatus
+from app.models.member import Member  # noqa: F401
+from app.models.parcel import Parcel  # noqa: F401
+from app.models.pre_harvest_step import PreHarvestStep as ParcelPreHarvestStep  # noqa: F401
 from app.models.process_step import ProcessStep
 from app.models.product import Product
 from app.models.stock import Stock

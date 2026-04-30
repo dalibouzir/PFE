@@ -6,7 +6,7 @@ import { useAuth } from "@/context/auth/AuthContext";
 import { AgriBrandLoader } from "@/components/ui/AgriBrandLoader";
 import type { UserRole } from "@/lib/api/types";
 
-export function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: UserRole }) {
+export function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: UserRole | UserRole[] }) {
   const router = useRouter();
   const { user, loading } = useAuth();
 
@@ -16,7 +16,8 @@ export function ProtectedRoute({ children, role }: { children: React.ReactNode; 
       router.replace("/login");
       return;
     }
-    if (role && user.role !== role) {
+    const allowed = Array.isArray(role) ? role : role ? [role] : [];
+    if (allowed.length > 0 && !allowed.includes(user.role)) {
       router.replace(user.role === "admin" ? "/admin/dashboard" : "/manager/dashboard");
     }
   }, [loading, user, role, router]);

@@ -44,8 +44,10 @@ function parseSpecialtyTokens(value?: string | null) {
   return Array.from(new Set(tokens));
 }
 
-function mergeMemberProductTokens(mainProduct?: string | null, secondaryProducts?: string | null, specialty?: string | null) {
+function mergeMemberProductTokens(products?: string[] | null, mainProduct?: string | null, secondaryProducts?: string | null, specialty?: string | null) {
+  const normalizedProducts = (products ?? []).map((item) => normalizeToken(item)).filter(Boolean);
   const merged = [
+    ...normalizedProducts,
     ...parseSpecialtyTokens(mainProduct),
     ...parseSpecialtyTokens(secondaryProducts),
     ...parseSpecialtyTokens(specialty),
@@ -99,8 +101,8 @@ export default function InputsPage() {
   const selectedMemberId = watch("member_id");
   const selectedMember = useMemo(() => members.find((item) => item.id === selectedMemberId), [members, selectedMemberId]);
   const selectedMemberSpecialtyTokens = useMemo(
-    () => mergeMemberProductTokens(selectedMember?.main_product, selectedMember?.secondary_products, selectedMember?.specialty),
-    [selectedMember?.main_product, selectedMember?.secondary_products, selectedMember?.specialty],
+    () => mergeMemberProductTokens(selectedMember?.products, selectedMember?.main_product, selectedMember?.secondary_products, selectedMember?.specialty),
+    [selectedMember?.products, selectedMember?.main_product, selectedMember?.secondary_products, selectedMember?.specialty],
   );
   const productByNormalizedName = useMemo(() => {
     const map = new Map<string, (typeof products)[number]>();

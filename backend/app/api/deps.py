@@ -46,3 +46,21 @@ def get_current_manager(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != UserRole.MANAGER:
         raise ForbiddenError("Manager access is required.")
     return current_user
+
+
+def get_current_cooperative_user(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role not in {UserRole.ADMIN, UserRole.OWNER, UserRole.MANAGER, UserRole.VIEWER}:
+        raise ForbiddenError("Cooperative access is required.")
+    return current_user
+
+
+def get_current_cooperative_writer(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role not in {UserRole.ADMIN, UserRole.OWNER, UserRole.MANAGER}:
+        raise ForbiddenError("Write access is required.")
+    return current_user
+
+
+def get_current_cooperative_deleter(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role not in {UserRole.ADMIN, UserRole.OWNER}:
+        raise ForbiddenError("Delete access is required.")
+    return current_user

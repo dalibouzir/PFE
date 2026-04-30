@@ -5,47 +5,48 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AnalyticsIcon,
   BellIcon,
-  ChatIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   CloseIcon,
-  CooperativeIcon,
-  DashboardIcon,
   HelpIcon,
-  InputsIcon,
   LogoutIcon,
-  LotsIcon,
-  ManagerIcon,
   MenuIcon,
   ProfileIcon,
-  ProductsIcon,
   SearchIcon,
   SettingsIcon,
-  SparkIcon,
-  StocksIcon,
-  TransformIcon,
-  UsersIcon,
   WeatherIcon,
 } from "@/components/app/icons";
+import type { LucideIcon } from "lucide-react";
+import {
+  Bot,
+  Boxes,
+  FileText,
+  GitBranch,
+  Landmark,
+  LayoutDashboard,
+  Map,
+  ShoppingCart,
+  Sprout,
+  Truck,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { AgriBrandLoader } from "@/components/ui/AgriBrandLoader";
 import { useAuth } from "@/context/auth/AuthContext";
 
 const THIES_WEATHER_API_URL =
   "https://api.open-meteo.com/v1/forecast?latitude=14.7886&longitude=-16.9260&current=temperature_2m&timezone=Africa%2FDakar";
 
-type IconRenderer = (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element;
-
 type NavItem = {
   href: string;
   label: string;
-  icon: IconRenderer;
+  icon: LucideIcon;
 };
 
 type ProfileItem = {
   label: string;
-  icon: IconRenderer;
+  icon: (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element;
   href?: string;
   action?: () => void;
   tone?: "default" | "danger";
@@ -55,22 +56,23 @@ export type AppRole = "admin" | "manager";
 
 const navByRole: Record<AppRole, NavItem[]> = {
   admin: [
-    { href: "/admin/dashboard", label: "Tableau de bord", icon: DashboardIcon },
-    { href: "/admin/cooperatives", label: "Cooperatives", icon: CooperativeIcon },
-    { href: "/admin/managers", label: "Managers", icon: ManagerIcon },
-    { href: "/admin/parametres", label: "Parametres", icon: SettingsIcon },
+    { href: "/admin/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
+    { href: "/admin/cooperatives", label: "Cooperatives", icon: Map },
+    { href: "/admin/managers", label: "Managers", icon: Users },
+    { href: "/admin/parametres", label: "Parametres", icon: Landmark },
   ],
   manager: [
-    { href: "/manager/dashboard", label: "Dashboard", icon: DashboardIcon },
-    { href: "/manager/membres", label: "Member", icon: UsersIcon },
-    { href: "/manager/avances-producteurs", label: "Avance producteurs", icon: TransformIcon },
-    { href: "/manager/inputs", label: "Collecte", icon: InputsIcon },
-    { href: "/manager/stocks", label: "Stocks", icon: StocksIcon },
-    { href: "/manager/lots", label: "Flux matiere / lots", icon: LotsIcon },
-    { href: "/manager/commercialisation", label: "Commercialisation", icon: ProductsIcon },
-    { href: "/manager/facturation", label: "Facturation", icon: AnalyticsIcon },
-    { href: "/manager/tresorerie", label: "Tresorerie", icon: SparkIcon },
-    { href: "/manager/assistant-ia", label: "AI Assistant", icon: ChatIcon },
+    { href: "/manager/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/manager/membres", label: "Member", icon: Users },
+    { href: "/manager/parcelles", label: "Parcelles & Culture", icon: Sprout },
+    { href: "/manager/avances-producteurs", label: "Avance producteurs", icon: Wallet },
+    { href: "/manager/inputs", label: "Collecte", icon: Truck },
+    { href: "/manager/stocks", label: "Stocks", icon: Boxes },
+    { href: "/manager/lots", label: "Flux matiere / lots", icon: GitBranch },
+    { href: "/manager/commercialisation", label: "Commercialisation", icon: ShoppingCart },
+    { href: "/manager/facturation", label: "Facturation", icon: FileText },
+    { href: "/manager/tresorerie", label: "Tresorerie", icon: Landmark },
+    { href: "/manager/assistant-ia", label: "AI Assistant", icon: Bot },
   ],
 };
 
@@ -174,8 +176,8 @@ function SidebarNav({
             )}
             style={active ? { boxShadow: "0 0 12px rgba(0,126,47,0.34), 0 8px 18px rgba(0,126,47,0.28)" } : undefined}
           >
-            <span className={cx("grid place-items-center transition-all duration-200", collapsed ? "w-11" : "w-[18px]")}>
-              <Icon className={cx("shrink-0 transition-all duration-200", collapsed ? "h-[21px] w-[21px]" : "h-[17px] w-[17px]")} />
+            <span className={cx("grid place-items-center transition-all duration-200", collapsed ? "w-11" : "w-5")}>
+              <Icon className="h-5 w-5 shrink-0 transition-all duration-200 group-hover:scale-105" />
             </span>
             <span
               className={cx(
@@ -356,7 +358,16 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
       .slice(0, 2)
       .join("")
       .toUpperCase();
-    const roleLabel = user?.role === "admin" ? "Admin plateforme" : user?.role === "manager" ? "Manager cooperative" : base.roleLabel;
+    const roleLabel =
+      user?.role === "admin"
+        ? "Admin plateforme"
+        : user?.role === "owner"
+          ? "Propriétaire coopérative"
+          : user?.role === "viewer"
+            ? "Observateur coopérative"
+            : user?.role === "manager"
+              ? "Manager cooperative"
+              : base.roleLabel;
 
     return {
       ...base,

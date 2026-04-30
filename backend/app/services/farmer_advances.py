@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import FarmerAdvanceStatus, InputStatus
 from app.models.farmer_advance import FarmerAdvance
+from app.models.global_charge import GlobalCharge
 from app.models.input import Input
 from app.models.member import Member
 from app.models.user import User
@@ -52,6 +53,19 @@ def _active_amount_sum():
             )
         ),
         0.0,
+    )
+
+
+def _charges_total_subquery(cooperative_id):
+    return (
+        select(
+            GlobalCharge.member_id.label("farmer_id"),
+            func.coalesce(func.sum(GlobalCharge.amount_fcfa), 0.0).label("charges_total"),
+            func.max(GlobalCharge.updated_at).label("charges_last_modified"),
+        )
+        .where(GlobalCharge.cooperative_id == cooperative_id)
+        .group_by(GlobalCharge.member_id)
+        .subquery()
     )
 
 
@@ -182,19 +196,26 @@ def list_farmer_advances_summary(
         .subquery()
     )
     collecte_subquery = _validated_collecte_subquery(cooperative_id)
+    charges_subquery = _charges_total_subquery(cooperative_id)
 
     stmt = (
         select(
             Member.id.label("farmer_id"),
             Member.full_name.label("farmer_name"),
             func.coalesce(collecte_subquery.c.total_collected_quantity, 0.0).label("total_collected_quantity"),
-            advances_subquery.c.total_amount_given,
-            advances_subquery.c.last_modified,
-            advances_subquery.c.number_of_advances,
+            func.coalesce(advances_subquery.c.total_amount_given, 0.0).label("advances_total"),
+            func.coalesce(charges_subquery.c.charges_total, 0.0).label("charges_total"),
+            advances_subquery.c.last_modified.label("advances_last_modified"),
+            charges_subquery.c.charges_last_modified.label("charges_last_modified"),
+            func.coalesce(advances_subquery.c.number_of_advances, 0).label("number_of_advances"),
         )
-        .join(advances_subquery, advances_subquery.c.farmer_id == Member.id)
+        .outerjoin(advances_subquery, advances_subquery.c.farmer_id == Member.id)
         .outerjoin(collecte_subquery, collecte_subquery.c.farmer_id == Member.id)
-        .where(Member.cooperative_id == cooperative_id)
+        .outerjoin(charges_subquery, charges_subquery.c.farmer_id == Member.id)
+        .where(
+            Member.cooperative_id == cooperative_id,
+            (advances_subquery.c.farmer_id.is_not(None) | charges_subquery.c.farmer_id.is_not(None)),
+        )
     )
 
     if search:
@@ -204,9 +225,12 @@ def list_farmer_advances_summary(
     sort_field = (sort_by or "last_modified").strip().lower()
     sort_desc = (order or "desc").strip().lower() != "asc"
     if sort_field == "total_amount":
-        sort_column = advances_subquery.c.total_amount_given
+        sort_column = (
+            func.coalesce(advances_subquery.c.total_amount_given, 0.0)
+            + func.coalesce(charges_subquery.c.charges_total, 0.0)
+        )
     else:
-        sort_column = advances_subquery.c.last_modified
+        sort_column = func.coalesce(advances_subquery.c.last_modified, charges_subquery.c.charges_last_modified)
 
     if sort_desc:
         stmt = stmt.order_by(sort_column.desc(), Member.full_name.asc())
@@ -217,7 +241,10 @@ def list_farmer_advances_summary(
     items = []
     for row in rows:
         total_collected_quantity = round_metric(row.total_collected_quantity or 0.0)
-        total_amount_given = round_metric(row.total_amount_given or 0.0)
+        total_amount_given = round_metric((row.advances_total or 0.0) + (row.charges_total or 0.0))
+        last_modified = row.advances_last_modified or row.charges_last_modified
+        if row.advances_last_modified and row.charges_last_modified:
+            last_modified = max(row.advances_last_modified, row.charges_last_modified)
         items.append(
             FarmerAdvanceSummaryRow(
                 farmer_id=row.farmer_id,
@@ -225,7 +252,7 @@ def list_farmer_advances_summary(
                 total_collected_quantity=total_collected_quantity,
                 total_amount_given=total_amount_given,
                 cost_per_kg=_compute_cost_per_kg(total_amount_given, total_collected_quantity),
-                last_modified=row.last_modified,
+                last_modified=last_modified,
                 number_of_advances=int(row.number_of_advances or 0),
             )
         )
@@ -269,6 +296,18 @@ def get_farmer_advances_detail(db: Session, manager: User, farmer_id) -> FarmerA
 
     total_amount_given = round_metric(
         sum(item.amount_fcfa for item in advances if item.status == FarmerAdvanceStatus.ACTIVE)
+    )
+    total_amount_given = round_metric(
+        total_amount_given
+        + (
+            db.scalar(
+                select(func.coalesce(func.sum(GlobalCharge.amount_fcfa), 0.0)).where(
+                    GlobalCharge.cooperative_id == cooperative_id,
+                    GlobalCharge.member_id == farmer.id,
+                )
+            )
+            or 0.0
+        )
     )
     last_modified = max((item.updated_at for item in advances), default=farmer.updated_at)
 
