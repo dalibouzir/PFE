@@ -1,0 +1,187 @@
+{
+  "generated_at": "2026-05-11T18:00:18.857113+00:00",
+  "manager_email": "manager@weefarm.local",
+  "ground_truth": {
+    "member_rows": 17,
+    "active_lots": 0,
+    "lot_rows_latest_10": 10
+  },
+  "summary": {
+    "total_cases": 5,
+    "passed_cases": 5,
+    "score_pct": 100.0
+  },
+  "results": [
+    {
+      "case_id": "sql_active_lots_exact",
+      "category": "SQL_ONLY_EXACT",
+      "prompt": "combien de lots actifs avons-nous ?",
+      "pass": true,
+      "mode": "sql_only",
+      "intent": "SQL_ONLY",
+      "message_preview": "Lots actifs en cours: 0.",
+      "ui_block_types": [],
+      "checks": [
+        {
+          "name": "status_code_200",
+          "ok": true
+        },
+        {
+          "name": "intent_sql_only",
+          "ok": true
+        },
+        {
+          "name": "active_lot_count_matches_db",
+          "ok": true,
+          "expected": 0,
+          "actual": 0
+        }
+      ]
+    },
+    {
+      "case_id": "sql_members_table",
+      "category": "SQL_TABLE_MEMBERS",
+      "prompt": "liste les membres actifs avec code et statut",
+      "pass": true,
+      "mode": "sql_only",
+      "intent": "SQL_ONLY",
+      "message_preview": "17 membres trouvés. Voir le tableau pour le détail.",
+      "ui_block_types": [
+        "executive_summary",
+        "table"
+      ],
+      "checks": [
+        {
+          "name": "status_code_200",
+          "ok": true
+        },
+        {
+          "name": "intent_sql_only",
+          "ok": true
+        },
+        {
+          "name": "table_present",
+          "ok": true
+        },
+        {
+          "name": "member_columns_match_contract",
+          "ok": true
+        },
+        {
+          "name": "member_row_count_matches_db",
+          "ok": true
+        },
+        {
+          "name": "member_first_row_matches_db",
+          "ok": true
+        },
+        {
+          "name": "no_lot_loss_contamination",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "case_id": "sql_lots_table_latest",
+      "category": "SQL_TABLE_LOTS",
+      "prompt": "Affiche-moi un tableau des 10 derniers lots avec code lot, produit, quantité entrée, quantité sortie, taux de perte, statut et date de mise à jour.",
+      "pass": true,
+      "mode": "sql_only",
+      "intent": "SQL_ONLY",
+      "message_preview": "10 lots trouvés. Voir le tableau pour le détail.",
+      "ui_block_types": [
+        "table"
+      ],
+      "checks": [
+        {
+          "name": "status_code_200",
+          "ok": true
+        },
+        {
+          "name": "intent_sql_only",
+          "ok": true
+        },
+        {
+          "name": "table_present",
+          "ok": true
+        },
+        {
+          "name": "lot_columns_match_contract",
+          "ok": true
+        },
+        {
+          "name": "row_count_matches_requested_limit",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "case_id": "hybrid_operational_analysis",
+      "category": "HYBRID",
+      "prompt": "Pourquoi les pertes de séchage sont élevées cette semaine ?",
+      "pass": true,
+      "mode": "fallback_rag",
+      "intent": "HYBRID",
+      "message_preview": "Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: HARNESS-SRC-KNOW-001 (Séchage). Données SQL clés: rag_hit_count=0.0 count; loss_rate=9.21 %.",
+      "ui_block_types": [
+        "executive_summary",
+        "kpi_grid",
+        "risk_cards",
+        "analysis_section",
+        "recommendation_cards",
+        "confidence_block",
+        "evidence_drawer",
+        "table"
+      ],
+      "checks": [
+        {
+          "name": "status_code_200",
+          "ok": true
+        },
+        {
+          "name": "intent_hybrid",
+          "ok": true
+        },
+        {
+          "name": "hybrid_has_nonempty_message",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "case_id": "rag_only_reference",
+      "category": "RAG_ONLY",
+      "prompt": "donne des références agronomiques sur le séchage de la mangue avec sources",
+      "pass": true,
+      "mode": "fallback_rag",
+      "intent": "RAG_ONLY",
+      "message_preview": "Le fournisseur LLM est indisponible. Références récupérées: HARNESS-SRC-KNOW-001 (Séchage). Synthèse déterministe: [HARNESS-SRC-KNOW-001] Le séchage ventilé de la mangue réduit l'humidité résiduelle.",
+      "ui_block_types": [
+        "executive_summary",
+        "kpi_grid",
+        "analysis_section",
+        "benchmark_card",
+        "recommendation_cards",
+        "evidence_drawer"
+      ],
+      "checks": [
+        {
+          "name": "status_code_200",
+          "ok": true
+        },
+        {
+          "name": "intent_rag_only",
+          "ok": true
+        },
+        {
+          "name": "citations_present",
+          "ok": true
+        },
+        {
+          "name": "message_source_grounded",
+          "ok": true
+        }
+      ]
+    }
+  ]
+}

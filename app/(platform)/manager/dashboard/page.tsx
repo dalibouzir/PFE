@@ -20,10 +20,18 @@ import {
   YAxis,
 } from "recharts";
 import { PageIntro } from "@/components/ui/PageIntro";
+import { AIInsightsStrip, type AIInsightItem } from "@/components/ui/AIInsightsStrip";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useMembers } from "@/hooks/useMembers";
 import { useProducts } from "@/hooks/useProducts";
 import { useStocks } from "@/hooks/useStocks";
+import {
+  buildActionItems,
+  buildOperationalInsights,
+  buildPriorityStrip,
+  buildRecommendationCards,
+  buildStageInsights,
+} from "@/lib/insights/managerInsights";
 
 const GREEN = "#007E2F";
 const GREEN_SOFT = "#5FB87F";
@@ -219,6 +227,49 @@ export default function ManagerDashboardPage() {
     },
   ] as const;
 
+  const mlInsights = useMemo<AIInsightItem[]>(() => {
+    if (!data) return [];
+
+    const stageInsights = buildStageInsights(data);
+    const recommendationCards = buildRecommendationCards(data);
+    const actions = buildActionItems(recommendationCards, stageInsights, data.stock_alerts);
+    const priority = buildPriorityStrip(data, actions);
+    const operationalCards = buildOperationalInsights(data, stageInsights, actions);
+
+    const priorityTone: AIInsightItem["tone"] =
+      priority.severity === "critical" ? "critical" : priority.severity === "warning" ? "warning" : "success";
+
+    const mappedCards: AIInsightItem[] = operationalCards.map((card) => ({
+      id: card.id,
+      title: card.title,
+      message: card.message,
+      tone:
+        card.severity === "critical"
+          ? "critical"
+          : card.severity === "warning"
+            ? "warning"
+            : card.severity === "healthy"
+              ? "success"
+              : "info",
+      actionLabel: "Voir les recommandations",
+      href: "/manager/lots?tab=recommendations",
+      meta: card.action,
+    }));
+
+    return [
+      {
+        id: "priority-strip",
+        title: priority.headline,
+        message: priority.message,
+        tone: priorityTone,
+        actionLabel: "Action recommandee",
+        href: "/manager/lots?tab=recommendations",
+        meta: priority.recommendation,
+      },
+      ...mappedCards,
+    ].slice(0, 4);
+  }, [data]);
+
   const primaryInsight = (data?.loss_rate ?? 0) > 9 ? "Drop detecte sur les etapes aval" : "Tendance stable sur la semaine";
   const secondaryInsight = (data?.efficiency_rate ?? 0) >= 80 ? "Trend increasing sur le rendement" : "Efficacite sous cible, suivi recommande";
 
@@ -313,6 +364,12 @@ export default function ManagerDashboardPage() {
             </article>
           </div>
       </section>
+
+      <AIInsightsStrip
+        title="Pilotage IA multi-pages"
+        subtitle="Synthese actionnable pour lots, stocks et suivi terrain."
+        items={mlInsights}
+      />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {(isLoading && !data ? Array.from({ length: 4 }).map((_, i) => ({ id: `s-${i}` })) : kpiCards).map((kpi) =>

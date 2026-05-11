@@ -15,6 +15,7 @@ from app.services.helpers import (
     round_metric,
     to_kg,
 )
+from app.services.rag_reindex_hooks import reindex_batch_if_needed
 from app.services.stocks import apply_processed_output_delta, release_reserved_stock_for_lot, reserve_stock_for_lot
 from app.utils.exceptions import ConflictError, NotFoundError, ValidationError
 
@@ -131,6 +132,12 @@ def create_batch(db: Session, manager: User, payload) -> Batch:
         try:
             db.commit()
             db.refresh(batch)
+            reindex_batch_if_needed(
+                db,
+                current_user=manager,
+                batch_id=batch.id,
+                cooperative_id=cooperative_id,
+            )
             return batch
         except IntegrityError:
             db.rollback()
@@ -161,6 +168,12 @@ def update_batch(db: Session, manager: User, batch_id, payload) -> Batch:
 
     db.commit()
     db.refresh(batch)
+    reindex_batch_if_needed(
+        db,
+        current_user=manager,
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+    )
     return batch
 
 
@@ -183,6 +196,10 @@ def transition_batch_status(db: Session, batch: Batch, next_status: BatchStatus)
         product = batch.product
         if product is None:
             raise ValidationError("Batch product must be loaded before completing the batch.")
+        # Once a lot is completed, its initial reserved stock is consumed in transformation
+        # and must be released from the active-lot reservation ledger.
+        if batch.status in (BatchStatus.CREATED, BatchStatus.IN_PROGRESS):
+            release_reserved_stock_for_lot(db, batch.cooperative_id, product, batch.initial_qty)
         apply_processed_output_delta(db, batch.cooperative_id, product, batch.current_qty)
 
     batch.status = next_status
@@ -211,9 +228,16 @@ def delete_batch(db: Session, manager: User, batch_id):
     if product is None:
         raise ValidationError("Batch product must be loaded before deletion.")
 
-    release_reserved_stock_for_lot(db, batch.cooperative_id, product, batch.initial_qty)
+    if batch.status in (BatchStatus.CREATED, BatchStatus.IN_PROGRESS):
+        release_reserved_stock_for_lot(db, batch.cooperative_id, product, batch.initial_qty)
     if batch.status == BatchStatus.COMPLETED:
         apply_processed_output_delta(db, batch.cooperative_id, product, -batch.current_qty)
 
     db.delete(batch)
     db.commit()
+    reindex_batch_if_needed(
+        db,
+        current_user=manager,
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+    )

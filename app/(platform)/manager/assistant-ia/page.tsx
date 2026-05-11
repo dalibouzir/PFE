@@ -1,11 +1,14 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-unused-vars */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import {
+  ArrowDown,
   Bot,
   CalendarRange,
+  Check,
   CheckCheck,
   ChevronDown,
   Copy,
@@ -15,11 +18,14 @@ import {
   Plus,
   Send,
   Tag,
+  Trash2,
   ThumbsDown,
   ThumbsUp,
   Workflow,
+  X,
 } from "lucide-react";
 import { PageIntro } from "@/components/ui/PageIntro";
+import { ExecutiveResponse } from "@/components/ui/assistant/ExecutiveResponse";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
 import type { AssistantChatResponse, ChatMessage, ChatSession, ChatUIBlock } from "@/lib/api/types";
@@ -60,6 +66,8 @@ type ConversationMessage = {
   response?: AssistantChatResponse;
 };
 
+const SAFE_INVALID_RESPONSE_MESSAGE = "Je n’ai pas pu traiter cette demande. Veuillez reformuler votre question.";
+
 type ChatMessageUserProps = {
   id: string;
   text: string;
@@ -71,7 +79,6 @@ type ChatMessageAIProps = {
   text: string;
   time: string;
   response?: AssistantChatResponse;
-  showTemplateExample?: boolean;
 };
 
 type MetricsCardSectionProps = {
@@ -110,8 +117,10 @@ type PreviousChatsMenuProps = {
   items: PreviousChatSummary[];
   activeId: string | null;
   pendingCreate: boolean;
+  deletingSessionId: string | null;
   onSelect: (sessionId: string) => void;
   onCreate: () => void;
+  onDelete: (sessionId: string) => Promise<void> | void;
 };
 
 const STAGE_DATA: StageDatum[] = [
@@ -149,6 +158,52 @@ function trimText(input: string, limit: number) {
   return `${input.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
 }
 
+function stripAssistantMetaSections(input: string) {
+  const lines = input.split("\n");
+  const output: string[] = [];
+  let skipMode: "confidence" | "sources" | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const lower = line.toLowerCase();
+
+    if (lower === "niveau de confiance") {
+      skipMode = "confidence";
+      continue;
+    }
+    if (lower === "sources utilisées") {
+      skipMode = "sources";
+      continue;
+    }
+    if (lower === "afficher les détails techniques") {
+      skipMode = null;
+      continue;
+    }
+
+    if (skipMode === "confidence") {
+      if (line === "") {
+        skipMode = null;
+      }
+      continue;
+    }
+
+    if (skipMode === "sources") {
+      if (line === "") {
+        skipMode = null;
+      }
+      continue;
+    }
+
+    if (lower === "source métier") continue;
+    if (/^source\s*:/i.test(line)) continue;
+    if (/^processus\s*:/i.test(line)) continue;
+
+    output.push(rawLine);
+  }
+
+  return output.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function buildRecommendation(message: string) {
   const clean = message.replace(/\s+/g, " ").trim();
   if (!clean) {
@@ -159,25 +214,46 @@ function buildRecommendation(message: string) {
 }
 
 function buildSourceChips(response?: AssistantChatResponse): SourceChipItem[] {
-  if (response?.citations?.length) {
-    return response.citations.slice(0, 4).map((citation, index) => {
-      if (index === 0) {
-        return { id: `source-lot-${index}`, label: `Source: ${citation.source_id}`, icon: Tag };
-      }
-      if (index === 1) {
-        return { id: `source-topic-${index}`, label: `Processus: ${citation.topic}`, icon: Workflow };
-      }
-      if (index === 2) {
-        return { id: `source-region-${index}`, label: `Région: ${citation.region}`, icon: CalendarRange };
-      }
-      return { id: `source-crop-${index}`, label: `Culture: ${citation.crop}`, icon: Plus };
-    });
-  }
+  if (!response?.citations?.length) return [];
+  return response.citations.slice(0, 4).map((citation, index) => {
+    if (index === 0) {
+      return { id: `source-lot-${index}`, label: `Source: ${citation.source_id}`, icon: Tag };
+    }
+    if (index === 1) {
+      return { id: `source-topic-${index}`, label: `Processus: ${citation.topic}`, icon: Workflow };
+    }
+    if (index === 2) {
+      return { id: `source-region-${index}`, label: `Région: ${citation.region}`, icon: CalendarRange };
+    }
+    return { id: `source-crop-${index}`, label: `Culture: ${citation.crop}`, icon: Plus };
+  });
+}
 
-  return [
-    { id: "source-dashboard", label: "Contexte: Données coopérative en direct", icon: Tag },
-    { id: "source-scope", label: "Périmètre: lots / stocks / collecte", icon: Workflow },
-  ];
+function isNonOperationalMode(mode?: string | null) {
+  const current = String(mode || "").toLowerCase();
+  return current === "small_talk" || current === "clarification_needed" || current === "unsupported";
+}
+
+function normalizeAssistantResponse(response?: AssistantChatResponse | null): AssistantChatResponse | null {
+  if (!response || typeof response !== "object") return null;
+  const message = typeof response.message === "string" ? response.message.trim() : "";
+  if (!message) return null;
+
+  return {
+    success: Boolean(response.success),
+    session_id: String(response.session_id || ""),
+    user_message_id: response.user_message_id ?? null,
+    assistant_message_id: response.assistant_message_id ?? null,
+    message,
+    grounded: Boolean(response.grounded),
+    mode: typeof response.mode === "string" ? response.mode : "fallback",
+    llm_provider: null,
+    llm_model: null,
+    citations: Array.isArray(response.citations) ? [...response.citations] : [],
+    context_metrics: Array.isArray(response.context_metrics) ? [...response.context_metrics] : [],
+    dashboard: response.dashboard ?? null,
+    ui_blocks: Array.isArray(response.ui_blocks) ? [...response.ui_blocks] : [],
+  };
 }
 
 function createWelcomeMessage(): ConversationMessage {
@@ -191,27 +267,28 @@ function createWelcomeMessage(): ConversationMessage {
 
 function fromStoredMessage(message: ChatMessage): ConversationMessage | null {
   if (message.role !== "user" && message.role !== "assistant") return null;
+  const normalizedResponse =
+    message.role === "assistant"
+      ? normalizeAssistantResponse({
+          success: true,
+          session_id: message.session_id,
+          message: message.content,
+          grounded: message.citations.length > 0,
+          mode: message.mode ?? "fallback",
+          llm_provider: null,
+          llm_model: null,
+          citations: message.citations,
+          context_metrics: message.context_metrics,
+          dashboard: message.dashboard,
+          ui_blocks: message.ui_blocks,
+        })
+      : null;
   return {
     id: message.id,
     role: message.role,
     text: message.content,
     time: formatStoredTime(message.created_at),
-    response:
-      message.role === "assistant"
-        ? {
-            success: true,
-            session_id: message.session_id,
-            message: message.content,
-            grounded: message.citations.length > 0,
-            mode: message.mode ?? "fallback",
-            llm_provider: message.llm_provider,
-            llm_model: message.llm_model,
-            citations: message.citations,
-            context_metrics: message.context_metrics,
-            dashboard: message.dashboard,
-            ui_blocks: message.ui_blocks,
-          }
-        : undefined,
+    response: normalizedResponse ?? undefined,
   };
 }
 
@@ -305,7 +382,7 @@ function RecommendationCardSection({ text }: RecommendationCardSectionProps) {
 function SourceChips({ items }: SourceChipsProps) {
   return (
     <div className="mt-4">
-      <p className="text-xs font-medium text-[var(--text)]">Sources RAG</p>
+      <p className="text-xs font-medium text-[var(--text)]">Sources utilisées</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {items.map((item) => {
           const Icon = item.icon;
@@ -411,15 +488,32 @@ function StructuredBlocks({ blocks }: { blocks: ChatUIBlock[] }) {
   );
 }
 
-function ChatMessageAI({ id, text, time, response, showTemplateExample = false }: ChatMessageAIProps) {
-  const dashboard = response?.dashboard;
-  const lossPct = dashboard?.loss_rate ?? 18;
-  const efficiencyPct = dashboard?.efficiency_rate ?? 82;
-  const qtyIn = 1000;
-  const qtyOut = Math.max(Math.round((qtyIn * efficiencyPct) / 100), 0);
-  const recommendation = buildRecommendation(text);
-  const sources = buildSourceChips(response);
-  const hasContext = Boolean(response?.citations?.length || response?.context_metrics?.length);
+function ChatMessageAI({ id, text, time, response }: ChatMessageAIProps) {
+  const [copied, setCopied] = useState(false);
+  const [openMetaPanel, setOpenMetaPanel] = useState<"confidence" | "sources" | "technical" | null>(null);
+  const hasStructuredResponse = Boolean(response) && !isNonOperationalMode(response?.mode);
+  const cleanedText = stripAssistantMetaSections(response?.message || text) || text;
+  const confidenceMetric = response?.context_metrics?.find((metric) => metric.metric === "orchestration.confidence_score");
+  const confidencePct = confidenceMetric ? Math.round(Math.max(0, Math.min(100, (confidenceMetric.value || 0) * 100))) : null;
+  const sourceCount = Array.isArray(response?.citations) ? response.citations.length : 0;
+  const warningMetric = response?.context_metrics?.find((metric) => metric.metric === "orchestration.warning_count");
+  const warnings = (warningMetric?.notes || "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter((item) => item && item !== "none");
+  const intentMetric = response?.context_metrics?.find((metric) => metric.metric === "retrieval_plan.intent_type");
+  const responseMode = String(intentMetric?.unit || response?.mode || "HYBRID");
+
+  const copyResponse = async () => {
+    const payload = cleanedText;
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <div className="flex scroll-mt-28 gap-3" id={id}>
@@ -427,52 +521,114 @@ function ChatMessageAI({ id, text, time, response, showTemplateExample = false }
         <Bot className="h-5 w-5" />
       </div>
 
-      <article className="w-full rounded-[24px] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[0_10px_24px_rgba(35,30,21,0.06)]">
-        <div className="flex items-start justify-between gap-3">
-          <p className="max-w-4xl text-sm leading-7 text-[var(--text)]">{text}</p>
-          <div className="flex flex-col items-end gap-1.5">
-            <span className="text-xs text-[var(--muted)]">{time}</span>
-            {response?.mode === "llm" || response?.mode === "llm-rag" ? (
-              <span className="rounded-full border border-[#CFE3C8] bg-[#EEF6E7] px-2 py-0.5 text-[10px] font-semibold text-[var(--success)]">
-                {response.mode === "llm-rag" ? "LLM + RAG" : "LLM"} · {response.llm_provider ?? "provider"} / {response.llm_model ?? "model"}
-              </span>
-            ) : (
-              <span className="rounded-full border border-[var(--line)] bg-[var(--surface-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
-                Fallback
-              </span>
-            )}
-          </div>
+      <div className="w-full">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#2e5b41]">Assistant coopérative</span>
+          <span className="text-xs text-[var(--muted)]">{time}</span>
         </div>
 
-        {showTemplateExample ? (
-          <>
-            <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_1.45fr_1fr]">
-              <MetricsCardSection lossPct={lossPct} efficiencyPct={efficiencyPct} qtyIn={qtyIn} qtyOut={qtyOut} />
-              <StageComparisonChart data={STAGE_DATA} />
-              <RecommendationCardSection text={recommendation} />
-            </div>
-
-            <SourceChips items={sources} />
-
-            <div className="mt-4 flex items-center gap-2 border-t border-[rgba(19,40,31,0.08)] pt-3">
-              <button type="button" className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]" aria-label="Utile">
-                <ThumbsUp className="h-4 w-4" />
-              </button>
-              <button type="button" className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]" aria-label="Peu utile">
-                <ThumbsDown className="h-4 w-4" />
-              </button>
-              <button type="button" className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]" aria-label="Copier">
-                <Copy className="h-4 w-4" />
-              </button>
-            </div>
-          </>
+        {hasStructuredResponse ? (
+          <ExecutiveResponse response={response} fallbackText={cleanedText} hideMetaSections />
         ) : (
-          <>
-            {response?.ui_blocks?.length ? <StructuredBlocks blocks={response.ui_blocks} /> : null}
-            {hasContext && <SourceChips items={sources} />}
-          </>
+          <p className="max-w-4xl whitespace-pre-wrap text-sm leading-7 text-[var(--text)]">{cleanedText}</p>
         )}
-      </article>
+
+        <div className="mt-4 flex items-center gap-2 border-t border-[rgba(19,40,31,0.08)] pt-3">
+          <button
+            type="button"
+            onClick={copyResponse}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]"
+            aria-label="Copier la réponse"
+          >
+            <Copy className="h-3.5 w-3.5" />
+            {copied ? "Copié" : "Copier"}
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]"
+            aria-label="Réponse utile"
+          >
+            <ThumbsUp className="h-3.5 w-3.5" />
+            Utile
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]"
+            aria-label="Réponse peu utile"
+          >
+            <ThumbsDown className="h-3.5 w-3.5" />
+            Peu utile
+          </button>
+          {hasStructuredResponse ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setOpenMetaPanel((current) => (current === "confidence" ? null : "confidence"))}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]"
+                aria-label="Afficher le niveau de confiance"
+              >
+                Niveau de confiance
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpenMetaPanel((current) => (current === "sources" ? null : "sources"))}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]"
+                aria-label="Afficher les sources utilisées"
+              >
+                Sources utilisées
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpenMetaPanel((current) => (current === "technical" ? null : "technical"))}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]"
+                aria-label="Afficher les détails techniques"
+              >
+                Détails techniques
+              </button>
+            </>
+          ) : null}
+        </div>
+
+        {openMetaPanel && hasStructuredResponse ? (
+          <section className="mt-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-3 text-xs text-[var(--text)]">
+            {openMetaPanel === "confidence" ? (
+              <div className="space-y-2">
+                <p className="font-semibold text-[#173324]">Niveau de confiance</p>
+                <p>
+                  {confidencePct !== null ? `${confidencePct}%` : "N/A"} {warnings.length ? "· Confiance moyenne" : "· Confiance élevée"}
+                </p>
+                {warnings.length ? <p className="text-[var(--muted)]">{warnings.join(" | ")}</p> : <p className="text-[var(--muted)]">Aucun avertissement interne.</p>}
+              </div>
+            ) : null}
+
+            {openMetaPanel === "sources" ? (
+              <div className="space-y-2">
+                <p className="font-semibold text-[#173324]">Sources utilisées ({sourceCount})</p>
+                {sourceCount ? (
+                  <div className="flex flex-wrap gap-2">
+                    {(response?.citations || []).slice(0, 8).map((citation, index) => (
+                      <span key={`${citation.source_id}-${index}`} className="inline-flex rounded-full border border-[#c7dfcf] bg-[#f2faf5] px-2.5 py-1 text-[11px] font-medium text-[#24523b]">
+                        Source: {citation.source_id}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[var(--muted)]">Aucune source disponible.</p>
+                )}
+              </div>
+            ) : null}
+
+            {openMetaPanel === "technical" ? (
+              <div className="space-y-2">
+                <p className="font-semibold text-[#173324]">Détails techniques</p>
+                <p>Mode de réponse: {responseMode}</p>
+                <p>Sources récupérées: {sourceCount}</p>
+                <p>Avertissements: {warnings.length ? warnings.join(" | ") : "Aucun"}</p>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -574,8 +730,9 @@ function RequestAnchorRail({ items, activeId, onSelect }: RequestAnchorRailProps
   );
 }
 
-function PreviousChatsMenu({ items, activeId, pendingCreate, onSelect, onCreate }: PreviousChatsMenuProps) {
+function PreviousChatsMenu({ items, activeId, pendingCreate, deletingSessionId, onSelect, onCreate, onDelete }: PreviousChatsMenuProps) {
   const [open, setOpen] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -587,6 +744,10 @@ function PreviousChatsMenu({ items, activeId, pendingCreate, onSelect, onCreate 
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
   }, []);
+
+  useEffect(() => {
+    if (!open) setConfirmingDeleteId(null);
+  }, [open]);
 
   return (
     <div className="relative" ref={containerRef}>
@@ -618,22 +779,63 @@ function PreviousChatsMenu({ items, activeId, pendingCreate, onSelect, onCreate 
 
           <div className="mt-1.5 max-h-64 space-y-1 overflow-y-auto">
             {items.map((item) => (
-              <button
+              <div
                 key={item.id}
-                type="button"
-                onClick={() => {
-                  onSelect(item.id);
-                  setOpen(false);
-                }}
                 className={`w-full rounded-lg border border-transparent px-2.5 py-1.5 text-left transition-colors ${
                   activeId === item.id ? "border-[#007e2f]/28 bg-[#007e2f]/18" : "hover:bg-[#007e2f]/12"
                 }`}
               >
-                <p className="truncate text-sm font-semibold text-[#0f2d1b]">{item.title}</p>
-                <p className="mt-0.5 text-xs text-[#2e5b41]/85">
-                  {item.time} · {item.messageCount} messages
-                </p>
-              </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelect(item.id);
+                      setOpen(false);
+                    }}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <p className="truncate text-sm font-semibold text-[#0f2d1b]">{item.title}</p>
+                    <p className="mt-0.5 text-xs text-[#2e5b41]/85">
+                      {item.time} · {item.messageCount} messages
+                    </p>
+                  </button>
+                  {confirmingDeleteId === item.id ? (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmingDeleteId(null);
+                          void onDelete(item.id);
+                        }}
+                        disabled={pendingCreate || deletingSessionId === item.id}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#007e2f]/30 bg-[#007e2f]/18 text-[#0f2d1b] transition-colors hover:bg-[#007e2f]/28 disabled:cursor-not-allowed disabled:opacity-55"
+                        aria-label={`Confirmer la suppression de ${item.title}`}
+                      >
+                        <Check className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingDeleteId(null)}
+                        disabled={pendingCreate || deletingSessionId === item.id}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#007e2f]/20 bg-white/65 text-[#0f2d1b] transition-colors hover:bg-[#007e2f]/14 disabled:cursor-not-allowed disabled:opacity-55"
+                        aria-label={`Annuler la suppression de ${item.title}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDeleteId(item.id)}
+                      disabled={pendingCreate || deletingSessionId === item.id}
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#007e2f]/20 bg-white/65 text-[#0f2d1b] transition-colors hover:bg-[#007e2f]/16 disabled:cursor-not-allowed disabled:opacity-55"
+                      aria-label={`Supprimer la conversation ${item.title}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
             ))}
             {!items.length && <p className="px-3 py-2 text-xs text-[#2e5b41]/85">Aucune conversation enregistrée.</p>}
           </div>
@@ -644,14 +846,30 @@ function PreviousChatsMenu({ items, activeId, pendingCreate, onSelect, onCreate 
 }
 
 function ChatComposer({ value, pending, onChange, onSend }: ChatComposerProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const maxHeight = 96; // ~4 lines with current line-height/padding
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+  }, [value]);
+
   return (
-    <div className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 shadow-[0_2px_8px_rgba(35,30,21,0.05)]">
-      <div className="flex items-center gap-1.5">
-        <button type="button" className="rounded-full border border-[var(--line)] bg-[var(--surface-soft)] p-1 text-[var(--muted)] transition-colors hover:text-[var(--text)]" aria-label="Ajouter une pièce jointe">
+    <div className="mx-auto w-full max-w-4xl shrink-0 rounded-[26px] border border-[rgba(15,35,24,0.16)] bg-white px-2.5 py-2 shadow-[0_6px_16px_rgba(15,35,24,0.06)]">
+      <div className="flex items-end gap-2">
+        <button
+          type="button"
+          className="rounded-full border border-[rgba(15,35,24,0.14)] bg-[#f7faf8] p-1 text-[var(--muted)] transition-colors hover:text-[var(--text)]"
+          aria-label="Ajouter une pièce jointe"
+        >
           <Paperclip className="h-3.5 w-3.5" />
         </button>
 
         <textarea
+          ref={textareaRef}
+          rows={1}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
@@ -661,14 +879,14 @@ function ChatComposer({ value, pending, onChange, onSend }: ChatComposerProps) {
             }
           }}
           placeholder="Posez votre question..."
-          className="h-8 max-h-20 flex-1 resize-none bg-transparent px-1 py-1 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
+          className="max-h-24 min-h-[26px] flex-1 resize-none overflow-y-auto bg-transparent px-1.5 py-1 text-sm leading-6 text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
         />
 
         <button
           type="button"
           onClick={onSend}
           disabled={pending || !value.trim()}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-[0_6px_12px_rgba(0,126,47,0.26)] transition-transform duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-55"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-[0_5px_12px_rgba(0,126,47,0.22)] transition-transform duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-55"
           aria-label="Envoyer"
         >
           <Send className="h-3.5 w-3.5" />
@@ -683,6 +901,9 @@ export default function AssistantIAPage() {
   const [messages, setMessages] = useState<ConversationMessage[]>([createWelcomeMessage()]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeRequestId, setActiveRequestId] = useState("");
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const streamEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(false);
 
@@ -702,6 +923,13 @@ export default function AssistantIAPage() {
       apiFetch<ChatSession>(endpoints.chat.sessions, {
         method: "POST",
         body: payload,
+      }),
+  });
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: (sessionId: string) =>
+      apiFetch<void>(endpoints.chat.session(sessionId), {
+        method: "DELETE",
       }),
   });
 
@@ -765,6 +993,20 @@ export default function AssistantIAPage() {
     shouldAutoScrollRef.current = false;
   }, [messages, askMutation.isPending]);
 
+  useEffect(() => {
+    const node = chatScrollRef.current;
+    if (!node) return;
+
+    const updateScrollHint = () => {
+      const distanceToBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+      setShowScrollToBottom(distanceToBottom > 40);
+    };
+
+    updateScrollHint();
+    node.addEventListener("scroll", updateScrollHint, { passive: true });
+    return () => node.removeEventListener("scroll", updateScrollHint);
+  }, [messages, activeSessionId, askMutation.isPending]);
+
   const createNewConversation = async () => {
     try {
       const title = previousChats.length === 0 ? "Conversation test" : "Nouvelle conversation";
@@ -775,6 +1017,28 @@ export default function AssistantIAPage() {
       await sessionsQuery.refetch();
     } catch {
       // ignore menu creation errors to keep interaction lightweight
+    }
+  };
+
+  const deleteConversation = async (sessionId: string) => {
+    try {
+      setDeletingSessionId(sessionId);
+      await deleteSessionMutation.mutateAsync(sessionId);
+      const refreshed = await sessionsQuery.refetch();
+      const remaining = refreshed.data ?? [];
+      if (activeSessionId === sessionId) {
+        if (remaining.length) {
+          setActiveSessionId(remaining[0].id);
+        } else {
+          setActiveSessionId(null);
+          setActiveRequestId("");
+          setMessages([createWelcomeMessage()]);
+        }
+      }
+    } catch {
+      // ignore delete errors to keep interaction lightweight
+    } finally {
+      setDeletingSessionId(null);
     }
   };
 
@@ -808,12 +1072,25 @@ export default function AssistantIAPage() {
 
     try {
       const response = await askMutation.mutateAsync({ sessionId, message });
+      const normalized = normalizeAssistantResponse(response);
+      if (!normalized) {
+        const invalidAssistantMessage: ConversationMessage = {
+          id: `assistant-invalid-${Date.now()}`,
+          role: "assistant",
+          text: SAFE_INVALID_RESPONSE_MESSAGE,
+          time: getNowTime(),
+        };
+        shouldAutoScrollRef.current = true;
+        setMessages((current) => [...current, invalidAssistantMessage]);
+        await sessionsQuery.refetch();
+        return;
+      }
       const assistantMessage: ConversationMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        text: response.message,
+        text: normalized.message,
         time: getNowTime(),
-        response,
+        response: normalized,
       };
       shouldAutoScrollRef.current = true;
       setMessages((current) => [...current, assistantMessage]);
@@ -837,7 +1114,7 @@ export default function AssistantIAPage() {
   };
 
   return (
-    <main className="pb-0">
+    <main className="flex h-full min-h-0 flex-col overflow-hidden pb-0">
       <PageIntro title="Assistant IA" />
 
       <div className="-mt-1 mb-3 flex items-center justify-end">
@@ -845,48 +1122,63 @@ export default function AssistantIAPage() {
           items={previousChats}
           activeId={activeSessionId}
           pendingCreate={createSessionMutation.isPending}
+          deletingSessionId={deletingSessionId}
           onSelect={(sessionId) => {
             setActiveSessionId(sessionId);
             shouldAutoScrollRef.current = true;
           }}
           onCreate={createNewConversation}
+          onDelete={deleteConversation}
         />
       </div>
 
-      <section className="grid gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_56px]">
+      <section className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_56px]">
         <div className="min-h-0 min-w-0">
-          <div className="flex h-[calc(100dvh-16rem)] min-h-0 flex-col gap-2 sm:h-[calc(100dvh-16.75rem)] md:h-[calc(100dvh-19.5rem)] md:min-h-[520px] md:gap-3">
-            <div className="scroll-thin min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-              {messages.map((entry) =>
-                entry.role === "user" ? (
-                  <ChatMessageUser key={entry.id} id={entry.id} text={entry.text} time={entry.time} />
-                ) : (
-                  <ChatMessageAI
-                    key={entry.id}
-                    id={entry.id}
-                    text={entry.text}
-                    time={entry.time}
-                    response={entry.response}
-                    showTemplateExample={entry.id === "assistant-welcome"}
-                  />
-                ),
-              )}
+          <div className="relative h-full min-h-0 overflow-hidden">
+            <div ref={chatScrollRef} className="scroll-thin absolute inset-0 overflow-y-auto pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <div className="space-y-4 pb-40">
+                {messages.map((entry) =>
+                  entry.role === "user" ? (
+                    <ChatMessageUser key={entry.id} id={entry.id} text={entry.text} time={entry.time} />
+                  ) : (
+                    <ChatMessageAI key={entry.id} id={entry.id} text={entry.text} time={entry.time} response={entry.response} />
+                  ),
+                )}
 
-              {askMutation.isPending && (
-                <div className="flex gap-3">
-                  <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-[0_8px_18px_rgba(0,126,47,0.22)]">
-                    <Bot className="h-5 w-5" />
+                {askMutation.isPending && (
+                  <div className="flex gap-3">
+                    <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-[0_8px_18px_rgba(0,126,47,0.22)]">
+                      <Bot className="h-5 w-5" />
+                    </div>
+                    <article className="w-full rounded-[22px] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--muted)] shadow-[0_8px_18px_rgba(35,30,21,0.06)]">
+                      Traitement en cours...
+                    </article>
                   </div>
-                  <article className="w-full rounded-[22px] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--muted)] shadow-[0_8px_18px_rgba(35,30,21,0.06)]">
-                    Génération LLM en cours...
-                  </article>
-                </div>
-              )}
+                )}
 
-              <div ref={streamEndRef} />
+                <div ref={streamEndRef} />
+              </div>
             </div>
 
-            <ChatComposer value={draft} pending={askMutation.isPending} onChange={setDraft} onSend={sendMessage} />
+            {showScrollToBottom && (
+              <button
+                type="button"
+                onClick={() => {
+                  chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: "smooth" });
+                }}
+                className="absolute bottom-[calc(env(safe-area-inset-bottom)+6.2rem)] left-1/2 z-30 inline-flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-[rgba(255,255,255,0.62)] bg-[linear-gradient(160deg,rgba(255,255,255,0.62)_0%,rgba(244,252,248,0.44)_50%,rgba(229,245,236,0.34)_100%)] text-[#0f3d27] shadow-[0_12px_24px_rgba(12,49,30,0.16)] backdrop-blur-xl transition-colors hover:bg-[linear-gradient(160deg,rgba(255,255,255,0.74)_0%,rgba(244,252,248,0.56)_50%,rgba(229,245,236,0.42)_100%)]"
+                aria-label="Descendre au dernier message"
+              >
+                <ArrowDown className="h-4 w-4" />
+              </button>
+            )}
+
+            <div className="absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+0.4rem)] z-20 bg-gradient-to-t from-[#f3f7fb] via-[#f3f7fb]/96 to-transparent pb-0 pt-3">
+              <ChatComposer value={draft} pending={askMutation.isPending} onChange={setDraft} onSend={sendMessage} />
+              <p className="pointer-events-none mt-2 text-center text-[11px] font-medium tracking-[0.01em] text-[var(--primary)]/80 [text-shadow:0_0_10px_rgba(0,126,47,0.2)]">
+                Notre assistant peut faire des erreurs. Vérifiez les informations critiques.
+              </p>
+            </div>
           </div>
         </div>
 

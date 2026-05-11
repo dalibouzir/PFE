@@ -212,6 +212,8 @@ def _recommendation_payload_for_batch(db: Session, batch: Batch):
 
 
 def generate_recommendation(db: Session, batch_id) -> RecommendationResponse:
+    # TODO(phase3): hook-level reindex is executed from process-step workflows after commit.
+    # If this function gets invoked from additional write paths, add explicit rag_reindex_hooks integration there.
     batch = db.scalar(
         select(Batch)
         .options(selectinload(Batch.process_steps), selectinload(Batch.recommendation))

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AIInsightsStrip, type AIInsightItem } from "@/components/ui/AIInsightsStrip";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useBatches } from "@/hooks/useBatches";
@@ -161,6 +162,55 @@ export default function StocksPage() {
     return ordered.slice(0, 120);
   }, [logOrder, movementEvents, stockByProduct]);
 
+  const stockInsights = useMemo<AIInsightItem[]>(() => {
+    const trackedCount = filtered.length;
+    const critical = filtered.filter((item) => isCriticalStock(item));
+    const avgRemainingRatio =
+      filtered.length > 0
+        ? filtered.reduce((sum, item) => {
+            const total = item.total_stock > 0 ? item.total_stock : 1;
+            return sum + item.available_stock / total;
+          }, 0) / filtered.length
+        : 0;
+
+    const biggestDeficit = critical
+      .slice()
+      .sort((a, b) => (b.total_stock * 0.2 - b.available_stock) - (a.total_stock * 0.2 - a.available_stock))[0];
+
+    const items: AIInsightItem[] = [
+      {
+        id: "critical-stock-count",
+        title: critical.length > 0 ? "Rupture potentielle detectee" : "Stock global stable",
+        message:
+          critical.length > 0
+            ? `${critical.length}/${trackedCount} produit(s) sous seuil critique.`
+            : `${trackedCount} produit(s) suivis sans alerte critique.`,
+        tone: critical.length > 0 ? "critical" : "success",
+        actionLabel: "Ouvrir recommandations IA",
+        href: "/manager/lots?tab=recommendations",
+      },
+      {
+        id: "remaining-ratio",
+        title: "Pression stock",
+        message: `Niveau moyen restant: ${(avgRemainingRatio * 100).toFixed(1)}% du stock total.`,
+        tone: avgRemainingRatio < 0.3 ? "warning" : "info",
+        meta: avgRemainingRatio < 0.3 ? "Replanifier collectes et lots pour eviter rupture." : "Marge exploitable pour les prochains lots.",
+      },
+    ];
+
+    if (biggestDeficit) {
+      items.push({
+        id: "top-deficit",
+        title: "Produit le plus expose",
+        message: `${productLookup.get(biggestDeficit.product_id) ?? biggestDeficit.product_id.slice(0, 8)} sous seuil de securite.`,
+        tone: "warning",
+        meta: `Restant ${biggestDeficit.available_stock.toFixed(2)} ${biggestDeficit.unit} pour un seuil critique de ${(biggestDeficit.total_stock * 0.2).toFixed(2)} ${biggestDeficit.unit}.`,
+      });
+    }
+
+    return items.slice(0, 4);
+  }, [filtered, productLookup]);
+
   return (
     <main>
       <PageIntro title="Stocks" />
@@ -210,6 +260,12 @@ export default function StocksPage() {
           </div>
         </div>
       </section>
+
+      <AIInsightsStrip
+        title="Insights IA stock"
+        subtitle="Priorites operationnelles basees sur le niveau et la dynamique de stock."
+        items={stockInsights}
+      />
 
       {viewMode === "cards" ? (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

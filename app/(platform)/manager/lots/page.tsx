@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
+import { AIInsightsStrip, type AIInsightItem } from "@/components/ui/AIInsightsStrip";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { LotAnalyticsPanel } from "@/components/workspace/LotAnalyticsPanel";
@@ -395,6 +396,56 @@ export default function LotsPage() {
     ];
   }, [selectedBatch, selectedSteps]);
 
+  const postHarvestInsights = useMemo<AIInsightItem[]>(() => {
+    if (!selectedBatch) return [];
+
+    const highRiskCount = selectedRecommendations.filter((item) => item.risk_level.toLowerCase() === "high").length;
+    const worstStage = stageMetrics
+      .slice()
+      .sort((a, b) => b.lossPct - a.lossPct)[0];
+    const anomalyTone: AIInsightItem["tone"] = anomalyCount > 0 ? "warning" : "success";
+    const items: AIInsightItem[] = [
+      {
+        id: "served-risk-method",
+        title: "Methode risque active",
+        message: "Risque servi par seuil sur perte predite (thresholded_predicted_loss).",
+        tone: "info",
+        meta: "Utiliser ce signal pour prioriser les actions, pas pour conclure seul la cause.",
+      },
+      {
+        id: "anomaly-signal",
+        title: anomalyCount > 0 ? "Anomalies a verifier" : "Pas d'anomalie critique detectee",
+        message:
+          anomalyCount > 0
+            ? `${anomalyCount} etape(s) avec signal d'ecart sur ce lot.`
+            : "Les etapes executees restent dans une plage operationnelle attendue.",
+        tone: anomalyTone,
+      },
+    ];
+
+    if (worstStage) {
+      items.push({
+        id: "worst-stage",
+        title: `Etape sous pression: ${worstStage.stage}`,
+        message: `Perte moyenne ${worstStage.lossPct.toFixed(1)}% · efficacite ${worstStage.efficiencyPct.toFixed(1)}%.`,
+        tone: worstStage.lossPct >= 12 ? "critical" : worstStage.lossPct >= 8 ? "warning" : "info",
+      });
+    }
+
+    items.push({
+      id: "high-risk-rows",
+      title: highRiskCount > 0 ? "Lots a risque eleve detectes" : "Aucun risque eleve dans les recents",
+      message:
+        highRiskCount > 0
+          ? `${highRiskCount} recommandation(s) marquee(s) HIGH pour ce lot.`
+          : "Continuer le suivi des prochaines etapes pour confirmer la stabilite.",
+      tone: highRiskCount > 0 ? "critical" : "success",
+      actionLabel: "Voir les recommandations",
+      href: "/manager/lots?tab=recommendations",
+    });
+    return items;
+  }, [selectedBatch, selectedRecommendations, stageMetrics, anomalyCount]);
+
   const updateQuery = (nextTab: LotWorkspaceTab, nextLotId?: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", nextTab);
@@ -751,19 +802,35 @@ export default function LotsPage() {
             )}
 
             {activeTab === "analytics" && (
-              <LotAnalyticsPanel
-                stageMetrics={stageMetrics}
-                totals={{
-                  qtyIn: lotTotals.qtyIn,
-                  qtyOut: lotTotals.qtyOut,
-                  lossKg: lotTotals.lossKg,
-                  efficiencyPct: lotTotals.efficiencyPct,
-                }}
-                anomalyCount={anomalyCount}
-              />
+              <section className="space-y-4">
+                <AIInsightsStrip
+                  title="Insights IA post-recolte"
+                  subtitle="Signaux de priorisation pour le lot actif."
+                  items={postHarvestInsights}
+                />
+                <LotAnalyticsPanel
+                  stageMetrics={stageMetrics}
+                  totals={{
+                    qtyIn: lotTotals.qtyIn,
+                    qtyOut: lotTotals.qtyOut,
+                    lossKg: lotTotals.lossKg,
+                    efficiencyPct: lotTotals.efficiencyPct,
+                  }}
+                  anomalyCount={anomalyCount}
+                />
+              </section>
             )}
 
-            {activeTab === "recommendations" && <LotRecommendationPanel items={recommendationCards} />}
+            {activeTab === "recommendations" && (
+              <section className="space-y-4">
+                <AIInsightsStrip
+                  title="Synthese IA du lot"
+                  subtitle="Les recommandations restent une aide, a confirmer sur le terrain."
+                  items={postHarvestInsights}
+                />
+                <LotRecommendationPanel items={recommendationCards} />
+              </section>
+            )}
 
             {activeTab === "history" && (
               <article className="premium-card reveal rounded-2xl p-5" style={{ ["--delay" as string]: "110ms" }}>

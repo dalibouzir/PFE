@@ -62,17 +62,17 @@ const navByRole: Record<AppRole, NavItem[]> = {
     { href: "/admin/parametres", label: "Parametres", icon: Landmark },
   ],
   manager: [
-    { href: "/manager/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/manager/membres", label: "Member", icon: Users },
+    { href: "/manager/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
+    { href: "/manager/membres", label: "Membres", icon: Users },
     { href: "/manager/parcelles", label: "Parcelles & Culture", icon: Sprout },
     { href: "/manager/avances-producteurs", label: "Avance producteurs", icon: Wallet },
     { href: "/manager/inputs", label: "Collecte", icon: Truck },
     { href: "/manager/stocks", label: "Stocks", icon: Boxes },
-    { href: "/manager/lots", label: "Flux matiere / lots", icon: GitBranch },
+    { href: "/manager/lots", label: "Flux matière / lots", icon: GitBranch },
     { href: "/manager/commercialisation", label: "Commercialisation", icon: ShoppingCart },
     { href: "/manager/facturation", label: "Facturation", icon: FileText },
-    { href: "/manager/tresorerie", label: "Tresorerie", icon: Landmark },
-    { href: "/manager/assistant-ia", label: "AI Assistant", icon: Bot },
+    { href: "/manager/tresorerie", label: "Trésorerie", icon: Landmark },
+    { href: "/manager/assistant-ia", label: "Copilote IA", icon: Bot },
   ],
 };
 
@@ -99,9 +99,9 @@ const shellMeta: Record<
   },
   manager: {
     name: "Aissatou Ndiaye",
-    roleLabel: "Manager cooperative",
-    cooperativeLabel: "Cooperative Deggo Thies",
-    navLabel: "Navigation cooperative",
+    roleLabel: "Manager coopérative",
+    cooperativeLabel: "Coopérative Deggo Thiès",
+    navLabel: "Navigation coopérative",
     locationLabel: "Thies · 33°C",
     searchPlaceholder: "Rechercher un lot, agriculteur, stock...",
     initials: "AN",
@@ -117,7 +117,7 @@ function buildProfileMenu(role: AppRole, onLogout: () => void): ProfileItem[] {
 
   return [
     { label: "Mon profil", icon: ProfileIcon, href: settingsHref },
-    { label: "Parametres", icon: SettingsIcon, href: settingsHref },
+    { label: "Paramètres", icon: SettingsIcon, href: settingsHref },
     { label: "Aide", icon: HelpIcon },
     { label: "Deconnexion", icon: LogoutIcon, tone: "danger", action: onLogout },
   ];
@@ -376,6 +376,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
       roleLabel,
     };
   }, [role, user]);
+  const isAssistantPage = role === "manager" && pathname.startsWith("/manager/assistant-ia");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -759,7 +760,15 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
         </aside>
       </div>
 
-      <div className="relative z-10 min-h-[100svh] min-w-0 bg-[#f3f7fb] px-3 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-0 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:min-h-[100dvh] md:px-7 md:pt-6">
+      <div
+        className={cx(
+          "relative z-10 min-w-0 bg-[#f3f7fb] px-3 pt-0 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:px-7 md:pt-6",
+          isAssistantPage && "flex flex-col",
+          isAssistantPage
+            ? "h-[100svh] overflow-hidden pb-0 md:h-[100dvh]"
+            : "min-h-[100svh] pb-[calc(2rem+env(safe-area-inset-bottom))] md:min-h-[100dvh]",
+        )}
+      >
         <header
           ref={headerRef}
           className={cx(
@@ -867,8 +876,16 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
 
         <div className="md:hidden" aria-hidden="true" style={{ height: `${loaderTop}px` }} />
 
-        <div className="relative z-0">
-          <div className={cx("transition-opacity duration-150", navLoading && "pointer-events-none opacity-60")}>{children}</div>
+        <div className={cx("relative z-0", isAssistantPage && "min-h-0 flex-1")}>
+          <div
+            className={cx(
+              "transition-opacity duration-150",
+              navLoading && "pointer-events-none opacity-60",
+              isAssistantPage && "h-full min-h-0",
+            )}
+          >
+            {children}
+          </div>
         </div>
       </div>
 

@@ -1,0 +1,1595 @@
+{
+  "dataset": {
+    "row_count": 1485,
+    "column_count": 38,
+    "date_min": "2025-04-27",
+    "date_max": "2026-04-30",
+    "product_distribution": {
+      "Mangue": 506,
+      "Arachide": 492,
+      "Mil": 484,
+      "Bissap": 3
+    },
+    "stage_distribution": {
+      "Nettoyage": 372,
+      "Tri": 371,
+      "S\u00e9chage": 370,
+      "Emballage": 370,
+      "Sechage": 2
+    },
+    "stage_distribution_canonical": {
+      "cleaning": 372,
+      "drying": 372,
+      "sorting": 371,
+      "packaging": 370
+    },
+    "unknown_stage_count": 0,
+    "risk_class_distribution": {
+      "low": 1229,
+      "medium": 204,
+      "high": 52
+    },
+    "loss_distribution_pct": {
+      "min": 0.0,
+      "p25": 2.6027543723825977,
+      "median": 4.561139884673099,
+      "p75": 9.856785346259809,
+      "max": 68.0,
+      "mean": 6.684146236542031,
+      "std": 5.80256644386741
+    },
+    "missing_values": {
+      "batch_id": 0,
+      "cooperative_id": 0,
+      "product": 0,
+      "process_type": 0,
+      "stage_canonical": 0,
+      "product_stage_key": 0,
+      "qty_in": 0,
+      "qty_in_log": 0,
+      "qty_out": 0,
+      "batch_size": 0,
+      "batch_size_log": 0,
+      "stock_level": 0,
+      "stock_pressure_ratio": 0,
+      "date": 0,
+      "month": 0,
+      "week_of_year": 0,
+      "season": 0,
+      "stage_order": 0,
+      "is_drying_stage": 0,
+      "is_sorting_stage": 0,
+      "is_packaging_stage": 0,
+      "historical_avg_loss_same_product": 0,
+      "historical_avg_loss_same_stage": 0,
+      "historical_avg_efficiency_same_stage": 0,
+      "product_stage_historical_avg_loss": 0,
+      "product_stage_historical_median_loss": 0,
+      "product_stage_rolling_loss_last_5": 0,
+      "product_stage_rolling_loss_last_10": 0,
+      "stage_season_avg_loss": 0,
+      "product_stage_season_avg_loss": 0,
+      "loss_volatility_product_stage": 0,
+      "deviation_from_stage_avg": 0,
+      "previous_batch_loss": 0,
+      "days_since_previous_batch": 0,
+      "rolling_loss_last_n_batches": 0,
+      "rolling_efficiency_last_n_batches": 0,
+      "loss_pct": 0,
+      "efficiency_pct": 0
+    },
+    "duplicate_rows": 0,
+    "batch_distribution": {
+      "6d165af7-214f-4f73-9bd9-1bf2afaf8851": 4,
+      "1c66738b-0994-4539-a89d-18a635cd90da": 4,
+      "a6ae82b3-fddb-42fd-983b-19a07c2779e2": 4,
+      "8d465e5b-5d2f-41db-a77b-70ffac50e713": 4,
+      "37acafb0-0e4c-45b1-beea-b56579de9c31": 4,
+      "fb3c60c1-3934-412a-85e1-18e1453a032e": 4,
+      "c51aec41-7e4e-4e0a-86f5-3c76e70cec05": 4,
+      "ed7ddfaa-9154-4e06-a39b-3228f9f38d6d": 4,
+      "8f867469-00aa-44f9-90ea-6fa49082eb84": 4,
+      "243d42c3-ada2-4595-8e23-bb238a4b575d": 4,
+      "a9e5faed-6705-4192-9db5-0778145ca099": 4,
+      "fb6638c4-ae28-4c22-936d-aa2f9e9b58a0": 4,
+      "df51cc2b-1cf4-42cb-90d4-fec6504f20fd": 4,
+      "b3874aa9-230b-4abf-ba7f-63fc1c965f57": 4,
+      "90d1a6d8-63d0-4630-bf2c-44185a28c38c": 4,
+      "ea52249b-778f-4a59-9d71-fe7e66d7bec8": 4,
+      "876c2364-cb11-40b8-965b-2f0cfe310826": 4,
+      "fa5eb1d8-2ecb-4d3a-b562-bf4479ccdcfe": 4,
+      "6b413fcb-b1f6-4628-acda-1bdea1636806": 4,
+      "067b648e-66b3-4c61-a356-a1b4de883c7c": 4,
+      "a785058a-950e-42e1-95b1-16880da1eb3d": 4,
+      "7a32dd4a-236c-4329-95e1-e59b73662735": 4,
+      "99a0a285-495b-484d-b3ed-184a6a4458da": 4,
+      "c621849e-980d-4900-9079-799a2ba030ab": 4,
+      "990fc3d2-ed8f-4085-9a6e-2f8bb9c25326": 4,
+      "a5d6506a-4cc4-49bf-9e27-038d3d151467": 4,
+      "93d9578b-a59d-4fda-b7bd-1a847e9b7291": 4,
+      "a94bfd59-ce58-47c5-8bd9-0cd6efd34e89": 4,
+      "4cfafb8f-b1bc-4fd6-a37a-66aed8d209b9": 4,
+      "a85a2b01-9e5e-43df-a405-a2d1b3b82b16": 4,
+      "8ddcbeae-6f83-4a1a-ac97-6eb7e40d7ef8": 4,
+      "6c7d1fe4-89d1-477a-badc-4d501babc285": 4,
+      "f74f9645-983a-4688-9ab2-fd46daf39bd2": 4,
+      "62fcd31b-e758-4732-ba8c-490b93ccc2cd": 4,
+      "7f6f7e57-e484-4201-8ee9-e019746e82d5": 4,
+      "6c09581e-9ed7-49dc-83e9-6e98dedc7224": 4,
+      "2659d646-9635-4d11-876d-f6ce96719964": 4,
+      "732ce25c-69e8-4749-97a9-252d6e6796a4": 4,
+      "2cd4a212-4e8a-48ce-9ecb-26cca1329b9f": 4,
+      "d1b51225-0af5-4769-a650-63065f7d4963": 4,
+      "4e416844-c3b4-449f-9267-4a555b321d7e": 4,
+      "15f90aa4-eee3-4d7c-bdd3-8f16d8e60ddf": 4,
+      "7e94917b-0dd6-40aa-97c2-a94f2c56feff": 4,
+      "539be42d-b084-4e68-8298-53fb83ee471e": 4,
+      "cb1ade11-e916-4770-b7a1-31d16f947633": 4,
+      "7aca5bbe-68c0-4c09-b53f-70ec58ca005b": 4,
+      "783b236c-2fb3-4f7e-8bbd-998e0c0cecaa": 4,
+      "16ad459c-a2b5-4ed4-bf63-073595839912": 4,
+      "b23242e6-5cb0-4563-a545-f9669c842e97": 4,
+      "162545cf-cc40-4462-be1c-781f4a32fe64": 4,
+      "bf85b036-22f7-4807-acbd-2a46cf90669a": 4,
+      "1f15fc78-b832-4ea1-af30-7ee59e5a5135": 4,
+      "f7cd85fb-b419-4fbb-9fd9-e0b353a55d56": 4,
+      "edb43b95-15d3-45e0-84e6-66d5667a356c": 4,
+      "45f69cf4-4a4a-42ec-839e-2afc3be37941": 4,
+      "e8225448-4045-4ce9-9ed8-0e0248612ed6": 4,
+      "590459fc-4e94-4943-ba4f-8745b01b5286": 4,
+      "753034ec-b154-45c1-82d9-4ca501894333": 4,
+      "1de20c4f-9162-4fce-9553-0f5684a0e3c9": 4,
+      "002fa160-801f-4cd7-a407-74172d59efb2": 4,
+      "34873d58-2766-4bec-9f83-54ccebf3710f": 4,
+      "22e5e314-6d3f-4d9c-91f7-057faace4ffc": 4,
+      "fcc24597-33d8-453a-a84d-4b156968aa4b": 4,
+      "6ad2e589-4b6f-49d8-b9db-722b92a710d7": 4,
+      "2fcbb60a-6b18-41f0-ad22-52cf542c56c2": 4,
+      "95c43392-bc86-41bc-9ee4-7d4a9e22d209": 4,
+      "2ce2a141-7b1a-4119-8ae4-55040288372f": 4,
+      "c6dde74d-e260-4411-acf6-47d03893b1a5": 4,
+      "47c574af-a543-4ecb-a0fc-f5177b80ffd3": 4,
+      "09710c97-f08a-427d-a6fb-35946bb0b8d3": 4,
+      "da694d58-46d8-4ffc-a73b-a7078c33a4d0": 4,
+      "1e183d8b-cec0-4af3-9a89-1f9d39030db3": 4,
+      "b2351ed6-cc1e-4d23-8d0f-ca90b5bf2a07": 4,
+      "d5e04a50-d93a-49f6-9c0d-9b2a354cb15e": 4,
+      "77df3286-ad70-4662-bff7-87967a7d9748": 4,
+      "0091e7b0-f2b4-4b80-a679-ba711fabb692": 4,
+      "4dd400d8-3002-4f83-984b-53f71132da0e": 4,
+      "179460a9-d4a0-41ca-848c-3eb5be3cbd25": 4,
+      "b28eff18-8f2f-46e0-9db6-69c833f73fae": 4,
+      "56134071-a92a-42a0-a436-1688608c6094": 4,
+      "27f06082-8c64-4627-9f7f-563de15aa020": 4,
+      "579f4553-7464-4381-abdf-c967956542cf": 4,
+      "188a70b3-413c-4a72-a594-ec50fa417703": 4,
+      "cb7d3c51-c229-4978-99d3-7d4cd7a953e1": 4,
+      "a9d15e6f-3330-43bc-9c5a-b0037b1801f5": 4,
+      "55ed9077-53ad-4ec1-94ba-e4ae871eedfe": 4,
+      "e33a119b-d0c5-43ce-aa5c-a8ed0faacbe2": 4,
+      "a42b8b51-7f8f-4b3d-85d0-6f39b88a1a8d": 4,
+      "d90179cc-5e0e-419c-a8fb-28d2804078a4": 4,
+      "54495d30-1a57-49c8-8919-311e2f09e880": 4,
+      "43b94a66-88f2-4981-bc52-aac8fc168884": 4,
+      "946cd3d4-b776-4f35-a8c0-d1a038716792": 4,
+      "7064b6ee-3dc1-47a6-86bd-4d2949a3a0ad": 4,
+      "c4c5edbf-7ba0-4e0d-a315-7ed5eb4021f7": 4,
+      "c34ca2c1-cc1a-448b-989a-27178d086e40": 4,
+      "13423534-2ec7-4339-a6ba-1d43e7256c46": 4,
+      "c8c3b998-2581-4490-9a9a-cb3ed9aed756": 4,
+      "c7cc41ee-fa55-4787-bd25-514e553375b1": 4,
+      "e6053da0-c37e-41c0-9686-aaa237dfd6b2": 4,
+      "a6da4f64-0e11-4f06-a2a5-4fe85dfacf9a": 4,
+      "84d84bcb-fafe-4d73-8567-6b7102c84cfb": 4,
+      "1782a690-e556-4d96-a415-da7b2c727c95": 4,
+      "d42dab7b-b94f-4e17-a0f0-ef8c8d1adac3": 4,
+      "bf20e37f-a089-480d-bf7d-a0a12b2fc51e": 4,
+      "94ef0ea2-e223-4c48-8d14-338a216bc82f": 4,
+      "ff8473cf-5a76-4932-ba85-77456a01ab35": 4,
+      "f4e65dcd-a958-4672-a18b-c9ca918bce80": 4,
+      "3cb7cc0c-6638-4aff-9c30-5673b60dcd62": 4,
+      "f1062d18-8bb7-4ac4-97e1-f71fe450f10c": 4,
+      "94c01a5e-dcad-4e56-93dd-13c210fbf5dd": 4,
+      "2fc628bf-a956-4c35-bc58-5bcff7744206": 4,
+      "54bc4b3f-819e-4122-913f-919e8a825e38": 4,
+      "4486590e-530d-4d41-9fea-4cad31375931": 4,
+      "b6ca95e7-6939-49ce-98bb-c225c0aedf06": 4,
+      "8403eaa0-9532-4f0f-a71b-3aa22a0c1faf": 4,
+      "ff199899-d323-4aa3-9c70-54f0d4d3fa69": 4,
+      "ae76b145-7274-4038-ba7b-eccea49c5efd": 4,
+      "ec1d89e3-d4ec-4313-9a22-064835e7fbe7": 4,
+      "d39457d6-b8ee-4541-ac27-96dec67116a4": 4,
+      "d2fdf19f-19ca-4d73-aa7b-0a006da62d5f": 4,
+      "7f1847f5-745b-424e-8e35-0dbc71c0fd5b": 4,
+      "45002bc8-417e-4fa9-b185-79bd4e444816": 4,
+      "23f862f2-08a6-42a6-a960-9edda397ba0e": 4,
+      "9d738d3b-38a6-408a-8240-a16d4cefb787": 4,
+      "378e07a5-b374-49fe-96ed-80eba157717c": 4,
+      "d5c4d745-fdf8-4d0b-9579-f36e0f860c1a": 4,
+      "1f97cc30-b991-48e9-8371-7e52ae304fbc": 4,
+      "7eec8a0b-1833-4151-83d2-0233ee01d2d6": 4,
+      "28e2a71c-d49b-454b-b4b0-d3b6cb2d7b2f": 4,
+      "abe82e88-1af2-463e-aaa9-4959f78dec75": 4,
+      "548eda29-c139-4a35-b027-89ee8016a6ce": 4,
+      "cbd01da9-3af5-4238-aae1-0a78e114c0ae": 4,
+      "3bcb3273-62eb-4f34-8dd3-b9d31de3da58": 4,
+      "e5c4d510-e567-4511-a59e-d5e10f56e10a": 4,
+      "ca7ddbee-6e45-4c85-a14d-98ef4bb8ad87": 4,
+      "fc205362-6917-416d-a1b4-52cce341b4ee": 4,
+      "b1c8b28c-3636-4895-8e6c-c6931c5b8410": 4,
+      "f8df0ead-8ae4-4c4b-960b-099f0e19b8f0": 4,
+      "76aa3507-4dcf-41e1-8c6f-91347fca47c3": 4,
+      "e2c3ba91-ccd7-4228-bcc8-242d3eb9f2dc": 4,
+      "2fa73022-dd47-4566-ae96-8d14feb4b443": 4,
+      "0b49defb-9b98-42fd-815b-a4b576bc31ab": 4,
+      "09ca6f5c-dc1b-4838-8aef-bc5534c65a0a": 4,
+      "b6d010b9-6c2c-4e6d-b260-ea21f9b85971": 4,
+      "37fd96e1-fc47-4299-95d5-bf1099ce5c8b": 4,
+      "3702d8a2-7b1f-4ff5-91f4-64511336c7ea": 4,
+      "fc32c9b7-42cf-4d40-984d-69c9589ff569": 4,
+      "de594b1e-e268-433b-89c8-81024a7c6fd4": 4,
+      "e9669b8e-e9d0-47a8-875a-fae22fd512f9": 4,
+      "c9e28d7c-bc3e-4701-bc6c-e456ac48032a": 4,
+      "21a5e5f4-a2f4-482b-ba4f-92347ba3ed81": 4,
+      "ea6ffff9-63ea-4141-b057-284b4f809474": 4,
+      "03f46621-7814-46b6-9e76-04ae0a279164": 4,
+      "dae520b9-cd4e-49d6-8921-b06a92ca6c82": 4,
+      "981aa30e-5e52-41c7-bdf0-3408afa4fd75": 4,
+      "0374eb77-386e-4224-9de5-abd5de525c6e": 4,
+      "2d7a9c0a-ca5a-4bf9-9592-5866864b123b": 4,
+      "0131dd9e-116e-418a-a051-3b285eb4699c": 4,
+      "ceb122ff-ba04-4d2d-924a-b7c357e3d568": 4,
+      "aef7462b-72d6-45a3-94c2-37c59bc0a286": 4,
+      "877a39c9-d70a-4279-8054-7c007b886891": 4,
+      "c3fd95a4-871b-4048-af14-2e8940b31ff8": 4,
+      "24827e6a-8926-4299-9ada-82046fb4eadd": 4,
+      "b31ed78a-7ea4-4ea0-a297-9a674000601f": 4,
+      "2ebdf7d8-10f9-44de-8b4e-806df160e90f": 4,
+      "76f351c0-8c4f-4cf7-98d6-3b285efb7c0d": 4,
+      "706296b1-0c67-417f-b2cf-4929e6569eb0": 4,
+      "b67d0137-c8fd-4e54-b3a9-34abed81e93b": 4,
+      "89f72b3a-69af-4c15-a199-745ea6feaa35": 4,
+      "e26b61da-c589-4986-835c-d91bd6374228": 4,
+      "7fc6a4c3-9619-45ca-b8da-5a9d8b59d4ed": 4,
+      "6fac398c-f75a-4556-bc8d-4dfa59742e48": 4,
+      "eca8b7ad-db99-4fd2-83f0-475b24c12ed7": 4,
+      "1b9774be-d1d2-45a4-9715-985ba2f1c1db": 4,
+      "f67926f7-d24c-4f13-b827-0efe70795e08": 4,
+      "e0442149-5ae8-44e9-be8c-8acd93d607ae": 4,
+      "2292ace5-68a4-470a-987e-9627e8f9e538": 4,
+      "ca8c8ad6-9a6f-4ade-9125-0e1cb32d5413": 4,
+      "363e3290-8e4c-434b-8a97-864d9d0ecf1b": 4,
+      "8f0cd161-2769-4810-a1f1-1a9994cbc342": 4,
+      "35987c9b-ef0a-4441-8a3f-33da83d9ed58": 4,
+      "03afab43-3ce0-4223-b7e3-942822707f89": 4,
+      "843e2302-bc04-4806-b774-cbd332ec0c60": 4,
+      "21e9ab8c-f30b-436c-ba8d-a66b1f5cbb4d": 4,
+      "9f190186-05d3-4744-ba9e-d6ea08200f13": 4,
+      "59946a57-d57f-40ce-bc5f-fdc8e27307ff": 4,
+      "f131619e-62f2-4a97-abe2-02b245707b9f": 4,
+      "4e59dde4-ff01-4624-8455-532bc6a2453a": 4,
+      "eabbad67-4786-4e83-a0bb-5e119df1788e": 4,
+      "c8b16bf3-2bab-4c2f-902d-37b9ec913913": 4,
+      "5f0f057c-e96d-4c14-bf30-0d65d0440ccf": 4,
+      "109036e0-c2fc-47d4-b586-19f38dfbafac": 4,
+      "70880d93-d69c-4655-b052-90376de89ff7": 4,
+      "6e77ab90-4eeb-42cf-8853-7978b5675d42": 4,
+      "1b2349a7-87cd-41d0-8874-b45da63d9745": 4,
+      "1118d6bc-1742-4207-849e-2ddb62d6c19f": 4,
+      "9004d318-a0a6-4891-bae1-671dc15c8b94": 4,
+      "9bb31784-79db-4a48-8c98-78af9909cdc9": 4,
+      "47841ad0-24d6-4a52-b3ec-fc4794692ce0": 4,
+      "9246f2bd-fc7b-4103-b348-b526941aae74": 4,
+      "a44a1428-e590-4b40-b5e7-7db683cb6411": 4,
+      "836969f1-a7d6-42a3-99d9-2d6bc1a2a85d": 4,
+      "d2eec97e-2b4d-424f-9776-700af2b02108": 4,
+      "a421e5d5-adc0-46aa-a7ea-8cda2ba8bf07": 4,
+      "25b061f6-ca73-4c1b-a598-08430a03aeac": 4,
+      "08fc5c64-8a8c-4175-a165-5e99b31b9fa5": 4,
+      "ea25343f-c89d-47c5-b30c-b996cf2d39d4": 4,
+      "5ab7709d-4c1d-4e5b-a84d-8eb082fa1f66": 4,
+      "3f7c4da7-865a-4d3a-a59b-b8ad6eb8f1b2": 4,
+      "f3d1f479-f872-4d5b-aa72-988006b9898f": 4,
+      "9ebca4a7-925b-45f1-b653-b3a328c06cdf": 4,
+      "b2080169-0f98-4c4c-9d3f-de3d0daee80a": 4,
+      "918c4109-fd26-462a-bf50-af2cbce03fc2": 4,
+      "daa4c5ec-eef0-4b65-9a1e-86e650f730c9": 4,
+      "954933cf-48b0-4e7b-bb38-004bbc2ef7b9": 4,
+      "c24a967d-6ad3-4b5f-9c5d-cb75940421d0": 4,
+      "029b50ca-9eca-469a-8feb-2c0695734eae": 4,
+      "1da99aea-a73d-4933-9d86-8b24806fcf9d": 4,
+      "11b1b2f3-d1de-445f-81f5-fa7efe96ac4d": 4,
+      "99689b9a-f1c4-446a-b3b5-90d0e0663609": 4,
+      "8ced29e4-c161-47e8-a20b-14779e7f63fc": 4,
+      "bcb6bc63-2388-4615-be5b-19d784048ed1": 4,
+      "51433354-aaf7-4b23-ba0c-b79a87ae7b4f": 4,
+      "4377895b-4258-4627-bf82-37261ef4f402": 4,
+      "1fbc3faf-3935-4cb8-9981-cb0acbd2685c": 4,
+      "ad6c2934-7d72-4287-a3e7-8dd1fec69e36": 4,
+      "a859b2e4-e298-48fa-8d85-1de9c25bea42": 4,
+      "7284c00f-ce6b-4a09-987f-5fff0ec750e6": 4,
+      "6f7172c7-731f-44dd-86f4-cf38ccb8380d": 4,
+      "aa1d31c7-e745-473d-a461-c499591a7b26": 4,
+      "8e6911c6-3714-494a-abea-af2b451d8d0c": 4,
+      "f525808c-0889-42c4-acde-f16360811eed": 4,
+      "5ea22b12-6a8d-4c95-b0e3-239a4fdfb0a5": 4,
+      "706e433d-1589-4269-9235-7b14d9ae0820": 4,
+      "1b17a038-840b-4d96-853e-5b3ec0e19f52": 4,
+      "16678513-fb64-4631-aa17-be92a8afa662": 4,
+      "a45c02dc-7e49-41ca-8716-b4f59d08ceee": 4,
+      "29209887-57c8-4f83-b26c-2b422ff8c9b6": 4,
+      "a8a35d64-9484-44b2-8f51-97503e13de1b": 4,
+      "08d96ea3-fce6-4198-82e6-8b4564031adf": 4,
+      "c83cf815-6164-43b8-ade7-f67785619a92": 4,
+      "139bb2b0-ca24-46fc-b7b2-b82a226c00cd": 4,
+      "ed31ecd2-6ba6-4951-bfca-9d2c93f88a26": 4,
+      "3fe2445f-67a7-4d21-89bd-d781daa27185": 4,
+      "f1bbd17b-4f3f-40d1-b601-9795e87ebc05": 4,
+      "6507024d-a144-4bb0-afaf-f280c230ef1e": 4,
+      "dde726d8-898f-464e-9c34-ee4a0f16d743": 4,
+      "7c5d6b11-7a39-4ea1-8301-006601055f2e": 4,
+      "bc3071d7-35d8-49b9-aa7c-1bbd92315873": 4,
+      "3e127bdd-a5f2-4abe-b1a2-40d43b13c5b0": 4,
+      "e38df9ae-6514-4ffd-bb3b-ce366e81d16d": 4,
+      "54338ec5-1f4d-4a0a-bf34-cc8976b9dbad": 4,
+      "e55a48f2-1358-4f67-9be9-742242835380": 4,
+      "baf2d4a7-4d9b-4013-8192-965e7a4ff0d2": 4,
+      "50a99321-6da3-4de6-ad2e-f55a2a965b2b": 4,
+      "e8f55c66-9c8b-434b-aeb6-80f752ea607c": 4,
+      "02dd9369-61ed-4b5f-8aeb-6b23db5f9e32": 4,
+      "0023e768-d55c-455a-a8ad-acfeea0b83a1": 4,
+      "f06b5e9a-e02a-4e86-9568-707f5bf86ff4": 4,
+      "63304867-ca21-4a95-8326-8539552ad26a": 4,
+      "e7642121-d6f4-40e9-b4c2-5c3af1745728": 4,
+      "a5839ecf-fcef-4eac-a66d-7d2cc1b2ab94": 4,
+      "9850cccd-0bc1-46a1-a526-118e3f74d42b": 4,
+      "459618dc-d111-4ff3-a2e7-83fa5a7c3775": 4,
+      "7c3a3ca0-a4cd-4961-8a35-0161ada8de5d": 4,
+      "449a2147-14da-4462-942c-294ff5e311bd": 4,
+      "fb5d61c0-3801-44f9-98a4-a7df572bc8fe": 4,
+      "7f952fe4-32c9-4355-b966-5079eca7e3c9": 4,
+      "e8fd6f3a-3fa0-465d-a65c-b24fbbd13f8f": 4,
+      "bec691e9-3f0c-4f71-a200-546de1fd8627": 4,
+      "dd591c9a-a02a-4198-baa9-a7d81b981a8f": 4,
+      "b6bf430e-753d-401e-9936-39d8c193e3d2": 4,
+      "eb265148-4cc2-4cfe-a3e5-05c791161198": 4,
+      "7ec7934f-0e58-40dd-a288-00caa0bbcb78": 4,
+      "c64c46ea-ba2a-40f1-a873-71cf68c77ff1": 4,
+      "11a806fb-b9b2-491d-99d9-4c2b2b57a692": 4,
+      "a4866061-8e93-46f9-8ae0-258a229c5a05": 4,
+      "c76c28a5-0528-4f02-add8-364414526cb6": 4,
+      "94df4d68-df43-41cc-95cf-99cc67d5cb78": 4,
+      "f5ce8f03-3b6b-4938-9a64-cc83f55ede42": 4,
+      "652bfd89-bc02-4d19-aca4-016c896ebcf7": 4,
+      "fcc5ece3-f375-438f-abce-d58a3bbd698a": 4,
+      "5bcfc7df-ad38-40a3-82a6-80ba444d4390": 4,
+      "e9c3d154-fac8-41e6-b073-88af7fe41859": 4,
+      "c977e51a-3a7b-4e91-8edd-92a0178c4483": 4,
+      "27ffd390-4ac5-49ee-a423-b2a15f40de30": 4,
+      "8077ddd8-09e8-481f-bb0a-510c0b9ad571": 4,
+      "621f0508-623f-4577-979d-0e180a6397b0": 4,
+      "f68e27a1-bf11-4c87-8a58-3c0a7fa3ae15": 4,
+      "b3dd7c40-cd36-4875-8114-995359dbb7ec": 4,
+      "9d54bd10-b81d-4786-9083-88db6ac066db": 4,
+      "65112dce-12ad-4382-bcdc-12be41fd9b22": 4,
+      "32b7afb0-a947-470d-a352-048e92143d21": 4,
+      "40fd5bca-be32-4fb5-bbc9-6420d7c7032d": 4,
+      "4066f19b-9c3b-4f30-8f4d-089d7f355d70": 4,
+      "2030540b-1ff8-4908-8656-8fb77c042691": 4,
+      "e9f7d111-9ddd-41b6-83e2-3beee965e847": 4,
+      "3e613b6f-3ae9-439d-823d-203422c477bc": 4,
+      "ce446e9e-92a1-42a5-aea2-868ed6fc9fc4": 4,
+      "6285a485-3248-4ac2-8768-77dad1edb36e": 4,
+      "399e9553-e843-44ff-b4b7-722299af7d6a": 4,
+      "4638b8b3-d9d7-428f-9a1c-fe180cc1e091": 4,
+      "a169863d-e718-4a5e-8ab3-a6153c6d0fa8": 4,
+      "e1f24937-be60-4fad-b939-55dd6045ca35": 4,
+      "589ed297-ff5d-4959-8b03-6b16d04699b1": 4,
+      "e40c2726-c158-4173-bb08-72913d02b0d9": 4,
+      "862bb0f8-e42f-4661-82ee-c5d9d11f7c2e": 4,
+      "0e277366-f882-495e-873f-aa7ae6599b58": 4,
+      "1763ac0d-4533-45cb-a0ba-0c7297b4a342": 4,
+      "05ad2cfc-0264-4599-b898-5cc29746c051": 4,
+      "e27cb6b1-6a95-41b6-b646-f12103ec4d07": 4,
+      "da3a3d8e-e366-4870-84d6-0c79b382c17d": 4,
+      "21c7a5d8-19b1-41ba-adbe-9ec690118bd2": 4,
+      "b812f9bb-a600-4a7b-8d4a-8223e2610328": 4,
+      "5d6127eb-391d-4805-af42-b7706d1f1adc": 4,
+      "e05b13d6-287a-4f29-8f44-27040e9a6ff2": 4,
+      "32fe623c-9011-4fd1-b19c-4a394adf0bb4": 4,
+      "3211591c-7ab1-40e9-98bb-24cb5628202d": 4,
+      "68e39b52-921d-4f44-81fb-9a733f3e0afa": 4,
+      "2711350f-71d8-4392-bfcd-44a204390260": 4,
+      "a5a63c4d-b286-4fab-833c-d2a3930449ec": 4,
+      "77552691-6832-46bf-a330-d536892c03d7": 4,
+      "531fd155-85be-49a3-9aac-1a664a2a8c4a": 4,
+      "60a7d231-8c3d-4a41-9e4f-3fb05c0da0dc": 4,
+      "cdb43d22-72dd-425e-8f72-5d8830051658": 4,
+      "4a4ab55d-60b8-428c-8497-a6723e84a41b": 4,
+      "596e8235-605f-46f0-8205-7085508265e6": 4,
+      "2b2d80c1-1fa3-4437-beff-c0cdae6d9e5d": 4,
+      "e707c647-22fb-4ebf-83e0-1122d8901136": 4,
+      "ccd1ac47-6f0e-47fa-aeb1-e5141f35d289": 4,
+      "d07a04d9-87f0-4ace-98e3-6ba8e6db2cee": 4,
+      "9f4765d1-6f34-4873-b752-eac5863a0052": 4,
+      "a3b315ca-34d7-4ee0-8ac9-abd28d86fece": 4,
+      "5ca5d92c-f925-43f5-b138-b816875fa896": 4,
+      "b1b1476e-a216-4a74-8bb8-46aa2385be79": 4,
+      "39d03830-1de8-4480-9bb6-2ce6ebd68926": 4,
+      "fd170b18-97cb-4583-85c7-d5ae4195d2de": 4,
+      "5bea4176-cdcb-4351-a31a-298f8616096d": 4,
+      "66f81970-aec1-4151-ad2f-5e15c5f62c6b": 4,
+      "33cc80b9-52e9-43ea-a49a-d93eba91fe0d": 4,
+      "f45b75be-e216-42cb-996c-81129cf1fb48": 4,
+      "2ba437ec-824c-4248-9f2c-84423f6821cf": 4,
+      "7c266d9c-30cd-467c-95a0-c4bcec516c73": 4,
+      "1435b85c-ec94-481b-875d-83668fd63a04": 4,
+      "4394dae0-1a2f-48ba-aa28-a94bc17ef7fd": 4,
+      "2f680ddf-756f-4e11-91b2-b12021ba5236": 4,
+      "821d5c4a-1baf-4cf1-8969-ba3c81bcca56": 4,
+      "528b9552-43bb-440d-a8b1-be187bf7b218": 4,
+      "75864e89-5d08-4b9a-8c88-4c8accd4f07b": 4,
+      "2e9c2533-d2ad-4e4c-93dc-0b5313060c55": 4,
+      "765b904b-28de-4b1a-8fbb-44d197495821": 4,
+      "1d4332f9-f1e8-401a-bcc6-e0b70026b5a8": 4,
+      "99bc41fb-41a8-4e50-8bbf-86e7e2b824e0": 4,
+      "226bac1b-6a79-45b4-88c6-d77e59cedb51": 4,
+      "f3e70cb6-961a-4e85-87b2-88cb14304efd": 4,
+      "e9283e53-e929-4310-b6f3-16aa70ee96a7": 4,
+      "abb734a9-5b2d-4a68-9834-c18b39b0e946": 4,
+      "01267d38-d1fd-4025-a012-38ca6a318073": 4,
+      "b2e2a7de-d778-4770-8ef4-813166e2d1e3": 4,
+      "0fa2e5a8-1f15-4fc8-affd-9ca4386a55f1": 4,
+      "dea0c11f-2271-4c2b-998b-9739353bc8df": 4,
+      "8ded3501-800b-43be-a2c3-ea7c84ea0dd2": 4,
+      "a053d4d1-5fed-42fa-9a09-bc4c6c0389b2": 4,
+      "1c216041-4972-4ee8-bfb0-5b4eef20a941": 4,
+      "3d402e2d-0324-4029-9711-17b37c482b7c": 4,
+      "169d5577-dd4f-487e-8a8a-66fb50f0f978": 4,
+      "acb7efb5-ca55-44e2-aa5b-980de1f69538": 4,
+      "3aee6b64-00be-4cad-ba9f-eb911d52e649": 4,
+      "be648615-8575-44b9-97a5-aba6a5abb102": 4,
+      "0ec1d92f-def4-47d0-a71f-e7c1ae4b87d1": 4,
+      "05ff7878-61bb-4cea-bf86-6518e48ffe6e": 3,
+      "b41542eb-9132-4980-8547-de1eeb5d5393": 2
+    },
+    "below_min_training_rows": false,
+    "ml_min_rows_required": 120
+  },
+  "split": {
+    "strategy": "time_based",
+    "split_cutoff_date_ordinal": 739570,
+    "train_rows": 1210,
+    "test_rows": 275,
+    "random_train_rows": 1188,
+    "random_test_rows": 297,
+    "cross_split_duplicate_signatures_time_based": 0
+  },
+  "leakage_checks": {
+    "predictive_feature_leakage_flags": [],
+    "target_in_predictive_features": [],
+    "assessment_contains_target_related_features": [
+      "deviation_from_stage_avg",
+      "efficiency_pct",
+      "loss_pct",
+      "qty_out"
+    ]
+  },
+  "model_eval_time_split": {
+    "split_name": "time_based",
+    "train_rows": 1210,
+    "test_rows": 275,
+    "metrics": {
+      "regression_mae": 3.7799943919242156,
+      "regression_rmse": 5.891642848908009,
+      "regression_r2": 0.09237794471494543,
+      "regression_baseline_mae": 4.371643354373778,
+      "regression_baseline_rmse": 6.199107250421349,
+      "classification_accuracy": 0.84,
+      "classification_macro_f1": 0.3043478260869565,
+      "classification_weighted_f1": 0.7802371541501976,
+      "classification_majority_baseline_accuracy": 0.8545454545454545,
+      "classification_thresholded_predicted_loss_accuracy": 0.5127272727272727,
+      "classification_thresholded_predicted_loss_macro_f1": 0.27793837620135503,
+      "classification_per_class": {
+        "low": {
+          "precision": 0.8523985239852399,
+          "recall": 0.9829787234042553,
+          "f1": 0.9130434782608695,
+          "support": 235
+        },
+        "medium": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 32
+        },
+        "high": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 8
+        }
+      },
+      "classification_confusion_matrix": [
+        [
+          231,
+          4,
+          0
+        ],
+        [
+          32,
+          0,
+          0
+        ],
+        [
+          8,
+          0,
+          0
+        ]
+      ],
+      "classification_labels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "false_low_high_risk_rate": 0.0,
+      "risk_thresholds_used": {
+        "low_to_medium": 6.0,
+        "medium_to_high": 12.0
+      },
+      "anomaly_ratio_test": 0.12727272727272726,
+      "anomaly_flag_rate_test": 0.12727272727272726,
+      "anomaly_contamination_configured": 0.08,
+      "baseline_comparison_summary": {
+        "model_mae": 3.7799943919242156,
+        "global_mean_mae": 4.371643354373778,
+        "product_stage_mean_mae": 2.6983304738215486
+      }
+    },
+    "feature_importance_top20": [
+      {
+        "feature": "num__historical_avg_efficiency_same_stage",
+        "importance": 0.1987878829812345
+      },
+      {
+        "feature": "num__historical_avg_loss_same_stage",
+        "importance": 0.14603684946481285
+      },
+      {
+        "feature": "num__stage_season_avg_loss",
+        "importance": 0.0882820819753204
+      },
+      {
+        "feature": "num__product_stage_rolling_loss_last_10",
+        "importance": 0.08703246085187386
+      },
+      {
+        "feature": "num__product_stage_rolling_loss_last_5",
+        "importance": 0.047804834354998764
+      },
+      {
+        "feature": "num__loss_volatility_product_stage",
+        "importance": 0.04509531387545708
+      },
+      {
+        "feature": "num__product_stage_historical_avg_loss",
+        "importance": 0.03860717045838412
+      },
+      {
+        "feature": "num__previous_batch_loss",
+        "importance": 0.03602479248337244
+      },
+      {
+        "feature": "num__stock_pressure_ratio",
+        "importance": 0.0360050328331763
+      },
+      {
+        "feature": "num__historical_avg_loss_same_product",
+        "importance": 0.032821285213449264
+      },
+      {
+        "feature": "num__product_stage_season_avg_loss",
+        "importance": 0.02986874617481902
+      },
+      {
+        "feature": "num__date_ordinal",
+        "importance": 0.027239172968099846
+      },
+      {
+        "feature": "num__product_stage_historical_median_loss",
+        "importance": 0.026913238171028152
+      },
+      {
+        "feature": "num__rolling_efficiency_last_n_batches",
+        "importance": 0.026672890994223042
+      },
+      {
+        "feature": "num__qty_in",
+        "importance": 0.022133738507327725
+      },
+      {
+        "feature": "num__rolling_loss_last_n_batches",
+        "importance": 0.02177729034839078
+      },
+      {
+        "feature": "num__qty_in_log",
+        "importance": 0.021521691287102077
+      },
+      {
+        "feature": "num__batch_size_log",
+        "importance": 0.014076310813458807
+      },
+      {
+        "feature": "num__batch_size",
+        "importance": 0.013224000225628453
+      },
+      {
+        "feature": "num__week_of_year",
+        "importance": 0.009057824445247685
+      }
+    ],
+    "permutation_importance_top20": [
+      {
+        "feature": "historical_avg_efficiency_same_stage",
+        "importance_mean": 0.6523695103999739,
+        "importance_std": 0.08046690231610751
+      },
+      {
+        "feature": "stage_season_avg_loss",
+        "importance_mean": 0.3030918313808729,
+        "importance_std": 0.0264921679064234
+      },
+      {
+        "feature": "historical_avg_loss_same_stage",
+        "importance_mean": 0.27028411184657186,
+        "importance_std": 0.05866721272536891
+      },
+      {
+        "feature": "product_stage_historical_median_loss",
+        "importance_mean": 0.1847967305821272,
+        "importance_std": 0.008581114912873977
+      },
+      {
+        "feature": "product_stage_rolling_loss_last_10",
+        "importance_mean": 0.1313882757730535,
+        "importance_std": 0.028475440637818844
+      },
+      {
+        "feature": "product_stage_historical_avg_loss",
+        "importance_mean": 0.1197116641701505,
+        "importance_std": 0.014192433840424965
+      },
+      {
+        "feature": "product_stage_rolling_loss_last_5",
+        "importance_mean": 0.1085444824721668,
+        "importance_std": 0.030383984662339707
+      },
+      {
+        "feature": "loss_volatility_product_stage",
+        "importance_mean": 0.09190941735609437,
+        "importance_std": 0.01478481136609848
+      },
+      {
+        "feature": "rolling_efficiency_last_n_batches",
+        "importance_mean": 0.04033374064754364,
+        "importance_std": 0.00860839237082877
+      },
+      {
+        "feature": "product_stage_season_avg_loss",
+        "importance_mean": 0.03757887565311968,
+        "importance_std": 0.007916108435536548
+      },
+      {
+        "feature": "rolling_loss_last_n_batches",
+        "importance_mean": 0.03259593589375237,
+        "importance_std": 0.006926379781440723
+      },
+      {
+        "feature": "stage_canonical",
+        "importance_mean": 0.02717697835024141,
+        "importance_std": 0.0090070286201774
+      },
+      {
+        "feature": "stage_order",
+        "importance_mean": 0.023447282623809518,
+        "importance_std": 0.0032199067722934807
+      },
+      {
+        "feature": "qty_in_log",
+        "importance_mean": 0.011312286551741102,
+        "importance_std": 0.009329750798314872
+      },
+      {
+        "feature": "stock_pressure_ratio",
+        "importance_mean": 0.009959347796951235,
+        "importance_std": 0.021108582196274265
+      },
+      {
+        "feature": "batch_size",
+        "importance_mean": 0.009474636393731306,
+        "importance_std": 0.003991107234929381
+      },
+      {
+        "feature": "days_since_previous_batch",
+        "importance_mean": 0.00830774738428175,
+        "importance_std": 0.006183425949368199
+      },
+      {
+        "feature": "qty_in",
+        "importance_mean": 0.007186972811229708,
+        "importance_std": 0.013835240282700166
+      },
+      {
+        "feature": "product_stage_key",
+        "importance_mean": 0.006329680197992793,
+        "importance_std": 0.002783573061613042
+      },
+      {
+        "feature": "is_sorting_stage",
+        "importance_mean": 0.004893110016525037,
+        "importance_std": 0.0010644838177667182
+      }
+    ],
+    "top_prediction_errors": [
+      {
+        "product": "Bissap",
+        "process_type": "Sechage",
+        "qty_in": 150.0,
+        "qty_out": 48.0,
+        "actual_loss_pct": 68.0,
+        "predicted_loss_pct": 6.400910648952135,
+        "abs_error": 61.599089351047866,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mil",
+        "process_type": "Tri",
+        "qty_in": 811.611,
+        "qty_out": 611.665,
+        "actual_loss_pct": 24.635693700553592,
+        "predicted_loss_pct": 9.889765212210795,
+        "abs_error": 14.745928488342797,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mangue",
+        "process_type": "Tri",
+        "qty_in": 783.9,
+        "qty_out": 756.373,
+        "actual_loss_pct": 3.51154483990304,
+        "predicted_loss_pct": 14.33994167000864,
+        "abs_error": 10.8283968301056,
+        "actual_risk_level": "low",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mangue",
+        "process_type": "Tri",
+        "qty_in": 827.463,
+        "qty_out": 800.102,
+        "actual_loss_pct": 3.306613105359393,
+        "predicted_loss_pct": 13.881139562144872,
+        "abs_error": 10.57452645678548,
+        "actual_risk_level": "low",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Arachide",
+        "process_type": "Tri",
+        "qty_in": 443.488,
+        "qty_out": 423.878,
+        "actual_loss_pct": 4.421765639656544,
+        "predicted_loss_pct": 14.985097947533832,
+        "abs_error": 10.563332307877289,
+        "actual_risk_level": "low",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mangue",
+        "process_type": "S\u00e9chage",
+        "qty_in": 877.503,
+        "qty_out": 827.463,
+        "actual_loss_pct": 5.702544606685113,
+        "predicted_loss_pct": 15.989262940552129,
+        "abs_error": 10.286718333867015,
+        "actual_risk_level": "low",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Arachide",
+        "process_type": "Tri",
+        "qty_in": 514.371,
+        "qty_out": 497.182,
+        "actual_loss_pct": 3.341751381784736,
+        "predicted_loss_pct": 13.566177869077602,
+        "abs_error": 10.224426487292867,
+        "actual_risk_level": "low",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mangue",
+        "process_type": "S\u00e9chage",
+        "qty_in": 927.08,
+        "qty_out": 864.584,
+        "actual_loss_pct": 6.741165810933262,
+        "predicted_loss_pct": 16.83270028404427,
+        "abs_error": 10.09153447311101,
+        "actual_risk_level": "low",
+        "predicted_risk_level": "medium"
+      },
+      {
+        "product": "Mil",
+        "process_type": "S\u00e9chage",
+        "qty_in": 439.889,
+        "qty_out": 421.387,
+        "actual_loss_pct": 4.206061074498342,
+        "predicted_loss_pct": 14.225679667092859,
+        "abs_error": 10.019618592594517,
+        "actual_risk_level": "low",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mil",
+        "process_type": "Tri",
+        "qty_in": 862.104,
+        "qty_out": 838.751,
+        "actual_loss_pct": 2.70883791282723,
+        "predicted_loss_pct": 12.691348391187587,
+        "abs_error": 9.982510478360357,
+        "actual_risk_level": "low",
+        "predicted_risk_level": "low"
+      }
+    ],
+    "anomaly_examples": [
+      {
+        "product": "Bissap",
+        "process_type": "Sechage",
+        "qty_in": 150.0,
+        "qty_out": 48.0,
+        "loss_pct": 68.0,
+        "efficiency_pct": 0.32,
+        "stock_level": 300.0,
+        "date_ordinal": 739733,
+        "anomaly_score_raw": -0.07873816614643969,
+        "is_anomalous": true
+      },
+      {
+        "product": "Bissap",
+        "process_type": "Tri",
+        "qty_in": 48.0,
+        "qty_out": 46.0,
+        "loss_pct": 4.166666666666666,
+        "efficiency_pct": 0.9583333333333334,
+        "stock_level": 300.0,
+        "date_ordinal": 739736,
+        "anomaly_score_raw": -0.04791127724235722,
+        "is_anomalous": true
+      },
+      {
+        "product": "Mangue",
+        "process_type": "Sechage",
+        "qty_in": 99.0,
+        "qty_out": 94.0,
+        "loss_pct": 5.05050505050505,
+        "efficiency_pct": 0.9494949494949495,
+        "stock_level": 110.0,
+        "date_ordinal": 739733,
+        "anomaly_score_raw": -0.04234156650549059,
+        "is_anomalous": true
+      },
+      {
+        "product": "Mangue",
+        "process_type": "Emballage",
+        "qty_in": 374.011,
+        "qty_out": 370.987,
+        "loss_pct": 0.8085323693688156,
+        "efficiency_pct": 0.9919146763063118,
+        "stock_level": 2500.0,
+        "date_ordinal": 739605,
+        "anomaly_score_raw": -0.024150883141161872,
+        "is_anomalous": true
+      },
+      {
+        "product": "Arachide",
+        "process_type": "Emballage",
+        "qty_in": 323.268,
+        "qty_out": 295.022,
+        "loss_pct": 8.737641832782701,
+        "efficiency_pct": 0.912623581672173,
+        "stock_level": 900.0,
+        "date_ordinal": 739607,
+        "anomaly_score_raw": -0.020347717537753218,
+        "is_anomalous": true
+      },
+      {
+        "product": "Bissap",
+        "process_type": "Nettoyage",
+        "qty_in": 150.0,
+        "qty_out": 150.0,
+        "loss_pct": 0.0,
+        "efficiency_pct": 1.0,
+        "stock_level": 300.0,
+        "date_ordinal": 739733,
+        "anomaly_score_raw": -0.01945343038555425,
+        "is_anomalous": true
+      },
+      {
+        "product": "Arachide",
+        "process_type": "Tri",
+        "qty_in": 338.585,
+        "qty_out": 307.992,
+        "loss_pct": 9.035544988702974,
+        "efficiency_pct": 0.9096445501129703,
+        "stock_level": 900.0,
+        "date_ordinal": 739573,
+        "anomaly_score_raw": -0.01795400515882528,
+        "is_anomalous": true
+      },
+      {
+        "product": "Arachide",
+        "process_type": "S\u00e9chage",
+        "qty_in": 455.991,
+        "qty_out": 401.922,
+        "loss_pct": 11.857470871135606,
+        "efficiency_pct": 0.8814252912886439,
+        "stock_level": 900.0,
+        "date_ordinal": 739617,
+        "anomaly_score_raw": -0.01503472651993587,
+        "is_anomalous": true
+      },
+      {
+        "product": "Mangue",
+        "process_type": "Emballage",
+        "qty_in": 803.128,
+        "qty_out": 780.347,
+        "loss_pct": 2.836534151467769,
+        "efficiency_pct": 0.9716346584853223,
+        "stock_level": 2500.0,
+        "date_ordinal": 739584,
+        "anomaly_score_raw": -0.014783292747234444,
+        "is_anomalous": true
+      },
+      {
+        "product": "Mangue",
+        "process_type": "Emballage",
+        "qty_in": 641.949,
+        "qty_out": 629.847,
+        "loss_pct": 1.8851964875714389,
+        "efficiency_pct": 0.9811480351242856,
+        "stock_level": 2500.0,
+        "date_ordinal": 739599,
+        "anomaly_score_raw": -0.013716245968118268,
+        "is_anomalous": true
+      }
+    ]
+  },
+  "model_eval_random_split": {
+    "split_name": "random",
+    "train_rows": 1188,
+    "test_rows": 297,
+    "metrics": {
+      "regression_mae": 2.918734606923648,
+      "regression_rmse": 4.448851793456384,
+      "regression_r2": 0.42489742576187306,
+      "regression_baseline_mae": 4.5479244549904605,
+      "regression_baseline_rmse": 5.866574560383025,
+      "classification_accuracy": 0.8249158249158249,
+      "classification_macro_f1": 0.4131220642033033,
+      "classification_weighted_f1": 0.7891434639924801,
+      "classification_majority_baseline_accuracy": 0.8282828282828283,
+      "classification_thresholded_predicted_loss_accuracy": 0.6195286195286195,
+      "classification_thresholded_predicted_loss_macro_f1": 0.40448411831413794,
+      "classification_per_class": {
+        "low": {
+          "precision": 0.8514492753623188,
+          "recall": 0.9552845528455285,
+          "f1": 0.9003831417624522,
+          "support": 246
+        },
+        "medium": {
+          "precision": 0.47619047619047616,
+          "recall": 0.2631578947368421,
+          "f1": 0.3389830508474576,
+          "support": 38
+        },
+        "high": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 13
+        }
+      },
+      "classification_confusion_matrix": [
+        [
+          235,
+          11,
+          0
+        ],
+        [
+          28,
+          10,
+          0
+        ],
+        [
+          13,
+          0,
+          0
+        ]
+      ],
+      "classification_labels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "false_low_high_risk_rate": 0.0,
+      "risk_thresholds_used": {
+        "low_to_medium": 6.0,
+        "medium_to_high": 12.0
+      },
+      "anomaly_ratio_test": 0.11447811447811448,
+      "anomaly_flag_rate_test": 0.11447811447811448,
+      "anomaly_contamination_configured": 0.08,
+      "baseline_comparison_summary": {
+        "model_mae": 2.918734606923648,
+        "global_mean_mae": 4.5479244549904605,
+        "product_stage_mean_mae": 2.8827625668014467
+      }
+    },
+    "feature_importance_top20": [
+      {
+        "feature": "num__stage_season_avg_loss",
+        "importance": 0.3240248046078352
+      },
+      {
+        "feature": "num__historical_avg_loss_same_stage",
+        "importance": 0.09000970172496668
+      },
+      {
+        "feature": "num__historical_avg_efficiency_same_stage",
+        "importance": 0.05897905617915575
+      },
+      {
+        "feature": "num__product_stage_rolling_loss_last_10",
+        "importance": 0.05640302629803061
+      },
+      {
+        "feature": "num__product_stage_rolling_loss_last_5",
+        "importance": 0.04585128969555448
+      },
+      {
+        "feature": "num__product_stage_historical_avg_loss",
+        "importance": 0.04506553569856694
+      },
+      {
+        "feature": "num__loss_volatility_product_stage",
+        "importance": 0.04094908160493049
+      },
+      {
+        "feature": "num__previous_batch_loss",
+        "importance": 0.036727909499739475
+      },
+      {
+        "feature": "num__historical_avg_loss_same_product",
+        "importance": 0.03668986058075379
+      },
+      {
+        "feature": "num__date_ordinal",
+        "importance": 0.028364661896217988
+      },
+      {
+        "feature": "num__product_stage_season_avg_loss",
+        "importance": 0.027464359224619907
+      },
+      {
+        "feature": "num__product_stage_historical_median_loss",
+        "importance": 0.025739281853432654
+      },
+      {
+        "feature": "num__stock_pressure_ratio",
+        "importance": 0.024714680682266392
+      },
+      {
+        "feature": "num__qty_in",
+        "importance": 0.020467055645627515
+      },
+      {
+        "feature": "num__rolling_loss_last_n_batches",
+        "importance": 0.019625553643181536
+      },
+      {
+        "feature": "num__rolling_efficiency_last_n_batches",
+        "importance": 0.019309103890514576
+      },
+      {
+        "feature": "num__qty_in_log",
+        "importance": 0.019226543584887013
+      },
+      {
+        "feature": "num__batch_size",
+        "importance": 0.013028879081165602
+      },
+      {
+        "feature": "num__batch_size_log",
+        "importance": 0.01247034038124976
+      },
+      {
+        "feature": "cat__process_type_S\u00e9chage",
+        "importance": 0.01098297733180193
+      }
+    ],
+    "permutation_importance_top20": [
+      {
+        "feature": "stage_season_avg_loss",
+        "importance_mean": 2.7560943593933853,
+        "importance_std": 0.16175989829164847
+      },
+      {
+        "feature": "historical_avg_efficiency_same_stage",
+        "importance_mean": 1.096933285578198,
+        "importance_std": 0.10664624088404037
+      },
+      {
+        "feature": "historical_avg_loss_same_stage",
+        "importance_mean": 0.2839937031980436,
+        "importance_std": 0.04346483523182455
+      },
+      {
+        "feature": "process_type",
+        "importance_mean": 0.10139676071109804,
+        "importance_std": 0.04810053523474456
+      },
+      {
+        "feature": "product_stage_rolling_loss_last_10",
+        "importance_mean": 0.09368725548723472,
+        "importance_std": 0.01554162746245486
+      },
+      {
+        "feature": "product_stage_rolling_loss_last_5",
+        "importance_mean": 0.062099547188908366,
+        "importance_std": 0.019826770904391174
+      },
+      {
+        "feature": "stock_pressure_ratio",
+        "importance_mean": 0.035368849418855264,
+        "importance_std": 0.006451512479466752
+      },
+      {
+        "feature": "qty_in_log",
+        "importance_mean": 0.02432832393344081,
+        "importance_std": 0.011035311851005609
+      },
+      {
+        "feature": "qty_in",
+        "importance_mean": 0.024001113313047107,
+        "importance_std": 0.009051163136551948
+      },
+      {
+        "feature": "product_stage_season_avg_loss",
+        "importance_mean": 0.020599085997381583,
+        "importance_std": 0.01612812648478117
+      },
+      {
+        "feature": "batch_size_log",
+        "importance_mean": 0.01846622673502346,
+        "importance_std": 0.005081070827104216
+      },
+      {
+        "feature": "product_stage_historical_avg_loss",
+        "importance_mean": 0.016884911974134054,
+        "importance_std": 0.020778538886128385
+      },
+      {
+        "feature": "batch_size",
+        "importance_mean": 0.016608974659723164,
+        "importance_std": 0.006333776751415274
+      },
+      {
+        "feature": "loss_volatility_product_stage",
+        "importance_mean": 0.010826090020481682,
+        "importance_std": 0.031477134048065535
+      },
+      {
+        "feature": "previous_batch_loss",
+        "importance_mean": 0.010388980150408345,
+        "importance_std": 0.012045623947528688
+      },
+      {
+        "feature": "date_ordinal",
+        "importance_mean": 0.009262375879996898,
+        "importance_std": 0.013381826327123716
+      },
+      {
+        "feature": "product_stage_historical_median_loss",
+        "importance_mean": 0.002660995018564316,
+        "importance_std": 0.013575183365239078
+      },
+      {
+        "feature": "week_of_year",
+        "importance_mean": 0.0018840905581553047,
+        "importance_std": 0.006657875460580469
+      },
+      {
+        "feature": "is_packaging_stage",
+        "importance_mean": 0.0015724687418795513,
+        "importance_std": 0.0008411289970084214
+      },
+      {
+        "feature": "stage_canonical",
+        "importance_mean": 0.0007798631744719287,
+        "importance_std": 0.005901007545565063
+      }
+    ],
+    "top_prediction_errors": [
+      {
+        "product": "Mangue",
+        "process_type": "S\u00e9chage",
+        "qty_in": 482.012,
+        "qty_out": 321.774,
+        "actual_loss_pct": 33.24357069948466,
+        "predicted_loss_pct": 11.101953640221923,
+        "abs_error": 22.141617059262735,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mil",
+        "process_type": "S\u00e9chage",
+        "qty_in": 566.252,
+        "qty_out": 392.553,
+        "actual_loss_pct": 30.675211743181475,
+        "predicted_loss_pct": 11.591734729822955,
+        "abs_error": 19.083477013358518,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mangue",
+        "process_type": "S\u00e9chage",
+        "qty_in": 416.758,
+        "qty_out": 286.599,
+        "actual_loss_pct": 31.231314095950168,
+        "predicted_loss_pct": 12.326444228062028,
+        "abs_error": 18.904869867888138,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mil",
+        "process_type": "Tri",
+        "qty_in": 811.611,
+        "qty_out": 611.665,
+        "actual_loss_pct": 24.635693700553592,
+        "predicted_loss_pct": 7.3386553188886365,
+        "abs_error": 17.297038381664954,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Arachide",
+        "process_type": "Tri",
+        "qty_in": 386.895,
+        "qty_out": 289.097,
+        "actual_loss_pct": 25.277659313250368,
+        "predicted_loss_pct": 9.300761151890425,
+        "abs_error": 15.976898161359943,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mil",
+        "process_type": "Tri",
+        "qty_in": 451.335,
+        "qty_out": 348.206,
+        "actual_loss_pct": 22.849767910753645,
+        "predicted_loss_pct": 8.611396672465707,
+        "abs_error": 14.238371238287938,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mangue",
+        "process_type": "Tri",
+        "qty_in": 560.323,
+        "qty_out": 418.879,
+        "actual_loss_pct": 25.243297169668207,
+        "predicted_loss_pct": 11.159153756063379,
+        "abs_error": 14.084143413604828,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Arachide",
+        "process_type": "Tri",
+        "qty_in": 563.907,
+        "qty_out": 446.643,
+        "actual_loss_pct": 20.7949183109981,
+        "predicted_loss_pct": 6.878744888599435,
+        "abs_error": 13.916173422398664,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Arachide",
+        "process_type": "S\u00e9chage",
+        "qty_in": 827.361,
+        "qty_out": 632.986,
+        "actual_loss_pct": 23.49337230060397,
+        "predicted_loss_pct": 9.908667489075725,
+        "abs_error": 13.584704811528244,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      },
+      {
+        "product": "Mil",
+        "process_type": "Tri",
+        "qty_in": 685.989,
+        "qty_out": 538.919,
+        "actual_loss_pct": 21.439119286169316,
+        "predicted_loss_pct": 8.062902244926642,
+        "abs_error": 13.376217041242674,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      }
+    ],
+    "anomaly_examples": [
+      {
+        "product": "Mangue",
+        "process_type": "S\u00e9chage",
+        "qty_in": 416.758,
+        "qty_out": 286.599,
+        "loss_pct": 31.231314095950168,
+        "efficiency_pct": 0.6876868590404983,
+        "stock_level": 2500.0,
+        "date_ordinal": 739564,
+        "anomaly_score_raw": -0.04647524670357106,
+        "is_anomalous": true
+      },
+      {
+        "product": "Bissap",
+        "process_type": "Nettoyage",
+        "qty_in": 150.0,
+        "qty_out": 150.0,
+        "loss_pct": 0.0,
+        "efficiency_pct": 1.0,
+        "stock_level": 300.0,
+        "date_ordinal": 739733,
+        "anomaly_score_raw": -0.044143441876311695,
+        "is_anomalous": true
+      },
+      {
+        "product": "Arachide",
+        "process_type": "S\u00e9chage",
+        "qty_in": 432.024,
+        "qty_out": 410.673,
+        "loss_pct": 4.94208655074718,
+        "efficiency_pct": 0.9505791344925282,
+        "stock_level": 900.0,
+        "date_ordinal": 739395,
+        "anomaly_score_raw": -0.03746516832347513,
+        "is_anomalous": true
+      },
+      {
+        "product": "Mangue",
+        "process_type": "Tri",
+        "qty_in": 560.323,
+        "qty_out": 418.879,
+        "loss_pct": 25.243297169668207,
+        "efficiency_pct": 0.747567028303318,
+        "stock_level": 2500.0,
+        "date_ordinal": 739400,
+        "anomaly_score_raw": -0.03566488796412315,
+        "is_anomalous": true
+      },
+      {
+        "product": "Mangue",
+        "process_type": "S\u00e9chage",
+        "qty_in": 441.191,
+        "qty_out": 397.065,
+        "loss_pct": 10.001563948493958,
+        "efficiency_pct": 0.8999843605150604,
+        "stock_level": 2500.0,
+        "date_ordinal": 739558,
+        "anomaly_score_raw": -0.032521569818468876,
+        "is_anomalous": true
+      },
+      {
+        "product": "Mangue",
+        "process_type": "Tri",
+        "qty_in": 521.951,
+        "qty_out": 509.042,
+        "loss_pct": 2.4732206663077663,
+        "efficiency_pct": 0.9752677933369224,
+        "stock_level": 2500.0,
+        "date_ordinal": 739418,
+        "anomaly_score_raw": -0.031104251639386682,
+        "is_anomalous": true
+      },
+      {
+        "product": "Arachide",
+        "process_type": "S\u00e9chage",
+        "qty_in": 497.249,
+        "qty_out": 453.787,
+        "loss_pct": 8.740490176953609,
+        "efficiency_pct": 0.9125950982304639,
+        "stock_level": 900.0,
+        "date_ordinal": 739383,
+        "anomaly_score_raw": -0.026813504252171105,
+        "is_anomalous": true
+      },
+      {
+        "product": "Mangue",
+        "process_type": "Tri",
+        "qty_in": 737.068,
+        "qty_out": 614.997,
+        "loss_pct": 16.561701227023836,
+        "efficiency_pct": 0.8343829877297617,
+        "stock_level": 2500.0,
+        "date_ordinal": 739376,
+        "anomaly_score_raw": -0.02246847551720421,
+        "is_anomalous": true
+      },
+      {
+        "product": "Mil",
+        "process_type": "Tri",
+        "qty_in": 676.766,
+        "qty_out": 592.102,
+        "loss_pct": 12.510084726478574,
+        "efficiency_pct": 0.8748991527352142,
+        "stock_level": 120.0,
+        "date_ordinal": 739374,
+        "anomaly_score_raw": -0.022071687776091475,
+        "is_anomalous": true
+      },
+      {
+        "product": "Arachide",
+        "process_type": "Tri",
+        "qty_in": 386.895,
+        "qty_out": 289.097,
+        "loss_pct": 25.277659313250368,
+        "efficiency_pct": 0.7472234068674963,
+        "stock_level": 900.0,
+        "date_ordinal": 739570,
+        "anomaly_score_raw": -0.020063960438329476,
+        "is_anomalous": true
+      }
+    ]
+  },
+  "artifact_consistency": {
+    "bundle_loaded": true,
+    "model_version": "20260507155633",
+    "missing_features": {
+      "predictive_regression_features": [],
+      "predictive_classification_features": [],
+      "assessment_anomaly_features": []
+    },
+    "leakage_flags": {
+      "predictive_regression_features": [],
+      "predictive_classification_features": [],
+      "assessment_anomaly_features": [
+        "deviation_from_stage_avg",
+        "efficiency_pct",
+        "loss_pct",
+        "qty_out"
+      ]
+    }
+  },
+  "artifact_compatibility": {
+    "compatible": true,
+    "reason": "ok",
+    "model_version": "20260507155633",
+    "active_model_version": "20260507155633",
+    "feature_schema_version": "phase4-v1",
+    "predictive_regression_features": [
+      "product",
+      "process_type",
+      "stage_canonical",
+      "product_stage_key",
+      "season",
+      "qty_in",
+      "qty_in_log",
+      "batch_size",
+      "batch_size_log",
+      "stock_level",
+      "stock_pressure_ratio",
+      "month",
+      "week_of_year",
+      "stage_order",
+      "is_drying_stage",
+      "is_sorting_stage",
+      "is_packaging_stage",
+      "historical_avg_loss_same_product",
+      "historical_avg_loss_same_stage",
+      "historical_avg_efficiency_same_stage",
+      "product_stage_historical_avg_loss",
+      "product_stage_historical_median_loss",
+      "product_stage_rolling_loss_last_5",
+      "product_stage_rolling_loss_last_10",
+      "stage_season_avg_loss",
+      "product_stage_season_avg_loss",
+      "loss_volatility_product_stage",
+      "previous_batch_loss",
+      "days_since_previous_batch",
+      "rolling_loss_last_n_batches",
+      "rolling_efficiency_last_n_batches",
+      "date_ordinal"
+    ],
+    "predictive_classification_features": [
+      "product",
+      "process_type",
+      "stage_canonical",
+      "product_stage_key",
+      "season",
+      "qty_in",
+      "qty_in_log",
+      "batch_size",
+      "batch_size_log",
+      "stock_level",
+      "stock_pressure_ratio",
+      "month",
+      "week_of_year",
+      "stage_order",
+      "is_drying_stage",
+      "is_sorting_stage",
+      "is_packaging_stage",
+      "historical_avg_loss_same_product",
+      "historical_avg_loss_same_stage",
+      "historical_avg_efficiency_same_stage",
+      "product_stage_historical_avg_loss",
+      "product_stage_historical_median_loss",
+      "product_stage_rolling_loss_last_5",
+      "product_stage_rolling_loss_last_10",
+      "stage_season_avg_loss",
+      "product_stage_season_avg_loss",
+      "loss_volatility_product_stage",
+      "previous_batch_loss",
+      "days_since_previous_batch",
+      "rolling_loss_last_n_batches",
+      "rolling_efficiency_last_n_batches",
+      "date_ordinal"
+    ],
+    "forbidden_predictive_violations": {},
+    "forbidden_predictive_features": [
+      "deviation_from_stage_avg",
+      "efficiency_pct",
+      "loss_pct",
+      "qty_out"
+    ]
+  },
+  "model_registry": {
+    "active_model_version": "20260507155633",
+    "registered_versions": [
+      "20260507155401",
+      "20260507155633"
+    ],
+    "registered_count": 2
+  },
+  "recommendation_diagnostics": {
+    "fallback_rate": 0.0,
+    "recommendation_coverage": 1.0,
+    "stage_specific_coverage": {
+      "cleaning": {
+        "rows": 372,
+        "coverage": 1.0,
+        "fallback_rate": 0.0
+      },
+      "drying": {
+        "rows": 372,
+        "coverage": 1.0,
+        "fallback_rate": 0.0
+      },
+      "packaging": {
+        "rows": 370,
+        "coverage": 1.0,
+        "fallback_rate": 0.0
+      },
+      "sorting": {
+        "rows": 371,
+        "coverage": 1.0,
+        "fallback_rate": 0.0
+      }
+    }
+  }
+}

@@ -111,6 +111,7 @@ export const endpoints = {
   chat: {
     ask: "/chat",
     sessions: "/chat/sessions",
+    session: (sessionId: string) => `/chat/sessions/${sessionId}`,
     messages: (sessionId: string) => `/chat/sessions/${sessionId}/messages`,
   },
   commercial: {

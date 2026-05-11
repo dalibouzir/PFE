@@ -1,0 +1,326 @@
+# Chatbot Unseen Robustness Audit
+
+## Overview
+- Generated at: 2026-05-08T22:22:10.514422+00:00
+- Total unseen questions: 60
+- Overall pass rate: 1.0
+
+## Pass Rate by Intent
+- HYBRID: 14/14 (1.0)
+- RAG_ONLY: 11/11 (1.0)
+- SMALL_TALK: 6/6 (1.0)
+- SQL_ONLY: 23/23 (1.0)
+- UNSUPPORTED: 6/6 (1.0)
+
+## Acceptance Targets
+- overall >= 85%: True
+- SQL_ONLY >= 90%: True
+- RAG_ONLY >= 80%: True
+- HYBRID >= 80%: True
+- SMALL_TALK = 100%: True
+- UNSUPPORTED = 100%: True
+- at least 60 unseen questions: True
+- at least 10 follow-up turns: True
+- at least 10 fake-entity traps: True
+
+## Test Results
+- `sql-u-01` [SQL_ONLY] Montre-moi le volume total en stock pour Arachide.
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Stock Arachide : total 3100.0 kg, 1960.0 kg réservés dans les lots, 1140.0 kg disponibles. Statut : stable.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `sql-u-02` [SQL_ONLY] Peux-tu sortir uniquement la quantité réservée de Arachide ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Stock Arachide : total 3100.0 kg, 1960.0 kg réservés dans les lots, 1140.0 kg disponibles. Statut : stable.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `sql-u-03` [SQL_ONLY] How much available stock do we still have for Banane?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `sql-u-04` [SQL_ONLY] Donne juste le nombre de lots actuellement actifs.
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `sql-u-05` [SQL_ONLY] Etat opérationnel du lot LOT-MANG-001 (statut uniquement).
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: LOT-MANG-001 (Mangue) : statut in_progress, quantité initiale 100.0 kg, quantité actuelle 94.0 kg, perte cumulée 6.0%, dernière étape Sechage, étape en attente none, anomalie/risque none.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `sql-u-06` [SQL_ONLY] Lot LOT-BISS-001: current status please.
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: LOT-BISS-001 (Bissap) : statut created, quantité initiale 450.0 kg, quantité actuelle 450.0 kg, perte cumulée 0.0%, dernière étape none, étape en attente none, anomalie/risque none.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `sql-u-07` [SQL_ONLY] stock dispnible Bissap stp
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Stock Bissap : total 1840.0 kg, 1840.0 kg réservés dans les lots, 0.0 kg disponibles. Statut : low.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `sql-u-08` [SQL_ONLY] Total collecte pour member code DEMOFP-M-014.
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Collecte cumulée — Sokhna Diatta (DEMOFP-M-014) : 1280.0 kg, valeur estimée 1376750.0 FCFA.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `sql-u-09` [SQL_ONLY] Pour Arachide, donne la quantité disponible actuelle uniquement.
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Stock Arachide : total 3100.0 kg, 1960.0 kg réservés dans les lots, 1140.0 kg disponibles. Statut : stable.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `rag-u-01` [RAG_ONLY] Quelles bonnes pratiques post-récolte conseiller pour conserver Arachide plus longtemps ?
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Quelles bonnes pratiques post-récolte conseiller pour conserver Arachide plus longtemps ?. Refere
+  - citations=1 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `rag-u-02` [RAG_ONLY] Need agronomic references about storage prevention of mold for Banane.
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Aucune preuve benchmark/agronomique n'a été récupérée pour cette question. Je ne peux pas fournir une réponse de référence fiable pour le moment.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `rag-u-03` [RAG_ONLY] Donne des sources fiables sur les seuils recommandés d'humidité en Nettoyage.
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Donne des sources fiables sur les seuils recommandés d'humidité en Nettoyage.. Reference disponib
+  - citations=1 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `rag-u-04` [RAG_ONLY] Packaging guidance: what reference practices improve conservation?
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Aucune preuve benchmark/agronomique n'a été récupérée pour cette question. Je ne peux pas fournir une réponse de référence fiable pour le moment.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `rag-u-05` [RAG_ONLY] Je veux un rappel benchmark des pertes typiques en post-récolte.
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Je veux un rappel benchmark des pertes typiques en post-récolte.. Reference disponible: DEMOFP-SR
+  - citations=2 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `rag-u-06` [RAG_ONLY] Quelles références agronomiques existent pour la transformation de Bissap ?
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Quelles références agronomiques existent pour la transformation de Bissap ?. Reference disponible
+  - citations=3 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `rag-u-07` [RAG_ONLY] Conseils pratiques de tri/nettoyage pour réduire les pertes (avec sources).
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Conseils pratiques de tri/nettoyage pour réduire les pertes (avec sources).. Reference disponible
+  - citations=4 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `hyb-u-01` [HYBRID] Pourquoi la performance du lot LOT-MANG-001 semble faible cette semaine, et quelles actions prioriser ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Aucune preuve de référence n'a été récupérée pour étayer cette analyse opérationnelle. Je ne peux pas fournir une synthèse HYBRID fiable pour le moment.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `hyb-u-02` [HYBRID] Compare LOT-MANG-001 vs LOT-BISS-001 sur pertes et efficacité, puis explique les écarts.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Compare LOT-MANG-001 vs LOT-BISS-001 sur pertes et efficacité, puis explique les écarts.. Referen
+  - citations=2 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `hyb-u-03` [HYBRID] Fais un bilan matière du lot LOT-BISS-002 et signale les risques associés.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Aucune preuve de référence n'a été récupérée pour étayer cette analyse opérationnelle. Je ne peux pas fournir une synthèse HYBRID fiable pour le moment.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `hyb-u-04` [HYBRID] Explain why losses are high at Nettoyage for Arachide, with operational recommendations.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Explain why losses are high at Nettoyage for Arachide, with operational recommendations.. Referen
+  - citations=2 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `hyb-u-05` [HYBRID] Détecte les anomalies récentes sur Banane au stade Tri et propose des actions.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Aucune preuve de référence n'a été récupérée pour étayer cette analyse opérationnelle. Je ne peux pas fournir une synthèse HYBRID fiable pour le moment.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `hyb-u-06` [HYBRID] Pourquoi le rendement baisse sur Séchage pour Bissap aujourd'hui ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Pourquoi le rendement baisse sur Séchage pour Bissap aujourd'hui ?. Reference disponible: DEMOFP-
+  - citations=4 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `hyb-u-07` [HYBRID] Quels risques opérationnels critiques vois-tu aujourd'hui à l'échelle coopérative ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Aucune preuve de référence n'a été récupérée pour étayer cette analyse opérationnelle. Je ne peux pas fournir une synthèse HYBRID fiable pour le moment.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `hyb-u-08` [HYBRID] J'ai besoin d'une explication des écarts entre lots actifs et recommandations immédiates.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: J'ai besoin d'une explication des écarts entre lots actifs et recommandations immédiates.. Refere
+  - citations=1 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `hyb-u-09` [HYBRID] Pourquoi les pertes globales varient-elles malgré un stock stable ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Pourquoi les pertes globales varient-elles malgré un stock stable ?. Reference disponible: DEMOFP
+  - citations=4 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `small-u-01` [SMALL_TALK] hey
+  - expected/actual: ['SMALL_TALK'] -> SMALL_TALK | pass=True
+  - snippet: Bonjour. Je peux vous aider à analyser les stocks, les lots, les pertes, les risques opérationnels et les recommandations de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `small-u-02` [SMALL_TALK] coucou
+  - expected/actual: ['SMALL_TALK'] -> SMALL_TALK | pass=True
+  - snippet: Bonjour. Je peux vous aider à analyser les stocks, les lots, les pertes, les risques opérationnels et les recommandations de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `small-u-03` [SMALL_TALK] hi
+  - expected/actual: ['SMALL_TALK'] -> SMALL_TALK | pass=True
+  - snippet: Bonjour. Je peux vous aider à analyser les stocks, les lots, les pertes, les risques opérationnels et les recommandations de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `small-u-04` [SMALL_TALK] ca va
+  - expected/actual: ['SMALL_TALK'] -> SMALL_TALK | pass=True
+  - snippet: Bonjour. Je peux vous aider à analyser les stocks, les lots, les pertes, les risques opérationnels et les recommandations de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `small-u-05` [SMALL_TALK] ok merci
+  - expected/actual: ['SMALL_TALK'] -> SMALL_TALK | pass=True
+  - snippet: Bonjour. Je peux vous aider à analyser les stocks, les lots, les pertes, les risques opérationnels et les recommandations de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `unsup-u-01` [UNSUPPORTED] Quel film me recommandes-tu ce soir ?
+  - expected/actual: ['UNSUPPORTED'] -> UNSUPPORTED | pass=True
+  - snippet: Cette question sort du périmètre actuel. Je peux répondre aux questions liées aux stocks, lots, pertes, transformation post-récolte, recommandations et indicateurs de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `unsup-u-02` [UNSUPPORTED] Qui va gagner la Ligue des Champions cette année ?
+  - expected/actual: ['UNSUPPORTED'] -> UNSUPPORTED | pass=True
+  - snippet: Cette question sort du périmètre actuel. Je peux répondre aux questions liées aux stocks, lots, pertes, transformation post-récolte, recommandations et indicateurs de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `unsup-u-03` [UNSUPPORTED] Should I invest in crypto meme coins this month?
+  - expected/actual: ['UNSUPPORTED'] -> UNSUPPORTED | pass=True
+  - snippet: Cette question sort du périmètre actuel. Je peux répondre aux questions liées aux stocks, lots, pertes, transformation post-récolte, recommandations et indicateurs de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `unsup-u-04` [UNSUPPORTED] Tell me tomorrow weather in Tokyo.
+  - expected/actual: ['UNSUPPORTED'] -> UNSUPPORTED | pass=True
+  - snippet: Cette question sort du périmètre actuel. Je peux répondre aux questions liées aux stocks, lots, pertes, transformation post-récolte, recommandations et indicateurs de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `unsup-u-05` [UNSUPPORTED] Donne-moi une analyse de la politique monétaire US.
+  - expected/actual: ['UNSUPPORTED'] -> UNSUPPORTED | pass=True
+  - snippet: Cette question sort du périmètre actuel. Je peux répondre aux questions liées aux stocks, lots, pertes, transformation post-récolte, recommandations et indicateurs de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `fake-u-01` [SQL_ONLY] Quel est le stock actuel de Papaye ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `fake-u-02` [SQL_ONLY] Statut du lot LOT-MANG-999 ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `fake-u-03` [SQL_ONLY] Total de collecte pour le producteur Mamadou Diop ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `fake-u-04` [HYBRID] Pourquoi les pertes du lot LOT-MANG-999 sont élevées aujourd'hui ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `fake-u-05` [SQL_ONLY] Quel est le statut du lot LOT-MANG-999 à l'étape Fermentation ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `fake-u-06` [RAG_ONLY] Quelles références agronomiques pour la culture Niébé lunaire ?
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Aucune preuve benchmark/agronomique n'a été récupérée pour cette question. Je ne peux pas fournir une réponse de référence fiable pour le moment.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `fake-u-07` [SQL_ONLY] Quel est le stock réservé de Gombo Rouge ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `fake-u-08` [SQL_ONLY] Quel est le statut du lot LOT-BISS-404 ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `fake-u-09` [HYBRID] Explique les pertes à l'étape Fumigation cette semaine.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `fake-u-10` [SQL_ONLY] Show total collection for farmer Awa Ndiaye-901.
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq1-1` [SQL_ONLY] Première vérif: stock dispo Arachide.
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Stock Arachide : total 3100.0 kg, 1960.0 kg réservés dans les lots, 1140.0 kg disponibles. Statut : stable.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq1-2` [SQL_ONLY] Deuxième vérif: stock dispo pour Banane ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq1-3` [SQL_ONLY] Troisième: réservé Banane ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: LLM indisponible. Réponse rapide : Troisième: réservé Banane ?
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq2-1` [HYBRID] Pourquoi LOT-MANG-001 sous-performe en Nettoyage ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: LLM indisponible. Réponse rapide : Pourquoi LOT-MANG-001 sous-performe en Nettoyage ?
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq2-2` [SMALL_TALK] hey
+  - expected/actual: ['SMALL_TALK'] -> SMALL_TALK | pass=True
+  - snippet: Bonjour. Je peux vous aider à analyser les stocks, les lots, les pertes, les risques opérationnels et les recommandations de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq2-3` [UNSUPPORTED] best movie now?
+  - expected/actual: ['UNSUPPORTED'] -> UNSUPPORTED | pass=True
+  - snippet: Cette question sort du périmètre actuel. Je peux répondre aux questions liées aux stocks, lots, pertes, transformation post-récolte, recommandations et indicateurs de la coopérative.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq3-1` [RAG_ONLY] Quels repères de conservation pour Arachide ?
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Quels repères de conservation pour Arachide ?. Reference disponible: DEMOFP-SRC-KNOW-001 (Séchage
+  - citations=3 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq3-2` [RAG_ONLY] Et côté emballage, quelles sources ?
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Aucune preuve benchmark/agronomique n'a été récupérée pour cette question. Je ne peux pas fournir une réponse de référence fiable pour le moment.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq3-3` [RAG_ONLY] Any benchmark references for storage moisture?
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=True
+  - snippet: Aucune preuve benchmark/agronomique n'a été récupérée pour cette question. Je ne peux pas fournir une réponse de référence fiable pour le moment.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq4-1` [SQL_ONLY] Status lot LOT-BISS-002
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: LOT-BISS-002 (Bissap) : statut in_progress, quantité initiale 150.0 kg, quantité actuelle 46.0 kg, perte cumulée 69.33%, dernière étape Tri, étape en attente none, anomalie/risque none.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq4-2` [HYBRID] Explique l'écart de performance de ce lot et les risques.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: Explique l'écart de performance de ce lot et les risques.. Reference disponible: DEMOFP-SRC-KNOW-
+  - citations=1 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq4-3` [SQL_ONLY] ok now give only available stock for Arachide
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Stock Arachide : total 3100.0 kg, 1960.0 kg réservés dans les lots, 1140.0 kg disponibles. Statut : stable.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq5-1` [SQL_ONLY] stock actuel Bissap
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Stock Bissap : total 1840.0 kg, 1840.0 kg réservés dans les lots, 0.0 kg disponibles. Statut : low.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq5-2` [SQL_ONLY] et le total collecte pour Sokhna Diatta ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=True
+  - snippet: Collecte cumulée — Sokhna Diatta (DEMOFP-M-014) : 1280.0 kg, valeur estimée 1376750.0 FCFA.
+  - citations=0 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.
+- `seq5-3` [HYBRID] pk pertes hautes aujourd'hui sur Tri ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=True
+  - snippet: Je n'ai pas pu joindre le fournisseur LLM. Contexte actuel: pertes 9.2%, efficacite 90.8%, production 11022.5 kg. Requete: pk pertes hautes aujourd'hui sur Tri ?. Reference disponible: DEMOFP-SRC-KNOW-001 (Séchage). Proc
+  - citations=2 hallucination_risk=low stale_risk=low debug_risk=low
+  - notes: All checks passed.

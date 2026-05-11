@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import time
 from typing import Dict, List, Optional
 from uuid import UUID
 
@@ -16,9 +17,11 @@ from app.ml.recommendations.impact_engine import (
     recommend_action_with_confidence,
     should_assign_holdout,
 )
-from app.ml.recommendations.rule_engine import build_recommendation
+from app.ml.recommendations.rule_engine import LIMITED_CONFIDENCE_SIGNAL, build_recommendation
 from app.ml.training.trainer import train_models
-from app.ml.utils.model_store import artifacts_status, load_model_bundle
+from app.ml.utils.model_registry import get_active_model_version
+from app.ml.utils.prediction_logging import append_prediction_log
+from app.ml.utils.model_store import artifact_compatibility_status, artifacts_status, load_model_bundle
 from app.models.ml import MLRecommendationLog, MLTrainingRun, RecommendationFeedbackLog
 from app.schemas.ml import AssessmentFeaturePayload, PredictiveFeaturePayload, RecommendationFeedbackCreate
 from app.utils.exceptions import ValidationError
@@ -57,6 +60,8 @@ def _attach_confidence_decision(db: Session, recommendation: Dict, context_snaps
         signals = recommendation.get("reasoning_signals") or []
         if "Manual review required" not in signals:
             signals.append("Manual review required")
+        if LIMITED_CONFIDENCE_SIGNAL not in signals:
+            signals.append(LIMITED_CONFIDENCE_SIGNAL)
         recommendation["reasoning_signals"] = signals
 
     recommendation["decision"] = decision
@@ -68,6 +73,7 @@ def predict(
     features: List[PredictiveFeaturePayload],
     include_explanation: bool = False,
 ) -> Dict:
+    start = time.perf_counter()
     df = pd.DataFrame([item.model_dump() for item in features])
     prediction = predict_from_features(db, df)
     feature_records = df.to_dict(orient="records")
@@ -96,6 +102,34 @@ def predict(
     )
     db.add(recommendation_log)
     db.commit()
+
+    active_model = get_active_model_version()
+    input_summary = {
+        "rows": int(len(df)),
+        "products": sorted({str(item.get("product")) for item in feature_records}),
+        "stages": sorted({str(item.get("process_type")) for item in feature_records}),
+    }
+    append_prediction_log(
+        {
+            "model_version": prediction.get("model_version"),
+            "active_model_version": active_model.get("model_version") if active_model else None,
+            "feature_schema_version": prediction.get("feature_schema_version"),
+            "input_summary": input_summary,
+            "predicted_loss_pct": prediction.get("predicted_loss_pct"),
+            "risk_level": prediction.get("risk_level"),
+            "risk_method": prediction.get("risk_method"),
+            "anomaly_flag": False,
+            "top_signals": prediction.get("top_signals", []),
+            "recommendation_log_id": str(recommendation_log.id),
+            "recommendation_actions": recommendation.get("recommended_actions", []),
+            "warning_flags": prediction.get("warning_flags", []),
+            "latency_ms": round((time.perf_counter() - start) * 1000.0, 2),
+            "data_quality": {
+                "include_explanation": bool(include_explanation),
+                "feature_rows": int(len(feature_records)),
+            },
+        }
+    )
 
     return {
         "prediction": prediction,
@@ -226,6 +260,7 @@ def reliability_status(db: Session) -> Dict:
 
 def health(db: Session) -> Dict:
     status = artifacts_status()
+    compatibility = artifact_compatibility_status()
     reliability = impact_reliability_status(db)
     models_ready = all(status.values())
     model_version = None
@@ -236,12 +271,16 @@ def health(db: Session) -> Dict:
             models_ready = False
 
     last_run = db.scalar(select(MLTrainingRun).order_by(MLTrainingRun.completed_at.desc()))
+    active_model = get_active_model_version()
+
     return {
         "models_ready": models_ready,
         "model_version": model_version,
+        "active_model_version": active_model.get("model_version") if active_model else None,
         "last_training_time": last_run.completed_at if last_run else None,
         "available_artifacts": {
             **status,
+            "artifact_compatible": bool(compatibility.get("compatible", False)),
             "impact_recommender": bool(reliability.get("impact_model_ready", False)),
         },
     }

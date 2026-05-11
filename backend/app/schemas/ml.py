@@ -57,7 +57,6 @@ class PredictiveFeaturePayload(BaseModel):
     historical_avg_loss_same_product: float
     historical_avg_loss_same_stage: float
     historical_avg_efficiency_same_stage: float
-    deviation_from_stage_avg: float
     previous_batch_loss: float
     rolling_loss_last_n_batches: float
     rolling_efficiency_last_n_batches: float
@@ -65,6 +64,7 @@ class PredictiveFeaturePayload(BaseModel):
 
 class AssessmentFeaturePayload(PredictiveFeaturePayload):
     qty_out: float
+    deviation_from_stage_avg: Optional[float] = None
     loss_pct: Optional[float] = None
     efficiency_pct: Optional[float] = None
 
@@ -88,7 +88,13 @@ class MLPredictionOutput(BaseModel):
     predicted_loss_pct: float
     predicted_efficiency_pct: float
     risk_level: str
+    risk_method: str
+    risk_thresholds_used: Dict[str, float]
     top_signals: List[str]
+    model_version: Optional[str] = None
+    feature_schema_version: Optional[str] = None
+    warning_flags: List[str] = Field(default_factory=list)
+    latency_ms: Optional[float] = None
 
 
 class MLAssessmentOutput(BaseModel):
@@ -153,6 +159,7 @@ class MLAssessResponse(BaseModel):
 class MLHealthResponse(BaseModel):
     models_ready: bool
     model_version: Optional[str]
+    active_model_version: Optional[str] = None
     last_training_time: Optional[datetime]
     available_artifacts: Dict[str, bool]
 

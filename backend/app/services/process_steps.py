@@ -11,6 +11,7 @@ from app.models.user import User
 from app.services import analytics
 from app.services.batches import refresh_batch_current_qty, require_batch, sync_batch_status_from_steps
 from app.services.helpers import get_manager_cooperative_id, normalize_mass_unit, round_metric, to_kg
+from app.services.rag_reindex_hooks import reindex_process_step_if_needed, reindex_recommendation_if_needed
 from app.utils.exceptions import NotFoundError, ValidationError
 
 
@@ -118,6 +119,19 @@ def create_process_step(db: Session, manager: User, payload) -> ProcessStep:
 
     db.commit()
     db.refresh(step)
+    reindex_process_step_if_needed(
+        db,
+        current_user=manager,
+        process_step_id=step.id,
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+    )
+    reindex_recommendation_if_needed(
+        db,
+        current_user=manager,
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+    )
     return step
 
 
@@ -157,6 +171,19 @@ def update_process_step(db: Session, manager: User, step_id, payload) -> Process
 
     db.commit()
     db.refresh(step)
+    reindex_process_step_if_needed(
+        db,
+        current_user=manager,
+        process_step_id=step.id,
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+    )
+    reindex_recommendation_if_needed(
+        db,
+        current_user=manager,
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+    )
     return step
 
 
@@ -182,6 +209,19 @@ def complete_process_step(db: Session, manager: User, step_id, _mark_batch_compl
     analytics.generate_recommendation(db, batch.id)
     db.commit()
     db.refresh(step)
+    reindex_process_step_if_needed(
+        db,
+        current_user=manager,
+        process_step_id=step.id,
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+    )
+    reindex_recommendation_if_needed(
+        db,
+        current_user=manager,
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+    )
     return step
 
 
@@ -211,3 +251,16 @@ def delete_process_step(db: Session, manager: User, step_id):
         analytics.generate_recommendation(db, batch.id)
 
     db.commit()
+    reindex_process_step_if_needed(
+        db,
+        current_user=manager,
+        process_step_id=step.id,
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+    )
+    reindex_recommendation_if_needed(
+        db,
+        current_user=manager,
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+    )

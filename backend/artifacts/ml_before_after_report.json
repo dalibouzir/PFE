@@ -1,0 +1,102 @@
+{
+  "summary": {
+    "overall_status": "mvp_demo_ready_with_warnings",
+    "production_ready": false,
+    "notes": [
+      "Leakage controls and artifact governance are in place.",
+      "Model still underperforms strong stage/product-stage baselines.",
+      "Classifier medium/high recall remains weak."
+    ]
+  },
+  "before": {
+    "leakage_present": true,
+    "predictive_features_contained_deviation_from_stage_avg": true,
+    "artifact_compatibility": false,
+    "dataset_too_small": true,
+    "metrics_misleading": true,
+    "strong_baselines_missing": true,
+    "risk_classifier_overtrusted": true,
+    "stage_normalization_absent": true,
+    "anomaly_detection_not_validated": true
+  },
+  "now": {
+    "predictive_leakage_flags_clean": true,
+    "forbidden_predictive_features_excluded": [
+      "loss_pct",
+      "efficiency_pct",
+      "qty_out",
+      "deviation_from_stage_avg"
+    ],
+    "artifact_compatibility": true,
+    "feature_schema_version_present": true,
+    "stage_normalization_present": true,
+    "recommendation_coverage_preserved": true,
+    "evaluation_includes_baselines": true,
+    "served_risk_method": "thresholded_predicted_loss",
+    "anomaly_is_exploratory_only": true,
+    "mvp_demo_ready_with_warnings": true,
+    "production_ready": false
+  },
+  "area_comparison": [
+    {
+      "area": "Predictive leakage",
+      "before": "present",
+      "now": "clean",
+      "status": "fixed"
+    },
+    {
+      "area": "Artifact compatibility",
+      "before": "false with contaminated metadata",
+      "now": "true",
+      "status": "fixed"
+    },
+    {
+      "area": "Feature schema governance",
+      "before": "weak",
+      "now": "versioned and validated",
+      "status": "improved"
+    },
+    {
+      "area": "Dataset size",
+      "before": "tiny",
+      "now": "expanded for demo",
+      "status": "improved"
+    },
+    {
+      "area": "Stage normalization",
+      "before": "inconsistent",
+      "now": "canonical mapping in place",
+      "status": "fixed"
+    },
+    {
+      "area": "Baseline comparison",
+      "before": "missing",
+      "now": "strong baselines included",
+      "status": "fixed"
+    },
+    {
+      "area": "Regression strength",
+      "before": "unclear",
+      "now": "still loses to stage/product-stage baselines",
+      "status": "still weak"
+    },
+    {
+      "area": "Risk serving",
+      "before": "overtrusted classifier",
+      "now": "thresholded predicted loss",
+      "status": "improved"
+    },
+    {
+      "area": "Classifier medium/high performance",
+      "before": "weak",
+      "now": "still weak",
+      "status": "still weak"
+    },
+    {
+      "area": "Anomaly evaluation",
+      "before": "not validated",
+      "now": "explicit exploratory framing",
+      "status": "intentionally limited"
+    }
+  ]
+}

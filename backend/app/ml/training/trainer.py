@@ -10,17 +10,44 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier, RandomForestRegressor
-from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, mean_squared_error
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    f1_score,
+    mean_absolute_error,
+    mean_squared_error,
+    precision_recall_fscore_support,
+    r2_score,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.ml.features.engineer import build_features
 from app.ml.recommendations.impact_engine import train_impact_models
 from app.ml.recommendations.rule_engine import NORMAL_PERFORMANCE_SIGNAL, build_recommendation, derive_prediction_signals
-from app.ml.utils.feature_prep import CATEGORICAL_FEATURES, assign_risk_level, prepare_feature_frame
+from app.ml.utils.model_registry import (
+    ensure_registry_files,
+    get_active_model_version,
+    register_model_version,
+    set_active_model_version,
+    store_versioned_artifacts,
+)
+from app.ml.utils.model_validation import evaluate_validation_gates
+from app.ml.utils.feature_prep import (
+    CATEGORICAL_FEATURES,
+    FEATURE_SCHEMA_VERSION,
+    FORBIDDEN_PREDICTIVE_FEATURES,
+    assign_risk_level,
+    assign_thresholded_risk_level,
+    forbidden_predictive_violations,
+    get_risk_thresholds,
+    prepare_feature_frame,
+)
+from app.models.batch import Batch
 from app.models.ml import MLModelRegistry, MLTrainingRun
 from app.utils.exceptions import ValidationError
 
@@ -59,7 +86,46 @@ def _build_pipeline(feature_names: list[str], estimator: object) -> Pipeline:
     )
 
 
+def _split_train_test_indices(prepared: pd.DataFrame, test_size: float = 0.2) -> tuple[pd.Index, pd.Index, Dict]:
+    unique_dates = np.sort(prepared["date_ordinal"].dropna().unique())
+    if len(unique_dates) >= 2:
+        split_pos = max(1, int(round(len(unique_dates) * (1.0 - test_size))))
+        split_pos = min(split_pos, len(unique_dates) - 1)
+        split_cutoff = unique_dates[split_pos - 1]
+
+        train_indices = prepared.index[prepared["date_ordinal"] <= split_cutoff]
+        test_indices = prepared.index[prepared["date_ordinal"] > split_cutoff]
+        if len(train_indices) > 0 and len(test_indices) > 0:
+            return train_indices, test_indices, {
+                "strategy": "time_based",
+                "split_cutoff_date_ordinal": int(split_cutoff),
+                "train_rows": int(len(train_indices)),
+                "test_rows": int(len(test_indices)),
+            }
+
+    train_indices, test_indices = train_test_split(prepared.index, test_size=test_size, random_state=42)
+    return train_indices, test_indices, {
+        "strategy": "random_fallback",
+        "train_rows": int(len(train_indices)),
+        "test_rows": int(len(test_indices)),
+    }
+
+
+def _contains_demo_seed_data(db: Session, batch_ids: pd.Series) -> bool:
+    values = [value for value in batch_ids.dropna().unique().tolist() if value is not None]
+    if not values:
+        return False
+    demo_batch = db.scalar(
+        select(Batch.id).where(
+            Batch.id.in_(values),
+            Batch.code.like("DEMO-ML-%"),
+        )
+    )
+    return demo_batch is not None
+
+
 def train_models(db: Session, run_name: str) -> Dict:
+    ensure_registry_files()
     feature_set = build_features(db)
     df = feature_set.features
     if df.empty or len(df) < settings.ml_min_rows:
@@ -67,16 +133,30 @@ def train_models(db: Session, run_name: str) -> Dict:
 
     prepared, feature_groups = prepare_feature_frame(df)
     prepared["risk_level"] = prepared["loss_pct"].apply(assign_risk_level)
+    dataset_profile = {
+        "product_distribution": {str(k): int(v) for k, v in prepared["product"].value_counts(dropna=False).to_dict().items()},
+        "stage_distribution": {str(k): int(v) for k, v in prepared["stage_canonical"].value_counts(dropna=False).to_dict().items()},
+        "risk_distribution": {str(k): int(v) for k, v in prepared["risk_level"].value_counts(dropna=False).to_dict().items()},
+        "missing_feature_rate": {
+            str(col): float(prepared[col].isna().mean())
+            for col in feature_groups["predictive_regression_features"]
+            if col in prepared.columns
+        },
+    }
 
     y_loss = prepared["loss_pct"]
     y_risk = prepared["risk_level"]
     regression_features = feature_groups["predictive_regression_features"]
     classification_features = feature_groups["predictive_classification_features"]
     anomaly_features = feature_groups["assessment_anomaly_features"]
+    regression_violations = forbidden_predictive_violations(regression_features)
+    classification_violations = forbidden_predictive_violations(classification_features)
+    if regression_violations or classification_violations:
+        raise ValidationError(
+            "Predictive feature contract violated. Remove target-derived predictive features and retrain."
+        )
 
-    train_indices, test_indices = train_test_split(
-        prepared.index, test_size=0.2, random_state=42
-    )
+    train_indices, test_indices, split_details = _split_train_test_indices(prepared, test_size=0.2)
     X_loss_train = prepared.loc[train_indices, regression_features]
     X_loss_test = prepared.loc[test_indices, regression_features]
     X_risk_train = prepared.loc[train_indices, classification_features]
@@ -111,6 +191,44 @@ def train_models(db: Session, run_name: str) -> Dict:
     anomaly_scores = anomaly_model.decision_function(X_anomaly_test)
     anomaly_flags = anomaly_model.predict(X_anomaly_test)
     anomaly_ratio = float(np.mean(anomaly_scores < 0))
+    baseline_loss = np.full(shape=len(y_loss_test), fill_value=float(y_loss_train.mean()))
+    stage_mean_map = prepared.loc[train_indices].groupby("stage_canonical")["loss_pct"].mean().to_dict()
+    product_stage_mean_map = prepared.loc[train_indices].groupby(["product", "stage_canonical"])["loss_pct"].mean().to_dict()
+    default_mean = float(y_loss_train.mean())
+    stage_mean_pred = np.array(
+        [stage_mean_map.get(row["stage_canonical"], default_mean) for _, row in prepared.loc[test_indices].iterrows()],
+        dtype=float,
+    )
+    product_stage_mean_pred = np.array(
+        [
+            product_stage_mean_map.get(
+                (row["product"], row["stage_canonical"]),
+                stage_mean_map.get(row["stage_canonical"], default_mean),
+            )
+            for _, row in prepared.loc[test_indices].iterrows()
+        ],
+        dtype=float,
+    )
+    thresholded_risk_pred = np.array([assign_thresholded_risk_level(float(value)) for value in loss_pred])
+    high_mask = y_risk_test == "high"
+    false_low_high_risk_rate = float(np.mean(thresholded_risk_pred[high_mask] == "low")) if int(np.sum(high_mask)) else 0.0
+    risk_labels = ["low", "medium", "high"]
+    precision, recall, f1, support = precision_recall_fscore_support(
+        y_risk_test,
+        risk_pred,
+        labels=risk_labels,
+        zero_division=0,
+    )
+    class_report = {
+        label: {
+            "precision": float(precision[idx]),
+            "recall": float(recall[idx]),
+            "f1": float(f1[idx]),
+            "support": int(support[idx]),
+        }
+        for idx, label in enumerate(risk_labels)
+    }
+    confusion = confusion_matrix(y_risk_test, risk_pred, labels=risk_labels).tolist()
 
     recommendation_actions = []
     recommendation_alignments = []
@@ -144,11 +262,25 @@ def train_models(db: Session, run_name: str) -> Dict:
     metrics = {
         "regression_mae": float(mean_absolute_error(y_loss_test, loss_pred)),
         "regression_rmse": float(mean_squared_error(y_loss_test, loss_pred, squared=False)),
+        "regression_r2": float(r2_score(y_loss_test, loss_pred)),
+        "regression_baseline_mae": float(mean_absolute_error(y_loss_test, baseline_loss)),
+        "regression_baseline_rmse": float(mean_squared_error(y_loss_test, baseline_loss, squared=False)),
+        "regression_stage_mean_mae": float(mean_absolute_error(y_loss_test, stage_mean_pred)),
+        "regression_product_stage_mean_mae": float(mean_absolute_error(y_loss_test, product_stage_mean_pred)),
         "classification_accuracy": float(accuracy_score(y_risk_test, risk_pred)),
+        "classification_macro_f1": float(f1_score(y_risk_test, risk_pred, average="macro")),
         "classification_f1": float(f1_score(y_risk_test, risk_pred, average="weighted")),
+        "classification_majority_baseline_accuracy": float(np.mean(y_risk_test == y_risk_train.mode().iloc[0])),
+        "thresholded_risk_accuracy": float(accuracy_score(y_risk_test, thresholded_risk_pred)),
+        "thresholded_risk_macro_f1": float(f1_score(y_risk_test, thresholded_risk_pred, average="macro")),
+        "false_low_high_risk_rate": false_low_high_risk_rate,
+        "risk_thresholds_used": get_risk_thresholds(),
+        "classification_per_class": class_report,
+        "classification_confusion_matrix": confusion,
         "anomaly_ratio": float(anomaly_ratio),
         "recommendation_action_coverage": recommendation_action_coverage,
         "recommendation_issue_alignment": recommendation_issue_alignment,
+        "split_details": split_details,
     }
 
     artifacts_dir = _ensure_artifacts_dir()
@@ -179,12 +311,35 @@ def train_models(db: Session, run_name: str) -> Dict:
     metadata = {
         "model_version": model_version,
         "trained_at": datetime.now(timezone.utc).isoformat(),
+        "feature_schema_version": FEATURE_SCHEMA_VERSION,
+        "trained_rows": int(len(df)),
         "predictive_regression_features": regression_features,
         "predictive_classification_features": classification_features,
         "assessment_anomaly_features": anomaly_features,
+        "forbidden_predictive_features": sorted(FORBIDDEN_PREDICTIVE_FEATURES),
+        "forbidden_predictive_violations": {
+            "predictive_regression_features": regression_violations,
+            "predictive_classification_features": classification_violations,
+        },
+        "predictive_features_clean": not (regression_violations or classification_violations),
+        "contains_demo_seed_data": _contains_demo_seed_data(db, prepared["batch_id"]),
+        "dataset_profile": dataset_profile,
         "metrics": metrics,
     }
-    (artifacts_dir / MODEL_FILES["feature_metadata"]).write_text(json.dumps(metadata, indent=2))
+    metadata_path = artifacts_dir / MODEL_FILES["feature_metadata"]
+    metadata_path.write_text(json.dumps(metadata, indent=2))
+
+    artifact_compatibility = {
+        "compatible": not (regression_violations or classification_violations),
+        "reason": "ok" if not (regression_violations or classification_violations) else "forbidden_predictive_features_present",
+    }
+    validation = evaluate_validation_gates(
+        metadata=metadata,
+        artifact_compatibility=artifact_compatibility,
+        trained_rows=int(len(df)),
+    )
+    metadata["validation"] = validation
+    metadata_path.write_text(json.dumps(metadata, indent=2))
 
     run = MLTrainingRun(
         run_name=run_name,
@@ -226,11 +381,45 @@ def train_models(db: Session, run_name: str) -> Dict:
     db.add_all(models)
     db.commit()
 
+    artifact_paths = {
+        name: str(artifacts_dir / file_name)
+        for name, file_name in MODEL_FILES.items()
+    }
+    versioned_artifacts = store_versioned_artifacts(model_version, artifact_paths)
+    active_before = get_active_model_version()
+    notes = (
+        "Candidate registered after validation. "
+        f"mvp_demo_allowed={validation['mvp_demo_allowed']} production_ready={validation['production_ready']}"
+    )
+    registry_record = register_model_version(
+        model_version=model_version,
+        run_name=run_name,
+        feature_schema_version=FEATURE_SCHEMA_VERSION,
+        training_rows=int(len(df)),
+        metrics=metrics,
+        artifact_paths=versioned_artifacts,
+        status="candidate",
+        notes=notes,
+        validation=validation,
+        extra_metadata={
+            "contains_demo_seed_data": metadata["contains_demo_seed_data"],
+            "dataset_profile": dataset_profile,
+        },
+    )
+
+    activation_action = "candidate_registered"
+    if validation.get("can_activate") and not active_before:
+        set_active_model_version(model_version, notes="Auto-activated: first validated model")
+        activation_action = "auto_activated_first_validated_model"
+
     return {
         "run_id": run.id,
         "run_name": run.run_name,
         "trained_rows": len(df),
         "model_version": model_version,
         "metrics": metrics,
+        "validation": validation,
+        "registry_status": registry_record.get("status"),
+        "activation_action": activation_action,
         "completed_at": run.completed_at,
     }

@@ -1,0 +1,46 @@
+{
+  "dataset_type": "literature_informed_benchmark",
+  "marker": "[ML_LITERATURE_BENCHMARK]",
+  "batch_prefix": "BENCH-ML-",
+  "generated_at": "2026-05-07T16:36:13.867044+00:00",
+  "seed": 42,
+  "row_count": 3000,
+  "batch_count": 750,
+  "product_distribution": {
+    "Arachide": 1052,
+    "Mil": 980,
+    "Mangue": 968
+  },
+  "stage_distribution": {
+    "Nettoyage": 750,
+    "Séchage": 750,
+    "Tri": 750,
+    "Emballage": 750
+  },
+  "risk_distribution": {
+    "low": 1806,
+    "medium": 844,
+    "high": 350
+  },
+  "loss_distribution": {
+    "mean": 6.156606484225156,
+    "median": 4.741657754210314,
+    "p90": 12.478956655978802,
+    "p95": 15.137447237284004,
+    "max": 37.65411987497327
+  },
+  "source_count": 9,
+  "sources_file_json": "artifacts/benchmark_sources.json",
+  "sources_file_md": "artifacts/benchmark_sources.md",
+  "assumption_policy": {
+    "direct_source_ranges": [
+      "APHLIS cumulative country/province and value-chain context for cereals",
+      "SCIRP groundnut post-harvest loss bands (contextual, non-Senegal)"
+    ],
+    "assumption_derived_ranges": [
+      "Mango stage-level ranges inferred from Senegal fruit-fly literature and horticultural post-harvest context",
+      "Arachide and Mil stage decomposition where APHLIS provides cumulative or proxy value-chain context"
+    ]
+  },
+  "not_for_production_training": true
+}

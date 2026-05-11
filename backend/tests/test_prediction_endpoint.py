@@ -46,7 +46,6 @@ def test_predictive_and_assessment_endpoints(db_session, tmp_path, monkeypatch):
                 "historical_avg_loss_same_product": first_feature["historical_avg_loss_same_product"],
                 "historical_avg_loss_same_stage": first_feature["historical_avg_loss_same_stage"],
                 "historical_avg_efficiency_same_stage": first_feature["historical_avg_efficiency_same_stage"],
-                "deviation_from_stage_avg": first_feature["deviation_from_stage_avg"],
                 "previous_batch_loss": first_feature["previous_batch_loss"],
                 "rolling_loss_last_n_batches": first_feature["rolling_loss_last_n_batches"],
                 "rolling_efficiency_last_n_batches": first_feature["rolling_efficiency_last_n_batches"],

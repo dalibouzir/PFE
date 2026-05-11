@@ -1,0 +1,2598 @@
+{
+  "generated_at": "2026-05-08T10:42:20.511979+00:00",
+  "actual_data_snapshot": {
+    "generated_at": "2026-05-08T10:41:18.826725+00:00",
+    "cooperative_id": "356f4e38-f4f8-4559-a005-0a9c10366d37",
+    "manager_user_id": "a5624e3d-16ad-489f-8722-38f5dbbcde13",
+    "stocks": [
+      {
+        "product_name": "Mangue",
+        "total_stock_kg": 210.0,
+        "reserved_in_lots_kg": 100.0,
+        "available_stock_kg": 110.0,
+        "threshold": 0.0
+      },
+      {
+        "product_name": "Arachide",
+        "total_stock_kg": 60.0,
+        "reserved_in_lots_kg": 0.0,
+        "available_stock_kg": 60.0,
+        "threshold": 0.0
+      },
+      {
+        "product_name": "Bissap",
+        "total_stock_kg": 900.0,
+        "reserved_in_lots_kg": 600.0,
+        "available_stock_kg": 300.0,
+        "threshold": 0.0
+      }
+    ],
+    "batches": [
+      {
+        "code": "LOT-MANG-001",
+        "status": "in_progress",
+        "initial_qty": 100.0,
+        "current_qty": 94.0,
+        "product_name": "Mangue"
+      },
+      {
+        "code": "LOT-BISS-001",
+        "status": "created",
+        "initial_qty": 450.0,
+        "current_qty": 450.0,
+        "product_name": "Bissap"
+      },
+      {
+        "code": "LOT-BISS-002",
+        "status": "in_progress",
+        "initial_qty": 150.0,
+        "current_qty": 46.0,
+        "product_name": "Bissap"
+      }
+    ],
+    "mango_drying_week": {
+      "step_count": 0,
+      "avg_loss_pct": null,
+      "max_loss_pct": null
+    },
+    "reference_metric_count": 12,
+    "reference_metrics_preview": [
+      {
+        "crop": "Mil",
+        "metric": "post_harvest_loss_pct_range_drying",
+        "value": 10.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Mil",
+        "metric": "post_harvest_loss_pct_range_sorting",
+        "value": 5.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Mil",
+        "metric": "post_harvest_loss_pct_range_storage",
+        "value": 7.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Mangue",
+        "metric": "post_harvest_loss_pct_range_drying",
+        "value": 12.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Mangue",
+        "metric": "post_harvest_loss_pct_range_sorting",
+        "value": 6.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Mangue",
+        "metric": "post_harvest_loss_pct_range_packaging",
+        "value": 4.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Arachide",
+        "metric": "post_harvest_loss_pct_range_drying",
+        "value": 9.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Arachide",
+        "metric": "post_harvest_loss_pct_range_sorting",
+        "value": 5.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Arachide",
+        "metric": "post_harvest_loss_pct_range_storage",
+        "value": 8.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Mil",
+        "metric": "post_harvest_loss_pct_range_total",
+        "value": 17.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Mangue",
+        "metric": "post_harvest_loss_pct_range_total",
+        "value": 20.0,
+        "unit": "%",
+        "period": "2018-2024"
+      },
+      {
+        "crop": "Arachide",
+        "metric": "post_harvest_loss_pct_range_total",
+        "value": 15.0,
+        "unit": "%",
+        "period": "2018-2024"
+      }
+    ]
+  },
+  "questions": [
+    {
+      "question": "current stock of mango",
+      "category": "SQL_ONLY",
+      "expected_intent": "SQL_ONLY",
+      "latency_ms": 3356.241,
+      "answer_text": "Mangue stock: total 210.0 kg, 100.0 kg reserved in lots, 110.0 kg remaining. Status: stable.",
+      "observed": {
+        "intent_type": "SQL_ONLY",
+        "sql_needed": true,
+        "rag_needed": false,
+        "orchestration_confidence_score": 0.67,
+        "orchestration_confidence_label": "MEDIUM",
+        "contamination_risk": 0.0,
+        "warning_flags": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE"
+        ],
+        "chunk_types": {},
+        "citations_count": 0,
+        "ui_blocks_count": 3,
+        "citations": []
+      },
+      "scores": {
+        "route_correct": true,
+        "sql_used_correctly": true,
+        "rag_used_correctly": true,
+        "factual_accuracy_score": 1.0,
+        "citation_relevance_score": 0.0,
+        "scope_purity_score": 1.0,
+        "contamination_detected": false,
+        "answer_usefulness_score": 0.9,
+        "ui_blocks_relevant": true,
+        "passed": true,
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 2,
+            "active_filters": {
+              "product_name": [
+                "mango"
+              ],
+              "max_age_minutes": 1440
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "warnings": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE"
+        ]
+      },
+      "debug": {
+        "filters": {
+          "product_name": [
+            "mango"
+          ],
+          "stage": [],
+          "stage_canonical": [],
+          "chunk_type": [],
+          "source_table": [],
+          "risk_level": null,
+          "batch_id": [],
+          "batch_codes": [],
+          "max_age_minutes": 1440
+        },
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 2,
+            "active_filters": {
+              "product_name": [
+                "mango"
+              ],
+              "max_age_minutes": 1440
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "orchestration": {
+          "warning_flags": [
+            "LIMITED_EVIDENCE",
+            "LOW_GROUNDING_CONFIDENCE"
+          ],
+          "confidence_estimate": {
+            "label": "MEDIUM",
+            "score": 0.67
+          },
+          "contradictory_signals": [],
+          "grounding_notes": [
+            "No semantic retrieval evidence available."
+          ],
+          "scope_analysis": {
+            "scope_level": "PRODUCT",
+            "lot_codes": [],
+            "products": [
+              "mango"
+            ],
+            "stages": [],
+            "time_hints": [
+              "current"
+            ],
+            "benchmark_intent": false,
+            "comparative_intent": false
+          },
+          "contamination_diagnostics": {
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0,
+            "scope_purity_score": 1.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0
+          }
+        },
+        "hits": []
+      },
+      "passed": true,
+      "factual_accuracy_score": 1.0,
+      "citation_relevance_score": 0.0,
+      "scope_purity_score": 1.0,
+      "answer_usefulness_score": 0.9,
+      "route_correct": true
+    },
+    {
+      "question": "how much arachide stock is remaining?",
+      "category": "SQL_ONLY",
+      "expected_intent": "SQL_ONLY",
+      "latency_ms": 2973.414,
+      "answer_text": "Arachide stock: total 60.0 kg, 0.0 kg reserved in lots, 60.0 kg remaining. Status: stable.",
+      "observed": {
+        "intent_type": "SQL_ONLY",
+        "sql_needed": true,
+        "rag_needed": false,
+        "orchestration_confidence_score": 0.67,
+        "orchestration_confidence_label": "MEDIUM",
+        "contamination_risk": 0.0,
+        "warning_flags": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE"
+        ],
+        "chunk_types": {},
+        "citations_count": 0,
+        "ui_blocks_count": 3,
+        "citations": []
+      },
+      "scores": {
+        "route_correct": true,
+        "sql_used_correctly": true,
+        "rag_used_correctly": true,
+        "factual_accuracy_score": 1.0,
+        "citation_relevance_score": 0.0,
+        "scope_purity_score": 1.0,
+        "contamination_detected": false,
+        "answer_usefulness_score": 0.9,
+        "ui_blocks_relevant": true,
+        "passed": true,
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 1,
+            "active_filters": {
+              "product_name": [
+                "peanut"
+              ]
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "warnings": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE"
+        ]
+      },
+      "debug": {
+        "filters": {
+          "product_name": [
+            "peanut"
+          ],
+          "stage": [],
+          "stage_canonical": [],
+          "chunk_type": [],
+          "source_table": [],
+          "risk_level": null,
+          "batch_id": [],
+          "batch_codes": [],
+          "max_age_minutes": null
+        },
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 1,
+            "active_filters": {
+              "product_name": [
+                "peanut"
+              ]
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "orchestration": {
+          "warning_flags": [
+            "LIMITED_EVIDENCE",
+            "LOW_GROUNDING_CONFIDENCE"
+          ],
+          "confidence_estimate": {
+            "label": "MEDIUM",
+            "score": 0.67
+          },
+          "contradictory_signals": [],
+          "grounding_notes": [
+            "No semantic retrieval evidence available."
+          ],
+          "scope_analysis": {
+            "scope_level": "PRODUCT",
+            "lot_codes": [],
+            "products": [
+              "peanut"
+            ],
+            "stages": [],
+            "time_hints": [],
+            "benchmark_intent": false,
+            "comparative_intent": false
+          },
+          "contamination_diagnostics": {
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0,
+            "scope_purity_score": 1.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0
+          }
+        },
+        "hits": []
+      },
+      "passed": true,
+      "factual_accuracy_score": 1.0,
+      "citation_relevance_score": 0.0,
+      "scope_purity_score": 1.0,
+      "answer_usefulness_score": 0.9,
+      "route_correct": true
+    },
+    {
+      "question": "what is the status of LOT-MANG-001?",
+      "category": "SQL_ONLY",
+      "expected_intent": "SQL_ONLY",
+      "latency_ms": 2834.255,
+      "answer_text": "LOT-MANG-001 (Mangue): status in_progress, initial 100.0 kg, current 94.0 kg, cumulative loss 6.0%, latest step Sechage, pending step none, anomaly/risk none.",
+      "observed": {
+        "intent_type": "SQL_ONLY",
+        "sql_needed": true,
+        "rag_needed": false,
+        "orchestration_confidence_score": 0.67,
+        "orchestration_confidence_label": "MEDIUM",
+        "contamination_risk": 0.0,
+        "warning_flags": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE"
+        ],
+        "chunk_types": {},
+        "citations_count": 0,
+        "ui_blocks_count": 1,
+        "citations": []
+      },
+      "scores": {
+        "route_correct": true,
+        "sql_used_correctly": true,
+        "rag_used_correctly": true,
+        "factual_accuracy_score": 1.0,
+        "citation_relevance_score": 0.0,
+        "scope_purity_score": 1.0,
+        "contamination_detected": false,
+        "answer_usefulness_score": 0.9,
+        "ui_blocks_relevant": true,
+        "passed": true,
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 1,
+            "active_filters": {
+              "batch_codes": [
+                "LOT-MANG-001"
+              ]
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "warnings": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE"
+        ]
+      },
+      "debug": {
+        "filters": {
+          "product_name": [],
+          "stage": [],
+          "stage_canonical": [],
+          "chunk_type": [],
+          "source_table": [],
+          "risk_level": null,
+          "batch_id": [],
+          "batch_codes": [
+            "LOT-MANG-001"
+          ],
+          "max_age_minutes": null
+        },
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 1,
+            "active_filters": {
+              "batch_codes": [
+                "LOT-MANG-001"
+              ]
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "orchestration": {
+          "warning_flags": [
+            "LIMITED_EVIDENCE",
+            "LOW_GROUNDING_CONFIDENCE"
+          ],
+          "confidence_estimate": {
+            "label": "MEDIUM",
+            "score": 0.67
+          },
+          "contradictory_signals": [],
+          "grounding_notes": [
+            "No semantic retrieval evidence available."
+          ],
+          "scope_analysis": {
+            "scope_level": "LOT",
+            "lot_codes": [
+              "LOT-MANG-001"
+            ],
+            "products": [],
+            "stages": [],
+            "time_hints": [],
+            "benchmark_intent": false,
+            "comparative_intent": false
+          },
+          "contamination_diagnostics": {
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0,
+            "scope_purity_score": 1.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0
+          }
+        },
+        "hits": []
+      },
+      "passed": true,
+      "factual_accuracy_score": 1.0,
+      "citation_relevance_score": 0.0,
+      "scope_purity_score": 1.0,
+      "answer_usefulness_score": 0.9,
+      "route_correct": true
+    },
+    {
+      "question": "what does benchmark say about millet losses?",
+      "category": "RAG_ONLY",
+      "expected_intent": "RAG_ONLY",
+      "latency_ms": 3544.881,
+      "answer_text": "No benchmark/agronomic evidence was retrieved for this question. I cannot provide a grounded reference answer yet.",
+      "observed": {
+        "intent_type": "RAG_ONLY",
+        "sql_needed": false,
+        "rag_needed": true,
+        "orchestration_confidence_score": 0.55,
+        "orchestration_confidence_label": "MEDIUM",
+        "contamination_risk": 0.0,
+        "warning_flags": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE",
+          "SQL_CONTEXT_MISSING"
+        ],
+        "chunk_types": {},
+        "citations_count": 0,
+        "ui_blocks_count": 0,
+        "citations": []
+      },
+      "scores": {
+        "route_correct": true,
+        "sql_used_correctly": true,
+        "rag_used_correctly": true,
+        "factual_accuracy_score": 0.85,
+        "citation_relevance_score": 0.55,
+        "scope_purity_score": 1.0,
+        "contamination_detected": false,
+        "answer_usefulness_score": 0.9,
+        "ui_blocks_relevant": true,
+        "passed": true,
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 3,
+            "active_filters": {
+              "product_name": [
+                "millet"
+              ],
+              "chunk_type": [
+                "agronomic_knowledge",
+                "benchmark_reference"
+              ],
+              "source_table": [
+                "reference_metrics",
+                "knowledge_chunks"
+              ]
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "warnings": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE",
+          "SQL_CONTEXT_MISSING"
+        ]
+      },
+      "debug": {
+        "filters": {
+          "product_name": [
+            "millet"
+          ],
+          "stage": [],
+          "stage_canonical": [],
+          "chunk_type": [
+            "agronomic_knowledge",
+            "benchmark_reference"
+          ],
+          "source_table": [
+            "knowledge_chunks",
+            "reference_metrics"
+          ],
+          "risk_level": null,
+          "batch_id": [],
+          "batch_codes": [],
+          "max_age_minutes": null
+        },
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 3,
+            "active_filters": {
+              "product_name": [
+                "millet"
+              ],
+              "chunk_type": [
+                "agronomic_knowledge",
+                "benchmark_reference"
+              ],
+              "source_table": [
+                "reference_metrics",
+                "knowledge_chunks"
+              ]
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "orchestration": {
+          "warning_flags": [
+            "CONTRADICTORY_EVIDENCE",
+            "LIMITED_EVIDENCE",
+            "LOW_GROUNDING_CONFIDENCE"
+          ],
+          "confidence_estimate": {
+            "label": "LOW",
+            "score": 0.42
+          },
+          "contradictory_signals": [
+            "SQL avg loss (25.11%) conflicts with ML predicted loss (3.44%)."
+          ],
+          "grounding_notes": [
+            "Contradictory evidence detected across SQL/RAG/ML signals.",
+            "No semantic retrieval evidence available.",
+            "Conflicts detected: prioritize SQL operational facts over stale semantic values.",
+            "Scope clarification: interpret contradictions within millet / all stages first; cooperative-wide aggregates can include other products and distort product-level reasoning."
+          ],
+          "scope_analysis": {
+            "scope_level": "PRODUCT",
+            "lot_codes": [],
+            "products": [
+              "millet"
+            ],
+            "stages": [],
+            "time_hints": [],
+            "benchmark_intent": true,
+            "comparative_intent": false
+          },
+          "contamination_diagnostics": {
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0,
+            "scope_purity_score": 1.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0
+          }
+        },
+        "hits": []
+      },
+      "passed": true,
+      "factual_accuracy_score": 0.85,
+      "citation_relevance_score": 0.55,
+      "scope_purity_score": 1.0,
+      "answer_usefulness_score": 0.9,
+      "route_correct": true
+    },
+    {
+      "question": "best practices for mango drying",
+      "category": "RAG_ONLY",
+      "expected_intent": "RAG_ONLY",
+      "latency_ms": 3517.07,
+      "answer_text": "Aucune evidence benchmark/agronomique n'a ete recuperee pour cette question. Je ne peux pas fournir une reponse referencee fiable pour le moment.",
+      "observed": {
+        "intent_type": "RAG_ONLY",
+        "sql_needed": false,
+        "rag_needed": true,
+        "orchestration_confidence_score": 0.55,
+        "orchestration_confidence_label": "MEDIUM",
+        "contamination_risk": 0.0,
+        "warning_flags": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE",
+          "SQL_CONTEXT_MISSING"
+        ],
+        "chunk_types": {},
+        "citations_count": 0,
+        "ui_blocks_count": 0,
+        "citations": []
+      },
+      "scores": {
+        "route_correct": true,
+        "sql_used_correctly": true,
+        "rag_used_correctly": true,
+        "factual_accuracy_score": 0.85,
+        "citation_relevance_score": 0.55,
+        "scope_purity_score": 1.0,
+        "contamination_detected": false,
+        "answer_usefulness_score": 0.9,
+        "ui_blocks_relevant": true,
+        "passed": true,
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 5,
+            "active_filters": {
+              "product_name": [
+                "mango"
+              ],
+              "stage": [
+                "drying"
+              ],
+              "stage_canonical": [
+                "drying"
+              ],
+              "chunk_type": [
+                "agronomic_knowledge",
+                "benchmark_reference"
+              ],
+              "source_table": [
+                "reference_metrics",
+                "knowledge_chunks"
+              ]
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "warnings": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE",
+          "SQL_CONTEXT_MISSING"
+        ]
+      },
+      "debug": {
+        "filters": {
+          "product_name": [
+            "mango"
+          ],
+          "stage": [
+            "drying"
+          ],
+          "stage_canonical": [
+            "drying"
+          ],
+          "chunk_type": [
+            "agronomic_knowledge",
+            "benchmark_reference"
+          ],
+          "source_table": [
+            "knowledge_chunks",
+            "reference_metrics"
+          ],
+          "risk_level": null,
+          "batch_id": [],
+          "batch_codes": [],
+          "max_age_minutes": null
+        },
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 5,
+            "active_filters": {
+              "product_name": [
+                "mango"
+              ],
+              "stage": [
+                "drying"
+              ],
+              "stage_canonical": [
+                "drying"
+              ],
+              "chunk_type": [
+                "agronomic_knowledge",
+                "benchmark_reference"
+              ],
+              "source_table": [
+                "reference_metrics",
+                "knowledge_chunks"
+              ]
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "orchestration": {
+          "warning_flags": [
+            "LIMITED_EVIDENCE",
+            "LOW_GROUNDING_CONFIDENCE"
+          ],
+          "confidence_estimate": {
+            "label": "MEDIUM",
+            "score": 0.67
+          },
+          "contradictory_signals": [],
+          "grounding_notes": [
+            "No semantic retrieval evidence available."
+          ],
+          "scope_analysis": {
+            "scope_level": "PRODUCT_STAGE",
+            "lot_codes": [],
+            "products": [
+              "mango"
+            ],
+            "stages": [
+              "drying"
+            ],
+            "time_hints": [],
+            "benchmark_intent": true,
+            "comparative_intent": false
+          },
+          "contamination_diagnostics": {
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0,
+            "scope_purity_score": 1.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0
+          }
+        },
+        "hits": []
+      },
+      "passed": true,
+      "factual_accuracy_score": 0.85,
+      "citation_relevance_score": 0.55,
+      "scope_purity_score": 1.0,
+      "answer_usefulness_score": 0.9,
+      "route_correct": true
+    },
+    {
+      "question": "why are drying losses high this week for mango?",
+      "category": "HYBRID",
+      "expected_intent": "HYBRID",
+      "latency_ms": 7766.93,
+      "answer_text": "The high drying losses for mango this week can be attributed to several factors. The current loss rate for the cooperative is 15.71%, with a specific loss of 5.05% at the drying stage for mango. This indicates that the drying process is the most sensitive stage, contributing significantly to the overall losses.\n\nFor the specific lot LOT-MANG-001, the cumulative loss is reported at 6.0%, with the drying stage being a critical point of concern. The operational risk summary classifies this risk as low, but the losses at the drying stage are notable.\n\nAt the product-stage level, the recent average loss for mango during the drying process is 5.05%, which is higher than the cooperative-wide average loss of 15.64%. This suggests that while the cooperative is experiencing losses, the mango drying stage is particularly problematic.\n\nAt the cooperative level, the overall efficiency rate is 84.29%, which indicates that there is room for improvement in the drying process. The average loss percentage across all batches is 25.11%, which is significantly higher than the specific loss for mango, indicating that other products may be contributing to the overall loss metrics.\n\nCompared with benchmark data, the average loss for mango at the drying stage is 12.0%, which is lower than the current loss rate observed in the cooperative. This suggests that there is potential for improvement in the",
+      "observed": {
+        "intent_type": "HYBRID",
+        "sql_needed": true,
+        "rag_needed": true,
+        "orchestration_confidence_score": 0.64,
+        "orchestration_confidence_label": "MEDIUM",
+        "contamination_risk": 0.0,
+        "warning_flags": [
+          "CONTRADICTORY_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE",
+          "ML_LOGS_EMPTY"
+        ],
+        "chunk_types": {
+          "operational_risk_summary": 1,
+          "product_stage_summary": 1,
+          "scoped_loss_summary": 1,
+          "process_step_summary": 1
+        },
+        "citations_count": 4,
+        "ui_blocks_count": 4,
+        "citations": [
+          {
+            "source_id": "batches:batch_risk:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "source_url": "app://batches/batch_risk:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "region": "thies",
+            "crop": "Mangue",
+            "topic": "operational_risk_summary",
+            "excerpt": "Operational risk summary for lot LOT-MANG-001 (Mangue): cumulative loss is 6.0% with risk classified as LOW. Most sensitive stage is Sechage at 5.05% loss. Recommended mitigation: Process indicators are stable. Keep w..."
+          },
+          {
+            "source_id": "process_steps:process_step_scope:1128f318-deb6-47c5-8529-6714fa028067",
+            "source_url": "app://process_steps/process_step_scope:1128f318-deb6-47c5-8529-6714fa028067",
+            "region": "thies",
+            "crop": "Mangue",
+            "topic": "product_stage_summary",
+            "excerpt": "For product Mangue at stage Nettoyage, lot LOT-MANG-001 processed 100.0 kg into 99.0 kg with 1.0% loss and 99.0% efficiency. Recent product-stage average loss is 1.0%. Cooperative-wide stage average is 0.5%, which can..."
+          },
+          {
+            "source_id": "process_steps:process_step_scoped_loss:1128f318-deb6-47c5-8529-6714fa028067",
+            "source_url": "app://process_steps/process_step_scoped_loss:1128f318-deb6-47c5-8529-6714fa028067",
+            "region": "thies",
+            "crop": "Mangue",
+            "topic": "scoped_loss_summary",
+            "excerpt": "Mangue at stage Nettoyage shows 1.0% loss, while cooperative-wide average is 0.5%. The cooperative average is affected by unrelated product signals such as bissap (0.0% loss). Do not treat this as direct Mangue evidence."
+          },
+          {
+            "source_id": "process_steps:process_step:1128f318-deb6-47c5-8529-6714fa028067",
+            "source_url": "app://process_steps/process_step:1128f318-deb6-47c5-8529-6714fa028067",
+            "region": "thies",
+            "crop": "Mangue",
+            "topic": "process_step_summary",
+            "excerpt": "Process step Nettoyage for lot LOT-MANG-001 (Mangue) transformed 100.0 kg into 99.0 kg, with a loss of 1.0 kg (1.0%). The step status is completed and duration is not recorded minutes."
+          }
+        ]
+      },
+      "scores": {
+        "route_correct": true,
+        "sql_used_correctly": true,
+        "rag_used_correctly": true,
+        "factual_accuracy_score": 0.95,
+        "citation_relevance_score": 0.5,
+        "scope_purity_score": 1.0,
+        "contamination_detected": false,
+        "answer_usefulness_score": 0.9,
+        "ui_blocks_relevant": true,
+        "passed": true,
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 6,
+            "active_filters": {
+              "product_name": [
+                "mango"
+              ],
+              "stage": [
+                "drying"
+              ],
+              "stage_canonical": [
+                "drying"
+              ],
+              "chunk_type": [
+                "agronomic_knowledge",
+                "operational_risk_summary",
+                "scoped_loss_summary",
+                "product_stage_summary",
+                "process_step_summary"
+              ],
+              "source_table": [
+                "batches",
+                "knowledge_chunks",
+                "process_steps",
+                "recommendations",
+                "ml_prediction_logs"
+              ],
+              "max_age_minutes": 10080
+            }
+          },
+          "chunk_types": {
+            "product_stage_summary": 2,
+            "scoped_loss_summary": 2,
+            "operational_risk_summary": 1,
+            "process_step_summary": 1
+          },
+          "freshness": {
+            "freshness_count": 6,
+            "freshness_min_minutes": 51.37,
+            "freshness_max_minutes": 51.39,
+            "freshness_avg_minutes": 51.38
+          },
+          "relevance": {
+            "avg_score": 0.639169,
+            "max_score": 0.741765
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 4,
+            "source_table_unique_count": 2
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 1.0,
+            "stage_alignment_score": 0.6667,
+            "operational_priority_score": 1.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.95
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 6
+        },
+        "warnings": [
+          "CONTRADICTORY_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE",
+          "ML_LOGS_EMPTY"
+        ]
+      },
+      "debug": {
+        "filters": {
+          "product_name": [
+            "mango"
+          ],
+          "stage": [
+            "drying"
+          ],
+          "stage_canonical": [
+            "drying"
+          ],
+          "chunk_type": [
+            "agronomic_knowledge",
+            "operational_risk_summary",
+            "process_step_summary",
+            "product_stage_summary",
+            "scoped_loss_summary"
+          ],
+          "source_table": [
+            "batches",
+            "knowledge_chunks",
+            "ml_prediction_logs",
+            "process_steps",
+            "recommendations"
+          ],
+          "risk_level": null,
+          "batch_id": [],
+          "batch_codes": [],
+          "max_age_minutes": 10080
+        },
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 6,
+            "active_filters": {
+              "product_name": [
+                "mango"
+              ],
+              "stage": [
+                "drying"
+              ],
+              "stage_canonical": [
+                "drying"
+              ],
+              "chunk_type": [
+                "agronomic_knowledge",
+                "operational_risk_summary",
+                "scoped_loss_summary",
+                "product_stage_summary",
+                "process_step_summary"
+              ],
+              "source_table": [
+                "batches",
+                "knowledge_chunks",
+                "process_steps",
+                "recommendations",
+                "ml_prediction_logs"
+              ],
+              "max_age_minutes": 10080
+            }
+          },
+          "chunk_types": {
+            "product_stage_summary": 2,
+            "scoped_loss_summary": 2,
+            "operational_risk_summary": 1,
+            "process_step_summary": 1
+          },
+          "freshness": {
+            "freshness_count": 6,
+            "freshness_min_minutes": 51.37,
+            "freshness_max_minutes": 51.39,
+            "freshness_avg_minutes": 51.38
+          },
+          "relevance": {
+            "avg_score": 0.639169,
+            "max_score": 0.741765
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 4,
+            "source_table_unique_count": 2
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 1.0,
+            "stage_alignment_score": 0.6667,
+            "operational_priority_score": 1.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.95
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 6
+        },
+        "orchestration": {
+          "warning_flags": [
+            "CONTRADICTORY_EVIDENCE",
+            "LOW_GROUNDING_CONFIDENCE",
+            "ML_LOGS_EMPTY"
+          ],
+          "confidence_estimate": {
+            "label": "MEDIUM",
+            "score": 0.68
+          },
+          "contradictory_signals": [
+            "SQL avg loss (25.11%) conflicts with RAG avg loss (3.86%)."
+          ],
+          "grounding_notes": [
+            "Contradictory evidence detected across SQL/RAG/ML signals.",
+            "Conflicts detected: prioritize SQL operational facts over stale semantic values.",
+            "Scope clarification: interpret contradictions within mango / drying first; cooperative-wide aggregates can include other products and distort product-level reasoning."
+          ],
+          "scope_analysis": {
+            "scope_level": "PRODUCT_STAGE",
+            "lot_codes": [],
+            "products": [
+              "mango"
+            ],
+            "stages": [
+              "drying"
+            ],
+            "time_hints": [
+              "this week"
+            ],
+            "benchmark_intent": false,
+            "comparative_intent": false
+          },
+          "contamination_diagnostics": {
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0,
+            "scope_purity_score": 1.0,
+            "product_alignment_score": 1.0,
+            "stage_alignment_score": 0.6667,
+            "operational_priority_score": 1.0
+          }
+        },
+        "hits": [
+          {
+            "chunk_id": "18ce4075-8b18-4122-9076-aa021755fb94",
+            "source_table": "process_steps",
+            "source_record_ref": "process_step_scope:e551a40d-ce3e-443b-9684-96ffe2b7860a",
+            "chunk_type": "product_stage_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.927239+00:00",
+            "freshness_age_minutes": 51.37,
+            "retrieval_score": 0.74,
+            "retrieval_reason": "chunk_type_boost,table_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "c73c31aa-dec5-4eef-9988-3ba41bc2056c",
+            "source_table": "process_steps",
+            "source_record_ref": "process_step_scoped_loss:e551a40d-ce3e-443b-9684-96ffe2b7860a",
+            "chunk_type": "scoped_loss_summary",
+            "freshness_timestamp": "2026-05-08T09:50:25.007843+00:00",
+            "freshness_age_minutes": 51.37,
+            "retrieval_score": 0.73,
+            "retrieval_reason": "chunk_type_boost,table_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "4c08f4ad-aa02-4b05-bba4-75fc23c953da",
+            "source_table": "batches",
+            "source_record_ref": "batch_risk:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "chunk_type": "operational_risk_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.047552+00:00",
+            "freshness_age_minutes": 51.39,
+            "retrieval_score": 0.68,
+            "retrieval_reason": "chunk_type_boost,table_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "1085efad-9412-4364-b46b-b8a29d258332",
+            "source_table": "process_steps",
+            "source_record_ref": "process_step:e551a40d-ce3e-443b-9684-96ffe2b7860a",
+            "chunk_type": "process_step_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.848615+00:00",
+            "freshness_age_minutes": 51.37,
+            "retrieval_score": 0.57,
+            "retrieval_reason": "chunk_type_boost,table_boost,scope_match_boost,staleness_penalty"
+          },
+          {
+            "chunk_id": "1a3aa9d4-e812-4a19-a627-7abfdbc1df49",
+            "source_table": "process_steps",
+            "source_record_ref": "process_step_scope:1128f318-deb6-47c5-8529-6714fa028067",
+            "chunk_type": "product_stage_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.687278+00:00",
+            "freshness_age_minutes": 51.38,
+            "retrieval_score": 0.56,
+            "retrieval_reason": "chunk_type_boost,table_boost,scope_match_boost,scope_mismatch_penalty,freshness_boost"
+          },
+          {
+            "chunk_id": "23486902-a27a-420e-a3d5-e0f3f537196f",
+            "source_table": "process_steps",
+            "source_record_ref": "process_step_scoped_loss:1128f318-deb6-47c5-8529-6714fa028067",
+            "chunk_type": "scoped_loss_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.767772+00:00",
+            "freshness_age_minutes": 51.38,
+            "retrieval_score": 0.55,
+            "retrieval_reason": "chunk_type_boost,table_boost,scope_match_boost,scope_mismatch_penalty,freshness_boost"
+          }
+        ]
+      },
+      "passed": true,
+      "factual_accuracy_score": 0.95,
+      "citation_relevance_score": 0.5,
+      "scope_purity_score": 1.0,
+      "answer_usefulness_score": 0.9,
+      "route_correct": true
+    },
+    {
+      "question": "compare current mango drying losses with benchmark references",
+      "category": "HYBRID",
+      "expected_intent": "HYBRID",
+      "latency_ms": 9686.563,
+      "answer_text": "Pour le s\u00e9chage des mangues, le taux de perte actuel dans la coop\u00e9rative Deggo Thies est de 15,71 %. En comparaison, le taux de perte de r\u00e9f\u00e9rence pour le s\u00e9chage des mangues dans la r\u00e9gion de l'Afrique de l'Ouest est de 12,0 %. Cela indique que les pertes de la coop\u00e9rative sont sup\u00e9rieures \u00e0 la r\u00e9f\u00e9rence.\n\nPour le lot sp\u00e9cifique LOT-MANG-001, le r\u00e9sum\u00e9 des risques op\u00e9rationnels indique une perte cumulative de 6,0 %, avec un risque class\u00e9 comme faible. La phase la plus sensible est le s\u00e9chage, avec une perte de 5,05 %. Cela montre que, bien que les pertes soient inf\u00e9rieures \u00e0 celles observ\u00e9es au niveau coop\u00e9ratif, elles restent pr\u00e9occupantes.\n\n\u00c0 un niveau de produit, le taux de perte pour le s\u00e9chage des mangues est de 5,05 %, ce qui est sup\u00e9rieur \u00e0 la perte moyenne de 3,03 % pour le produit mangue dans son ensemble. Cela sugg\u00e8re que le processus de s\u00e9chage n\u00e9cessite une attention particuli\u00e8re.\n\nCompar\u00e9 aux r\u00e9f\u00e9rences, les pertes de la coop\u00e9rative sont significativement plus \u00e9lev\u00e9es que celles observ\u00e9es dans d'autres contextes, ce qui pourrait indiquer des inefficacit\u00e9s dans le processus de s\u00e9chage.\n\nIl est recommand\u00e9 d'examiner les processus",
+      "observed": {
+        "intent_type": "HYBRID",
+        "sql_needed": true,
+        "rag_needed": true,
+        "orchestration_confidence_score": 0.64,
+        "orchestration_confidence_label": "MEDIUM",
+        "contamination_risk": 0.0,
+        "warning_flags": [
+          "CONTRADICTORY_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE",
+          "ML_LOGS_EMPTY"
+        ],
+        "chunk_types": {
+          "operational_risk_summary": 1,
+          "product_stage_summary": 1,
+          "scoped_loss_summary": 1,
+          "process_step_summary": 1
+        },
+        "citations_count": 4,
+        "ui_blocks_count": 4,
+        "citations": [
+          {
+            "source_id": "batches:batch_risk:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "source_url": "app://batches/batch_risk:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "region": "thies",
+            "crop": "Mangue",
+            "topic": "operational_risk_summary",
+            "excerpt": "Operational risk summary for lot LOT-MANG-001 (Mangue): cumulative loss is 6.0% with risk classified as LOW. Most sensitive stage is Sechage at 5.05% loss. Recommended mitigation: Process indicators are stable. Keep w..."
+          },
+          {
+            "source_id": "process_steps:process_step_scope:1128f318-deb6-47c5-8529-6714fa028067",
+            "source_url": "app://process_steps/process_step_scope:1128f318-deb6-47c5-8529-6714fa028067",
+            "region": "thies",
+            "crop": "Mangue",
+            "topic": "product_stage_summary",
+            "excerpt": "For product Mangue at stage Nettoyage, lot LOT-MANG-001 processed 100.0 kg into 99.0 kg with 1.0% loss and 99.0% efficiency. Recent product-stage average loss is 1.0%. Cooperative-wide stage average is 0.5%, which can..."
+          },
+          {
+            "source_id": "process_steps:process_step_scoped_loss:1128f318-deb6-47c5-8529-6714fa028067",
+            "source_url": "app://process_steps/process_step_scoped_loss:1128f318-deb6-47c5-8529-6714fa028067",
+            "region": "thies",
+            "crop": "Mangue",
+            "topic": "scoped_loss_summary",
+            "excerpt": "Mangue at stage Nettoyage shows 1.0% loss, while cooperative-wide average is 0.5%. The cooperative average is affected by unrelated product signals such as bissap (0.0% loss). Do not treat this as direct Mangue evidence."
+          },
+          {
+            "source_id": "process_steps:process_step:1128f318-deb6-47c5-8529-6714fa028067",
+            "source_url": "app://process_steps/process_step:1128f318-deb6-47c5-8529-6714fa028067",
+            "region": "thies",
+            "crop": "Mangue",
+            "topic": "process_step_summary",
+            "excerpt": "Process step Nettoyage for lot LOT-MANG-001 (Mangue) transformed 100.0 kg into 99.0 kg, with a loss of 1.0 kg (1.0%). The step status is completed and duration is not recorded minutes."
+          }
+        ]
+      },
+      "scores": {
+        "route_correct": true,
+        "sql_used_correctly": true,
+        "rag_used_correctly": true,
+        "factual_accuracy_score": 0.8,
+        "citation_relevance_score": 0.5,
+        "scope_purity_score": 1.0,
+        "contamination_detected": false,
+        "answer_usefulness_score": 0.9,
+        "ui_blocks_relevant": true,
+        "passed": true,
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 6,
+            "active_filters": {
+              "product_name": [
+                "mango"
+              ],
+              "stage": [
+                "drying"
+              ],
+              "stage_canonical": [
+                "drying"
+              ],
+              "chunk_type": [
+                "agronomic_knowledge",
+                "operational_risk_summary",
+                "scoped_loss_summary",
+                "product_stage_summary",
+                "benchmark_reference",
+                "process_step_summary"
+              ],
+              "source_table": [
+                "batches",
+                "reference_metrics",
+                "knowledge_chunks",
+                "process_steps",
+                "recommendations",
+                "ml_prediction_logs"
+              ],
+              "max_age_minutes": 1440
+            }
+          },
+          "chunk_types": {
+            "product_stage_summary": 2,
+            "scoped_loss_summary": 2,
+            "operational_risk_summary": 1,
+            "process_step_summary": 1
+          },
+          "freshness": {
+            "freshness_count": 6,
+            "freshness_min_minutes": 51.56,
+            "freshness_max_minutes": 51.57,
+            "freshness_avg_minutes": 51.56
+          },
+          "relevance": {
+            "avg_score": 0.346915,
+            "max_score": 0.451765
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 4,
+            "source_table_unique_count": 2
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 1.0,
+            "stage_alignment_score": 0.6667,
+            "operational_priority_score": 1.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.95
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 6
+        },
+        "warnings": [
+          "CONTRADICTORY_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE",
+          "ML_LOGS_EMPTY"
+        ]
+      },
+      "debug": {
+        "filters": {
+          "product_name": [
+            "mango"
+          ],
+          "stage": [
+            "drying"
+          ],
+          "stage_canonical": [
+            "drying"
+          ],
+          "chunk_type": [
+            "agronomic_knowledge",
+            "benchmark_reference",
+            "operational_risk_summary",
+            "process_step_summary",
+            "product_stage_summary",
+            "scoped_loss_summary"
+          ],
+          "source_table": [
+            "batches",
+            "knowledge_chunks",
+            "ml_prediction_logs",
+            "process_steps",
+            "recommendations",
+            "reference_metrics"
+          ],
+          "risk_level": null,
+          "batch_id": [],
+          "batch_codes": [],
+          "max_age_minutes": 1440
+        },
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 6,
+            "active_filters": {
+              "product_name": [
+                "mango"
+              ],
+              "stage": [
+                "drying"
+              ],
+              "stage_canonical": [
+                "drying"
+              ],
+              "chunk_type": [
+                "agronomic_knowledge",
+                "operational_risk_summary",
+                "scoped_loss_summary",
+                "product_stage_summary",
+                "benchmark_reference",
+                "process_step_summary"
+              ],
+              "source_table": [
+                "batches",
+                "reference_metrics",
+                "knowledge_chunks",
+                "process_steps",
+                "recommendations",
+                "ml_prediction_logs"
+              ],
+              "max_age_minutes": 1440
+            }
+          },
+          "chunk_types": {
+            "product_stage_summary": 2,
+            "scoped_loss_summary": 2,
+            "operational_risk_summary": 1,
+            "process_step_summary": 1
+          },
+          "freshness": {
+            "freshness_count": 6,
+            "freshness_min_minutes": 51.56,
+            "freshness_max_minutes": 51.57,
+            "freshness_avg_minutes": 51.56
+          },
+          "relevance": {
+            "avg_score": 0.346915,
+            "max_score": 0.451765
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 4,
+            "source_table_unique_count": 2
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 1.0,
+            "stage_alignment_score": 0.6667,
+            "operational_priority_score": 1.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.95
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 6
+        },
+        "orchestration": {
+          "warning_flags": [
+            "CONTRADICTORY_EVIDENCE",
+            "LOW_GROUNDING_CONFIDENCE",
+            "ML_LOGS_EMPTY"
+          ],
+          "confidence_estimate": {
+            "label": "MEDIUM",
+            "score": 0.68
+          },
+          "contradictory_signals": [
+            "SQL avg loss (25.11%) conflicts with RAG avg loss (3.86%)."
+          ],
+          "grounding_notes": [
+            "Contradictory evidence detected across SQL/RAG/ML signals.",
+            "Conflicts detected: prioritize SQL operational facts over stale semantic values.",
+            "Scope clarification: interpret contradictions within mango / drying first; cooperative-wide aggregates can include other products and distort product-level reasoning."
+          ],
+          "scope_analysis": {
+            "scope_level": "PRODUCT_STAGE",
+            "lot_codes": [],
+            "products": [
+              "mango"
+            ],
+            "stages": [
+              "drying"
+            ],
+            "time_hints": [
+              "current"
+            ],
+            "benchmark_intent": true,
+            "comparative_intent": true
+          },
+          "contamination_diagnostics": {
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0,
+            "scope_purity_score": 1.0,
+            "product_alignment_score": 1.0,
+            "stage_alignment_score": 0.6667,
+            "operational_priority_score": 1.0
+          }
+        },
+        "hits": [
+          {
+            "chunk_id": "18ce4075-8b18-4122-9076-aa021755fb94",
+            "source_table": "process_steps",
+            "source_record_ref": "process_step_scope:e551a40d-ce3e-443b-9684-96ffe2b7860a",
+            "chunk_type": "product_stage_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.927239+00:00",
+            "freshness_age_minutes": 51.56,
+            "retrieval_score": 0.45,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "c73c31aa-dec5-4eef-9988-3ba41bc2056c",
+            "source_table": "process_steps",
+            "source_record_ref": "process_step_scoped_loss:e551a40d-ce3e-443b-9684-96ffe2b7860a",
+            "chunk_type": "scoped_loss_summary",
+            "freshness_timestamp": "2026-05-08T09:50:25.007843+00:00",
+            "freshness_age_minutes": 51.56,
+            "retrieval_score": 0.44,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "4c08f4ad-aa02-4b05-bba4-75fc23c953da",
+            "source_table": "batches",
+            "source_record_ref": "batch_risk:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "chunk_type": "operational_risk_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.047552+00:00",
+            "freshness_age_minutes": 51.57,
+            "retrieval_score": 0.37,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "1085efad-9412-4364-b46b-b8a29d258332",
+            "source_table": "process_steps",
+            "source_record_ref": "process_step:e551a40d-ce3e-443b-9684-96ffe2b7860a",
+            "chunk_type": "process_step_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.848615+00:00",
+            "freshness_age_minutes": 51.56,
+            "retrieval_score": 0.28,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,staleness_penalty"
+          },
+          {
+            "chunk_id": "1a3aa9d4-e812-4a19-a627-7abfdbc1df49",
+            "source_table": "process_steps",
+            "source_record_ref": "process_step_scope:1128f318-deb6-47c5-8529-6714fa028067",
+            "chunk_type": "product_stage_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.687278+00:00",
+            "freshness_age_minutes": 51.56,
+            "retrieval_score": 0.27,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,scope_mismatch_penalty,freshness_boost"
+          },
+          {
+            "chunk_id": "23486902-a27a-420e-a3d5-e0f3f537196f",
+            "source_table": "process_steps",
+            "source_record_ref": "process_step_scoped_loss:1128f318-deb6-47c5-8529-6714fa028067",
+            "chunk_type": "scoped_loss_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.767772+00:00",
+            "freshness_age_minutes": 51.56,
+            "retrieval_score": 0.26,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,scope_mismatch_penalty,freshness_boost"
+          }
+        ]
+      },
+      "passed": true,
+      "factual_accuracy_score": 0.8,
+      "citation_relevance_score": 0.5,
+      "scope_purity_score": 1.0,
+      "answer_usefulness_score": 0.9,
+      "route_correct": true
+    },
+    {
+      "question": "which lot is most risky and what should we do?",
+      "category": "HYBRID",
+      "expected_intent": "HYBRID",
+      "latency_ms": 7960.25,
+      "answer_text": "For the specific lot, LOT-BISS-002 (Bissap) is the most risky, with a cumulative loss of 69.33% and classified as HIGH risk. The most sensitive stage is Sechage, which accounts for 68.0% of the loss. The recommended mitigation is to audit the full stage sequence to identify and address the issues causing such high losses.\n\nAt product-stage level, the Sechage stage for Bissap is critically underperforming, indicating a need for immediate attention to improve processing methods or conditions.\n\nAt cooperative level, the overall loss rate is 15.71%, with an efficiency rate of 84.29%. The average batch loss percentage across all lots is 25.11%, and the worst batch loss percentage is 69.33%. This suggests that while some lots are performing adequately, there are significant outliers that require focused intervention.\n\nCompared with benchmark metrics, the current loss rates indicate that LOT-BISS-002 is significantly underperforming, as the average loss percentage is much lower than the 69.33% observed in this lot.\n\nA practical next step is to conduct an audit of the Sechage stage for LOT-BISS-002 to identify specific issues and implement corrective actions.",
+      "observed": {
+        "intent_type": "HYBRID",
+        "sql_needed": true,
+        "rag_needed": true,
+        "orchestration_confidence_score": 0.89,
+        "orchestration_confidence_label": "HIGH",
+        "contamination_risk": 0.0,
+        "warning_flags": [
+          "ML_LOGS_EMPTY"
+        ],
+        "chunk_types": {
+          "operational_risk_summary": 2,
+          "lot_status_summary": 2
+        },
+        "citations_count": 4,
+        "ui_blocks_count": 4,
+        "citations": [
+          {
+            "source_id": "batches:batch_risk:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "source_url": "app://batches/batch_risk:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "region": "thies",
+            "crop": "Mangue",
+            "topic": "operational_risk_summary",
+            "excerpt": "Operational risk summary for lot LOT-MANG-001 (Mangue): cumulative loss is 6.0% with risk classified as LOW. Most sensitive stage is Sechage at 5.05% loss. Recommended mitigation: Process indicators are stable. Keep w..."
+          },
+          {
+            "source_id": "batches:batch_risk:05ff7878-61bb-4cea-bf86-6518e48ffe6e",
+            "source_url": "app://batches/batch_risk:05ff7878-61bb-4cea-bf86-6518e48ffe6e",
+            "region": "thies",
+            "crop": "Bissap",
+            "topic": "operational_risk_summary",
+            "excerpt": "Operational risk summary for lot LOT-BISS-002 (Bissap): cumulative loss is 69.33% with risk classified as HIGH. Most sensitive stage is Sechage at 68.0% loss. Recommended mitigation: Audit the full stage sequence and..."
+          },
+          {
+            "source_id": "batches:batch_status:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "source_url": "app://batches/batch_status:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "region": "thies",
+            "crop": "Mangue",
+            "topic": "lot_status_summary",
+            "excerpt": "Lot LOT-MANG-001 is in_progress for Mangue. Initial quantity is 100.0 kg, current quantity is 94.0 kg. Completed steps: Nettoyage 1.0% loss, Sechage 5.05% loss. Cumulative loss is 6.0% (6.0 kg) and operational risk is..."
+          },
+          {
+            "source_id": "batches:batch_status:baf91872-912e-48f8-870b-91caf85e879f",
+            "source_url": "app://batches/batch_status:baf91872-912e-48f8-870b-91caf85e879f",
+            "region": "thies",
+            "crop": "Bissap",
+            "topic": "lot_status_summary",
+            "excerpt": "Lot LOT-BISS-001 is created for Bissap. Initial quantity is 450.0 kg, current quantity is 450.0 kg. Completed steps: No completed process steps yet. Cumulative loss is 0.0% (0.0 kg) and operational risk is LOW."
+          }
+        ]
+      },
+      "scores": {
+        "route_correct": true,
+        "sql_used_correctly": true,
+        "rag_used_correctly": true,
+        "factual_accuracy_score": 0.8,
+        "citation_relevance_score": 0.5,
+        "scope_purity_score": 1.0,
+        "contamination_detected": false,
+        "answer_usefulness_score": 1.0,
+        "ui_blocks_relevant": true,
+        "passed": true,
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 2,
+            "active_filters": {
+              "chunk_type": [
+                "batch_summary",
+                "operational_risk_summary",
+                "recommendation_context",
+                "lot_recommendation_summary",
+                "anomaly_summary",
+                "lot_status_summary"
+              ],
+              "source_table": [
+                "ml_recommendation_logs",
+                "batches",
+                "recommendations",
+                "ml_prediction_logs",
+                "recommendation_feedback_logs"
+              ]
+            }
+          },
+          "chunk_types": {
+            "operational_risk_summary": 3,
+            "lot_status_summary": 3
+          },
+          "freshness": {
+            "freshness_count": 6,
+            "freshness_min_minutes": 51.72,
+            "freshness_max_minutes": 51.73,
+            "freshness_avg_minutes": 51.72
+          },
+          "relevance": {
+            "avg_score": 0.329753,
+            "max_score": 0.383514
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 2,
+            "source_table_unique_count": 1
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 1.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.95
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 6
+        },
+        "warnings": [
+          "ML_LOGS_EMPTY"
+        ]
+      },
+      "debug": {
+        "filters": {
+          "product_name": [],
+          "stage": [],
+          "stage_canonical": [],
+          "chunk_type": [
+            "anomaly_summary",
+            "batch_summary",
+            "lot_recommendation_summary",
+            "lot_status_summary",
+            "operational_risk_summary",
+            "recommendation_context"
+          ],
+          "source_table": [
+            "batches",
+            "ml_prediction_logs",
+            "ml_recommendation_logs",
+            "recommendation_feedback_logs",
+            "recommendations"
+          ],
+          "risk_level": null,
+          "batch_id": [],
+          "batch_codes": [],
+          "max_age_minutes": null
+        },
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 2,
+            "active_filters": {
+              "chunk_type": [
+                "batch_summary",
+                "operational_risk_summary",
+                "recommendation_context",
+                "lot_recommendation_summary",
+                "anomaly_summary",
+                "lot_status_summary"
+              ],
+              "source_table": [
+                "ml_recommendation_logs",
+                "batches",
+                "recommendations",
+                "ml_prediction_logs",
+                "recommendation_feedback_logs"
+              ]
+            }
+          },
+          "chunk_types": {
+            "operational_risk_summary": 3,
+            "lot_status_summary": 3
+          },
+          "freshness": {
+            "freshness_count": 6,
+            "freshness_min_minutes": 51.72,
+            "freshness_max_minutes": 51.73,
+            "freshness_avg_minutes": 51.72
+          },
+          "relevance": {
+            "avg_score": 0.329753,
+            "max_score": 0.383514
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 2,
+            "source_table_unique_count": 1
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 1.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.95
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 6
+        },
+        "orchestration": {
+          "warning_flags": [
+            "ML_LOGS_EMPTY"
+          ],
+          "confidence_estimate": {
+            "label": "HIGH",
+            "score": 0.93
+          },
+          "contradictory_signals": [],
+          "grounding_notes": [
+            "Grounding quality is consistent with available retrieval evidence."
+          ],
+          "scope_analysis": {
+            "scope_level": "COOPERATIVE",
+            "lot_codes": [],
+            "products": [],
+            "stages": [],
+            "time_hints": [],
+            "benchmark_intent": false,
+            "comparative_intent": false
+          },
+          "contamination_diagnostics": {
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0,
+            "scope_purity_score": 1.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 1.0
+          }
+        },
+        "hits": [
+          {
+            "chunk_id": "4c08f4ad-aa02-4b05-bba4-75fc23c953da",
+            "source_table": "batches",
+            "source_record_ref": "batch_risk:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "chunk_type": "operational_risk_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.047552+00:00",
+            "freshness_age_minutes": 51.73,
+            "retrieval_score": 0.38,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "1bd016d1-b9fd-4ca7-8df8-222b9b0b4038",
+            "source_table": "batches",
+            "source_record_ref": "batch_risk:05ff7878-61bb-4cea-bf86-6518e48ffe6e",
+            "chunk_type": "operational_risk_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.527223+00:00",
+            "freshness_age_minutes": 51.72,
+            "retrieval_score": 0.38,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "b3541673-922d-426d-b27f-a8b0b25429a9",
+            "source_table": "batches",
+            "source_record_ref": "batch_status:b41542eb-9132-4980-8547-de1eeb5d5393",
+            "chunk_type": "lot_status_summary",
+            "freshness_timestamp": "2026-05-08T09:50:23.967835+00:00",
+            "freshness_age_minutes": 51.73,
+            "retrieval_score": 0.3,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "92fdcf7c-6267-4226-b429-9a251f71a2e6",
+            "source_table": "batches",
+            "source_record_ref": "batch_status:baf91872-912e-48f8-870b-91caf85e879f",
+            "chunk_type": "lot_status_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.209201+00:00",
+            "freshness_age_minutes": 51.72,
+            "retrieval_score": 0.3,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "a69f8ff4-7b33-4a03-bb98-9e120bf35fe9",
+            "source_table": "batches",
+            "source_record_ref": "batch_risk:baf91872-912e-48f8-870b-91caf85e879f",
+            "chunk_type": "operational_risk_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.284362+00:00",
+            "freshness_age_minutes": 51.72,
+            "retrieval_score": 0.3,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,freshness_boost"
+          },
+          {
+            "chunk_id": "a82256ab-62df-419f-a5b2-a9b69f0d8630",
+            "source_table": "batches",
+            "source_record_ref": "batch_status:05ff7878-61bb-4cea-bf86-6518e48ffe6e",
+            "chunk_type": "lot_status_summary",
+            "freshness_timestamp": "2026-05-08T09:50:24.447960+00:00",
+            "freshness_age_minutes": 51.72,
+            "retrieval_score": 0.3,
+            "retrieval_reason": "chunk_type_boost,scope_match_boost,freshness_boost"
+          }
+        ]
+      },
+      "passed": true,
+      "factual_accuracy_score": 0.8,
+      "citation_relevance_score": 0.5,
+      "scope_purity_score": 1.0,
+      "answer_usefulness_score": 1.0,
+      "route_correct": true
+    },
+    {
+      "question": "why does the ML prediction differ from current operational losses?",
+      "category": "HYBRID",
+      "expected_intent": "HYBRID",
+      "latency_ms": 9382.708,
+      "answer_text": "The ML prediction indicates a loss rate of 3.44%, while the current operational loss rate is 15.71%. This discrepancy arises from conflicting evidence between the SQL operational metrics and the ML predictions. Specifically, the average batch loss percentage is reported at 25.11%, which is significantly higher than the ML prediction.\n\nFor the specific lot, the average batch loss percentage (25.11%) suggests that there are batches experiencing higher losses, which the ML model may not be capturing accurately. The worst batch loss percentage is even higher at 69.33%, indicating that some batches are performing poorly.\n\nAt the cooperative level, the operational loss rate of 15.71% reflects the overall performance across all batches, which is not aligned with the ML prediction. This suggests that the ML model may not be fully accounting for the current operational realities.\n\nCompared with benchmark data, the ML prediction appears to underestimate the actual losses experienced in the cooperative. The operational metrics indicate a more severe loss situation than what the ML model predicts.\n\nML interpretation indicates that the model may be outdated or not sufficiently trained on recent data, leading to a low-risk assessment that does not align with current operational facts. The confidence score of 0.42 suggests low reliability in the ML predictions.\n\nA practical next step would be to review the ML model's training data and update it with the latest operational data to improve its accuracy in",
+      "observed": {
+        "intent_type": "HYBRID",
+        "sql_needed": true,
+        "rag_needed": true,
+        "orchestration_confidence_score": 0.42,
+        "orchestration_confidence_label": "LOW",
+        "contamination_risk": 0.0,
+        "warning_flags": [
+          "CONTRADICTORY_EVIDENCE",
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE"
+        ],
+        "chunk_types": {},
+        "citations_count": 0,
+        "ui_blocks_count": 4,
+        "citations": []
+      },
+      "scores": {
+        "route_correct": true,
+        "sql_used_correctly": true,
+        "rag_used_correctly": true,
+        "factual_accuracy_score": 0.8,
+        "citation_relevance_score": 0.0,
+        "scope_purity_score": 1.0,
+        "contamination_detected": false,
+        "answer_usefulness_score": 1.0,
+        "ui_blocks_relevant": true,
+        "passed": false,
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 3,
+            "active_filters": {
+              "chunk_type": [
+                "scoped_loss_summary",
+                "operational_risk_summary",
+                "ml_evaluation_context"
+              ],
+              "source_table": [
+                "batches",
+                "process_steps",
+                "recommendations",
+                "ml_model_registry",
+                "ml_prediction_logs",
+                "ml_training_runs"
+              ],
+              "max_age_minutes": 1440
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "warnings": [
+          "CONTRADICTORY_EVIDENCE",
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE"
+        ]
+      },
+      "debug": {
+        "filters": {
+          "product_name": [],
+          "stage": [],
+          "stage_canonical": [],
+          "chunk_type": [
+            "ml_evaluation_context",
+            "operational_risk_summary",
+            "scoped_loss_summary"
+          ],
+          "source_table": [
+            "batches",
+            "ml_model_registry",
+            "ml_prediction_logs",
+            "ml_training_runs",
+            "process_steps",
+            "recommendations"
+          ],
+          "risk_level": null,
+          "batch_id": [],
+          "batch_codes": [],
+          "max_age_minutes": 1440
+        },
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 3,
+            "active_filters": {
+              "chunk_type": [
+                "scoped_loss_summary",
+                "operational_risk_summary",
+                "ml_evaluation_context"
+              ],
+              "source_table": [
+                "batches",
+                "process_steps",
+                "recommendations",
+                "ml_model_registry",
+                "ml_prediction_logs",
+                "ml_training_runs"
+              ],
+              "max_age_minutes": 1440
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "orchestration": {
+          "warning_flags": [
+            "CONTRADICTORY_EVIDENCE",
+            "LIMITED_EVIDENCE",
+            "LOW_GROUNDING_CONFIDENCE"
+          ],
+          "confidence_estimate": {
+            "label": "LOW",
+            "score": 0.42
+          },
+          "contradictory_signals": [
+            "SQL avg loss (25.11%) conflicts with ML predicted loss (3.44%)."
+          ],
+          "grounding_notes": [
+            "Contradictory evidence detected across SQL/RAG/ML signals.",
+            "No semantic retrieval evidence available.",
+            "Conflicts detected: prioritize SQL operational facts over stale semantic values."
+          ],
+          "scope_analysis": {
+            "scope_level": "COOPERATIVE",
+            "lot_codes": [],
+            "products": [],
+            "stages": [],
+            "time_hints": [
+              "current"
+            ],
+            "benchmark_intent": false,
+            "comparative_intent": false
+          },
+          "contamination_diagnostics": {
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0,
+            "scope_purity_score": 1.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0
+          }
+        },
+        "hits": []
+      },
+      "passed": false,
+      "factual_accuracy_score": 0.8,
+      "citation_relevance_score": 0.0,
+      "scope_purity_score": 1.0,
+      "answer_usefulness_score": 1.0,
+      "route_correct": true
+    },
+    {
+      "question": "what is the best movie this week?",
+      "category": "UNSUPPORTED",
+      "expected_intent": "UNSUPPORTED",
+      "latency_ms": 2479.905,
+      "answer_text": "I am designed for agricultural cooperative operations: stocks, batches, post-harvest process, members, commercialization, invoicing, treasury, recommendations, and agronomic context. Please ask a question in that scope.",
+      "observed": {
+        "intent_type": "UNSUPPORTED",
+        "sql_needed": false,
+        "rag_needed": false,
+        "orchestration_confidence_score": 0.55,
+        "orchestration_confidence_label": "MEDIUM",
+        "contamination_risk": 0.0,
+        "warning_flags": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE",
+          "SQL_CONTEXT_MISSING"
+        ],
+        "chunk_types": {},
+        "citations_count": 0,
+        "ui_blocks_count": 1,
+        "citations": []
+      },
+      "scores": {
+        "route_correct": true,
+        "sql_used_correctly": true,
+        "rag_used_correctly": true,
+        "factual_accuracy_score": 1.0,
+        "citation_relevance_score": 0.0,
+        "scope_purity_score": 1.0,
+        "contamination_detected": false,
+        "answer_usefulness_score": 1.0,
+        "ui_blocks_relevant": true,
+        "passed": true,
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 1,
+            "active_filters": {
+              "max_age_minutes": 10080
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "warnings": [
+          "LIMITED_EVIDENCE",
+          "LOW_GROUNDING_CONFIDENCE",
+          "SQL_CONTEXT_MISSING"
+        ]
+      },
+      "debug": {
+        "filters": {
+          "product_name": [],
+          "stage": [],
+          "stage_canonical": [],
+          "chunk_type": [],
+          "source_table": [],
+          "risk_level": null,
+          "batch_id": [],
+          "batch_codes": [],
+          "max_age_minutes": 10080
+        },
+        "retrieval_diagnostics": {
+          "filters": {
+            "active_filter_count": 1,
+            "active_filters": {
+              "max_age_minutes": 10080
+            }
+          },
+          "chunk_types": {},
+          "freshness": {
+            "freshness_count": 0
+          },
+          "relevance": {
+            "avg_score": 0.0,
+            "max_score": 0.0
+          },
+          "chunk_diversity": {
+            "chunk_type_unique_count": 0,
+            "source_table_unique_count": 0
+          },
+          "scope": {
+            "scope_purity_score": 1.0,
+            "contamination_rate": 0.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0,
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0
+          },
+          "freshness_quality": {
+            "freshness_quality_score": 0.5
+          },
+          "contradiction_summary": {
+            "contradiction_count": 0,
+            "contradictions": []
+          },
+          "sql_rag_agreement": {
+            "alignment": "aligned"
+          },
+          "hit_count": 0
+        },
+        "orchestration": {
+          "warning_flags": [
+            "LIMITED_EVIDENCE",
+            "LOW_GROUNDING_CONFIDENCE",
+            "SQL_CONTEXT_MISSING"
+          ],
+          "confidence_estimate": {
+            "label": "MEDIUM",
+            "score": 0.55
+          },
+          "contradictory_signals": [],
+          "grounding_notes": [
+            "No semantic retrieval evidence available.",
+            "No SQL metrics were available for grounding."
+          ],
+          "scope_analysis": {
+            "scope_level": "COOPERATIVE",
+            "lot_codes": [],
+            "products": [],
+            "stages": [],
+            "time_hints": [
+              "this week"
+            ],
+            "benchmark_intent": false,
+            "comparative_intent": false
+          },
+          "contamination_diagnostics": {
+            "unrelated_product_evidence_count": 0,
+            "unrelated_scope_penalty": 0.0,
+            "contamination_risk_score": 0.0,
+            "scope_purity_score": 1.0,
+            "product_alignment_score": 0.0,
+            "stage_alignment_score": 0.0,
+            "operational_priority_score": 0.0
+          }
+        },
+        "hits": []
+      },
+      "passed": true,
+      "factual_accuracy_score": 1.0,
+      "citation_relevance_score": 0.0,
+      "scope_purity_score": 1.0,
+      "answer_usefulness_score": 1.0,
+      "route_correct": true
+    }
+  ],
+  "aggregate_metrics": {
+    "pass_rate": 0.9,
+    "avg_factual_accuracy": 0.905,
+    "avg_citation_relevance": 0.26,
+    "avg_scope_purity": 1.0,
+    "avg_answer_usefulness": 0.93,
+    "sql_only_pass_rate": 1.0,
+    "rag_only_pass_rate": 1.0,
+    "hybrid_pass_rate": 0.75,
+    "unsupported_pass_rate": 1.0
+  },
+  "failure_patterns": [
+    "Hybrid answers show weak citation relevance in some cases."
+  ],
+  "recommendation": "Phase 6 should start only if hybrid and RAG-only pass rates are both >= 0.70 and no contamination failures are present."
+}

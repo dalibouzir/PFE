@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     ml_calibration_drift_threshold: float = 0.08
     ml_recommendation_confidence_threshold: float = 0.55
     ml_harmful_probability_threshold: float = 0.35
+    ml_risk_low_threshold: float = 6.0
+    ml_risk_high_threshold: float = 12.0
+    ml_expected_feature_schema_version: str = "phase4-v1"
+    ml_max_false_low_high_risk_rate: float = 0.35
+    ml_production_min_rows: int = 3000
+    ml_monitoring_low_data_rows: int = 2000
+    ml_distribution_shift_threshold: float = 0.2
 
     llm_provider: str = "openrouter"
     llm_model: str = "openai/gpt-4o-mini"

@@ -40,6 +40,7 @@ from app.services.helpers import (
     round_metric,
     to_kg,
 )
+from app.services.rag_reindex_hooks import reindex_commercial_if_needed
 from app.services.stocks import apply_total_stock_delta, available_stock_kg
 from app.utils.exceptions import NotFoundError, ValidationError
 
@@ -365,6 +366,12 @@ def intake_order(db: Session, manager: User, payload) -> CommercialOrderRead:
 
     db.commit()
     db.refresh(order)
+    reindex_commercial_if_needed(
+        db,
+        current_user=manager,
+        cooperative_id=cooperative_id,
+        order_id=order.id,
+    )
     order = _require_order(db, cooperative_id, order.id)
     return _serialize_order(order)
 
@@ -618,6 +625,13 @@ def update_order_status(db: Session, manager: User, order_id, payload) -> Commer
 
     order.status = next_status
     db.commit()
+    reindex_commercial_if_needed(
+        db,
+        current_user=manager,
+        cooperative_id=cooperative_id,
+        order_id=order.id,
+        invoice_id=order.invoice.id if order.invoice else None,
+    )
 
     order = _require_order(db, cooperative_id, order.id)
     return _serialize_order(order)

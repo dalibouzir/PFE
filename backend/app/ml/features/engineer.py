@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.ml.utils.stage_normalization import normalize_stage
 from app.models.batch import Batch
 from app.models.process_step import ProcessStep
 from app.models.product import Product
@@ -34,12 +35,6 @@ def _season_for_month(month: int) -> str:
         if month in months:
             return season
     return "dry"
-
-
-def _safe_ratio(numerator: float, denominator: float) -> float:
-    if denominator <= 0:
-        return 0.0
-    return numerator / denominator
 
 
 def _to_date(value: date) -> pd.Timestamp:
@@ -87,11 +82,42 @@ def build_features(db: Session, batch_id: Optional[str] = None) -> FeatureSet:
     df["date"] = df["date"].apply(_to_date)
     df = df.sort_values(["date", "batch_id"], ascending=True)
 
-    df["loss_pct"] = ((df["qty_in"] - df["qty_out"]) / df["qty_in"]) * 100.0
-    df["efficiency_pct"] = df.apply(lambda row: _safe_ratio(row["qty_out"], row["qty_in"]), axis=1)
+    qty_in = pd.to_numeric(df["qty_in"], errors="coerce").fillna(0.0)
+    qty_out = pd.to_numeric(df["qty_out"], errors="coerce").fillna(0.0)
+    valid_input = qty_in > 0
+
+    df["loss_pct"] = np.where(valid_input, ((qty_in - qty_out) / qty_in) * 100.0, 0.0)
+    df["loss_pct"] = pd.Series(df["loss_pct"]).replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(lower=0.0)
+    df["efficiency_pct"] = np.where(valid_input, qty_out / qty_in, 0.0)
+    df["efficiency_pct"] = pd.Series(df["efficiency_pct"]).replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(lower=0.0)
     df["month"] = df["date"].dt.month
     df["week_of_year"] = df["date"].dt.isocalendar().week.astype(int)
     df["season"] = df["month"].apply(_season_for_month)
+    df["stage_canonical"] = df["process_type"].apply(normalize_stage)
+    df["stage_order"] = df["stage_canonical"].map(
+        {"cleaning": 1, "drying": 2, "sorting": 3, "packaging": 4}
+    ).fillna(0).astype(int)
+    df["is_drying_stage"] = (df["stage_canonical"] == "drying").astype(int)
+    df["is_sorting_stage"] = (df["stage_canonical"] == "sorting").astype(int)
+    df["is_packaging_stage"] = (df["stage_canonical"] == "packaging").astype(int)
+    df["stock_pressure_ratio"] = np.where(
+        pd.to_numeric(df["batch_size"], errors="coerce").fillna(0.0) > 0,
+        pd.to_numeric(df["stock_level"], errors="coerce").fillna(0.0)
+        / pd.to_numeric(df["batch_size"], errors="coerce").fillna(1.0),
+        0.0,
+    )
+    df["stock_pressure_ratio"] = (
+        pd.to_numeric(df["stock_pressure_ratio"], errors="coerce")
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0.0)
+    )
+    df["qty_in_log"] = np.log1p(pd.to_numeric(df["qty_in"], errors="coerce").fillna(0.0).clip(lower=0.0))
+    df["batch_size_log"] = np.log1p(pd.to_numeric(df["batch_size"], errors="coerce").fillna(0.0).clip(lower=0.0))
+    df["product_stage_key"] = (
+        df["product"].astype(str).str.lower().str.strip()
+        + "|"
+        + df["stage_canonical"].astype(str).str.lower().str.strip()
+    )
 
     df["historical_avg_loss_same_product"] = (
         df.groupby("product")["loss_pct"].expanding().mean().shift(1).reset_index(level=0, drop=True)
@@ -101,6 +127,47 @@ def build_features(db: Session, batch_id: Optional[str] = None) -> FeatureSet:
     )
     df["historical_avg_efficiency_same_stage"] = (
         df.groupby("process_type")["efficiency_pct"].expanding().mean().shift(1).reset_index(level=0, drop=True)
+    )
+    df["product_stage_historical_avg_loss"] = (
+        df.groupby("product_stage_key")["loss_pct"].expanding().mean().shift(1).reset_index(level=0, drop=True)
+    )
+    df["product_stage_historical_median_loss"] = (
+        df.groupby("product_stage_key")["loss_pct"].expanding().median().shift(1).reset_index(level=0, drop=True)
+    )
+    df["product_stage_rolling_loss_last_5"] = (
+        df.groupby("product_stage_key")["loss_pct"]
+        .rolling(5, min_periods=1)
+        .mean()
+        .shift(1)
+        .reset_index(level=0, drop=True)
+    )
+    df["product_stage_rolling_loss_last_10"] = (
+        df.groupby("product_stage_key")["loss_pct"]
+        .rolling(10, min_periods=1)
+        .mean()
+        .shift(1)
+        .reset_index(level=0, drop=True)
+    )
+    df["stage_season_avg_loss"] = (
+        df.groupby(["stage_canonical", "season"])["loss_pct"]
+        .expanding()
+        .mean()
+        .shift(1)
+        .reset_index(level=[0, 1], drop=True)
+    )
+    df["product_stage_season_avg_loss"] = (
+        df.groupby(["product_stage_key", "season"])["loss_pct"]
+        .expanding()
+        .mean()
+        .shift(1)
+        .reset_index(level=[0, 1], drop=True)
+    )
+    df["loss_volatility_product_stage"] = (
+        df.groupby("product_stage_key")["loss_pct"]
+        .rolling(5, min_periods=3)
+        .std()
+        .shift(1)
+        .reset_index(level=0, drop=True)
     )
 
     df["deviation_from_stage_avg"] = df["loss_pct"] - df["historical_avg_loss_same_stage"]
@@ -118,6 +185,9 @@ def build_features(db: Session, batch_id: Optional[str] = None) -> FeatureSet:
     batch_summary["previous_batch_loss"] = (
         batch_summary.groupby("product")["batch_loss"].shift(1)
     )
+    batch_summary["days_since_previous_batch"] = (
+        batch_summary.groupby("product")["batch_date"].diff().dt.days
+    )
     batch_summary["rolling_loss_last_n_batches"] = (
         batch_summary.groupby("product")["batch_loss"]
         .rolling(settings.ml_rolling_window, min_periods=1)
@@ -134,19 +204,37 @@ def build_features(db: Session, batch_id: Optional[str] = None) -> FeatureSet:
     )
 
     df = df.merge(
-        batch_summary[["batch_id", "previous_batch_loss", "rolling_loss_last_n_batches", "rolling_efficiency_last_n_batches"]],
+        batch_summary[
+            [
+                "batch_id",
+                "previous_batch_loss",
+                "days_since_previous_batch",
+                "rolling_loss_last_n_batches",
+                "rolling_efficiency_last_n_batches",
+            ]
+        ],
         on="batch_id",
         how="left",
     )
 
+    default_loss_pct = float(settings.step_loss_threshold)
+    default_efficiency = max(0.0, 1.0 - default_loss_pct / 100.0)
     fill_defaults = {
-        "historical_avg_loss_same_product": df["loss_pct"].mean(),
-        "historical_avg_loss_same_stage": df["loss_pct"].mean(),
-        "historical_avg_efficiency_same_stage": df["efficiency_pct"].mean(),
+        "historical_avg_loss_same_product": default_loss_pct,
+        "historical_avg_loss_same_stage": default_loss_pct,
+        "historical_avg_efficiency_same_stage": default_efficiency,
+        "product_stage_historical_avg_loss": default_loss_pct,
+        "product_stage_historical_median_loss": default_loss_pct,
+        "product_stage_rolling_loss_last_5": default_loss_pct,
+        "product_stage_rolling_loss_last_10": default_loss_pct,
+        "stage_season_avg_loss": default_loss_pct,
+        "product_stage_season_avg_loss": default_loss_pct,
+        "loss_volatility_product_stage": 0.0,
         "deviation_from_stage_avg": 0.0,
-        "previous_batch_loss": df["loss_pct"].mean(),
-        "rolling_loss_last_n_batches": df["loss_pct"].mean(),
-        "rolling_efficiency_last_n_batches": df["efficiency_pct"].mean(),
+        "previous_batch_loss": default_loss_pct,
+        "days_since_previous_batch": 0.0,
+        "rolling_loss_last_n_batches": default_loss_pct,
+        "rolling_efficiency_last_n_batches": default_efficiency,
     }
 
     df = df.fillna(fill_defaults)
@@ -155,21 +243,40 @@ def build_features(db: Session, batch_id: Optional[str] = None) -> FeatureSet:
         df = df[df["batch_id"].astype(str) == str(batch_id)]
 
     feature_columns = [
+        "batch_id",
+        "cooperative_id",
         "product",
         "process_type",
+        "stage_canonical",
+        "product_stage_key",
         "qty_in",
+        "qty_in_log",
         "qty_out",
         "batch_size",
+        "batch_size_log",
         "stock_level",
+        "stock_pressure_ratio",
         "date",
         "month",
         "week_of_year",
         "season",
+        "stage_order",
+        "is_drying_stage",
+        "is_sorting_stage",
+        "is_packaging_stage",
         "historical_avg_loss_same_product",
         "historical_avg_loss_same_stage",
         "historical_avg_efficiency_same_stage",
+        "product_stage_historical_avg_loss",
+        "product_stage_historical_median_loss",
+        "product_stage_rolling_loss_last_5",
+        "product_stage_rolling_loss_last_10",
+        "stage_season_avg_loss",
+        "product_stage_season_avg_loss",
+        "loss_volatility_product_stage",
         "deviation_from_stage_avg",
         "previous_batch_loss",
+        "days_since_previous_batch",
         "rolling_loss_last_n_batches",
         "rolling_efficiency_last_n_batches",
         "loss_pct",

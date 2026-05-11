@@ -13,6 +13,7 @@ from app.models.pre_harvest_step import PreHarvestStep
 from app.models.user import User
 from app.schemas.pre_harvest import PreHarvestStepUpdate
 from app.services.helpers import ensure_can_delete, ensure_can_write, get_manager_cooperative_id, round_metric
+from app.services.rag_reindex_hooks import reindex_parcel_if_needed
 from app.utils.exceptions import NotFoundError, ValidationError
 
 DEFAULT_STEP_TEMPLATE = [
@@ -91,6 +92,7 @@ def create_parcel(db: Session, current_user: User, payload) -> Parcel:
     _create_default_steps(db, cooperative_id, parcel, current_user.id)
     db.commit()
     db.refresh(parcel)
+    reindex_parcel_if_needed(db, current_user=current_user, parcel_id=parcel.id, cooperative_id=cooperative_id)
     return parcel
 
 
@@ -113,6 +115,7 @@ def update_parcel(db: Session, current_user: User, parcel_id, payload) -> Parcel
         parcel.tree_count = data["tree_count"]
     db.commit()
     db.refresh(parcel)
+    reindex_parcel_if_needed(db, current_user=current_user, parcel_id=parcel.id, cooperative_id=cooperative_id)
     return parcel
 
 
@@ -122,6 +125,7 @@ def delete_parcel(db: Session, current_user: User, parcel_id):
     parcel = _require_parcel(db, cooperative_id, parcel_id)
     db.delete(parcel)
     db.commit()
+    reindex_parcel_if_needed(db, current_user=current_user, parcel_id=parcel.id, cooperative_id=cooperative_id)
 
 
 def list_pre_harvest_steps(db: Session, current_user: User, parcel_id) -> Sequence[PreHarvestStep]:
@@ -148,6 +152,7 @@ def init_pre_harvest_steps(db: Session, current_user: User, parcel_id) -> int:
         return 0
     created = _create_default_steps(db, cooperative_id, parcel, current_user.id)
     db.commit()
+    reindex_parcel_if_needed(db, current_user=current_user, parcel_id=parcel.id, cooperative_id=cooperative_id)
     return created
 
 
@@ -192,6 +197,13 @@ def update_pre_harvest_step(db: Session, current_user: User, parcel_id, step_id,
     step.updated_by_user_id = current_user.id
     db.commit()
     db.refresh(step)
+    reindex_parcel_if_needed(
+        db,
+        current_user=current_user,
+        parcel_id=parcel_id,
+        cooperative_id=cooperative_id,
+        pre_harvest_step_id=step.id,
+    )
     return step
 
 
@@ -212,4 +224,11 @@ def complete_pre_harvest_step(db: Session, current_user: User, parcel_id, step_i
     step.updated_by_user_id = current_user.id
     db.commit()
     db.refresh(step)
+    reindex_parcel_if_needed(
+        db,
+        current_user=current_user,
+        parcel_id=parcel_id,
+        cooperative_id=cooperative_id,
+        pre_harvest_step_id=step.id,
+    )
     return step

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
+import { AIInsightsStrip, type AIInsightItem } from "@/components/ui/AIInsightsStrip";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
@@ -114,7 +115,7 @@ export default function ParcellesCulturePage() {
     return parcels.find((item) => item.id === selectedParcelId) ?? null;
   }, [parcelsQuery.data, selectedParcelId]);
   const stepsQuery = usePreHarvestSteps(selectedParcel?.id ?? null);
-  const steps = stepsQuery.data ?? [];
+  const steps = useMemo(() => stepsQuery.data ?? [], [stepsQuery.data]);
   const chargesQuery = useFarmerCharges(selectedFarmer?.id ?? null);
   const charges = chargesQuery.data;
 
@@ -253,6 +254,63 @@ export default function ParcellesCulturePage() {
     }
     return `Conseil IA basé sur ${selectedFarmer.full_name} / ${selectedParcel.name} : ${completedCount}/${steps.length} étapes réalisées. Priorisez les étapes restantes avant récolte.`;
   }, [selectedFarmer, selectedParcel, steps.length, completedCount]);
+
+  const preHarvestInsights = useMemo<AIInsightItem[]>(() => {
+    if (!selectedFarmer || !selectedParcel) {
+      return [
+        {
+          id: "select-context",
+          title: "Contexte requis",
+          message: "Selectionnez un agriculteur et une parcelle pour obtenir un conseil IA contextualise.",
+          tone: "info",
+        },
+      ];
+    }
+
+    const pending = steps.filter((item) => item.status !== "completed");
+    const doneRatio = steps.length > 0 ? completedCount / steps.length : 0;
+    const riskyPending = pending.filter((item) =>
+      ["phytosanitary_treatment", "fertilization", "irrigation"].includes(item.step_key),
+    );
+    const recentCharges = charges?.items.slice(0, 5) ?? [];
+    const recentChargeAmount = recentCharges.reduce((sum, item) => sum + item.amount_fcfa, 0);
+
+    const items: AIInsightItem[] = [
+      {
+        id: "cycle-progress",
+        title: doneRatio < 0.5 ? "Cycle pre-recolte en retard" : "Cycle pre-recolte en bonne voie",
+        message: `${completedCount}/${steps.length || 0} etapes realisees pour ${selectedParcel.name}.`,
+        tone: doneRatio < 0.5 ? "warning" : "success",
+        meta: doneRatio < 0.5 ? "Planifier les etapes restantes cette semaine." : "Maintenir la cadence actuelle.",
+      },
+    ];
+
+    if (riskyPending.length > 0) {
+      items.push({
+        id: "critical-remaining",
+        title: "Etapes sensibles non realisees",
+        message: `${riskyPending.length} etape(s) critique(s) en attente: ${riskyPending
+          .slice(0, 2)
+          .map((item) => item.label)
+          .join(", ")}${riskyPending.length > 2 ? "..." : ""}.`,
+        tone: "critical",
+        meta: "Prioriser avant la fenetre de recolte pour limiter le risque terrain.",
+      });
+    }
+
+    items.push({
+      id: "charge-signal",
+      title: "Signal cout pre-recolte",
+      message: `Charges recentes: ${recentChargeAmount.toLocaleString("fr-FR")} FCFA.`,
+      tone: recentChargeAmount > 200000 ? "warning" : "info",
+      meta:
+        recentChargeAmount > 200000
+          ? "Verifier l'impact des charges sur le rendement attendu."
+          : "Cout sous controle, continuer le suivi des justificatifs.",
+    });
+
+    return items.slice(0, 4);
+  }, [selectedFarmer, selectedParcel, steps, completedCount, charges?.items]);
 
   return (
     <main>
@@ -393,6 +451,12 @@ export default function ParcellesCulturePage() {
               <div className="h-2 rounded-full bg-[#168A4A]" style={{ width: `${progress}%` }} />
             </div>
           </div>
+
+          <AIInsightsStrip
+            title="Conseils IA pre-recolte"
+            subtitle="Lecture operationnelle pour la parcelle selectionnee."
+            items={preHarvestInsights}
+          />
 
           <h4 className="mb-3 text-base font-semibold text-[var(--text)]">
             🌱 Phases pré-récolte — {selectedParcel?.main_culture ?? "-"}
@@ -576,6 +640,17 @@ export default function ParcellesCulturePage() {
 
       <LiquidGlassModal open={aiModalOpen} onClose={() => setAiModalOpen(false)} title="🤖 Conseils IA" subtitle="Conseil contextuel basé sur les données disponibles." size="md">
         <p className="text-sm text-[var(--text)]">{aiAdvice}</p>
+        <div className="mt-3 space-y-2">
+          {preHarvestInsights.map((item) => (
+            <div key={item.id} className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+              <p className="text-xs font-semibold text-[var(--text)]">{item.title}</p>
+              <p className="text-xs text-[var(--muted)]">{item.message}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-[11px] text-[var(--muted)]">
+          Note: ce conseil reste une aide a la decision et doit etre confirme par verification terrain.
+        </p>
       </LiquidGlassModal>
     </main>
   );

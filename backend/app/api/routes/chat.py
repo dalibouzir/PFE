@@ -40,6 +40,11 @@ def create_session(payload: ChatSessionCreate, db: Session = Depends(get_db), cu
     return assistant_service.create_chat_session(db, current_user, title=payload.title)
 
 
+@router.delete("/sessions/{session_id}", status_code=204, summary="Delete a chat session and all related messages.")
+def delete_session(session_id: UUID, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    assistant_service.delete_chat_session(db, current_user, session_id)
+
+
 @router.get("/sessions/{session_id}/messages", response_model=List[ChatMessageRead], summary="List all messages in one chat session.")
 def list_messages(session_id: UUID, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     return assistant_service.list_chat_messages(db, current_user, session_id)

@@ -34,6 +34,27 @@ def test_load_model_bundle_rejects_invalid_metadata(tmp_path, monkeypatch):
         load_model_bundle()
 
 
+def test_load_model_bundle_rejects_forbidden_predictive_features(tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "ml_artifacts_path", str(tmp_path))
+
+    joblib.dump(object(), tmp_path / MODEL_FILES["loss_regressor"])
+    joblib.dump(object(), tmp_path / MODEL_FILES["risk_classifier"])
+    joblib.dump(object(), tmp_path / MODEL_FILES["anomaly_detector"])
+    (tmp_path / MODEL_FILES["feature_metadata"]).write_text(
+        json.dumps(
+            {
+                "model_version": "old-contaminated",
+                "predictive_regression_features": ["product", "deviation_from_stage_avg", "date_ordinal"],
+                "predictive_classification_features": ["product", "deviation_from_stage_avg", "date_ordinal"],
+                "assessment_anomaly_features": ["product", "loss_pct", "date_ordinal"],
+            }
+        )
+    )
+
+    with pytest.raises(ValidationError, match="contaminated"):
+        load_model_bundle()
+
+
 def test_llm_client_timeout_raises_validation_error(monkeypatch):
     class TimeoutClient:
         def __init__(self, *args, **kwargs):

@@ -1,0 +1,613 @@
+{
+  "dataset": {
+    "row_count": 5,
+    "column_count": 21,
+    "date_min": "2026-04-27",
+    "date_max": "2026-04-30",
+    "product_distribution": {
+      "Bissap": 3,
+      "Mangue": 2
+    },
+    "stage_distribution": {
+      "Nettoyage": 2,
+      "Sechage": 2,
+      "Tri": 1
+    },
+    "risk_class_distribution": {
+      "low": 4,
+      "high": 1
+    },
+    "loss_distribution_pct": {
+      "min": 0.0,
+      "p25": 1.0,
+      "median": 4.166666666666666,
+      "p75": 5.05050505050505,
+      "max": 68.0,
+      "mean": 15.643434343434345,
+      "std": 26.24607979142631
+    },
+    "missing_values": {
+      "batch_id": 0,
+      "cooperative_id": 0,
+      "product": 0,
+      "process_type": 0,
+      "qty_in": 0,
+      "qty_out": 0,
+      "batch_size": 0,
+      "stock_level": 0,
+      "date": 0,
+      "month": 0,
+      "week_of_year": 0,
+      "season": 0,
+      "historical_avg_loss_same_product": 0,
+      "historical_avg_loss_same_stage": 0,
+      "historical_avg_efficiency_same_stage": 0,
+      "deviation_from_stage_avg": 0,
+      "previous_batch_loss": 0,
+      "rolling_loss_last_n_batches": 0,
+      "rolling_efficiency_last_n_batches": 0,
+      "loss_pct": 0,
+      "efficiency_pct": 0
+    },
+    "duplicate_rows": 0,
+    "batch_distribution": {
+      "05ff7878-61bb-4cea-bf86-6518e48ffe6e": 3,
+      "b41542eb-9132-4980-8547-de1eeb5d5393": 2
+    },
+    "below_min_training_rows": true,
+    "ml_min_rows_required": 120
+  },
+  "split": {
+    "strategy": "time_based",
+    "split_cutoff_date_ordinal": 739733,
+    "train_rows": 4,
+    "test_rows": 1,
+    "random_train_rows": 4,
+    "random_test_rows": 1,
+    "cross_split_duplicate_signatures_time_based": 0
+  },
+  "leakage_checks": {
+    "predictive_feature_leakage_flags": [],
+    "target_in_predictive_features": [],
+    "assessment_contains_target_related_features": [
+      "deviation_from_stage_avg",
+      "efficiency_pct",
+      "loss_pct",
+      "qty_out"
+    ]
+  },
+  "model_eval_time_split": {
+    "split_name": "time_based",
+    "train_rows": 4,
+    "test_rows": 1,
+    "metrics": {
+      "regression_mae": 11.960040404040386,
+      "regression_rmse": 11.960040404040386,
+      "regression_r2": null,
+      "regression_baseline_mae": 14.345959595959597,
+      "regression_baseline_rmse": 14.345959595959597,
+      "classification_accuracy": 1.0,
+      "classification_macro_f1": 1.0,
+      "classification_weighted_f1": 1.0,
+      "classification_majority_baseline_accuracy": 1.0,
+      "classification_per_class": {
+        "low": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 1
+        },
+        "medium": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "high": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        }
+      },
+      "classification_confusion_matrix": [
+        [
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "classification_labels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "anomaly_ratio_test": 0.0,
+      "anomaly_flag_rate_test": 0.0,
+      "anomaly_contamination_configured": 0.08
+    },
+    "feature_importance_top20": [
+      {
+        "feature": "num__historical_avg_loss_same_product",
+        "importance": 0.29950826836295114
+      },
+      {
+        "feature": "num__historical_avg_efficiency_same_stage",
+        "importance": 0.13380543946131893
+      },
+      {
+        "feature": "cat__process_type_Nettoyage",
+        "importance": 0.13289543839212448
+      },
+      {
+        "feature": "num__historical_avg_loss_same_stage",
+        "importance": 0.08984764504716122
+      },
+      {
+        "feature": "cat__process_type_Sechage",
+        "importance": 0.08511882203894171
+      },
+      {
+        "feature": "cat__product_Bissap",
+        "importance": 0.06120229393120825
+      },
+      {
+        "feature": "num__qty_in",
+        "importance": 0.06081757343972234
+      },
+      {
+        "feature": "num__rolling_efficiency_last_n_batches",
+        "importance": 0.0410373017108401
+      },
+      {
+        "feature": "num__rolling_loss_last_n_batches",
+        "importance": 0.040906078481842925
+      },
+      {
+        "feature": "cat__product_Mangue",
+        "importance": 0.03319936442667203
+      },
+      {
+        "feature": "num__batch_size",
+        "importance": 0.013162192008455914
+      },
+      {
+        "feature": "num__stock_level",
+        "importance": 0.008499582698760961
+      },
+      {
+        "feature": "cat__season_hot",
+        "importance": 0.0
+      },
+      {
+        "feature": "num__month",
+        "importance": 0.0
+      },
+      {
+        "feature": "num__week_of_year",
+        "importance": 0.0
+      },
+      {
+        "feature": "num__previous_batch_loss",
+        "importance": 0.0
+      },
+      {
+        "feature": "num__date_ordinal",
+        "importance": 0.0
+      }
+    ],
+    "permutation_importance_top20": [
+      {
+        "feature": "product",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "process_type",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "season",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "qty_in",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "batch_size",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "stock_level",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "month",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "week_of_year",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "historical_avg_loss_same_product",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "historical_avg_loss_same_stage",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "historical_avg_efficiency_same_stage",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "previous_batch_loss",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "rolling_loss_last_n_batches",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "rolling_efficiency_last_n_batches",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "date_ordinal",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      }
+    ],
+    "top_prediction_errors": [
+      {
+        "product": "Bissap",
+        "process_type": "Tri",
+        "qty_in": 48.0,
+        "qty_out": 46.0,
+        "actual_loss_pct": 4.166666666666666,
+        "predicted_loss_pct": 16.126707070707052,
+        "abs_error": 11.960040404040386,
+        "actual_risk_level": "low",
+        "predicted_risk_level": "low"
+      }
+    ],
+    "anomaly_examples": [
+      {
+        "product": "Bissap",
+        "process_type": "Tri",
+        "qty_in": 48.0,
+        "qty_out": 46.0,
+        "loss_pct": 4.166666666666666,
+        "efficiency_pct": 0.9583333333333334,
+        "stock_level": 300.0,
+        "date_ordinal": 739736,
+        "anomaly_score_raw": 0.018426815354103676,
+        "is_anomalous": false
+      }
+    ]
+  },
+  "model_eval_random_split": {
+    "split_name": "random",
+    "train_rows": 4,
+    "test_rows": 1,
+    "metrics": {
+      "regression_mae": 66.38626262626262,
+      "regression_rmse": 66.38626262626262,
+      "regression_r2": null,
+      "regression_baseline_mae": 65.44570707070707,
+      "regression_baseline_rmse": 65.44570707070707,
+      "classification_accuracy": 0.0,
+      "classification_macro_f1": 0.0,
+      "classification_weighted_f1": 0.0,
+      "classification_majority_baseline_accuracy": 0.0,
+      "classification_per_class": {
+        "low": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "medium": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "high": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        }
+      },
+      "classification_confusion_matrix": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0
+        ]
+      ],
+      "classification_labels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "anomaly_ratio_test": 0.0,
+      "anomaly_flag_rate_test": 0.0,
+      "anomaly_contamination_configured": 0.08
+    },
+    "feature_importance_top20": [
+      {
+        "feature": "num__qty_in",
+        "importance": 0.20718359617599413
+      },
+      {
+        "feature": "num__historical_avg_loss_same_stage",
+        "importance": 0.17121006302615685
+      },
+      {
+        "feature": "cat__process_type_Nettoyage",
+        "importance": 0.1495714869756143
+      },
+      {
+        "feature": "num__historical_avg_efficiency_same_stage",
+        "importance": 0.14196152359789094
+      },
+      {
+        "feature": "num__historical_avg_loss_same_product",
+        "importance": 0.0858768326557571
+      },
+      {
+        "feature": "cat__process_type_Sechage",
+        "importance": 0.03621080758253454
+      },
+      {
+        "feature": "cat__product_Bissap",
+        "importance": 0.035533645632526596
+      },
+      {
+        "feature": "cat__process_type_Tri",
+        "importance": 0.03349378448141867
+      },
+      {
+        "feature": "num__date_ordinal",
+        "importance": 0.028057009391258846
+      },
+      {
+        "feature": "num__stock_level",
+        "importance": 0.027133275911874272
+      },
+      {
+        "feature": "num__rolling_loss_last_n_batches",
+        "importance": 0.026943242070506863
+      },
+      {
+        "feature": "cat__product_Mangue",
+        "importance": 0.02265045658936908
+      },
+      {
+        "feature": "num__rolling_efficiency_last_n_batches",
+        "importance": 0.018372669617051755
+      },
+      {
+        "feature": "num__batch_size",
+        "importance": 0.01580160629204609
+      },
+      {
+        "feature": "cat__season_hot",
+        "importance": 0.0
+      },
+      {
+        "feature": "num__month",
+        "importance": 0.0
+      },
+      {
+        "feature": "num__week_of_year",
+        "importance": 0.0
+      },
+      {
+        "feature": "num__previous_batch_loss",
+        "importance": 0.0
+      }
+    ],
+    "permutation_importance_top20": [
+      {
+        "feature": "product",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "process_type",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "season",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "qty_in",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "batch_size",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "stock_level",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "month",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "week_of_year",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "historical_avg_loss_same_product",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "historical_avg_loss_same_stage",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "historical_avg_efficiency_same_stage",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "previous_batch_loss",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "rolling_loss_last_n_batches",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "rolling_efficiency_last_n_batches",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      },
+      {
+        "feature": "date_ordinal",
+        "importance_mean": 0.0,
+        "importance_std": 0.0
+      }
+    ],
+    "top_prediction_errors": [
+      {
+        "product": "Bissap",
+        "process_type": "Sechage",
+        "qty_in": 150.0,
+        "qty_out": 48.0,
+        "actual_loss_pct": 68.0,
+        "predicted_loss_pct": 1.6137373737373735,
+        "abs_error": 66.38626262626262,
+        "actual_risk_level": "high",
+        "predicted_risk_level": "low"
+      }
+    ],
+    "anomaly_examples": [
+      {
+        "product": "Bissap",
+        "process_type": "Sechage",
+        "qty_in": 150.0,
+        "qty_out": 48.0,
+        "loss_pct": 68.0,
+        "efficiency_pct": 0.32,
+        "stock_level": 300.0,
+        "date_ordinal": 739733,
+        "anomaly_score_raw": 0.0022943645390116063,
+        "is_anomalous": false
+      }
+    ]
+  },
+  "artifact_consistency": {
+    "bundle_loaded": false,
+    "error": "ML model artifacts are missing or invalid. Retrain models first. Artifact predictive features are contaminated with target-derived fields (forbidden=['deviation_from_stage_avg', 'efficiency_pct', 'loss_pct', 'qty_out'], regression_violations=['deviation_from_stage_avg'], classification_violations=['deviation_from_stage_avg']). Retrain with a clean predictive feature contract."
+  },
+  "artifact_compatibility": {
+    "compatible": false,
+    "reason": "forbidden_predictive_features_present",
+    "model_version": "20260422143351",
+    "feature_schema_version": null,
+    "predictive_regression_features": [
+      "product",
+      "process_type",
+      "season",
+      "qty_in",
+      "batch_size",
+      "stock_level",
+      "month",
+      "week_of_year",
+      "historical_avg_loss_same_product",
+      "historical_avg_loss_same_stage",
+      "historical_avg_efficiency_same_stage",
+      "deviation_from_stage_avg",
+      "previous_batch_loss",
+      "rolling_loss_last_n_batches",
+      "rolling_efficiency_last_n_batches",
+      "date_ordinal"
+    ],
+    "predictive_classification_features": [
+      "product",
+      "process_type",
+      "season",
+      "qty_in",
+      "batch_size",
+      "stock_level",
+      "month",
+      "week_of_year",
+      "historical_avg_loss_same_product",
+      "historical_avg_loss_same_stage",
+      "historical_avg_efficiency_same_stage",
+      "deviation_from_stage_avg",
+      "previous_batch_loss",
+      "rolling_loss_last_n_batches",
+      "rolling_efficiency_last_n_batches",
+      "date_ordinal"
+    ],
+    "forbidden_predictive_violations": {
+      "predictive_regression_features": [
+        "deviation_from_stage_avg"
+      ],
+      "predictive_classification_features": [
+        "deviation_from_stage_avg"
+      ]
+    },
+    "forbidden_predictive_features": [
+      "deviation_from_stage_avg",
+      "efficiency_pct",
+      "loss_pct",
+      "qty_out"
+    ]
+  }
+}

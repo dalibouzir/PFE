@@ -1,0 +1,141 @@
+[
+  {
+    "title": "Post Harvest Losses - losses_estimates - for crop Millets in country Senegal",
+    "url": "https://archive.aphlis.net/?c_id=342&co_id=40&form=losses_estimates",
+    "crop": "Mil",
+    "country_region": "Senegal",
+    "relevant_stages": [
+      "Séchage",
+      "Nettoyage",
+      "Tri"
+    ],
+    "reported_loss_value_or_range": "Country/province cumulative losses mostly around ~8.3% to 10.8%, with outlier 20.5% in one province-year listing.",
+    "app_stage_mapping": "Cumulative cereal chain used to calibrate Mil overall risk and upper-tail spikes; not a direct one-to-one stage table for app transformation steps.",
+    "reliability_note": "Official APHLIS archive table; model-based estimates from literature + contextual factors.",
+    "evidence": "APHLIS states estimates are cumulative across harvesting, drying, handling, storage, and transport; Senegal millet table shows multiple province-year values around 8-11% and one 20.5% spike.",
+    "access_date": "2026-05-07"
+  },
+  {
+    "title": "Postharvest losses data tables (APHLIS)",
+    "url": "https://www.aphlis.net/en/data/tables/dry-weight-losses/XAF/millet/all-years?metric=tns",
+    "crop": "Mil",
+    "country_region": "Sub-Saharan Africa / Senegal context",
+    "relevant_stages": [
+      "Séchage",
+      "Nettoyage",
+      "Tri"
+    ],
+    "reported_loss_value_or_range": "Metric definitions and methodology; no direct Senegal stage-by-stage numeric range on this page.",
+    "app_stage_mapping": "Used as methodology source for mapping APHLIS handling operations to Nettoyage/Tri and drying to Séchage.",
+    "reliability_note": "Official APHLIS documentation page.",
+    "evidence": "APHLIS defines % loss as cumulative across drying, handling operations (threshing/shelling/winnowing), storage and transport, with references traceable per estimate.",
+    "access_date": "2026-05-07"
+  },
+  {
+    "title": "Key facts about postharvest Sorghum losses in Senegal 2021 (APHLIS)",
+    "url": "https://www.aphlis.net/en/data/tables/overview/SN/sorghum/2021",
+    "crop": "Mil (proxy via cereal chain behavior)",
+    "country_region": "Senegal",
+    "relevant_stages": [
+      "Séchage",
+      "Nettoyage",
+      "Tri"
+    ],
+    "reported_loss_value_or_range": "2021 sorghum chain example: harvesting/field drying 4.55%, threshing/shelling 3.6%, transport from field 2.17%, market storage 2.65%; total 11.6%.",
+    "app_stage_mapping": "Field drying informs Séchage baseline; threshing/shelling informs Nettoyage/Tri baseline for cereals.",
+    "reliability_note": "Official APHLIS country-year overview with stage-step decomposition.",
+    "evidence": "Page reports Senegal sorghum 11.6% total PHL in 2021 and shows stepwise value-chain losses including field drying and threshing/shelling.",
+    "access_date": "2026-05-07"
+  },
+  {
+    "title": "Postharvest loss estimates for millet | Africa Knowledge Platform",
+    "url": "https://africa-knowledge-platform.ec.europa.eu/dataset/postharvest-loss-estimates-millet",
+    "crop": "Mil",
+    "country_region": "Africa",
+    "relevant_stages": [
+      "Séchage",
+      "Nettoyage",
+      "Tri"
+    ],
+    "reported_loss_value_or_range": "No fixed numeric Senegal stage range; dataset describes cumulative value-chain % loss and cautions on missing data.",
+    "app_stage_mapping": "Supports transparent benchmark assumption labeling where direct stage values are missing.",
+    "reliability_note": "EU-JRC Africa Knowledge Platform dataset description using APHLIS model outputs.",
+    "evidence": "Dataset states cumulative loss includes harvesting, drying, threshing/shelling, winnowing, storage and transport; warns some gaps are filled with similar-crop/context studies.",
+    "access_date": "2026-05-07"
+  },
+  {
+    "title": "ORCHESTRATING SOLUTIONS... mango losses in Senegal",
+    "url": "https://topjournals.org/index.php/TAJEAS/article/view/903",
+    "crop": "Mangue",
+    "country_region": "Senegal",
+    "relevant_stages": [
+      "Tri",
+      "Séchage"
+    ],
+    "reported_loss_value_or_range": "Abstract cites severe fruit-fly impact and references estimates of large production reductions in affected regions.",
+    "app_stage_mapping": "Used to justify heavier high-loss tail in mango sorting and some drying scenarios during pressure periods.",
+    "reliability_note": "Peer-reviewed journal page with Senegal focus; cited values are broad and should not be used as direct stage rates.",
+    "evidence": "Abstract highlights substantial economic losses from fruit fly infestations and major production reductions in parts of Senegal.",
+    "access_date": "2026-05-07"
+  },
+  {
+    "title": "Economic Impact of Fruit Flies in Mango Production in Senegal (Virginia Tech thesis)",
+    "url": "https://vtechworks.lib.vt.edu/bitstream/handle/10919/82484/Diatta_PM_T_2016.pdf",
+    "crop": "Mangue",
+    "country_region": "Ziguinchor/Casamance, Senegal",
+    "relevant_stages": [
+      "Tri"
+    ],
+    "reported_loss_value_or_range": "Household-level yearly losses from fruit-fly infestations estimated at 17.09% of average total household income (study context metric, not direct stage % mass loss).",
+    "app_stage_mapping": "Supports elevated mango rejection/loss risk scenarios at sorting due to infestation pressure.",
+    "reliability_note": "Academic thesis with field survey; economic-loss framing, not process-step mass-loss rates.",
+    "evidence": "Abstract reports substantial household losses tied to fruit fly infestations in Ziguinchor and links losses to production/yield effects.",
+    "access_date": "2026-05-07"
+  },
+  {
+    "title": "Identification of Post-Harvest Operations... Groundnut by Mycotoxins (DOI:10.4236/as.2021.124026)",
+    "url": "https://www.scirp.org/pdf/as_2021042014241041.pdf",
+    "crop": "Arachide",
+    "country_region": "Chad (contextual African groundnut operations)",
+    "relevant_stages": [
+      "Séchage",
+      "Tri",
+      "Emballage"
+    ],
+    "reported_loss_value_or_range": "Survey reported post-harvest loss bands with 74.7% of respondents in 2-10% range and 25.3% in 10-50% range.",
+    "app_stage_mapping": "Used as contextual support for medium/high tails in Arachide drying and sorting when conditions are poor.",
+    "reliability_note": "Peer-reviewed but not Senegal-specific; used as contextual range support only.",
+    "evidence": "Paper describes drying and storage practices and reports respondent-based loss bands up to 50% under poor post-harvest management.",
+    "access_date": "2026-05-07"
+  },
+  {
+    "title": "IITA Senegal Country Status Report (Aflasafe)",
+    "url": "https://www.iita.org/wp-content/uploads/2021/03/Senegal-Country-Status-Report_Final-161120.pdf",
+    "crop": "Arachide",
+    "country_region": "Senegal",
+    "relevant_stages": [
+      "Séchage",
+      "Emballage",
+      "Stockage context"
+    ],
+    "reported_loss_value_or_range": "Reports strong aflatoxin contamination risk and notes mitigation reduced contamination >80% in trials; no direct per-stage mass-loss percentages.",
+    "app_stage_mapping": "Supports higher drying-related risk scenarios for groundnut quality degradation and loss pressure.",
+    "reliability_note": "Institutional technical report for Senegal context; mostly contamination/economic risk evidence.",
+    "evidence": "Report highlights contamination burden and emphasizes drying/storage discipline and mitigation impact in Senegal groundnut chain.",
+    "access_date": "2026-05-07"
+  },
+  {
+    "title": "FAO Statistics portal (FAOSTAT access)",
+    "url": "https://www.fao.org/statistics/en/",
+    "crop": "Mangue/Arachide/Mil context",
+    "country_region": "Global/Senegal",
+    "relevant_stages": [
+      "All (context only)"
+    ],
+    "reported_loss_value_or_range": "Production-context source only; no app-stage process-step loss rates.",
+    "app_stage_mapping": "Used for macro production context only, not stage-level loss calibration.",
+    "reliability_note": "Official FAO statistics entrypoint.",
+    "evidence": "FAO page states FAOSTAT provides broad food/agriculture statistics and production context.",
+    "access_date": "2026-05-07"
+  }
+]

@@ -98,7 +98,37 @@ def test_chat_prompt_uses_intent_based_style_for_quick_questions(db_session, mon
     app.dependency_overrides.clear()
 
 
-def test_chat_switches_prompt_language_to_english_when_query_is_english(db_session, monkeypatch):
+def test_delete_chat_session_removes_history(db_session):
+    def override_db():
+        try:
+            yield db_session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: db_session.query(User).first()
+
+    client = TestClient(app)
+
+    create_response = client.post("/chat/sessions", json={"title": "To delete"})
+    assert create_response.status_code == 200
+    session_id = create_response.json()["id"]
+
+    delete_response = client.delete(f"/chat/sessions/{session_id}")
+    assert delete_response.status_code == 204
+
+    sessions_response = client.get("/chat/sessions")
+    assert sessions_response.status_code == 200
+    assert all(item["id"] != session_id for item in sessions_response.json())
+
+    messages_response = client.get(f"/chat/sessions/{session_id}/messages")
+    assert messages_response.status_code == 404
+    assert "Chat session not found" in messages_response.json().get("detail", "")
+
+    app.dependency_overrides.clear()
+
+
+def test_chat_keeps_french_prompt_even_when_query_is_english(db_session, monkeypatch):
     def override_db():
         try:
             yield db_session
@@ -114,12 +144,16 @@ def test_chat_switches_prompt_language_to_english_when_query_is_english(db_sessi
     client = TestClient(app)
     response = client.post("/chat", json={"message": "What is the current stock status?"})
     assert response.status_code == 200
-
-    assert len(llm_client.calls) == 1
-    system_prompt = llm_client.calls[0][0]["content"]
-    user_prompt = llm_client.calls[0][-1]["content"]
-    assert "Reply in English." in system_prompt
-    assert "Language: en" in user_prompt
+    payload = response.json()
+    if payload["mode"] in {"sql_only", "sql_only_no_data"}:
+        assert llm_client.calls == []
+        assert payload["message"]
+    else:
+        assert len(llm_client.calls) == 1
+        system_prompt = llm_client.calls[0][0]["content"]
+        user_prompt = llm_client.calls[0][-1]["content"]
+        assert "français" in system_prompt.lower()
+        assert "Language: fr" in user_prompt
 
     app.dependency_overrides.clear()
 

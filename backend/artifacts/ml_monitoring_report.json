@@ -1,0 +1,188 @@
+{
+  "dataset": {
+    "row_count": 1485,
+    "product_distribution": {
+      "Mangue": 506,
+      "Arachide": 492,
+      "Mil": 484,
+      "Bissap": 3
+    },
+    "stage_distribution": {
+      "cleaning": 372,
+      "drying": 372,
+      "sorting": 371,
+      "packaging": 370
+    },
+    "risk_distribution": {
+      "low": 1229,
+      "medium": 204,
+      "high": 52
+    },
+    "unknown_stage_rate": 0.0,
+    "missing_feature_rate": {
+      "product": 0.0,
+      "process_type": 0.0,
+      "stage_canonical": 0.0,
+      "product_stage_key": 0.0,
+      "season": 0.0,
+      "qty_in": 0.0,
+      "qty_in_log": 0.0,
+      "batch_size": 0.0,
+      "batch_size_log": 0.0,
+      "stock_level": 0.0,
+      "stock_pressure_ratio": 0.0,
+      "month": 0.0,
+      "week_of_year": 0.0,
+      "stage_order": 0.0,
+      "is_drying_stage": 0.0,
+      "is_sorting_stage": 0.0,
+      "is_packaging_stage": 0.0,
+      "historical_avg_loss_same_product": 0.0,
+      "historical_avg_loss_same_stage": 0.0,
+      "historical_avg_efficiency_same_stage": 0.0,
+      "product_stage_historical_avg_loss": 0.0,
+      "product_stage_historical_median_loss": 0.0,
+      "product_stage_rolling_loss_last_5": 0.0,
+      "product_stage_rolling_loss_last_10": 0.0,
+      "stage_season_avg_loss": 0.0,
+      "product_stage_season_avg_loss": 0.0,
+      "loss_volatility_product_stage": 0.0,
+      "previous_batch_loss": 0.0,
+      "days_since_previous_batch": 0.0,
+      "rolling_loss_last_n_batches": 0.0,
+      "rolling_efficiency_last_n_batches": 0.0,
+      "date_ordinal": 0.0
+    }
+  },
+  "model": {
+    "latest_model_version": "20260507155633",
+    "active_model_version": "20260507155633",
+    "feature_schema_version": "phase4-v1",
+    "artifact_compatibility": {
+      "compatible": true,
+      "reason": "ok",
+      "model_version": "20260507155633",
+      "active_model_version": "20260507155633",
+      "feature_schema_version": "phase4-v1",
+      "predictive_regression_features": [
+        "product",
+        "process_type",
+        "stage_canonical",
+        "product_stage_key",
+        "season",
+        "qty_in",
+        "qty_in_log",
+        "batch_size",
+        "batch_size_log",
+        "stock_level",
+        "stock_pressure_ratio",
+        "month",
+        "week_of_year",
+        "stage_order",
+        "is_drying_stage",
+        "is_sorting_stage",
+        "is_packaging_stage",
+        "historical_avg_loss_same_product",
+        "historical_avg_loss_same_stage",
+        "historical_avg_efficiency_same_stage",
+        "product_stage_historical_avg_loss",
+        "product_stage_historical_median_loss",
+        "product_stage_rolling_loss_last_5",
+        "product_stage_rolling_loss_last_10",
+        "stage_season_avg_loss",
+        "product_stage_season_avg_loss",
+        "loss_volatility_product_stage",
+        "previous_batch_loss",
+        "days_since_previous_batch",
+        "rolling_loss_last_n_batches",
+        "rolling_efficiency_last_n_batches",
+        "date_ordinal"
+      ],
+      "predictive_classification_features": [
+        "product",
+        "process_type",
+        "stage_canonical",
+        "product_stage_key",
+        "season",
+        "qty_in",
+        "qty_in_log",
+        "batch_size",
+        "batch_size_log",
+        "stock_level",
+        "stock_pressure_ratio",
+        "month",
+        "week_of_year",
+        "stage_order",
+        "is_drying_stage",
+        "is_sorting_stage",
+        "is_packaging_stage",
+        "historical_avg_loss_same_product",
+        "historical_avg_loss_same_stage",
+        "historical_avg_efficiency_same_stage",
+        "product_stage_historical_avg_loss",
+        "product_stage_historical_median_loss",
+        "product_stage_rolling_loss_last_5",
+        "product_stage_rolling_loss_last_10",
+        "stage_season_avg_loss",
+        "product_stage_season_avg_loss",
+        "loss_volatility_product_stage",
+        "previous_batch_loss",
+        "days_since_previous_batch",
+        "rolling_loss_last_n_batches",
+        "rolling_efficiency_last_n_batches",
+        "date_ordinal"
+      ],
+      "forbidden_predictive_violations": {},
+      "forbidden_predictive_features": [
+        "deviation_from_stage_avg",
+        "efficiency_pct",
+        "loss_pct",
+        "qty_out"
+      ]
+    },
+    "active_model_status": "active",
+    "mvp_demo_allowed": true,
+    "production_ready": false
+  },
+  "prediction_logs": {
+    "prediction_count": 0,
+    "average_predicted_loss": null,
+    "risk_distribution": {},
+    "warning_flag_counts": {}
+  },
+  "feedback": {
+    "feedback_rows": 485,
+    "real_feedback_rows": 485,
+    "outcome_distribution": {
+      "helpful": 174,
+      "neutral": 126,
+      "harmful": 185
+    }
+  },
+  "drift": {
+    "reference_profile_available": true,
+    "reference_product_distribution": {
+      "Mangue": 506,
+      "Arachide": 492,
+      "Mil": 484,
+      "Bissap": 3
+    },
+    "reference_stage_distribution": {
+      "cleaning": 372,
+      "drying": 372,
+      "sorting": 371,
+      "packaging": 370
+    },
+    "reference_risk_distribution": {
+      "low": 1229,
+      "medium": 204,
+      "high": 52
+    },
+    "product_distribution_tvd": 0.0,
+    "stage_distribution_tvd": 0.0,
+    "risk_distribution_tvd": 0.0
+  },
+  "warnings": [
+    "synthetic_demo_data_used"
+  ]
+}

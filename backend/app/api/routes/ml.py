@@ -20,6 +20,7 @@ from app.schemas.ml import (
     MLTrainResponse,
 )
 from app.services import ml as ml_service
+from app.services.rag_reindex_hooks import reindex_ml_prediction_if_needed
 
 
 router = APIRouter(prefix="/ml", tags=["ML"])
@@ -45,6 +46,14 @@ def predict(payload: MLPredictRequest, db: Session = Depends(get_db), current_ma
         features=payload.features,
         include_explanation=payload.include_explanation,
     )
+    # TODO(phase3): move this hook to service once user-scoped context is propagated in ml_service signatures.
+    reindex_ml_prediction_if_needed(
+        db,
+        current_user=current_manager,
+        prediction_log_id=None,
+        batch_id=None,
+        cooperative_id=current_manager.cooperative_id,
+    )
     return MLPredictResponse(
         prediction=result["prediction"],
         recommendation=result["recommendation"],
@@ -60,6 +69,14 @@ def assess(payload: MLAssessRequest, db: Session = Depends(get_db), current_mana
         batch_id=payload.batch_id,
         features=payload.features,
         include_explanation=payload.include_explanation,
+    )
+    # TODO(phase3): move this hook to service once user-scoped context is propagated in ml_service signatures.
+    reindex_ml_prediction_if_needed(
+        db,
+        current_user=current_manager,
+        prediction_log_id=None,
+        batch_id=payload.batch_id,
+        cooperative_id=current_manager.cooperative_id,
     )
     return MLAssessResponse(
         assessment=result["assessment"],
@@ -94,7 +111,15 @@ def recommendation(batch_id: UUID, db: Session = Depends(get_db), current_manage
 
 @router.post("/feedback", response_model=RecommendationFeedbackRead, summary="Log operator feedback and observed outcomes for a recommendation.")
 def feedback(payload: RecommendationFeedbackCreate, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
-    return ml_service.log_feedback(db, payload)
+    feedback_row = ml_service.log_feedback(db, payload)
+    reindex_ml_prediction_if_needed(
+        db,
+        current_user=current_manager,
+        prediction_log_id=None,
+        batch_id=payload.batch_id,
+        cooperative_id=current_manager.cooperative_id,
+    )
+    return feedback_row
 
 
 @router.get("/reliability", response_model=MLReliabilityStatusResponse, summary="Return offline recommendation reliability metrics and drift status.")
