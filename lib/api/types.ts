@@ -608,6 +608,74 @@ export type AssistantChatResponse = {
   ui_blocks: ChatUIBlock[];
 };
 
+export type AgentRoute =
+  | "SQL_ONLY"
+  | "RAG_ONLY"
+  | "ML_ONLY"
+  | "RECOMMENDATION_ONLY"
+  | "HYBRID_SQL_RAG"
+  | "HYBRID_SQL_ML"
+  | "HYBRID_RAG_RECOMMENDATION"
+  | "HYBRID_FULL"
+  | "SMALL_TALK"
+  | "OUT_OF_SCOPE";
+
+export type AgentSource = {
+  type: "sql" | "rag" | "ml" | string;
+  table?: string;
+  label?: string;
+  record_count?: number;
+  related_batch?: string;
+  related_product?: string;
+  related_stage?: string;
+  document_id?: string;
+  chunk_id?: string;
+  title?: string;
+  topic?: string;
+  score?: number;
+  model?: string;
+  risk_level?: string;
+};
+
+export type AgentChatRequest = {
+  message: string;
+  conversation_id?: string | null;
+  user_id?: string | null;
+  language?: string | null;
+};
+
+export type AgentChatResponse = {
+  answer: string;
+  route: AgentRoute;
+  agents_used: string[];
+  response_blocks?: AgentResponseBlock[];
+  sources: AgentSource[];
+  confidence: number;
+  warnings: string[];
+  metadata: Record<string, unknown>;
+};
+
+export type AgentResponseBlock = {
+  type:
+    | "summary"
+    | "table"
+    | "recommendations"
+    | "best_practices"
+    | "chart"
+    | "sources"
+    | "warnings"
+    | string;
+  title?: string;
+  content?: string;
+  columns?: string[];
+  rows?: Array<Array<string | number>>;
+  items?: Array<Record<string, unknown> | string>;
+  chart_type?: "bar" | "line" | string;
+  x_key?: string;
+  y_key?: string;
+  data?: Array<Record<string, unknown>>;
+};
+
 export type ChatSession = {
   id: string;
   title: string;

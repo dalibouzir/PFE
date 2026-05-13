@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
 from uuid import UUID
 
@@ -805,3 +805,4 @@ def _clean_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
             continue
         cleaned[key] = value
     return cleaned
+UTC = timezone.utc

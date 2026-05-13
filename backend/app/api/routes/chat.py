@@ -8,6 +8,8 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.schemas.chat import ChatMessageCreate, ChatMessageRead, ChatRequest, ChatResponse, ChatSessionCreate, ChatSessionRead
 from app.schemas.rag import RAGReindexRequest, RAGReindexResponse
+from app.ai.schemas.chat_schemas import ChatAgentRequest, ChatAgentResponse
+from app.services import agent_assistant as agent_assistant_service
 from app.services import assistant as assistant_service
 from app.services import rag_indexer as rag_indexer_service
 
@@ -27,6 +29,26 @@ def chat(
         message=payload.message,
         session_id=payload.session_id,
         top_k=payload.top_k,
+    )
+
+
+@router.post(
+    "/agent",
+    response_model=ChatAgentResponse,
+    summary="Send a manager message to the Coop Agent Orchestrator.",
+)
+def chat_agent(
+    payload: ChatAgentRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return agent_assistant_service.generate_agent_chat_reply(
+        db,
+        current_user=current_user,
+        message=payload.message,
+        conversation_id=payload.conversation_id,
+        user_id=payload.user_id,
+        language=payload.language,
     )
 
 

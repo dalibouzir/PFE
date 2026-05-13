@@ -1,0 +1,589 @@
+from __future__ import annotations
+
+import re
+import time
+from datetime import date
+from typing import Any
+
+from app.ai.agents.base_agent import BaseAgent
+from app.ai.schemas.agent_schemas import AgentContext, AgentResult
+from app.ai.tools.sql_tools import SQLTools
+
+
+class SQLAnalyticsAgent(BaseAgent):
+    name = "SQLAnalyticsAgent"
+    description = "Retrieves structured cooperative operational data via controlled SQL tools."
+
+    def __init__(self, sql_tools: SQLTools):
+        self.sql_tools = sql_tools
+
+    async def run(self, query: str, context: AgentContext) -> AgentResult:
+        start = time.perf_counter()
+        entities = context.detected_entities or {}
+        product = _pick_first(entities.get("product"))
+        stage = _pick_first(entities.get("stage"))
+        batch_ref = entities.get("batch_ref")
+        lowered = query.lower()
+        date_range = entities.get("date_range")
+        effective_date_range = date_range
+        if any(token in lowered for token in ("aujourd'hui", "aujourd’hui", "aujourdhui", "today")):
+            today = date.today().isoformat()
+            effective_date_range = [today, today]
+        scope = entities.get("scope", "global")
+        module = entities.get("module", "global")
+        member_name = entities.get("member_name")
+
+        asks_member_ranking = any(
+            token in lowered
+            for token in (
+                "quel membre a livré le plus",
+                "quel membre a livre le plus",
+                "classe les membres",
+                "classement des membres",
+                "top membre",
+                "top members",
+                "top producteurs",
+            )
+        )
+        asks_member_value = any(token in lowered for token in ("plus de valeur", "plus de coût", "plus de cout", "généré le plus de valeur", "genere le plus de valeur"))
+        asks_parcel_count = any(token in lowered for token in ("combien", "nombre", "total")) and any(
+            token in lowered for token in ("parcelle", "parcelles", "parcel")
+        )
+        asks_cooperative_summary = module == "cooperative_summary" or (
+            any(token in lowered for token in ("coopérative", "cooperative"))
+            and any(token in lowered for token in ("résumé", "resume", "synthèse", "synthese", "aperçu", "apercu"))
+        )
+        asks_stage_comparison = "compare" in lowered and any(token in lowered for token in ("séchage", "sechage", "drying")) and any(
+            token in lowered for token in ("tri", "sorting")
+        )
+        warnings: list[str] = []
+        payload: dict[str, Any] = {}
+        payload["detected_module"] = module
+        payload["query_text"] = query
+        if batch_ref:
+            payload["requested_batch_ref"] = batch_ref
+        sources: list[dict[str, Any]] = []
+
+        # Pre-harvest and parcel queries
+        if scope == "pre_harvest" or any(token in lowered for token in ("pré-récolte", "pre-harvest", "parcelle", "parcelles", "preharvest")):
+            if asks_parcel_count:
+                parcels = self.sql_tools.get_parcels_list(product=product)
+                payload["parcels_list"] = parcels.get("items", [])
+                payload["parcel_count"] = len(payload["parcels_list"])
+                sources.extend(parcels.get("sources", []))
+                warnings.extend(parcels.get("warnings", []))
+            if any(token in lowered for token in ("liste les parcelles", "parcelles enregistrées", "parcelles enregistrees", "liste des parcelles")):
+                parcels = self.sql_tools.get_parcels_list(product=product)
+                payload["parcels_list"] = parcels.get("items", [])
+                sources.extend(parcels.get("sources", []))
+                warnings.extend(parcels.get("warnings", []))
+            if any(token in lowered for token in ("parcelle", "parcelles", "parcel")) or "action" in lowered or "nécessite" in lowered:
+                # Get parcel status
+                parcel_status = self.sql_tools.preharvest.get_parcel_preharvest_status(product=product)
+                payload["parcel_status"] = parcel_status.get("data", [])
+                sources.extend(parcel_status.get("sources", []))
+                warnings.extend(parcel_status.get("warnings", []))
+                
+                parcel_missing = self.sql_tools.preharvest.get_parcels_missing_data()
+                payload["parcels_missing_data"] = parcel_missing.get("data", [])
+                sources.extend(parcel_missing.get("sources", []))
+                warnings.extend(parcel_missing.get("warnings", []))
+            else:
+                # General pre-harvest status
+                preharvest_status = self.sql_tools.preharvest.get_parcel_preharvest_status(product=product)
+                payload["preharvest_status"] = preharvest_status.get("data", [])
+                sources.extend(preharvest_status.get("sources", []))
+                warnings.extend(preharvest_status.get("warnings", []))
+
+        if asks_cooperative_summary:
+            coop = self.sql_tools.get_cooperative_overview()
+            payload["cooperative_overview"] = coop.get("items", [])
+            sources.extend(coop.get("sources", []))
+            warnings.extend(coop.get("warnings", []))
+
+        if "stock" in lowered:
+            stock = self.sql_tools.get_current_stock(product=product)
+            payload["current_stock"] = stock.get("items", [])
+            sources.extend(stock.get("sources", []))
+            warnings.extend(stock.get("warnings", []))
+
+        if (module == "members" or any(token in lowered for token in ("membre", "membres", "member", "farmer", "producteur", "producteurs"))) and not asks_member_ranking:
+            members = self.sql_tools.get_members_list(member_name=member_name)
+            payload["members_list"] = members.get("items", [])
+            sources.extend(members.get("sources", []))
+            warnings.extend(members.get("warnings", []))
+
+        if asks_member_ranking:
+            top_farmers = self.sql_tools.get_top_farmers(product=product, date_range=effective_date_range)
+            payload["top_farmers"] = top_farmers.get("items", [])
+            sources.extend(top_farmers.get("sources", []))
+            warnings.extend(top_farmers.get("warnings", []))
+
+        if module == "member_value" or asks_member_value or (
+            any(token in lowered for token in ("membre", "membres", "producteur", "producteurs"))
+            and any(token in lowered for token in ("valeur", "coût", "cout"))
+        ):
+            payload["member_value_module_available"] = self.sql_tools.module_available("global_charges")
+            top_members_by_cost = self.sql_tools.get_top_members_by_cost(date_range=date_range)
+            payload["top_members_by_cost"] = top_members_by_cost.get("items", [])
+            sources.extend(top_members_by_cost.get("sources", []))
+            warnings.extend(top_members_by_cost.get("warnings", []))
+
+        if any(token in lowered for token in ("collect", "collecte", "input")):
+            collections = self.sql_tools.get_collections_summary(product=product, date_range=effective_date_range)
+            payload["collections_summary"] = collections.get("items", [])
+            sources.extend(collections.get("sources", []))
+            warnings.extend(collections.get("warnings", []))
+
+        if module == "invoices" or any(token in lowered for token in ("facture", "factures", "invoice", "invoices")):
+            payload["invoices_module_available"] = self.sql_tools.module_available("commercial_invoices")
+            invoices = self.sql_tools.get_invoices_summary()
+            payload["invoices_summary"] = invoices.get("items", [])
+            sources.extend(invoices.get("sources", []))
+            warnings.extend(invoices.get("warnings", []))
+
+        if module == "commercial" or any(
+            token in lowered for token in ("commande", "commandes", "vente", "ventes", "commercialisation", "commercial")
+        ):
+            payload["commercial_module_available"] = self.sql_tools.module_available("commercial_orders")
+            orders = self.sql_tools.get_commercial_orders_summary()
+            totals = self.sql_tools.get_commercial_totals()
+            payload["commercial_orders"] = orders.get("items", [])
+            payload["commercial_totals"] = totals.get("items", [])
+            sources.extend(orders.get("sources", []))
+            sources.extend(totals.get("sources", []))
+            warnings.extend(orders.get("warnings", []))
+            warnings.extend(totals.get("warnings", []))
+
+        if module == "finance" or any(
+            token in lowered for token in ("finance", "trésorerie", "tresorerie", "charge", "charges", "dépense", "depense")
+        ):
+            payload["finance_module_available"] = self.sql_tools.module_available("treasury_transactions") or self.sql_tools.module_available("global_charges")
+            finance = self.sql_tools.get_finance_expenses()
+            payload["finance_expenses"] = finance.get("items", [])
+            sources.extend(finance.get("sources", []))
+            warnings.extend(finance.get("warnings", []))
+
+        if batch_ref or any(token in lowered for token in ("lot", "batch")):
+            batch = self.sql_tools.get_batch_summary(batch_ref=batch_ref)
+            payload["batch_summary"] = batch.get("items", [])
+            sources.extend(batch.get("sources", []))
+            warnings.extend(batch.get("warnings", []))
+            if any(token in lowered for token in ("en cours", "in progress")):
+                payload["in_progress_lots"] = [
+                    row for row in (batch.get("items", []) or []) if str(row.get("status", "")).lower() == "in_progress"
+                ]
+            if any(token in lowered for token in ("efficacité faible", "efficacite faible", "faible efficacité", "faible efficacite")):
+                payload["low_efficiency_lots"] = [
+                    row for row in (batch.get("items", []) or []) if float(row.get("efficiency_pct", 0.0) or 0.0) < 85.0
+                ]
+            if any(
+                token in lowered
+                for token in (
+                    "plus de pertes",
+                    "pertes les plus élevées",
+                    "pertes les plus elevees",
+                    "plus élevées",
+                    "plus elevees",
+                    "most loss",
+                    "highest loss",
+                    "plus perte",
+                    "risque",
+                    "risk",
+                )
+            ):
+                high_risk_lots = self.sql_tools.get_high_risk_lots()
+                payload["high_risk_lots"] = high_risk_lots.get("items", [])
+                sources.extend(high_risk_lots.get("sources", []))
+                warnings.extend(high_risk_lots.get("warnings", []))
+                payload["top_loss_batches"] = sorted(
+                    batch.get("items", []),
+                    key=lambda item: float(item.get("loss_pct", 0.0) or 0.0),
+                    reverse=True,
+                )[:5]
+
+        if any(token in lowered for token in ("perte", "loss", "efficacit", "efficiency", "séchage", "sechage", "tri", "drying", "sorting", "emballage", "packaging")):
+            losses = self.sql_tools.get_process_step_losses(
+                batch_ref=batch_ref,
+                stage=stage,
+                product=product,
+                date_range=effective_date_range,
+            )
+            payload["process_step_losses"] = losses.get("items", [])
+            sources.extend(losses.get("sources", []))
+            warnings.extend(losses.get("warnings", []))
+
+            stage_eff = self.sql_tools.get_stage_efficiency_summary(product=product, date_range=effective_date_range)
+            payload["stage_efficiency_summary"] = stage_eff.get("items", [])
+            sources.extend(stage_eff.get("sources", []))
+            warnings.extend(stage_eff.get("warnings", []))
+            if any(token in lowered for token in ("efficacité faible", "efficacite faible", "faible efficacité", "faible efficacite")):
+                if not payload.get("low_efficiency_lots"):
+                    batch_all = self.sql_tools.get_batch_summary(batch_ref=None)
+                    payload["low_efficiency_lots"] = [
+                        row for row in (batch_all.get("items", []) or []) if float(row.get("efficiency_pct", 0.0) or 0.0) < 85.0
+                    ]
+                    sources.extend(batch_all.get("sources", []))
+                    warnings.extend(batch_all.get("warnings", []))
+            if asks_stage_comparison:
+                stage_rows = payload.get("stage_efficiency_summary", [])
+                stage_map: dict[str, dict[str, Any]] = {}
+                for row in stage_rows:
+                    stage_name = str(row.get("stage") or "").lower().strip()
+                    stage_map[stage_name] = row
+                drying = stage_map.get("drying") or stage_map.get("séchage") or stage_map.get("sechage")
+                sorting = stage_map.get("sorting") or stage_map.get("tri")
+                comparison_rows = []
+                if drying:
+                    comparison_rows.append({"stage": "drying", "stage_label": "Séchage", "avg_loss_pct": float(drying.get("avg_loss_pct", 0.0) or 0.0)})
+                if sorting:
+                    comparison_rows.append({"stage": "sorting", "stage_label": "Tri", "avg_loss_pct": float(sorting.get("avg_loss_pct", 0.0) or 0.0)})
+                payload["stage_loss_comparison"] = comparison_rows
+
+        if "bilan" in lowered or "material balance" in lowered or "matiere" in lowered:
+            balance = self.sql_tools.get_material_balance(batch_ref=batch_ref, product=product)
+            payload["material_balance"] = balance.get("items", [])
+            sources.extend(balance.get("sources", []))
+            warnings.extend(balance.get("warnings", []))
+
+        contains_member_top_intent = bool(
+            re.search(r"\b(top|classement|classer|plus\s+gros)\b", lowered)
+            or (
+                re.search(r"\bmeilleur(?:e|es)?\b", lowered)
+                and re.search(r"\b(membre|producteur|farmer)s?\b", lowered)
+            )
+        )
+        if contains_member_top_intent and not payload.get("top_farmers"):
+            top_farmers = self.sql_tools.get_top_farmers(product=product, date_range=effective_date_range)
+            payload["top_farmers"] = top_farmers.get("items", [])
+            sources.extend(top_farmers.get("sources", []))
+            warnings.extend(top_farmers.get("warnings", []))
+
+        if "seuil" in lowered or "alert" in lowered:
+            low_stock = self.sql_tools.get_low_stock_alerts()
+            payload["low_stock_alerts"] = low_stock.get("items", [])
+            sources.extend(low_stock.get("sources", []))
+            warnings.extend(low_stock.get("warnings", []))
+
+        module_specific = module in {"members", "member_value", "collections", "stocks", "invoices", "commercial", "finance", "pre_harvest"}
+
+        if not payload and not module_specific:
+            # Default operational pack for broad SQL queries.
+            batch = self.sql_tools.get_batch_summary(batch_ref=batch_ref)
+            losses = self.sql_tools.get_process_step_losses(batch_ref=batch_ref, stage=stage, product=product, date_range=effective_date_range)
+            payload["batch_summary"] = batch.get("items", [])
+            payload["process_step_losses"] = losses.get("items", [])
+            sources.extend(batch.get("sources", []))
+            sources.extend(losses.get("sources", []))
+            warnings.extend(batch.get("warnings", []))
+            warnings.extend(losses.get("warnings", []))
+
+        if all(not value for key, value in payload.items() if key not in {"detected_module", "query_text", "requested_batch_ref"}):
+            warnings.append("SQL_DATA_INCOMPLETE")
+
+        answer_part = _build_sql_answer(payload)
+        confidence = 0.88 if "SQL_DATA_INCOMPLETE" not in warnings and "NO_SQL_DATA" not in warnings else 0.48
+
+        return AgentResult(
+            agent_name=self.name,
+            route=context.route,
+            answer_part=answer_part,
+            data=payload,
+            sources=sources,
+            confidence=confidence,
+            warnings=sorted(set(warnings)),
+            execution_time_ms=int((time.perf_counter() - start) * 1000),
+        )
+
+
+def _pick_first(value):
+    if isinstance(value, list) and value:
+        return value[0]
+    if isinstance(value, str):
+        return value
+    return None
+
+
+def _build_sql_answer(payload: dict[str, Any]) -> str:
+    if payload.get("requested_batch_ref") and not payload.get("batch_summary"):
+        return f"Je n’ai pas trouvé de lot avec la référence {_display_batch_ref(payload.get('requested_batch_ref'))}."
+    if payload.get("cooperative_overview"):
+        row = payload["cooperative_overview"][0]
+        return (
+            "Résumé coopérative: "
+            f"{int(row.get('member_count', 0))} membre(s), {int(row.get('parcel_count', 0))} parcelle(s), "
+            f"{int(row.get('batch_count', 0))} lot(s) dont {int(row.get('open_batch_count', 0))} en cours, "
+            f"stock disponible total {float(row.get('stock_total_kg', 0.0)):.1f} kg, "
+            f"perte moyenne observée {float(row.get('avg_loss_pct', 0.0)):.1f}%."
+        )
+    if payload.get("parcel_count") is not None:
+        return f"La coopérative compte {int(payload.get('parcel_count', 0) or 0)} parcelle(s) enregistrée(s)."
+    if payload.get("parcels_list") is not None:
+        rows = payload.get("parcels_list", [])
+        if rows:
+            lines = [f"Parcelles enregistrées ({len(rows)}):"]
+            for row in rows[:20]:
+                lines.append(
+                    f"- {row.get('parcel_name')}: {float(row.get('surface_ha', 0.0)):.2f} ha | culture {row.get('main_culture')} | membre {row.get('member_name')}"
+                )
+            return "\\n".join(lines)
+        return "Aucune parcelle n’est enregistrée pour cette coopérative."
+    # Pre-harvest responses
+    if payload.get("parcel_status"):
+        items = payload["parcel_status"]
+        if items:
+            completed_total = sum(item.get("completed", 0) for item in items)
+            pending_total = sum(item.get("pending", 0) for item in items)
+            return (
+                f"Les données de pré-récolte indiquent {completed_total} étapes complétées "
+                f"et {pending_total} étapes en attente sur {len(items)} parcelles."
+            )
+        return "Les données de pré-récolte ne sont pas suffisantes pour confirmer ce point."
+    
+    if payload.get("preharvest_status"):
+        items = payload["preharvest_status"]
+        if items:
+            return f"Les parcelles suivies en pré-récolte sont au nombre de {len(items)} avec les étapes associées."
+        return "Aucune donnée pré-récolte disponible pour le moment."
+    
+    if payload.get("parcels_missing_data"):
+        items = payload["parcels_missing_data"]
+        if items:
+            return f"{len(items)} parcelle(s) avec données manquantes. Vérifiez les détails pour compléter les informations."
+        return "Toutes les parcelles ont les données requises."
+
+    if payload.get("top_farmers") is not None and ("classe" in str(payload.get("query_text", "")).lower() or "livré" in str(payload.get("query_text", "")).lower() or "livre" in str(payload.get("query_text", "")).lower() or "plus de kg" in str(payload.get("query_text", "")).lower()):
+        rows = payload.get("top_farmers", [])
+        if rows:
+            lines = [f"Classement des membres par quantité collectée ({len(rows)}):"]
+            for row in rows[:10]:
+                lines.append(
+                    f"- {row.get('member_name')} ({row.get('member_code')}): {float(row.get('total_quantity_kg', 0.0)):.1f} kg"
+                )
+            return "\n".join(lines)
+        return "Aucune donnée de collecte membre n’est disponible pour établir ce classement."
+
+    if payload.get("members_list") is not None:
+        members = payload.get("members_list", [])
+        if members:
+            previews = []
+            for member in members[:5]:
+                previews.append(f"{member.get('member_name')} ({member.get('member_code')})")
+            suffix = "…" if len(members) > 5 else ""
+            return f"Les membres trouvés ({len(members)}) sont: " + ", ".join(previews) + suffix
+        return "Aucun membre n’est enregistré pour cette coopérative."
+
+    if payload.get("top_members_by_cost") is not None:
+        rows = payload.get("top_members_by_cost", [])
+        if rows:
+            lines = [f"Classement des membres par coût total ({len(rows)}):"]
+            for row in rows[:10]:
+                lines.append(
+                    f"- {row.get('member_name')} ({row.get('member_code')}): {float(row.get('total_cost_fcfa', 0.0)):.0f} FCFA"
+                )
+            return "\n".join(lines)
+        if payload.get("member_value_module_available") is False:
+            return "Le module valeur/coût des membres n’est pas disponible dans le modèle de données actuel."
+        return "Le module valeur/coût des membres ne contient pas encore de données."
+
+    if payload.get("high_risk_lots") is not None:
+        high_risk_lots = payload.get("high_risk_lots", [])
+        if high_risk_lots:
+            previews = []
+            for item in high_risk_lots[:6]:
+                previews.append(
+                    f"{_display_batch_ref(item.get('batch_ref'))} ({float(item.get('loss_pct', 0.0)):.1f} % de perte, {float(item.get('efficiency_pct', 0.0)):.1f} % d’efficacité)"
+                )
+            suffix = "…" if len(high_risk_lots) > 6 else ""
+            return f"Les lots à risque élevé détectés ({len(high_risk_lots)}) sont: " + "; ".join(previews) + suffix
+        return "Aucun lot à risque élevé n’a été détecté selon les mesures SQL de pertes/efficacité."
+
+    if payload.get("stage_loss_comparison"):
+        rows = payload.get("stage_loss_comparison", [])
+        if len(rows) >= 2:
+            left, right = rows[0], rows[1]
+            return (
+                f"Comparaison des pertes: {left.get('stage_label')} {float(left.get('avg_loss_pct', 0.0)):.1f} % "
+                f"vs {right.get('stage_label')} {float(right.get('avg_loss_pct', 0.0)):.1f} %."
+            )
+        if rows:
+            row = rows[0]
+            return f"Perte moyenne {row.get('stage_label')}: {float(row.get('avg_loss_pct', 0.0)):.1f} %."
+
+    if payload.get("in_progress_lots") is not None:
+        rows = payload.get("in_progress_lots", [])
+        if rows:
+            lines = [f"Lots en cours ({len(rows)}):"]
+            for row in rows[:20]:
+                lines.append(
+                    f"- {_display_batch_ref(row.get('batch_ref'))}: perte {float(row.get('loss_pct', 0.0)):.1f} % | efficacité {float(row.get('efficiency_pct', 0.0)):.1f} %"
+                )
+            return "\n".join(lines)
+        return "Aucun lot en cours n’a été trouvé."
+
+    if payload.get("low_efficiency_lots") is not None:
+        rows = sorted(
+            payload.get("low_efficiency_lots", []),
+            key=lambda item: float(item.get("efficiency_pct", 100.0) or 100.0),
+        )
+        if rows:
+            lines = [f"Lots à efficacité faible ({len(rows)}):"]
+            for row in rows[:20]:
+                lines.append(
+                    f"- {_display_batch_ref(row.get('batch_ref'))}: efficacité {float(row.get('efficiency_pct', 0.0)):.1f} % | perte {float(row.get('loss_pct', 0.0)):.1f} %"
+                )
+            return "\n".join(lines)
+        return "Aucun lot à efficacité faible n’a été détecté."
+    
+    if payload.get("top_loss_batches"):
+        item = payload["top_loss_batches"][0]
+        return (
+            f"Le lot avec le plus de pertes est {_display_batch_ref(item.get('batch_ref'))} "
+            f"avec {float(item.get('loss_pct', 0.0)):.1f} % de pertes cumulées."
+        )
+    
+    if payload.get("current_stock"):
+        items = payload["current_stock"]
+        if len(items) == 1:
+            item = items[0]
+            return (
+                f"Le stock opérationnel observé pour {_fr_product_label(item.get('product'))} est de "
+                f"{item.get('available_stock_kg', 0):.1f} {_normalize_unit(item.get('unit'))} disponibles."
+            )
+        lines = [f"Les stocks actuels ({len(items)} produits) sont:"]
+        for item in items[:8]:
+            lines.append(
+                f"- {_fr_product_label(item.get('product'))}: {float(item.get('available_stock_kg', 0.0)):.1f} {_normalize_unit(item.get('unit'))} disponibles"
+            )
+        if len(items) > 8:
+            lines.append("- …")
+        return "\n".join(lines)
+
+    if payload.get("invoices_summary") is not None:
+        rows = payload.get("invoices_summary", [])
+        if rows:
+            lines = [f"Factures ({len(rows)}):"]
+            for row in rows[:20]:
+                lines.append(
+                    f"- {row.get('invoice_number')}: statut {row.get('status')} | montant {float(row.get('total_amount_fcfa', 0.0)):.0f} FCFA"
+                )
+            return "\n".join(lines)
+        if payload.get("invoices_module_available") is False:
+            return "Le module factures n’est pas disponible dans le modèle de données actuel."
+        return "Aucune facture n’est disponible dans les données actuelles."
+
+    if payload.get("commercial_orders") is not None:
+        rows = payload.get("commercial_orders", [])
+        totals = payload.get("commercial_totals", [])
+        if rows:
+            lines = [f"Commandes commerciales ({len(rows)}):"]
+            for row in rows[:20]:
+                lines.append(
+                    f"- {row.get('order_number')}: statut {row.get('status')} | montant {float(row.get('total_amount_fcfa', 0.0)):.0f} FCFA"
+                )
+            if totals:
+                total = totals[0]
+                lines.append(
+                    f"Total commercial: {float(total.get('total_amount_fcfa', 0.0)):.0f} FCFA sur {int(total.get('order_count', 0))} commande(s)."
+                )
+            return "\n".join(lines)
+        if totals:
+            total = totals[0]
+            if int(total.get("order_count", 0) or 0) == 0:
+                return "Aucune commande commerciale n’est disponible dans les données actuelles."
+        if payload.get("commercial_module_available") is False:
+            return "Le module commercialisation n’est pas disponible dans le modèle de données actuel."
+        return "Le module commercialisation n’est pas disponible dans les données actuelles."
+
+    if payload.get("finance_expenses") is not None:
+        rows = payload.get("finance_expenses", [])
+        if rows:
+            row = rows[0]
+            treasury_count = int(row.get("treasury_count", 0) or 0)
+            charge_count = int(row.get("global_charge_count", 0) or 0)
+            if treasury_count == 0 and charge_count == 0:
+                return "Aucune charge ou dépense n’est disponible dans les données actuelles."
+            return (
+                "Synthèse charges/dépenses: "
+                f"{treasury_count} transaction(s) trésorerie pour {float(row.get('treasury_total_fcfa', 0.0)):.0f} FCFA, "
+                f"{charge_count} charge(s) globales pour {float(row.get('global_charge_total_fcfa', 0.0)):.0f} FCFA."
+            )
+        if payload.get("finance_module_available") is False:
+            return "Le module finance n’est pas disponible dans le modèle de données actuel."
+        return "Le module finance n’est pas disponible dans les données actuelles."
+    if payload.get("material_balance"):
+        item = payload["material_balance"][0]
+        return (
+            f"Le bilan matière du lot {_display_batch_ref(item.get('batch_ref'))} montre une perte de "
+            f"{float(item.get('loss_percentage', 0.0)):.1f} % et une efficacité de "
+            f"{float(item.get('efficiency_percentage', 0.0)):.1f} %."
+        )
+    if payload.get("process_step_losses"):
+        item = max(payload["process_step_losses"], key=lambda row: float(row.get("loss_pct", 0.0) or 0.0))
+        return (
+            f"L’étape critique observée est {_fr_stage_label(item.get('stage'))} sur {_display_batch_ref(item.get('batch_ref'))} "
+            f"avec {float(item.get('loss_pct', 0.0)):.1f} % de pertes."
+            )
+    if payload.get("batch_summary"):
+        item = payload["batch_summary"][0]
+        return (
+            f"Le lot {_display_batch_ref(item.get('batch_ref'))} présente une perte cumulée de {float(item.get('loss_pct', 0.0)):.1f} % "
+            f"et une efficacité de {float(item.get('efficiency_pct', 0.0)):.1f} %."
+        )
+    return "Les données SQL disponibles ne permettent pas de confirmer ce point."
+
+
+def _display_batch_ref(value) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "lot inconnu"
+    parts = raw.split("-")
+    pretty = []
+    for part in parts:
+        if part.isalpha():
+            pretty.append(part.capitalize())
+        else:
+            pretty.append(part)
+    return "-".join(pretty)
+
+
+def _fr_product_label(value) -> str:
+    normalized = str(value or "").strip().lower()
+    mapping = {
+        "mango": "Mangue",
+        "mangue": "Mangue",
+        "peanut": "Arachide",
+        "arachide": "Arachide",
+        "millet": "Mil",
+        "mil": "Mil",
+    }
+    return mapping.get(normalized, str(value or "Produit"))
+
+
+def _fr_stage_label(value) -> str:
+    normalized = str(value or "").strip().lower()
+    mapping = {
+        "drying": "séchage",
+        "sorting": "tri",
+        "packaging": "emballage",
+        "cleaning": "nettoyage",
+    }
+    return mapping.get(normalized, str(value or "étape"))
+
+
+def _normalize_unit(value) -> str:
+    normalized = str(value or "kg").strip().lower()
+    mapping = {
+        "kg": "kg",
+        "kilogram": "kg",
+        "kilograms": "kg",
+        "t": "tonnes",
+        "ton": "tonnes",
+        "tons": "tonnes",
+        "tonne": "tonnes",
+        "tonnes": "tonnes",
+        "fcfa": "FCFA",
+        "xof": "FCFA",
+        "%": "%",
+    }
+    return mapping.get(normalized, str(value or "kg"))

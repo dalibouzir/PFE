@@ -1,4 +1,5 @@
 from app.models.batch import Batch
+from app.models.ai_audit import AIChatAuditLog
 from app.models.chat import ChatMessage, ChatSession
 from app.models.commercial_catalog_product import CommercialCatalogProduct
 from app.models.commercial_invoice import CommercialInvoice, CommercialInvoiceLine
@@ -20,6 +21,7 @@ from app.models.treasury_transaction import TreasuryTransaction
 from app.models.user import User
 
 __all__ = [
+    "AIChatAuditLog",
     "Batch",
     "ChatMessage",
     "ChatSession",

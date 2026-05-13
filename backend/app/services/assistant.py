@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 import json
 import re
 from typing import Any, List, Optional, Sequence
@@ -2011,7 +2013,7 @@ def generate_chat_reply(
             )
             if llm_answer:
                 answer = llm_answer
-                mode = "llm-rag" if citations else "llm"
+                mode = "llm-rag" if _has_knowledge_citations(citations) else "llm"
                 llm_provider = settings.llm_provider
                 llm_model = settings.llm_model
         except ValidationError:
@@ -3314,6 +3316,17 @@ def _dedupe_citations(citations: Sequence[ChatCitation], *, limit: int) -> list[
         if len(ordered) >= limit:
             break
     return ordered
+
+
+def _has_knowledge_citations(citations: Sequence[ChatCitation]) -> bool:
+    """Keep the legacy /chat mode stable unless actual RAG/reference evidence was used."""
+    for citation in citations:
+        source_id = str(citation.source_id or "")
+        source_url = str(citation.source_url or "")
+        if source_id.startswith("sql:") or source_url.startswith("app://sql-metric/"):
+            continue
+        return True
+    return False
 
 
 def _build_sql_evidence_citations(
@@ -5317,7 +5330,19 @@ def _safe_parse_ui_blocks(raw: Optional[list[dict]]) -> List[ChatUIBlock]:
     parsed: List[ChatUIBlock] = []
     for item in raw:
         try:
-            parsed.append(ChatUIBlock.model_validate(item))
+            if not isinstance(item, dict):
+                continue
+            normalized_item = dict(item)
+            payload = normalized_item.get("payload")
+            if not isinstance(payload, dict):
+                # Backward/forward compatibility: preserve raw block fields (chart/table/etc.)
+                # even when payload wrapper is absent in persisted JSON.
+                normalized_item["payload"] = {
+                    key: value
+                    for key, value in normalized_item.items()
+                    if key not in {"type", "title"}
+                }
+            parsed.append(ChatUIBlock.model_validate(normalized_item))
         except Exception:
             continue
     return parsed

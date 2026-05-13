@@ -7,9 +7,10 @@ import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useCreateInput, useDeleteInput, useInputs, useUpdateInput } from "@/hooks/useInputs";
+import { ApiError } from "@/lib/api/client";
 import { useMembers } from "@/hooks/useMembers";
 import { useProducts } from "@/hooks/useProducts";
-import type { Input, InputCreate, InputUpdate } from "@/lib/api/types";
+import type { Input, InputCreate } from "@/lib/api/types";
 
 const statusTone: Record<string, "success" | "warning" | "info"> = {
   validated: "success",
@@ -33,6 +34,38 @@ function normalizeToken(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase();
+}
+
+function toNullableFiniteNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const num = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function formatApiError(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    if (Array.isArray(error.details)) {
+      const details = error.details
+        .map((detail) => {
+          if (typeof detail === "string") return detail;
+          if (detail && typeof detail === "object" && "loc" in detail && "msg" in detail) {
+            const loc = Array.isArray((detail as { loc?: unknown }).loc)
+              ? (detail as { loc: unknown[] }).loc.join(".")
+              : "";
+            const msg = typeof (detail as { msg?: unknown }).msg === "string"
+              ? (detail as { msg: string }).msg
+              : "";
+            return [loc, msg].filter(Boolean).join(": ");
+          }
+          return JSON.stringify(detail);
+        })
+        .filter(Boolean);
+      if (details.length > 0) return details.join(" | ");
+    }
+    if (typeof error.message === "string" && error.message.trim()) return error.message;
+  }
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return fallback;
 }
 
 function parseSpecialtyTokens(value?: string | null) {
@@ -67,7 +100,8 @@ export default function InputsPage() {
   const [fromDate, setFromDate] = useState("");
   const [viewMode, setViewMode] = useState<DataViewMode>("table");
   const [formOpen, setFormOpen] = useState(false);
-  const [editingInput, setEditingInput] = useState<Input | null>(null);
+  const [statusEditingId, setStatusEditingId] = useState<string | null>(null);
+  const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, setValue, watch, getValues, formState } = useForm<InputCreate>({
@@ -140,7 +174,6 @@ export default function InputsPage() {
   }, [availableProducts, formOpen, getValues, setValue]);
 
   const openCreateForm = () => {
-    setEditingInput(null);
     reset({
       member_id: members[0]?.id ?? "",
       product_id: "",
@@ -154,21 +187,6 @@ export default function InputsPage() {
     setFormOpen(true);
   };
 
-  const openEditForm = (item: Input) => {
-    setEditingInput(item);
-    reset({
-      member_id: item.member_id,
-      product_id: item.product_id,
-      date: item.date,
-      quantity: item.quantity,
-      grade: item.grade,
-      status: item.status,
-      estimated_value: item.estimated_value ?? undefined,
-    });
-    setFormError(null);
-    setFormOpen(true);
-  };
-
   const closeForm = () => {
     setFormOpen(false);
     setFormError(null);
@@ -177,41 +195,43 @@ export default function InputsPage() {
   const submitInput = handleSubmit(async (values) => {
     setFormError(null);
     try {
-      if (editingInput) {
-        const payload: InputUpdate = {
-          member_id: values.member_id || editingInput.member_id,
-          product_id: values.product_id || editingInput.product_id,
-          field_id: editingInput.field_id ?? null,
-          date: values.date || editingInput.date,
-          quantity: Number(values.quantity),
-          grade: values.grade.trim(),
-          status: values.status || editingInput.status,
-          estimated_value:
-            values.estimated_value !== undefined ? Number(values.estimated_value) : editingInput.estimated_value ?? null,
-        };
-        await updateInput.mutateAsync({ id: editingInput.id, payload });
-      } else {
-        if (!values.product_id) {
-          setFormError("Produit requis.");
-          return;
-        }
-        const payload: InputCreate = {
-          member_id: values.member_id,
-          product_id: values.product_id,
-          field_id: null,
-          date: values.date,
-          quantity: Number(values.quantity),
-          grade: values.grade.trim(),
-          status: values.status || "pending",
-          estimated_value: values.estimated_value ? Number(values.estimated_value) : null,
-        };
-        await createInput.mutateAsync(payload);
+      if (!values.product_id) {
+        setFormError("Produit requis.");
+        return;
       }
+      const payload: InputCreate = {
+        member_id: values.member_id,
+        product_id: values.product_id,
+        field_id: null,
+        date: values.date,
+        quantity: Number(values.quantity),
+        grade: values.grade.trim(),
+        status: values.status || "pending",
+        estimated_value: toNullableFiniteNumber(values.estimated_value),
+      };
+      await createInput.mutateAsync(payload);
       closeForm();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Impossible d'enregistrer la collecte.");
+      setFormError(formatApiError(error, "Impossible d'enregistrer la collecte."));
     }
   });
+
+  const handleStatusUpdate = async (item: Input, nextStatus: string) => {
+    if (!nextStatus || nextStatus === item.status) {
+      setStatusEditingId(null);
+      return;
+    }
+    setFormError(null);
+    setStatusSavingId(item.id);
+    try {
+      await updateInput.mutateAsync({ id: item.id, payload: { status: nextStatus } });
+      setStatusEditingId(null);
+    } catch (error) {
+      setFormError(formatApiError(error, "Impossible de mettre à jour le statut."));
+    } finally {
+      setStatusSavingId(null);
+    }
+  };
 
   const handleDeleteInput = async (item: Input) => {
     if (!window.confirm("Supprimer cette collecte ?")) return;
@@ -294,6 +314,11 @@ export default function InputsPage() {
           <GlassViewToggle value={viewMode} onChange={setViewMode} className="shrink-0" />
         </div>
       </section>
+      {formError ? (
+        <section className="mb-4 rounded-xl border border-[#f2c7c7] bg-[#fff1f1] px-4 py-3 text-sm text-[#8f2f2f]">
+          {formError}
+        </section>
+      ) : null}
 
       {filtered.length === 0 ? (
         <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "100ms" }}>
@@ -325,13 +350,36 @@ export default function InputsPage() {
                       <StatusBadge label={item.grade.toUpperCase()} tone={gradeTone[item.grade.toUpperCase()] ?? "info"} />
                     </td>
                     <td className="px-5 py-4">
-                      <StatusBadge label={statusLabel[item.status] ?? item.status} tone={statusTone[item.status] ?? "info"} />
+                      {statusEditingId === item.id ? (
+                        <select
+                          autoFocus
+                          className="wf-input h-9 min-w-[170px] px-2 text-xs"
+                          value={item.status}
+                          disabled={statusSavingId === item.id}
+                          onBlur={() => {
+                            if (statusSavingId !== item.id) setStatusEditingId(null);
+                          }}
+                          onChange={(event) => {
+                            void handleStatusUpdate(item, event.target.value);
+                          }}
+                        >
+                          <option value="pending">En attente</option>
+                          <option value="quality_control">Controle qualite</option>
+                          <option value="validated">Valide</option>
+                        </select>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-left"
+                          onClick={() => setStatusEditingId(item.id)}
+                          title="Changer le statut"
+                        >
+                          <StatusBadge label={statusLabel[item.status] ?? item.status} tone={statusTone[item.status] ?? "info"} />
+                        </button>
+                      )}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
-                        <button className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => openEditForm(item)}>
-                          Modifier
-                        </button>
                         <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => handleDeleteInput(item)}>
                           Supprimer
                         </button>
@@ -352,7 +400,33 @@ export default function InputsPage() {
                   <p className="text-sm font-semibold text-[var(--text)]">{memberLookup.get(item.member_id) ?? item.member_id.slice(0, 8)}</p>
                   <p className="text-xs text-[var(--muted)]">{item.date}</p>
                 </div>
-                <StatusBadge label={item.status} tone={statusTone[item.status] ?? "info"} />
+                {statusEditingId === item.id ? (
+                  <select
+                    autoFocus
+                    className="wf-input h-8 min-w-[150px] px-2 text-xs"
+                    value={item.status}
+                    disabled={statusSavingId === item.id}
+                    onBlur={() => {
+                      if (statusSavingId !== item.id) setStatusEditingId(null);
+                    }}
+                    onChange={(event) => {
+                      void handleStatusUpdate(item, event.target.value);
+                    }}
+                  >
+                    <option value="pending">En attente</option>
+                    <option value="quality_control">Controle qualite</option>
+                    <option value="validated">Valide</option>
+                  </select>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-left"
+                    onClick={() => setStatusEditingId(item.id)}
+                    title="Changer le statut"
+                  >
+                    <StatusBadge label={statusLabel[item.status] ?? item.status} tone={statusTone[item.status] ?? "info"} />
+                  </button>
+                )}
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -369,9 +443,6 @@ export default function InputsPage() {
               <p className="mt-3 text-xs text-[var(--muted)]">Grade {item.grade}</p>
 
               <div className="mt-3 flex items-center gap-2">
-                <button className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => openEditForm(item)}>
-                  Modifier
-                </button>
                 <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => handleDeleteInput(item)}>
                   Supprimer
                 </button>
@@ -384,7 +455,7 @@ export default function InputsPage() {
       <LiquidGlassModal
         open={formOpen}
         onClose={closeForm}
-        title={editingInput ? "Modifier collecte" : "Nouvelle collecte"}
+        title="Nouvelle collecte"
         subtitle="Les collectes actualisent automatiquement les stocks."
         size="lg"
         footer={

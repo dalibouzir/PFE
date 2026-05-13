@@ -98,6 +98,13 @@ def update_input(db: Session, manager: User, input_id, payload) -> Input:
     input_record = get_input(db, manager, input_id)
     data = payload.model_dump(exclude_unset=True)
 
+    member_changed = "member_id" in data
+    product_changed = "product_id" in data
+    field_changed = "field_id" in data
+    quantity_changed = "quantity" in data
+    unit_changed = "unit" in data
+    touches_structure = member_changed or product_changed or field_changed or quantity_changed or unit_changed
+
     member = db.scalar(
         select(Member).where(
             Member.id == data.get("member_id", input_record.member_id),
@@ -115,10 +122,13 @@ def update_input(db: Session, manager: User, input_id, payload) -> Input:
     )
     if product is None:
         raise NotFoundError("Product not found in the current cooperative.")
-    _validate_member_product_mapping(member, product)
+    # Keep historical records editable (e.g. status/grade/date updates) even when
+    # member-product assignments changed after the collection was created.
+    if member_changed or product_changed:
+        _validate_member_product_mapping(member, product)
 
     next_field_id = data.get("field_id", input_record.field_id)
-    if next_field_id is not None:
+    if touches_structure and next_field_id is not None:
         field = db.scalar(
             select(Field).where(
                 Field.id == next_field_id,

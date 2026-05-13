@@ -112,7 +112,7 @@ def serialize_stock_read(stock: Stock) -> StockRead:
     return _serialize_stock(stock)
 
 
-def _create_stock_row(db: Session, cooperative_id, product: Product, unit: str | None = None) -> Stock:
+def _create_stock_row(db: Session, cooperative_id, product: Product, unit=None) -> Stock:
     normalized_unit = normalize_mass_unit(unit or product.unit)
     stock = Stock(
         cooperative_id=cooperative_id,

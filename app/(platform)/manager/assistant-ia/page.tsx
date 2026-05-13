@@ -28,7 +28,7 @@ import { PageIntro } from "@/components/ui/PageIntro";
 import { ExecutiveResponse } from "@/components/ui/assistant/ExecutiveResponse";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
-import type { AssistantChatResponse, ChatMessage, ChatSession, ChatUIBlock } from "@/lib/api/types";
+import type { AgentChatResponse, AssistantChatResponse, ChatMessage, ChatSession, ChatUIBlock } from "@/lib/api/types";
 
 type Tone = "normal" | "critical";
 
@@ -253,6 +253,166 @@ function normalizeAssistantResponse(response?: AssistantChatResponse | null): As
     context_metrics: Array.isArray(response.context_metrics) ? [...response.context_metrics] : [],
     dashboard: response.dashboard ?? null,
     ui_blocks: Array.isArray(response.ui_blocks) ? [...response.ui_blocks] : [],
+  };
+}
+
+function mapAgentBlocksToUIBlocks(response: AgentChatResponse): ChatUIBlock[] {
+  const blocks = Array.isArray(response.response_blocks) ? response.response_blocks : [];
+  const mapped: ChatUIBlock[] = [];
+  for (const block of blocks) {
+    if (!block || typeof block !== "object") continue;
+    const type = String(block.type || "");
+    const title = String(block.title || "");
+    if (type === "summary") {
+      mapped.push({ type: "executive_summary", title: title || "Résumé", payload: { text: String(block.content || "") } });
+      continue;
+    }
+    if (type === "recommendations") {
+      mapped.push({ type: "recommendation_cards", title: title || "Actions recommandées", payload: { items: Array.isArray(block.items) ? block.items : [] } });
+      continue;
+    }
+    if (type === "chart") {
+      const data = Array.isArray(block.data) ? block.data : [];
+      const xKey = String(block.x_key || "x");
+      const yKey = String(block.y_key || "y");
+      const labels = data.map((row) => {
+        const record = row as Record<string, unknown>;
+        const value = record[xKey] ?? record.stage ?? record.product ?? record.batch_ref ?? record.x ?? "";
+        return String(value);
+      });
+      const seriesValues = data.map((row) => {
+        const record = row as Record<string, unknown>;
+        const value = record[yKey] ?? record.loss_pct ?? record.available_stock_kg ?? record.y ?? 0;
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : 0;
+      });
+      mapped.push({
+        type: String(block.chart_type || "bar") === "line" ? "line_chart" : "bar_chart",
+        title: title || "Graphique",
+        payload: {
+          x_key: xKey,
+          y_key: yKey,
+          data,
+          labels,
+          series: [{ name: yKey || "Valeur", data: seriesValues }],
+        },
+      });
+      continue;
+    }
+    if (type === "warnings") {
+      const warningItems = Array.isArray(block.items) ? block.items : [];
+      mapped.push({
+        type: "warnings",
+        title: title || "Avertissements",
+        payload: { items: warningItems.map((item) => String(item)) },
+      });
+      continue;
+    }
+    if (type === "best_practices") {
+      const practiceItems = Array.isArray(block.items) ? block.items : [];
+      mapped.push({
+        type: "best_practices",
+        title: title || "Bonnes pratiques",
+        payload: { items: practiceItems.map((item) => String(item)) },
+      });
+      continue;
+    }
+    if (type === "sources") {
+      const sourceItems = Array.isArray(block.items) ? block.items : [];
+      mapped.push({
+        type: "sources",
+        title: title || "Sources utilisées",
+        payload: { items: sourceItems },
+      });
+      continue;
+    }
+    if (type === "table") {
+      mapped.push({
+        type: "table",
+        title: title || "Tableau",
+        payload: {
+          columns: Array.isArray(block.columns) ? block.columns : [],
+          rows: Array.isArray(block.rows) ? block.rows : [],
+        },
+      });
+      continue;
+    }
+    mapped.push({
+      type,
+      title: title || "Bloc",
+      payload: block as Record<string, unknown>,
+    });
+  }
+  return mapped;
+}
+
+function adaptAgentResponseToAssistant(response: AgentChatResponse): AssistantChatResponse {
+  const conversationId = String(response.metadata?.conversation_id || "");
+  const warnings = Array.isArray(response.warnings) ? response.warnings : [];
+  const citations = (Array.isArray(response.sources) ? response.sources : []).map((source, index) => ({
+    source_id: String(source.title || source.table || source.model || `source-${index + 1}`),
+    source_url: "",
+    region: "cooperative",
+    crop: String(source.related_product || "multi"),
+    topic: String(source.type || "source"),
+    excerpt: String(source.label || source.title || source.model || "Source opérationnelle"),
+  }));
+
+  return {
+    success: true,
+    session_id: conversationId,
+    user_message_id: null,
+    assistant_message_id: null,
+    message: response.answer,
+    grounded: citations.length > 0,
+    mode: `agent:${response.route}`,
+    llm_provider: null,
+    llm_model: null,
+    citations,
+    context_metrics: [
+      {
+        source_id: "agent",
+        region: "cooperative",
+        crop: "multi",
+        metric: "retrieval_plan.intent_type",
+        period: "current",
+        value: 1,
+        unit: response.route,
+        notes: response.route,
+      },
+      {
+        source_id: "agent",
+        region: "cooperative",
+        crop: "multi",
+        metric: "orchestration.confidence_score",
+        period: "current",
+        value: Number(response.confidence || 0),
+        unit: "score",
+        notes: "",
+      },
+      {
+        source_id: "agent",
+        region: "cooperative",
+        crop: "multi",
+        metric: "orchestration.warning_count",
+        period: "current",
+        value: warnings.length,
+        unit: "count",
+        notes: warnings.length ? warnings.join(" | ") : "none",
+      },
+      {
+        source_id: "agent",
+        region: "cooperative",
+        crop: "multi",
+        metric: "agent.agents_count",
+        period: "current",
+        value: Array.isArray(response.agents_used) ? response.agents_used.length : 0,
+        unit: "count",
+        notes: Array.isArray(response.agents_used) ? response.agents_used.join(" | ") : "",
+      },
+    ],
+    dashboard: null,
+    ui_blocks: mapAgentBlocksToUIBlocks(response),
   };
 }
 
@@ -490,19 +650,14 @@ function StructuredBlocks({ blocks }: { blocks: ChatUIBlock[] }) {
 
 function ChatMessageAI({ id, text, time, response }: ChatMessageAIProps) {
   const [copied, setCopied] = useState(false);
-  const [openMetaPanel, setOpenMetaPanel] = useState<"confidence" | "sources" | "technical" | null>(null);
   const hasStructuredResponse = Boolean(response) && !isNonOperationalMode(response?.mode);
   const cleanedText = stripAssistantMetaSections(response?.message || text) || text;
   const confidenceMetric = response?.context_metrics?.find((metric) => metric.metric === "orchestration.confidence_score");
   const confidencePct = confidenceMetric ? Math.round(Math.max(0, Math.min(100, (confidenceMetric.value || 0) * 100))) : null;
-  const sourceCount = Array.isArray(response?.citations) ? response.citations.length : 0;
-  const warningMetric = response?.context_metrics?.find((metric) => metric.metric === "orchestration.warning_count");
-  const warnings = (warningMetric?.notes || "")
-    .split("|")
-    .map((item) => item.trim())
-    .filter((item) => item && item !== "none");
   const intentMetric = response?.context_metrics?.find((metric) => metric.metric === "retrieval_plan.intent_type");
   const responseMode = String(intentMetric?.unit || response?.mode || "HYBRID");
+  const agentsMetric = response?.context_metrics?.find((metric) => metric.metric === "agent.agents_count");
+  const agentCount = Number(agentsMetric?.value || 0);
 
   const copyResponse = async () => {
     const payload = cleanedText;
@@ -528,10 +683,24 @@ function ChatMessageAI({ id, text, time, response }: ChatMessageAIProps) {
         </div>
 
         {hasStructuredResponse ? (
-          <ExecutiveResponse response={response} fallbackText={cleanedText} hideMetaSections />
+          <ExecutiveResponse response={response} fallbackText={cleanedText} />
         ) : (
           <p className="max-w-4xl whitespace-pre-wrap text-sm leading-7 text-[var(--text)]">{cleanedText}</p>
         )}
+
+        {hasStructuredResponse ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="rounded-full border border-[#c7dfcf] bg-[#f2faf5] px-2.5 py-1 font-semibold text-[#24523b]">
+              Route: {responseMode}
+            </span>
+            <span className="rounded-full border border-[#c7dfcf] bg-[#f2faf5] px-2.5 py-1 font-semibold text-[#24523b]">
+              Agents: {agentCount || "N/A"}
+            </span>
+            <span className="rounded-full border border-[#c7dfcf] bg-[#f2faf5] px-2.5 py-1 font-semibold text-[#24523b]">
+              Confiance: {confidencePct !== null ? `${confidencePct}%` : "N/A"}
+            </span>
+          </div>
+        ) : null}
 
         <div className="mt-4 flex items-center gap-2 border-t border-[rgba(19,40,31,0.08)] pt-3">
           <button
@@ -559,75 +728,7 @@ function ChatMessageAI({ id, text, time, response }: ChatMessageAIProps) {
             <ThumbsDown className="h-3.5 w-3.5" />
             Peu utile
           </button>
-          {hasStructuredResponse ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setOpenMetaPanel((current) => (current === "confidence" ? null : "confidence"))}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]"
-                aria-label="Afficher le niveau de confiance"
-              >
-                Niveau de confiance
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpenMetaPanel((current) => (current === "sources" ? null : "sources"))}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]"
-                aria-label="Afficher les sources utilisées"
-              >
-                Sources utilisées
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpenMetaPanel((current) => (current === "technical" ? null : "technical"))}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--text)]"
-                aria-label="Afficher les détails techniques"
-              >
-                Détails techniques
-              </button>
-            </>
-          ) : null}
         </div>
-
-        {openMetaPanel && hasStructuredResponse ? (
-          <section className="mt-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-3 text-xs text-[var(--text)]">
-            {openMetaPanel === "confidence" ? (
-              <div className="space-y-2">
-                <p className="font-semibold text-[#173324]">Niveau de confiance</p>
-                <p>
-                  {confidencePct !== null ? `${confidencePct}%` : "N/A"} {warnings.length ? "· Confiance moyenne" : "· Confiance élevée"}
-                </p>
-                {warnings.length ? <p className="text-[var(--muted)]">{warnings.join(" | ")}</p> : <p className="text-[var(--muted)]">Aucun avertissement interne.</p>}
-              </div>
-            ) : null}
-
-            {openMetaPanel === "sources" ? (
-              <div className="space-y-2">
-                <p className="font-semibold text-[#173324]">Sources utilisées ({sourceCount})</p>
-                {sourceCount ? (
-                  <div className="flex flex-wrap gap-2">
-                    {(response?.citations || []).slice(0, 8).map((citation, index) => (
-                      <span key={`${citation.source_id}-${index}`} className="inline-flex rounded-full border border-[#c7dfcf] bg-[#f2faf5] px-2.5 py-1 text-[11px] font-medium text-[#24523b]">
-                        Source: {citation.source_id}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[var(--muted)]">Aucune source disponible.</p>
-                )}
-              </div>
-            ) : null}
-
-            {openMetaPanel === "technical" ? (
-              <div className="space-y-2">
-                <p className="font-semibold text-[#173324]">Détails techniques</p>
-                <p>Mode de réponse: {responseMode}</p>
-                <p>Sources récupérées: {sourceCount}</p>
-                <p>Avertissements: {warnings.length ? warnings.join(" | ") : "Aucun"}</p>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
       </div>
     </div>
   );
@@ -935,9 +1036,9 @@ export default function AssistantIAPage() {
 
   const askMutation = useMutation({
     mutationFn: ({ sessionId, message }: { sessionId: string; message: string }) =>
-      apiFetch<AssistantChatResponse>(endpoints.chat.ask, {
+      apiFetch<AgentChatResponse>(endpoints.chat.agentAsk, {
         method: "POST",
-        body: { session_id: sessionId, message, top_k: 2 },
+        body: { conversation_id: sessionId, message, language: "fr" },
       }),
   });
 
@@ -1072,7 +1173,7 @@ export default function AssistantIAPage() {
 
     try {
       const response = await askMutation.mutateAsync({ sessionId, message });
-      const normalized = normalizeAssistantResponse(response);
+      const normalized = normalizeAssistantResponse(adaptAgentResponseToAssistant(response));
       if (!normalized) {
         const invalidAssistantMessage: ConversationMessage = {
           id: `assistant-invalid-${Date.now()}`,

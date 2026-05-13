@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date as date_type
+from datetime import datetime as datetime_type
 from typing import Optional
 from uuid import UUID
 
@@ -13,7 +14,7 @@ class InputCreate(BaseModel):
     member_id: UUID
     product_id: UUID
     field_id: Optional[UUID] = None
-    date: date
+    date: date_type
     quantity: float = Field(gt=0)
     unit: Optional[str] = Field(default=None, min_length=1, max_length=16)
     grade: str = Field(min_length=1, max_length=40)
@@ -25,7 +26,7 @@ class InputUpdate(BaseModel):
     member_id: Optional[UUID] = None
     product_id: Optional[UUID] = None
     field_id: Optional[UUID] = None
-    date: Optional[date] = None
+    date: Optional[date_type] = None
     quantity: Optional[float] = Field(default=None, gt=0)
     unit: Optional[str] = Field(default=None, min_length=1, max_length=16)
     grade: Optional[str] = Field(default=None, min_length=1, max_length=40)
@@ -39,10 +40,10 @@ class InputRead(ORMModel):
     member_id: UUID
     product_id: UUID
     field_id: Optional[UUID]
-    date: date
+    date: date_type
     quantity: float
     grade: str
     estimated_value: Optional[float]
     status: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime_type
+    updated_at: datetime_type
