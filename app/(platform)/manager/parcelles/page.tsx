@@ -859,8 +859,8 @@ export default function ParcellesCulturePage() {
                                 </p>
                               </div>
                               <StatusBadge
-                                label={selectedLotState === "active" ? "Verrouillé" : "Éditable"}
-                                tone={selectedLotState === "active" ? "warning" : "info"}
+                                label="Éditable"
+                                tone="info"
                               />
                             </div>
                             {(() => {

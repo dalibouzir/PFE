@@ -42,62 +42,66 @@ export function LoginExperience() {
       <div className="wf-ambient wf-ambient-a" />
       <div className="wf-ambient wf-ambient-b" />
 
-      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-[1020px] flex-col justify-between gap-4 sm:min-h-[calc(100dvh-2.5rem)]">
+      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-[1180px] flex-col justify-between gap-4 sm:min-h-[calc(100dvh-2.5rem)]">
         <div className="flex flex-1 items-center">
           <section className="unified-enter w-full overflow-hidden rounded-[22px] border border-white/25 bg-transparent shadow-[0_20px_46px_rgba(7,47,33,0.28)]">
-            <div className="grid min-h-[560px] grid-cols-1 md:min-h-[620px] md:grid-cols-[60%_40%]">
-              <aside className="order-2 flex h-full flex-col bg-gradient-to-r from-[#90d0b5] to-[#89c7c8] px-7 py-6 text-[#173126] sm:px-10 md:order-1">
-                <div className="flex items-start justify-between gap-4">
-                  <Image
-                    src="/logo.png"
-                    alt="Logo WeeFarm"
-                    width={138}
-                    height={58}
-                    className="h-auto w-[118px] object-contain sm:w-[132px]"
-                    priority
-                  />
-                  <div className="pt-1 text-center">
-                    <p className="text-[26px] font-semibold leading-none tracking-[0.01em] text-[#163527]">WeeFarm</p>
-                    <p className="mt-1 text-[15px] font-medium text-[#2f5f4a]">AI-first cooperative operations dashboard</p>
+            <div className="grid min-h-[600px] grid-cols-1 md:min-h-[660px] md:grid-cols-[58%_42%]">
+              <aside className="order-2 flex h-full flex-col bg-gradient-to-br from-[#a8dec6] via-[#9cd8bf] to-[#8ecdc4] px-7 py-6 text-[#173126] sm:px-10 md:order-1">
+                <div className="relative overflow-hidden rounded-[24px] border border-white/45 bg-white/40 px-5 py-5 shadow-[0_12px_34px_rgba(8,57,39,0.12)] backdrop-blur-[2px] sm:px-6">
+                  <div className="pointer-events-none absolute -left-16 -top-20 h-40 w-40 rounded-full bg-white/35 blur-2xl" />
+                  <div className="pointer-events-none absolute -bottom-20 right-10 h-40 w-40 rounded-full bg-[#1f9d57]/25 blur-2xl" />
+                  <div className="relative flex items-start justify-between gap-4">
+                    <Image
+                      src="/logo.png"
+                      alt="Logo WeeFarm"
+                      width={146}
+                      height={60}
+                      className="h-auto w-[122px] object-contain sm:w-[136px]"
+                      priority
+                    />
+                    <div className="pt-1 text-right">
+                      <p className="text-[26px] font-semibold leading-none tracking-[0.01em] text-[#163527]">WeeFarm</p>
+                      <p className="mt-1 text-[14px] font-medium text-[#2f5f4a]">AI-first cooperative operations dashboard</p>
+                    </div>
                   </div>
+
+                  <div className="relative mt-4 rounded-2xl bg-gradient-to-r from-[#0f7a3b] via-[#178a49] to-[#2ea55f] px-5 py-4 text-white sm:px-6">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/85">Plateforme coopérative</p>
+                    <p className="mt-1 text-[22px] font-semibold leading-tight">Pilotage unifié WeeFarm</p>
+                    <p className="mt-2 text-[13px] text-white/90">Administration, exécution terrain et suivi opérationnel.</p>
+                  </div>
+
+                  <div className="mt-4 grid gap-2.5 text-[13px] text-[#173b2d] sm:grid-cols-2">
+                    <div className="rounded-xl border border-[#d4e7da] bg-white/70 px-3.5 py-2.5">Gestion des coopératives et managers (admin)</div>
+                    <div className="rounded-xl border border-[#d4e7da] bg-white/70 px-3.5 py-2.5">Suivi membres, parcelles, stocks et lots (manager)</div>
+                    <div className="rounded-xl border border-[#d4e7da] bg-white/70 px-3.5 py-2.5 sm:col-span-2">Transformations et analytique opérationnelle</div>
+                  </div>
+
+                  <p className="mt-4 text-[12px] text-[#254a3a]">
+                    Support: <span className="font-semibold text-[#1a3d2f]">support@wefarm.sn</span>
+                  </p>
                 </div>
 
-                <div className="mt-5 max-w-[560px] space-y-3">
+                <div className="mt-5 max-w-[620px] space-y-3">
                   <h1 className="text-[30px] font-bold leading-[1.14] tracking-[-0.01em] text-[#1a3d2f] sm:text-[36px]">
                     Pilotage operations cooperative, de la collecte au bilan matiere.
                   </h1>
-                  <p className="max-w-[520px] text-[14px] leading-relaxed text-[#23483a]/90">
+                  <p className="max-w-[560px] text-[14px] leading-relaxed text-[#23483a]/90">
                     Interface pour administrer les cooperatives, suivre les membres, les lots, les stocks et les
                     transformations post-recolte.
                   </p>
                 </div>
-
-                <div className="wf-liquid-card mt-6 overflow-hidden rounded-2xl p-0 sm:mt-7">
-                  <div className="bg-gradient-to-r from-[#0f7a3b] via-[#178a49] to-[#2ea55f] px-5 py-4 text-white sm:px-6">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/85">Plateforme coopérative</p>
-                    <p className="mt-1 text-[18px] font-semibold leading-tight">Pilotage unifié WeeFarm</p>
-                    <p className="mt-1 text-[12px] text-white/90">Administration, exécution terrain et suivi opérationnel.</p>
-                  </div>
-                  <div className="grid gap-2 px-5 py-4 text-[13px] text-[#173b2d] sm:px-6 sm:py-5">
-                    <div className="rounded-xl border border-[#d4e7da] bg-white/70 px-3 py-2">Gestion des coopératives et managers (admin)</div>
-                    <div className="rounded-xl border border-[#d4e7da] bg-white/70 px-3 py-2">Suivi membres, parcelles, stocks et lots (manager)</div>
-                    <div className="rounded-xl border border-[#d4e7da] bg-white/70 px-3 py-2">Transformations et analytique opérationnelle</div>
-                    <p className="pt-1 text-[12px] text-[#254a3a]">
-                      Support: <span className="font-semibold text-[#1a3d2f]">support@wefarm.sn</span>
-                    </p>
-                  </div>
-                </div>
               </aside>
 
-              <aside className="order-1 h-full border-b border-white/35 bg-[#edf1f2]/95 px-8 py-7 md:order-2 md:border-b-0 md:border-l md:px-10">
-                <div className="mx-auto flex h-full max-w-[330px] flex-col justify-start pt-4">
+              <aside className="order-1 h-full border-b border-white/35 bg-[#edf1f2]/95 px-8 py-8 md:order-2 md:border-b-0 md:border-l md:px-12">
+                <div className="mx-auto flex h-full max-w-[390px] flex-col justify-start pt-5">
                   <div className="flex justify-center">
-                    <Image src="/logo.png" alt="Logo WeeFarm" width={180} height={70} className="h-auto w-[160px] object-contain" priority />
+                    <Image src="/logo.png" alt="Logo WeeFarm" width={196} height={76} className="h-auto w-[172px] object-contain" priority />
                   </div>
-                  <h3 className="mt-5 text-center text-[20px] font-medium text-[#18382d]">Connexion</h3>
+                  <h3 className="mt-6 text-center text-[22px] font-medium text-[#18382d]">Connexion</h3>
                   <p className="mt-1 text-center text-[13px] text-[#4e635b]">Acces role-based</p>
 
-                  <form className="mt-6 space-y-3.5" onSubmit={submitForm}>
+                  <form className="mt-7 space-y-4" onSubmit={submitForm}>
                     <label className="block text-[14px] font-medium text-[#243730]">
                       Email
                       <input
@@ -105,7 +109,7 @@ export function LoginExperience() {
                         autoComplete="email"
                         placeholder="nom@cooperative.sn"
                         {...register("email", { required: "Email requis." })}
-                        className="mt-2 h-12 w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3.5 text-[14px] text-[var(--text)] outline-none transition focus:border-[var(--primary)] focus:ring-4 focus:ring-[#007E2F]/15"
+                        className="mt-2 h-[50px] w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3.5 text-[14px] text-[var(--text)] outline-none transition focus:border-[var(--primary)] focus:ring-4 focus:ring-[#007E2F]/15"
                       />
                     </label>
 
@@ -116,14 +120,14 @@ export function LoginExperience() {
                         autoComplete="current-password"
                         placeholder="••••••••"
                         {...register("password", { required: "Mot de passe requis." })}
-                        className="mt-2 h-12 w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3.5 text-[14px] text-[var(--text)] outline-none transition focus:border-[var(--primary)] focus:ring-4 focus:ring-[#007E2F]/15"
+                        className="mt-2 h-[50px] w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3.5 text-[14px] text-[var(--text)] outline-none transition focus:border-[var(--primary)] focus:ring-4 focus:ring-[#007E2F]/15"
                       />
                     </label>
 
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="mt-1 h-12 w-full rounded-xl bg-[var(--primary)] px-4 text-[15px] font-semibold text-white shadow-[0_10px_18px_rgba(0,126,47,0.22)] transition hover:-translate-y-[1px] hover:bg-[var(--primary-hover)] hover:shadow-[0_14px_24px_rgba(0,126,47,0.28)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
+                      className="mt-1 h-[50px] w-full rounded-xl bg-[var(--primary)] px-4 text-[15px] font-semibold text-white shadow-[0_10px_18px_rgba(0,126,47,0.22)] transition hover:-translate-y-[1px] hover:bg-[var(--primary-hover)] hover:shadow-[0_14px_24px_rgba(0,126,47,0.28)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       {isSubmitting ? "Connexion..." : "Se connecter"}
                     </button>
