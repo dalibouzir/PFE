@@ -21,6 +21,7 @@ from app.models.enums import (
 from app.models.mixins import current_utc
 from app.models.product import Product
 from app.models.stock import Stock
+from app.models.stock_movement import StockMovement
 from app.models.treasury_transaction import TreasuryTransaction
 from app.models.user import User
 from app.schemas.commercial import (
@@ -161,6 +162,42 @@ def _treasury_reference() -> str:
     return f"TRS-{uuid.uuid4().hex[:10].upper()}"
 
 
+def _record_catalog_stock_movement(
+    db: Session,
+    *,
+    cooperative_id,
+    product_id,
+    catalog_product_id,
+    movement_type: str,
+    action_type: str,
+    source: str,
+    quantity_kg: float,
+    notes: str,
+):
+    key = f"commercial:catalog:{catalog_product_id}:{action_type}:{movement_type}"
+    existing = db.scalar(select(StockMovement).where(StockMovement.idempotency_key == key))
+    if existing is not None:
+        return existing
+
+    movement = StockMovement(
+        cooperative_id=cooperative_id,
+        product_id=product_id,
+        batch_id=None,
+        input_id=None,
+        process_step_id=None,
+        workflow_step_id=None,
+        movement_type=movement_type,
+        action_type=action_type,
+        source=source,
+        quantity_kg=round_metric(abs(quantity_kg)),
+        movement_date=date.today(),
+        idempotency_key=key,
+        notes=notes,
+    )
+    db.add(movement)
+    return movement
+
+
 def list_catalog_products(db: Session, manager: User) -> list[CatalogProductRead]:
     cooperative_id = get_manager_cooperative_id(manager)
     rows = db.scalars(
@@ -215,6 +252,18 @@ def create_catalog_product(db: Session, manager: User, payload) -> CatalogProduc
         status=CommercialCatalogStatus.ACTIVE,
     )
     db.add(item)
+    db.flush()
+    _record_catalog_stock_movement(
+        db,
+        cooperative_id=cooperative_id,
+        product_id=source_product.id,
+        catalog_product_id=item.id,
+        movement_type="out",
+        action_type="commercial_catalog_allocation",
+        source="commercial_catalog",
+        quantity_kg=allocated_kg,
+        notes=f"Allocation vers catalogue commercial: {item.name}",
+    )
     db.commit()
     db.refresh(item)
     return _serialize_catalog(item)
@@ -291,6 +340,17 @@ def delete_catalog_product(db: Session, manager: User, catalog_product_id) -> Ca
             source_product,
             restock_kg,
             create_if_missing=True,
+        )
+        _record_catalog_stock_movement(
+            db,
+            cooperative_id=cooperative_id,
+            product_id=source_product.id,
+            catalog_product_id=item.id,
+            movement_type="in",
+            action_type="commercial_catalog_release",
+            source="commercial_catalog",
+            quantity_kg=restock_kg,
+            notes=f"Retour du catalogue commercial: {item.name}",
         )
 
     snapshot = _serialize_catalog(item)

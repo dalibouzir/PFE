@@ -6,6 +6,7 @@ from app.models.commercial_order import CommercialOrder
 from app.models.enums import CommercialOrderStatus, InvoiceStatus, TreasuryTransactionStatus, TreasuryTransactionType
 from app.models.product import Product
 from app.models.stock import Stock
+from app.models.stock_movement import StockMovement
 from app.models.treasury_transaction import TreasuryTransaction
 from app.models.user import User
 from app.schemas.commercial import (
@@ -45,6 +46,16 @@ def test_catalog_order_invoice_payment_flow(db_session):
 
     stock = db_session.scalar(select(Stock).where(Stock.product_id == product.id))
     assert stock.total_stock_kg == 400.0
+    allocation_movement = db_session.scalar(
+        select(StockMovement).where(
+            StockMovement.product_id == product.id,
+            StockMovement.source == "commercial_catalog",
+            StockMovement.action_type == "commercial_catalog_allocation",
+            StockMovement.movement_type == "out",
+        )
+    )
+    assert allocation_movement is not None
+    assert allocation_movement.quantity_kg == 100.0
 
     order = commercial_service.intake_order(
         db_session,
@@ -150,3 +161,33 @@ def test_catalog_order_invoice_payment_flow(db_session):
     ).all()
     assert len(treasury_rows) == 1
     assert treasury_rows[0].status == TreasuryTransactionStatus.ENREGISTRE_COMPLET
+
+    # Create and remove an unused catalog product to validate stock journal IN release logging
+    catalog_unused = commercial_service.create_catalog_product(
+        db_session,
+        manager,
+        CatalogProductCreate(
+            source_product_id=product.id,
+            name="Mangue Kent Secondaire",
+            description="Produit secondaire",
+            category="Fruits",
+            sale_unit="kg",
+            sale_price_fcfa=300,
+            cost_price_fcfa=220,
+            min_order_qty=5,
+            allocated_quantity=30,
+        ),
+    )
+    deleted_catalog = commercial_service.delete_catalog_product(db_session, manager, catalog_unused.id)
+    assert deleted_catalog.id == catalog_unused.id
+
+    release_movement = db_session.scalar(
+        select(StockMovement).where(
+            StockMovement.product_id == product.id,
+            StockMovement.source == "commercial_catalog",
+            StockMovement.action_type == "commercial_catalog_release",
+            StockMovement.movement_type == "in",
+            StockMovement.quantity_kg == 30.0,
+        )
+    )
+    assert release_movement is not None
