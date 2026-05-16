@@ -22,8 +22,8 @@ import {
 import { PageIntro } from "@/components/ui/PageIntro";
 import { AIInsightsStrip, type AIInsightItem } from "@/components/ui/AIInsightsStrip";
 import { useDashboard } from "@/hooks/useDashboard";
+import { useCatalogProducts } from "@/hooks/useCommercial";
 import { useMembers } from "@/hooks/useMembers";
-import { useProducts } from "@/hooks/useProducts";
 import { useStocks } from "@/hooks/useStocks";
 import {
   buildActionItems,
@@ -94,8 +94,8 @@ function flowBarClass(lossPct: number) {
 
 export default function ManagerDashboardPage() {
   const { data, isLoading, isError, refetch } = useDashboard();
+  const { data: catalogProducts = [] } = useCatalogProducts();
   const { data: members = [] } = useMembers();
-  const { data: products = [] } = useProducts();
   const { data: stocks = [] } = useStocks();
 
   const inputs = useMemo(() => data?.recent_inputs ?? [], [data?.recent_inputs]);
@@ -218,9 +218,9 @@ export default function ManagerDashboardPage() {
     },
     {
       id: "products",
-      href: "/manager/stocks",
-      label: "Produits suivis",
-      value: products.length,
+      href: "/manager/commercialisation",
+      label: "Produits vendables",
+      value: catalogProducts.length,
       suffix: "",
       trend: trendData.map((item) => item.loss),
       tone: "neutral",

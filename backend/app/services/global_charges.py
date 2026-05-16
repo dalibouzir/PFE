@@ -82,7 +82,7 @@ def _create_or_sync_treasury_for_charge(db: Session, charge: GlobalCharge):
             label=charge.label,
             amount_fcfa=round_metric(charge.amount_fcfa),
             note=charge.notes,
-            status=TreasuryTransactionStatus.RECORDED,
+            status=TreasuryTransactionStatus.ENREGISTRE_SANS_JUSTIFICATIF,
             source_type=GLOBAL_CHARGE_SOURCE,
             source_id=charge.id,
             farmer_id=charge.member_id,
@@ -97,7 +97,8 @@ def _create_or_sync_treasury_for_charge(db: Session, charge: GlobalCharge):
         transaction.label = charge.label
         transaction.amount_fcfa = round_metric(charge.amount_fcfa)
         transaction.note = charge.notes
-        transaction.status = TreasuryTransactionStatus.RECORDED
+        if transaction.status != TreasuryTransactionStatus.ENREGISTRE_COMPLET:
+            transaction.status = TreasuryTransactionStatus.ENREGISTRE_SANS_JUSTIFICATIF
         transaction.source_type = GLOBAL_CHARGE_SOURCE
         transaction.source_id = charge.id
         transaction.farmer_id = charge.member_id

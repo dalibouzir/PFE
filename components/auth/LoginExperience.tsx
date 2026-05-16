@@ -43,6 +43,14 @@ export function LoginExperience() {
     setFormError(null);
     try {
       const profile = await login(values.email, values.password);
+      if (profile.role === "super_admin") {
+        router.push("/super-admin/dashboard");
+        return;
+      }
+      if (profile.role === "institution_admin") {
+        router.push("/institution-admin/dashboard");
+        return;
+      }
       router.push(profile.role === "admin" ? "/admin/dashboard" : "/manager/dashboard");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Connexion impossible.");

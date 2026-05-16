@@ -17,21 +17,6 @@ from app.services.rag_reindex_hooks import reindex_process_step_if_needed, reind
 from app.utils.exceptions import NotFoundError, ValidationError
 from app.services.stocks import apply_total_stock_delta
 
-STOCK_REDUCING_ACTIONS = {
-    "loss",
-    "perte",
-    "damage",
-    "dommage",
-    "rejection",
-    "rejet",
-    "sale",
-    "vente",
-    "delivery",
-    "livraison",
-    "external transfer",
-    "transfert externe",
-}
-
 
 def _require_step(db: Session, manager: User, step_id):
     cooperative_id = get_manager_cooperative_id(manager)
@@ -72,36 +57,37 @@ def _validate_loss(loss_value: float, loss_unit: str, input_qty_kg: float) -> tu
     return loss_value_normalized, unit, normalized_loss_kg
 
 
-def _is_stock_reducing_step(step_type: str) -> bool:
-    normalized = step_type.strip().lower()
-    return any(token in normalized for token in STOCK_REDUCING_ACTIONS)
-
-
 def _apply_step_stock_effect(db: Session, batch: Batch, step: ProcessStep, delta_loss_kg: float):
-    if abs(delta_loss_kg) < 1e-9 or not _is_stock_reducing_step(step.type):
+    if abs(delta_loss_kg) < 1e-9:
         return
     product = db.scalar(select(Product).where(Product.id == batch.product_id, Product.cooperative_id == batch.cooperative_id))
     if product is None:
         raise ValidationError("Batch product not found while applying stock movement.")
     apply_total_stock_delta(db, batch.cooperative_id, product, -float(delta_loss_kg), create_if_missing=True)
-    movement_key = f"step:{step.id}:loss:{round_metric(step.normalized_loss_value)}"
+    movement_key = f"step:{step.id}:loss"
     existing = db.scalar(select(StockMovement).where(StockMovement.idempotency_key == movement_key))
     if existing is not None:
+        existing.quantity_kg = abs(round_metric(step.normalized_loss_value))
+        existing.movement_date = step.date
+        existing.action_type = step.type
+        existing.notes = step.notes
+        existing.process_step_id = step.id
         return
-    movement = StockMovement(
-        cooperative_id=batch.cooperative_id,
-        product_id=batch.product_id,
-        batch_id=batch.id,
-        workflow_step_id=None,
-        movement_type="out",
-        action_type=step.type,
-        source="post_harvest_step",
-        quantity_kg=abs(round_metric(delta_loss_kg)),
-        movement_date=step.date,
-        idempotency_key=movement_key,
-        notes=step.notes,
+    db.add(
+        StockMovement(
+            cooperative_id=batch.cooperative_id,
+            product_id=batch.product_id,
+            batch_id=batch.id,
+            process_step_id=step.id,
+            movement_type="out",
+            action_type=step.type,
+            source="post_harvest_step",
+            quantity_kg=abs(round_metric(step.normalized_loss_value)),
+            movement_date=step.date,
+            idempotency_key=movement_key,
+            notes=step.notes,
+        )
     )
-    db.add(movement)
 
 
 def list_process_steps(db: Session, manager: User, batch_id=None):
@@ -319,7 +305,7 @@ def delete_process_step(db: Session, manager: User, step_id):
         batch_id=batch.id,
         cooperative_id=batch.cooperative_id,
     )
-    if _is_stock_reducing_step(step.type) and step.normalized_loss_value > 0:
+    if step.normalized_loss_value > 0:
         product = db.scalar(select(Product).where(Product.id == batch.product_id, Product.cooperative_id == batch.cooperative_id))
         if product is not None:
             apply_total_stock_delta(db, batch.cooperative_id, product, float(step.normalized_loss_value), create_if_missing=True)

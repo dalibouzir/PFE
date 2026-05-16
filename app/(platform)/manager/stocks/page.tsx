@@ -1,97 +1,102 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
+import { ExportActions } from "@/components/ui/table/ExportActions";
+import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { useBatches } from "@/hooks/useBatches";
-import { useCatalogProducts, useCommercialOrders } from "@/hooks/useCommercial";
+import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
+import { useTableControls } from "@/lib/table/useTableControls";
 import { useInputs } from "@/hooks/useInputs";
-import { useProcessSteps } from "@/hooks/useProcessSteps";
 import { useProducts } from "@/hooks/useProducts";
 import { useStocks } from "@/hooks/useStocks";
-import type { Stock } from "@/lib/api/types";
+import { useStockMovementDetail, useStockMovements } from "@/hooks/useStockMovements";
+import type { StockMovement } from "@/lib/api/types";
 
 type ViewMode = "cards" | "table";
-type LogOrder = "newest" | "oldest";
-type MovementReason = "collecte" | "commercialisation" | "perte_lot" | "sortie_lot";
 
-type StockMovementEvent = {
-  id: string;
-  product_id: string;
-  date: string;
-  quantity_kg: number;
-  delta_kg: number;
-  reason: MovementReason;
-  reference: string;
-  note?: string | null;
-};
-
-type StockMovementWithBalances = StockMovementEvent & {
-  before_kg: number;
-  after_kg: number;
+type MovementTicketRow = {
+  cooperative: string;
+  movement_reference: string;
+  movement_type: string;
+  action_type: string;
+  movement_date: string;
+  product: string;
+  quantity_kg: string;
+  batch_reference: string;
+  input_reference: string;
+  member_name: string;
+  source: string;
+  notes: string;
+  generated_at: string;
 };
 
 export default function StocksPage() {
   const { data: stocks = [] } = useStocks();
   const { data: products = [] } = useProducts();
   const { data: inputs = [] } = useInputs();
-  const { data: batches = [] } = useBatches();
-  const { data: processSteps = [] } = useProcessSteps();
-  const { data: orders = [] } = useCommercialOrders();
-  const { data: catalogProducts = [] } = useCatalogProducts();
 
   const [productId, setProductId] = useState<string>("Tous");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
-  const [logOrder, setLogOrder] = useState<LogOrder>("newest");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [batchReference, setBatchReference] = useState("");
+  const [inputReference, setInputReference] = useState("");
+  const [selectedMovementId, setSelectedMovementId] = useState<string | null>(null);
+
+  const tableControls = useTableControls([
+    {
+      key: "movement_type",
+      label: "Type",
+      options: [
+        { value: "all", label: "Tous types" },
+        { value: "in", label: "Entrée" },
+        { value: "out", label: "Sortie" },
+      ],
+      initialValue: "all",
+    },
+    {
+      key: "source",
+      label: "Source",
+      options: [
+        { value: "all", label: "Toutes sources" },
+        { value: "lot_linked_collecte", label: "Collecte liée lot" },
+        { value: "manual", label: "Collecte indépendante" },
+        { value: "post_harvest_step", label: "Post-récolte" },
+        { value: "pre_harvest_confirmed_weight", label: "Poids confirmé pré-récolte" },
+      ],
+      initialValue: "all",
+    },
+  ]);
+
+  const movementsQuery = useStockMovements({
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
+    product_id: productId !== "Tous" ? productId : undefined,
+    movement_type: tableControls.filters.movement_type,
+    source: tableControls.filters.source,
+    batch_reference: batchReference || undefined,
+    input_reference: inputReference || undefined,
+    search: tableControls.search || undefined,
+    sort: tableControls.sortOrder,
+  });
+
+  const detailQuery = useStockMovementDetail(selectedMovementId);
 
   const productLookup = useMemo(() => new Map(products.map((p) => [p.id, p.name])), [products]);
-  const productByNormalizedName = useMemo(() => {
-    const map = new Map<string, (typeof products)[number]>();
-    for (const product of products) {
-      const key = normalizeToken(product.name);
-      if (!map.has(key)) map.set(key, product);
-    }
-    return map;
-  }, [products]);
-
-  const batchById = useMemo(() => {
-    return new Map(batches.map((batch) => [batch.id, batch]));
-  }, [batches]);
-
-  const currentQtyByProductKg = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const batch of batches) {
-      if (!batch.confirmed_weight_kg) continue;
-      const currentKg = Math.max(batch.current_qty ?? batch.confirmed_weight_kg ?? 0, 0);
-      map.set(batch.product_id, (map.get(batch.product_id) ?? 0) + currentKg);
-    }
-    return map;
-  }, [batches]);
-
-  const remainingKgForProduct = useCallback(
-    (item: Stock) => {
-      const fromLots = currentQtyByProductKg.get(item.product_id);
-      if (fromLots === undefined) return item.available_stock_kg;
-      return fromLots;
-    },
-    [currentQtyByProductKg],
-  );
 
   const filtered = useMemo(() => {
     return stocks.filter((item) => (productId === "Tous" ? true : item.product_id === productId));
   }, [stocks, productId]);
 
   const filteredByUrgency = useMemo(() => {
-    return filtered.slice().sort((a, b) => {
-      const remainingA = remainingKgForProduct(a);
-      const remainingB = remainingKgForProduct(b);
-      return stockUrgencyScore(a.total_stock_kg, remainingA) - stockUrgencyScore(b.total_stock_kg, remainingB);
-    });
-  }, [filtered, remainingKgForProduct]);
+    return filtered.slice().sort((a, b) => stockUrgencyScore(a.total_stock_kg, a.available_stock_kg) - stockUrgencyScore(b.total_stock_kg, b.available_stock_kg));
+  }, [filtered]);
 
   const criticalCount = useMemo(
-    () => filtered.filter((item) => isCriticalStock(item.total_stock_kg, remainingKgForProduct(item))).length,
-    [filtered, remainingKgForProduct],
+    () => filtered.filter((item) => isCriticalStock(item.total_stock_kg, item.available_stock_kg)).length,
+    [filtered],
   );
 
   const collectedByProductKg = useMemo(() => {
@@ -102,101 +107,62 @@ export default function StocksPage() {
     return map;
   }, [inputs]);
 
-  const catalogById = useMemo(() => {
-    return new Map(catalogProducts.map((item) => [item.id, item]));
-  }, [catalogProducts]);
+  const movementRows = movementsQuery.data ?? [];
+  const journalExportColumns: ExportColumn<StockMovement>[] = [
+    { key: "movement_reference", header: "Référence" },
+    { key: "movement_type", header: "Type", format: (_, row) => (row.movement_type === "in" ? "Entrée" : "Sortie") },
+    { key: "batch_reference", header: "Lot", format: (_, row) => displayLotReference(row) },
+    { key: "input_reference", header: "Collecte", format: (_, row) => row.input_reference || "—" },
+    { key: "bl_number", header: "BL", format: (_, row) => row.input_reference_bl || "—" },
+    { key: "member_name", header: "Producteur", format: (_, row) => row.member_name || "—" },
+    { key: "product_name", header: "Produit", format: (_, row) => row.product_name || row.product_id },
+    { key: "quantity_kg", header: "Quantité (kg)", format: (_, row) => row.quantity_kg.toLocaleString("fr-FR") },
+    { key: "movement_date", header: "Date", format: (_, row) => formatDateTime(row.movement_date) },
+    { key: "source", header: "Source", format: (_, row) => row.source_label || row.source },
+    { key: "notes", header: "Notes", format: (_, row) => row.notes || "—" },
+  ];
 
-  const movementEvents = useMemo(() => {
-    const events: StockMovementEvent[] = [];
+  const exportMovementTicket = (movement: StockMovement) => {
+    const row: MovementTicketRow = {
+      cooperative: movement.cooperative_name || "WeeFarm Cooperative",
+      movement_reference: movement.movement_reference,
+      movement_type: movement.movement_type,
+      action_type: movement.action_type,
+      movement_date: formatDateTime(movement.movement_date),
+      product: movement.product_name || movement.product_id,
+      quantity_kg: `${movement.quantity_kg.toLocaleString("fr-FR")} kg`,
+      batch_reference: displayLotReference(movement),
+      input_reference: movement.input_reference || "—",
+      member_name: movement.member_name || "—",
+      source: movement.source_label || movement.source,
+      notes: movement.notes || "—",
+      generated_at: new Date().toLocaleString("fr-FR"),
+    };
 
-    for (const input of inputs) {
-      events.push({
-        id: `collecte-${input.id}`,
-        product_id: input.product_id,
-        date: input.created_at || input.updated_at || `${input.date}T00:00:00Z`,
-        quantity_kg: input.quantity,
-        delta_kg: input.quantity,
-        reason: "collecte",
-        reference: `COL-${input.id.slice(0, 8).toUpperCase()}`,
-      });
-    }
+    const columns: ExportColumn<MovementTicketRow>[] = [
+      { key: "cooperative", header: "Coopérative" },
+      { key: "movement_reference", header: "Référence mouvement" },
+      { key: "movement_type", header: "Type mouvement" },
+      { key: "action_type", header: "Action" },
+      { key: "movement_date", header: "Date" },
+      { key: "product", header: "Produit" },
+      { key: "quantity_kg", header: "Quantité" },
+      { key: "batch_reference", header: "Lot" },
+      { key: "input_reference", header: "Collecte" },
+      { key: "member_name", header: "Producteur" },
+      { key: "source", header: "Source" },
+      { key: "notes", header: "Notes" },
+      { key: "generated_at", header: "Généré le" },
+    ];
 
-    for (const step of processSteps) {
-      const batch = batchById.get(step.batch_id);
-      if (!batch) continue;
-      const qtyKg = Math.max(step.normalized_loss_value ?? 0, 0);
-      if (qtyKg <= 0) continue;
-      const reason: MovementReason = isExitReason(step.type) ? "sortie_lot" : "perte_lot";
-      events.push({
-        id: `step-${step.id}`,
-        product_id: batch.product_id,
-        date: step.created_at || step.updated_at || `${step.date}T00:00:00Z`,
-        quantity_kg: qtyKg,
-        delta_kg: -qtyKg,
-        reason,
-        reference: batch.code,
-        note: `${step.type}${step.notes ? ` · ${step.notes}` : ""}`,
-      });
-    }
-
-    for (const order of orders) {
-      if (order.status !== "delivered" && order.status !== "paid") continue;
-      const movementDate = order.delivered_at || order.paid_at || order.updated_at || order.created_at;
-      for (const line of order.lines) {
-        const catalog = catalogById.get(line.catalog_product_id);
-        let sourceProductId = catalog?.source_product_id ?? null;
-        if (!sourceProductId) {
-          const sourceName = catalog?.source_product_name || line.product_name;
-          sourceProductId = productByNormalizedName.get(normalizeToken(sourceName))?.id ?? null;
-        }
-        if (!sourceProductId) continue;
-
-        const qtyKg = toKg(line.quantity, line.unit);
-        events.push({
-          id: `commercial-${order.id}-${line.id}`,
-          product_id: sourceProductId,
-          date: movementDate,
-          quantity_kg: qtyKg,
-          delta_kg: -qtyKg,
-          reason: "commercialisation",
-          reference: order.order_number,
-          note: order.customer_name,
-        });
-      }
-    }
-
-    return events;
-  }, [batchById, catalogById, inputs, orders, processSteps, productByNormalizedName]);
-
-  const stockByProduct = useMemo(() => {
-    return new Map(filtered.map((item) => [item.product_id, item]));
-  }, [filtered]);
-
-  const movementRows = useMemo(() => {
-    const relevant = movementEvents
-      .filter((event) => stockByProduct.has(event.product_id))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    const cursor = new Map<string, number>();
-    for (const [id, stock] of stockByProduct) {
-      cursor.set(id, stock.available_stock_kg);
-    }
-
-    const computed: StockMovementWithBalances[] = [];
-    for (const event of relevant) {
-      const after = cursor.get(event.product_id) ?? 0;
-      const before = after - event.delta_kg;
-      cursor.set(event.product_id, before);
-      computed.push({
-        ...event,
-        before_kg: before,
-        after_kg: after,
-      });
-    }
-
-    const ordered = logOrder === "newest" ? computed : computed.slice().reverse();
-    return ordered.slice(0, 120);
-  }, [logOrder, movementEvents, stockByProduct]);
+    exportRowsToPdf({
+      filename: `ticket-mouvement-${movement.movement_reference}`,
+      title: `Ticket mouvement ${movement.movement_reference}`,
+      columns,
+      rows: [row],
+      generatedAt: new Date(),
+    });
+  };
 
   return (
     <main>
@@ -217,33 +183,23 @@ export default function StocksPage() {
             ))}
           </select>
 
-          <select
-            value={logOrder}
-            onChange={(event) => setLogOrder(event.target.value as LogOrder)}
-            className="soft-focus wf-input px-3 py-2.5 text-sm"
-          >
-            <option value="newest">Journal: plus récent</option>
-            <option value="oldest">Journal: plus ancien</option>
-          </select>
+          <div className="rounded-xl border border-[#E8B9B9] bg-[#FFEDEE] px-3 py-2 text-sm text-[var(--danger)]">
+            Alertes critiques: <span className="font-semibold">{criticalCount}</span>
+          </div>
 
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-[#E8B9B9] bg-[#FFEDEE] px-3 py-2 text-sm text-[var(--danger)]">
-              Alertes critiques: <span className="font-semibold">{criticalCount}</span>
-            </div>
-            <div className="flex gap-1 rounded-lg border border-[var(--line)] bg-[var(--surface-soft)] p-1">
-              <button
-                onClick={() => setViewMode("cards")}
-                className={`soft-focus rounded-md px-2.5 py-1.5 text-xs font-semibold ${viewMode === "cards" ? "bg-[var(--primary)] text-white" : "text-[var(--muted)]"}`}
-              >
-                Cartes
-              </button>
-              <button
-                onClick={() => setViewMode("table")}
-                className={`soft-focus rounded-md px-2.5 py-1.5 text-xs font-semibold ${viewMode === "table" ? "bg-[var(--primary)] text-white" : "text-[var(--muted)]"}`}
-              >
-                Tableau
-              </button>
-            </div>
+          <div className="flex gap-1 rounded-lg border border-[var(--line)] bg-[var(--surface-soft)] p-1">
+            <button
+              onClick={() => setViewMode("cards")}
+              className={`soft-focus rounded-md px-2.5 py-1.5 text-xs font-semibold ${viewMode === "cards" ? "bg-[var(--primary)] text-white" : "text-[var(--muted)]"}`}
+            >
+              Cartes
+            </button>
+            <button
+              onClick={() => setViewMode("table")}
+              className={`soft-focus rounded-md px-2.5 py-1.5 text-xs font-semibold ${viewMode === "table" ? "bg-[var(--primary)] text-white" : "text-[var(--muted)]"}`}
+            >
+              Tableau
+            </button>
           </div>
         </div>
       </section>
@@ -256,17 +212,16 @@ export default function StocksPage() {
             </article>
           ) : (
             filteredByUrgency.map((item, index) => {
-              const remainingKg = remainingKgForProduct(item);
+              const remainingKg = item.available_stock_kg;
               const remainingDisplay = fromKg(remainingKg, item.unit);
               const isCritical = isCriticalStock(item.total_stock_kg, remainingKg);
               const total = item.total_stock;
               const inLot = item.reserved_in_lots;
-              const remaining = remainingDisplay;
               const threshold = total * 0.2;
-              const progress = total > 0 ? Math.max(6, Math.min((remaining / total) * 100, 100)) : 0;
+              const progress = total > 0 ? Math.max(6, Math.min((remainingDisplay / total) * 100, 100)) : 0;
               const barClass = isCritical
                 ? "bg-gradient-to-r from-red-400 to-red-600"
-                : total > 0 && remaining < threshold * 1.4
+                : total > 0 && remainingDisplay < threshold * 1.4
                   ? "bg-gradient-to-r from-amber-400 to-amber-600"
                   : "bg-gradient-to-r from-green-400 to-green-600";
               return (
@@ -286,7 +241,7 @@ export default function StocksPage() {
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <MetricPill label="En lot" value={inLot} unit={item.unit} tone="danger" />
-                    <MetricPill label="Restant" value={remaining} unit={item.unit} tone={isCritical ? "danger" : "success"} />
+                    <MetricPill label="Restant" value={remainingDisplay} unit={item.unit} tone={isCritical ? "danger" : "success"} />
                   </div>
 
                   <div className="mt-3 h-2.5 rounded-full bg-[#E8E3DB]">
@@ -320,7 +275,7 @@ export default function StocksPage() {
                   </tr>
                 ) : (
                   filteredByUrgency.map((item) => {
-                    const remainingKg = remainingKgForProduct(item);
+                    const remainingKg = item.available_stock_kg;
                     const isCritical = isCriticalStock(item.total_stock_kg, remainingKg);
                     const collected = fromKg(collectedByProductKg.get(item.product_id) ?? 0, item.unit);
                     const remainingDisplay = fromKg(remainingKg, item.unit);
@@ -347,57 +302,145 @@ export default function StocksPage() {
       )}
 
       <section className="premium-card reveal mt-4 rounded-2xl p-6" style={{ ["--delay" as string]: "120ms" }}>
-        <h3 className="mb-4 text-lg font-semibold text-[var(--text)]">Journal des mouvements</h3>
-        <div className="overflow-x-auto">
+        <h3 className="mb-4 text-lg font-semibold text-[var(--text)]">Journal des mouvements (persisté)</h3>
+
+        <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm" />
+          <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm" />
+          <input value={batchReference} onChange={(event) => setBatchReference(event.target.value)} placeholder="Filtrer lot (ref)" className="soft-focus wf-input px-3 py-2.5 text-sm" />
+          <input value={inputReference} onChange={(event) => setInputReference(event.target.value)} placeholder="Filtrer collecte (ref)" className="soft-focus wf-input px-3 py-2.5 text-sm" />
+        </div>
+
+        <TableToolbar
+          search={tableControls.search}
+          onSearchChange={tableControls.setSearch}
+          searchPlaceholder="Recherche référence, produit, source, producteur..."
+          filters={tableControls.filterDefinitions}
+          onFilterChange={tableControls.setFilterValue}
+          sortOrder={tableControls.sortOrder}
+          onSortOrderChange={tableControls.setSortOrder}
+          sortAscLabel="Date asc"
+          sortDescLabel="Date desc"
+          rightActions={
+            <ExportActions
+              onCsv={() => exportRowsToCsv({ filename: "journal-mouvements-stock", title: "Journal Mouvements Stock", columns: journalExportColumns, rows: movementRows })}
+              onExcel={() => exportRowsToExcel({ filename: "journal-mouvements-stock", title: "Journal Mouvements Stock", columns: journalExportColumns, rows: movementRows })}
+              onPdf={() => exportRowsToPdf({ filename: "journal-mouvements-stock", title: "Journal Mouvements Stock", columns: journalExportColumns, rows: movementRows })}
+            />
+          }
+        />
+
+        <div className="mt-4 overflow-x-auto">
           <table className="wf-table min-w-full text-left text-sm">
             <thead>
               <tr>
-                <th className="px-5 py-3.5">Date</th>
-                <th className="px-5 py-3.5">Produit</th>
-                <th className="px-5 py-3.5">Mouvement</th>
-                <th className="px-5 py-3.5">Raison</th>
-                <th className="px-5 py-3.5">Avant</th>
-                <th className="px-5 py-3.5">Après</th>
                 <th className="px-5 py-3.5">Référence</th>
+                <th className="px-5 py-3.5">Type</th>
+                <th className="px-5 py-3.5">Lot</th>
+                <th className="px-5 py-3.5">Collecte</th>
+                <th className="px-5 py-3.5">BL</th>
+                <th className="px-5 py-3.5">Producteur</th>
+                <th className="px-5 py-3.5">Produit</th>
+                <th className="px-5 py-3.5">Quantité</th>
+                <th className="px-5 py-3.5">Date</th>
+                <th className="px-5 py-3.5">Source</th>
+                <th className="px-5 py-3.5">Notes</th>
+                <th className="px-5 py-3.5">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {movementRows.length === 0 ? (
+              {movementsQuery.isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-4 text-center text-sm text-[var(--muted)]">
-                    Aucun mouvement disponible pour ce filtre.
+                  <td colSpan={12} className="px-5 py-4 text-center text-sm text-[var(--muted)]">Chargement des mouvements...</td>
+                </tr>
+              ) : movementsQuery.error ? (
+                <tr>
+                  <td colSpan={12} className="px-5 py-4 text-center text-sm text-[var(--danger)]">
+                    {movementsQuery.error instanceof Error ? movementsQuery.error.message : "Erreur de chargement du journal."}
                   </td>
                 </tr>
+              ) : movementRows.length === 0 ? (
+                <tr>
+                  <td colSpan={12} className="px-5 py-4 text-center text-sm text-[var(--muted)]">Aucun mouvement disponible pour ces filtres.</td>
+                </tr>
               ) : (
-                movementRows.map((event) => {
-                  const stock = stockByProduct.get(event.product_id);
-                  const unit = stock?.unit ?? "kg";
-                  const signed = event.delta_kg >= 0 ? "+" : "-";
-                  const delta = fromKg(Math.abs(event.delta_kg), unit);
-                  const before = fromKg(event.before_kg, unit);
-                  const after = fromKg(event.after_kg, unit);
-                  return (
-                    <tr key={event.id}>
-                      <td className="px-5 py-4 text-xs text-[var(--muted)]">{formatDateTime(event.date)}</td>
-                      <td className="px-5 py-4 font-semibold text-[var(--text)]">{productLookup.get(event.product_id) ?? event.product_id.slice(0, 8)}</td>
-                      <td className={`px-5 py-4 font-semibold ${event.delta_kg >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
-                        {signed}{delta.toFixed(2)} {unit}
-                      </td>
-                      <td className="px-5 py-4">{movementReasonLabel(event.reason)}</td>
-                      <td className="px-5 py-4 text-[var(--muted)]">{before.toFixed(2)} {unit}</td>
-                      <td className="px-5 py-4 font-medium text-[var(--text)]">{after.toFixed(2)} {unit}</td>
-                      <td className="px-5 py-4 text-xs text-[var(--muted)]">
-                        <span className="font-semibold text-[var(--text)]">{event.reference}</span>
-                        {event.note ? ` · ${event.note}` : ""}
-                      </td>
-                    </tr>
-                  );
-                })
+                movementRows.map((movement) => (
+                  <tr key={movement.id}>
+                    <td className="px-5 py-4 font-semibold text-[var(--text)]">{movement.movement_reference}</td>
+                    <td className="px-5 py-4">{movement.movement_type} · {movement.action_type}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <span>{displayLotReference(movement)}</span>
+                        {movement.traceability_status === "legacy_unlinked" ? (
+                          <span className="inline-flex rounded-full bg-[#FFF5E8] px-2 py-0.5 text-[11px] font-semibold text-[#A8651A]">
+                            Historique / non lié
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">{movement.input_reference || "—"}</td>
+                    <td className="px-5 py-4">{movement.input_reference_bl || "—"}</td>
+                    <td className="px-5 py-4">{movement.member_name || "—"}</td>
+                    <td className="px-5 py-4">{movement.product_name || movement.product_id.slice(0, 8)}</td>
+                    <td className={`px-5 py-4 font-semibold ${movement.movement_type === "in" ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
+                      {movement.movement_type === "in" ? "+" : "-"}{movement.quantity_kg.toLocaleString("fr-FR")} kg
+                    </td>
+                    <td className="px-5 py-4 text-xs text-[var(--muted)]">{formatDateTime(movement.movement_date)}</td>
+                    <td className="px-5 py-4">
+                      <span className="inline-flex rounded-full bg-[var(--surface-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--text)]">
+                        {movement.source_label || movement.source}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-xs text-[var(--muted)]">{movement.notes || "—"}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <button type="button" className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => setSelectedMovementId(movement.id)}>
+                          Détail
+                        </button>
+                        <button type="button" className="text-xs font-semibold text-[var(--text)] hover:underline" onClick={() => exportMovementTicket(movement)}>
+                          Ticket PDF
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
       </section>
+
+      <LiquidGlassModal
+        open={Boolean(selectedMovementId)}
+        onClose={() => setSelectedMovementId(null)}
+        title="Détail mouvement"
+        subtitle="Contexte persisté depuis stock_movements"
+        size="lg"
+      >
+        {detailQuery.isLoading ? (
+          <p className="text-sm text-[var(--muted)]">Chargement du détail...</p>
+        ) : detailQuery.error ? (
+          <p className="text-sm text-[var(--danger)]">{detailQuery.error instanceof Error ? detailQuery.error.message : "Erreur de chargement."}</p>
+        ) : detailQuery.data ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Info label="Référence" value={detailQuery.data.movement_reference} />
+            <Info label="Type" value={`${detailQuery.data.movement_type} · ${detailQuery.data.action_type}`} />
+            <Info label="Date" value={formatDateTime(detailQuery.data.movement_date)} />
+            <Info label="Produit" value={detailQuery.data.product_name || detailQuery.data.product_id} />
+            <Info label="Quantité" value={`${detailQuery.data.quantity_kg.toLocaleString("fr-FR")} kg`} />
+            <Info label="Lot" value={displayLotReference(detailQuery.data)} />
+            <Info label="Collecte" value={detailQuery.data.input_reference || "—"} />
+            <Info label="BL collecte" value={detailQuery.data.input_reference_bl || "—"} />
+            <Info label="Producteur" value={detailQuery.data.member_name || "—"} />
+            <Info label="Source" value={detailQuery.data.source_label || detailQuery.data.source} />
+            <Info label="Coopérative" value={detailQuery.data.cooperative_name || "—"} />
+            <Info label="Idempotency key" value={detailQuery.data.idempotency_key} />
+            <Info label="Notes" value={detailQuery.data.notes || "—"} />
+          </div>
+        ) : (
+          <p className="text-sm text-[var(--muted)]">Aucune donnée.</p>
+        )}
+      </LiquidGlassModal>
 
       {filtered.length === 0 && (
         <section className="premium-card reveal mt-4 rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "90ms" }}>
@@ -405,6 +448,15 @@ export default function StocksPage() {
         </section>
       )}
     </main>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+      <p className="text-xs text-[var(--muted)]">{label}</p>
+      <p className="text-sm font-semibold text-[var(--text)] break-all">{value}</p>
+    </div>
   );
 }
 
@@ -447,38 +499,12 @@ function stockUrgencyScore(totalStockKg: number, remainingKg: number) {
   return remainingKg / totalStockKg;
 }
 
-function normalizeToken(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-}
-
 function normalizeMassUnit(unit?: string | null): "kg" | "ton" {
   return String(unit || "kg").toLowerCase() === "ton" ? "ton" : "kg";
 }
 
-function toKg(value: number, unit?: string | null) {
-  return normalizeMassUnit(unit) === "ton" ? value * 1000 : value;
-}
-
 function fromKg(valueKg: number, unit?: string | null) {
   return normalizeMassUnit(unit) === "ton" ? valueKg / 1000 : valueKg;
-}
-
-function movementReasonLabel(reason: MovementReason) {
-  if (reason === "collecte") return "Collecte";
-  if (reason === "perte_lot") return "Perte lot";
-  if (reason === "sortie_lot") return "Sortie lot";
-  return "Commercialisation";
-}
-
-function isExitReason(stepType: string) {
-  const value = normalizeToken(stepType);
-  return ["vente", "sale", "livraison", "delivery", "transfert", "transfer", "expedition", "sortie"].some((token) =>
-    value.includes(token),
-  );
 }
 
 function formatDateTime(value: string) {
@@ -488,4 +514,13 @@ function formatDateTime(value: string) {
     dateStyle: "short",
     timeStyle: "short",
   });
+}
+
+function displayLotReference(movement: Pick<StockMovement, "batch_reference" | "traceability_status">) {
+  if (movement.batch_reference) return movement.batch_reference;
+  if (movement.traceability_status === "missing_lot" || movement.traceability_status === "legacy_unlinked") {
+    return "Lot non renseigné";
+  }
+  if (movement.traceability_status === "unresolved_lot") return "Lot introuvable";
+  return "Lot non renseigné";
 }

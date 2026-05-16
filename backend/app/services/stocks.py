@@ -194,7 +194,10 @@ def apply_total_stock_delta(
             raise ValidationError("Stock row not found for the requested product.")
         stock = _create_stock_row(db, cooperative_id, product, unit=product.unit)
     else:
-        _hydrate_total_from_existing_inputs(db, stock)
+        # Avoid double-counting when caller already persisted a new input row and
+        # is now applying its explicit delta.
+        if abs(float(delta_kg)) < 1e-9:
+            _hydrate_total_from_existing_inputs(db, stock)
         _repair_legacy_stock_row(stock)
 
     next_total = round_metric(stock.total_stock_kg + float(delta_kg))

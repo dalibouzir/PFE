@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_manager
@@ -58,3 +58,13 @@ def update_farmer_advance(
 @router.patch("/{advance_id}/cancel", response_model=FarmerAdvanceRead, summary="Cancel a farmer advance and linked treasury transaction.")
 def cancel_farmer_advance(advance_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
     return farmer_advance_service.cancel_farmer_advance(db, current_manager, advance_id)
+
+
+@router.post("/{advance_id}/devis", response_model=FarmerAdvanceRead, summary="Upload optional devis file for a farmer advance.")
+def upload_farmer_advance_devis(
+    advance_id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_manager=Depends(get_current_manager),
+):
+    return farmer_advance_service.upload_farmer_advance_devis(db, current_manager, advance_id, file)

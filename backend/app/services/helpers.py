@@ -8,7 +8,9 @@ from typing import Any, Type
 from sqlalchemy.orm import Session
 
 from app.crud.common import require_by_id, require_scoped_by_id
+from app.models.cooperative import Cooperative
 from app.models.enums import UserRole
+from app.models.institution import Institution
 from app.models.user import User
 from app.utils.exceptions import ForbiddenError, ValidationError
 
@@ -32,29 +34,37 @@ def parse_enum_value(enum_class: Type[Enum], raw_value: str, field_name: str):
         raise ValidationError(f"Invalid {field_name}. Expected one of: {allowed}.")
 
 
+def is_super_admin(user: User) -> bool:
+    return user.role == UserRole.SUPER_ADMIN
+
+
+def is_institution_admin(user: User) -> bool:
+    return user.role == UserRole.INSTITUTION_ADMIN
+
+
 def ensure_can_read(user: User):
-    if user.role == UserRole.ADMIN:
+    if user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.INSTITUTION_ADMIN}:
         return
     if user.role not in COOPERATIVE_ROLES:
         raise ForbiddenError("Read access is not allowed for this role.")
 
 
 def ensure_can_write(user: User):
-    if user.role == UserRole.ADMIN:
+    if user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.INSTITUTION_ADMIN}:
         return
     if user.role not in {UserRole.OWNER, UserRole.MANAGER}:
         raise ForbiddenError("Write access is not allowed for this role.")
 
 
 def ensure_can_delete(user: User):
-    if user.role == UserRole.ADMIN:
+    if user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.INSTITUTION_ADMIN}:
         return
     if user.role != UserRole.OWNER:
         raise ForbiddenError("Delete access is not allowed for this role.")
 
 
 def resolve_cooperative_scope(user: User, requested_cooperative_id=None):
-    if user.role == UserRole.ADMIN:
+    if user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
         if requested_cooperative_id is not None:
             return requested_cooperative_id
         if user.cooperative_id is not None:
@@ -71,6 +81,46 @@ def resolve_cooperative_scope(user: User, requested_cooperative_id=None):
 
 def get_manager_cooperative_id(user: User):
     return resolve_cooperative_scope(user)
+
+
+def get_user_institution_scope(user: User):
+    if user.role in {UserRole.SUPER_ADMIN, UserRole.ADMIN}:
+        return None
+    if user.role == UserRole.INSTITUTION_ADMIN:
+        if user.institution_id is None:
+            raise ForbiddenError("Institution admin is not linked to an institution.")
+        return user.institution_id
+    return None
+
+
+def ensure_user_can_access_institution(db: Session, user: User, institution_id):
+    institution = require_by_id(db, Institution, institution_id, "Institution")
+    if user.role in {UserRole.SUPER_ADMIN, UserRole.ADMIN}:
+        return institution
+    if user.role == UserRole.INSTITUTION_ADMIN:
+        scope_id = get_user_institution_scope(user)
+        if scope_id != institution.id:
+            raise ForbiddenError("Cross-institution access is forbidden.")
+        return institution
+    raise ForbiddenError("Institution access is not allowed for this role.")
+
+
+def ensure_user_can_access_cooperative_by_institution_or_global(db: Session, user: User, cooperative_id):
+    cooperative = require_by_id(db, Cooperative, cooperative_id, "Cooperative")
+
+    if user.role in {UserRole.SUPER_ADMIN, UserRole.ADMIN}:
+        return cooperative
+
+    if user.role == UserRole.INSTITUTION_ADMIN:
+        scope_id = get_user_institution_scope(user)
+        if cooperative.institution_id != scope_id:
+            raise ForbiddenError("Cross-institution cooperative access is forbidden.")
+        return cooperative
+
+    ensure_can_read(user)
+    if user.cooperative_id != cooperative.id:
+        raise ForbiddenError("Cross-cooperative access is forbidden.")
+    return cooperative
 
 
 def require_entity_for_user(db: Session, model: Type[Any], object_id: Any, user: User, label: str):

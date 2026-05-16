@@ -35,6 +35,12 @@ FARMER_ADVANCES_ADDS = [
     "ADD COLUMN IF NOT EXISTS parcel_id UUID",
     "ADD COLUMN IF NOT EXISTS product_id UUID",
     "ADD COLUMN IF NOT EXISTS source_type VARCHAR(80) DEFAULT 'manual' NOT NULL",
+    "ADD COLUMN IF NOT EXISTS devis_file_id UUID",
+]
+
+TREASURY_TRANSACTIONS_ADDS = [
+    "ADD COLUMN IF NOT EXISTS justificatif_file_id UUID",
+    "ADD COLUMN IF NOT EXISTS receipt_reference VARCHAR(120)",
 ]
 
 
@@ -61,6 +67,9 @@ def ensure_runtime_schema_compat() -> None:
             if "farmer_advances" in tables:
                 for ddl in FARMER_ADVANCES_ADDS:
                     conn.execute(text(f"ALTER TABLE farmer_advances {ddl}"))
+            if "treasury_transactions" in tables:
+                for ddl in TREASURY_TRANSACTIONS_ADDS:
+                    conn.execute(text(f"ALTER TABLE treasury_transactions {ddl}"))
     except SQLAlchemyError as exc:
         # Keep API startup alive when DB is temporarily unreachable; endpoints that
         # require DB will still fail with explicit DB errors until connectivity returns.

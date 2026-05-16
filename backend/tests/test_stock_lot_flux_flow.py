@@ -3,15 +3,22 @@ from datetime import date
 import pytest
 from sqlalchemy import select
 
+from app.models.enums import InputStatus
+from app.models.member import Member
+from app.models.parcel import Parcel
+from app.models.stock_movement import StockMovement
 from app.models.enums import UserRole
 from app.models.product import Product
 from app.models.stock import Stock
 from app.models.user import User
 from app.schemas.batch import BatchCreate, BatchStatusUpdate
+from app.schemas.input import InputCreate
 from app.schemas.process_step import ProcessStepCreate, ProcessStepUpdate
 from app.schemas.stock import StockCreate
 from app.services import batches as batch_service
+from app.services import inputs as inputs_service
 from app.services import process_steps as process_step_service
+from app.services import stock_movements as stock_movement_service
 from app.services import stocks as stock_service
 from app.utils.exceptions import ValidationError
 
@@ -282,3 +289,138 @@ def test_manual_batch_status_update_is_blocked(db_session):
             batch.id,
             BatchStatusUpdate(status="completed"),
         )
+
+
+def test_linked_collecte_movement_has_linked_lot_traceability(db_session):
+    manager, product, stock = _manager_and_product(db_session)
+    stock.total_stock_kg = 2000.0
+    stock.reserved_in_lots_kg = 0.0
+    stock.quantity = 2000.0
+    db_session.commit()
+
+    member = db_session.scalar(select(Member).where(Member.cooperative_id == manager.cooperative_id))
+    parcel = db_session.scalar(select(Parcel).where(Parcel.cooperative_id == manager.cooperative_id))
+    if member is None:
+        member = Member(
+            cooperative_id=manager.cooperative_id,
+            code="MBR-TST-001",
+            full_name="Test Producer",
+            phone="+221700000000",
+            main_product=product.name,
+        )
+        db_session.add(member)
+        db_session.flush()
+    if parcel is None:
+        parcel = Parcel(
+            cooperative_id=manager.cooperative_id,
+            member_id=member.id,
+            name="Parcelle Test",
+            surface_ha=1.0,
+            main_culture=product.name,
+        )
+        db_session.add(parcel)
+        db_session.flush()
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            member_id=member.id,
+            parcel_id=parcel.id,
+            creation_date=date.today(),
+            initial_qty=1.0,
+            unit="kg",
+            process_steps=["tri"],
+            surface_ha=1,
+            expected_yield_kg_per_ha=1200,
+            expected_losses_kg=0,
+            estimated_charge_fcfa=1000,
+        ),
+    )
+    batch_service.complete_preharvest(db_session, manager, batch.id)
+    inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            batch_id=batch.id,
+            date=date.today(),
+            quantity=250,
+            grade="A",
+            status=InputStatus.PENDING.value,
+            source_type="manual",
+        ),
+    )
+
+    movements = stock_movement_service.list_stock_movements(db_session, manager)
+    linked = next(item for item in movements if item.source == "lot_linked_collecte")
+    assert linked.traceability_status == "linked_lot"
+    assert linked.batch_reference == batch.code
+
+
+def test_post_harvest_loss_movement_keeps_batch_and_step_reference(db_session):
+    manager, product, stock = _manager_and_product(db_session)
+    stock.total_stock_kg = 1500.0
+    stock.reserved_in_lots_kg = 0.0
+    stock.quantity = 1500.0
+    db_session.commit()
+
+    batch = _create_batch(db_session, manager, product, initial_qty=100.0, unit="kg", steps=["tri"])
+    step = process_step_service.create_process_step(
+        db_session,
+        manager,
+        ProcessStepCreate(batch_id=batch.id, type="tri", date=date.today(), loss_value=5.0, loss_unit="kg"),
+    )
+    movement = db_session.scalar(
+        select(StockMovement).where(StockMovement.idempotency_key == f"step:{step.id}:loss")
+    )
+    assert movement is not None
+    assert movement.batch_id == batch.id
+    assert movement.process_step_id == step.id
+
+    movements = stock_movement_service.list_stock_movements(db_session, manager)
+    row = next(item for item in movements if item.id == movement.id)
+    assert row.traceability_status == "linked_lot"
+
+
+def test_missing_or_legacy_lot_traceability_statuses(db_session):
+    manager, product, stock = _manager_and_product(db_session)
+    stock.total_stock_kg = 1000.0
+    stock.reserved_in_lots_kg = 0.0
+    stock.quantity = 1000.0
+    db_session.commit()
+
+    missing = StockMovement(
+        cooperative_id=manager.cooperative_id,
+        product_id=product.id,
+        batch_id=None,
+        input_id=None,
+        workflow_step_id=None,
+        movement_type="in",
+        action_type="manual",
+        source="manual",
+        quantity_kg=10.0,
+        movement_date=date.today(),
+        idempotency_key="test:missing-lot",
+    )
+    legacy = StockMovement(
+        cooperative_id=manager.cooperative_id,
+        product_id=product.id,
+        batch_id=None,
+        input_id=None,
+        workflow_step_id=None,
+        movement_type="out",
+        action_type="perte",
+        source="post_harvest_step",
+        quantity_kg=3.0,
+        movement_date=date.today(),
+        idempotency_key="test:legacy-unlinked",
+    )
+    db_session.add_all([missing, legacy])
+    db_session.commit()
+
+    movements = stock_movement_service.list_stock_movements(db_session, manager)
+    by_key = {m.idempotency_key: m for m in movements}
+    assert by_key["test:missing-lot"].traceability_status == "missing_lot"
+    assert by_key["test:legacy-unlinked"].traceability_status == "legacy_unlinked"

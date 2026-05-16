@@ -30,6 +30,13 @@ class User(TimestampMixin, Base):
         nullable=True,
         index=True,
     )
+    institution_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid,
+        ForeignKey("institutions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     cooperative: Mapped[Optional["Cooperative"]] = relationship(back_populates="users")
+    institution: Mapped[Optional["Institution"]] = relationship(back_populates="users")
     created_batches: Mapped[List["Batch"]] = relationship(back_populates="created_by_user", foreign_keys="Batch.created_by_user_id")

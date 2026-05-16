@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
+import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { AIInsightsStrip, type AIInsightItem } from "@/components/ui/AIInsightsStrip";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { ExportActions } from "@/components/ui/table/ExportActions";
+import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import { LotAnalyticsPanel } from "@/components/workspace/LotAnalyticsPanel";
 import { LotActiveSidebar, type ActiveLotItem } from "@/components/workspace/LotActiveSidebar";
 import { LotHeroBanner } from "@/components/workspace/LotHeroBanner";
@@ -33,6 +36,8 @@ import type {
   ProcessStepUpdate,
   Recommendation,
 } from "@/lib/api/types";
+import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
+import { useTableControls } from "@/lib/table/useTableControls";
 import {
   LOT_WORKFLOW_STAGES,
   buildSeasonFromDate,
@@ -143,6 +148,9 @@ export default function LotsPage() {
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
   const [editingStep, setEditingStep] = useState<ProcessStep | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [pendingDeleteLot, setPendingDeleteLot] = useState<Batch | null>(null);
+  const [pendingDeleteStep, setPendingDeleteStep] = useState<ProcessStep | null>(null);
+  const tableControls = useTableControls([], "desc");
 
   const [plannedStepsDraft, setPlannedStepsDraft] = useState<string[]>(defaultSteps);
   const [stepToAdd, setStepToAdd] = useState("");
@@ -188,7 +196,13 @@ export default function LotsPage() {
   const filteredBatches = useMemo(() => {
     const base = [...batches]
       .filter((item) =>
-        Boolean(item.member_id && item.parcel_id && item.preharvest_completed_at && item.confirmed_weight_kg),
+        Boolean(
+          item.member_id &&
+            item.parcel_id &&
+            item.preharvest_completed_at &&
+            (item.collecte_created || item.stock_in_created) &&
+            item.confirmed_weight_kg,
+        ),
       )
       .sort((a, b) => b.creation_date.localeCompare(a.creation_date));
     return base.filter((item) => {
@@ -198,13 +212,18 @@ export default function LotsPage() {
     });
   }, [batches, query, productLookup]);
 
+  const visibleBatches = useMemo(() => {
+    const sorted = filteredBatches.slice().sort((a, b) => a.creation_date.localeCompare(b.creation_date));
+    return tableControls.sortOrder === "asc" ? sorted : sorted.reverse();
+  }, [filteredBatches, tableControls.sortOrder]);
+
   const selectedBatch = useMemo(() => {
     if (selectedBatchId) {
-      const match = filteredBatches.find((item) => item.id === selectedBatchId);
+      const match = visibleBatches.find((item) => item.id === selectedBatchId);
       if (match) return match;
     }
-    return filteredBatches[0] ?? null;
-  }, [filteredBatches, selectedBatchId]);
+    return visibleBatches[0] ?? null;
+  }, [selectedBatchId, visibleBatches]);
 
   useEffect(() => {
     setActiveTab(normalizeTab(queryTab));
@@ -215,10 +234,10 @@ export default function LotsPage() {
   }, [queryLot]);
 
   useEffect(() => {
-    if (!selectedBatch && filteredBatches.length > 0) {
-      setSelectedBatchId(filteredBatches[0].id);
+    if (!selectedBatch && visibleBatches.length > 0) {
+      setSelectedBatchId(visibleBatches[0].id);
     }
-  }, [filteredBatches, selectedBatch]);
+  }, [selectedBatch, visibleBatches]);
 
   const stepsByBatch = useMemo(() => {
     const grouped = new Map<string, ProcessStep[]>();
@@ -390,7 +409,7 @@ export default function LotsPage() {
   );
 
   const lotSidebarItems = useMemo<ActiveLotItem[]>(() => {
-    return filteredBatches.map((batch) => {
+    return visibleBatches.map((batch) => {
       const lotSteps = stepsByBatch.get(batch.id) ?? [];
       const total = Math.max(batch.ordered_process_steps.length, 1);
       const done = Math.min(lotSteps.length, total);
@@ -412,7 +431,16 @@ export default function LotsPage() {
         statusTone: batchStatusTone[batch.status] ?? "info",
       };
     });
-  }, [filteredBatches, stepsByBatch, productLookup]);
+  }, [productLookup, stepsByBatch, visibleBatches]);
+
+  const lotExportColumns: ExportColumn<Batch>[] = [
+    { key: "code", header: "Lot" },
+    { key: "creation_date", header: "Date création" },
+    { key: "product", header: "Produit", format: (_, row) => productLookup.get(row.product_id) ?? row.product_id },
+    { key: "confirmed_weight_kg", header: "Poids confirmé (kg)", format: (_, row) => row.confirmed_weight_kg?.toLocaleString("fr-FR") ?? "—" },
+    { key: "current_qty", header: "Stock actuel (kg)", format: (_, row) => row.current_qty?.toLocaleString("fr-FR") ?? "—" },
+    { key: "status", header: "Statut", format: (_, row) => batchStatusLabel[row.status] ?? row.status },
+  ];
 
   const anomalyCount = selectedSteps.filter((step) => step.warning || step.loss_pct >= 12).length;
   const latestRecommendation = recommendationCards[0] ?? null;
@@ -525,10 +553,6 @@ export default function LotsPage() {
   const handleSelectLot = (lotId: string) => {
     setSelectedBatchId(lotId);
     updateQuery(activeTab, lotId);
-  };
-
-  const openCreateLot = () => {
-    setFormError("Post-récolte continue le même batch. Démarrez le lot depuis Parcelles.");
   };
 
   const openEditLot = (batch: Batch) => {
@@ -701,7 +725,6 @@ export default function LotsPage() {
   });
 
   const handleDeleteLot = async (batch: Batch) => {
-    if (!window.confirm("Supprimer ce lot ?")) return;
     try {
       await deleteBatch.mutateAsync(batch.id);
       if (selectedBatch?.id === batch.id) {
@@ -713,7 +736,6 @@ export default function LotsPage() {
   };
 
   const handleDeleteStep = async (step: ProcessStep) => {
-    if (!window.confirm("Supprimer cette etape ?")) return;
     try {
       await deleteStep.mutateAsync(step.id);
       closeForms();
@@ -742,9 +764,6 @@ export default function LotsPage() {
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "30ms" }}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={openCreateLot} className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold">
-              + Nouveau lot
-            </button>
             <button type="button" onClick={() => openCreateStep()} className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold" disabled={!selectedBatch}>
               + Executer etape
             </button>
@@ -757,12 +776,22 @@ export default function LotsPage() {
             </button>
           </div>
 
-          <div className="w-full sm:w-[320px]">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="soft-focus wf-input w-full px-3 py-2.5 text-sm"
-              placeholder="Rechercher un lot..."
+          <div className="w-full">
+            <TableToolbar
+              search={query}
+              onSearchChange={setQuery}
+              searchPlaceholder="Rechercher un lot..."
+              sortOrder={tableControls.sortOrder}
+              onSortOrderChange={tableControls.setSortOrder}
+              sortAscLabel="Date asc"
+              sortDescLabel="Date desc"
+              rightActions={
+                <ExportActions
+                  onCsv={() => exportRowsToCsv({ filename: "lots-post-recolte", title: "Lots Post-récolte", columns: lotExportColumns, rows: visibleBatches })}
+                  onExcel={() => exportRowsToExcel({ filename: "lots-post-recolte", title: "Lots Post-récolte", columns: lotExportColumns, rows: visibleBatches })}
+                  onPdf={() => exportRowsToPdf({ filename: "lots-post-recolte", title: "Lots Post-récolte", columns: lotExportColumns, rows: visibleBatches })}
+                />
+              }
             />
           </div>
         </div>
@@ -771,7 +800,7 @@ export default function LotsPage() {
       {!selectedBatch ? (
         <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "60ms" }}>
           <p className="text-sm text-[var(--muted)]">
-            Aucun lot prêt pour la Post-récolte. Confirmez le poids réel en Pré-récolte pour débloquer un lot.
+            Aucun lot prêt pour la Post-récolte. Terminez la Pré-récolte puis créez une Collecte liée au lot.
           </p>
         </section>
       ) : (
@@ -780,7 +809,6 @@ export default function LotsPage() {
             items={lotSidebarItems}
             selectedId={selectedBatch.id}
             onSelect={handleSelectLot}
-            onCreateLot={openCreateLot}
           />
 
           <div className="min-w-0 space-y-4">
@@ -946,7 +974,7 @@ export default function LotsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button type="button" className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => handleDeleteLot(selectedBatch)}>
+                  <button type="button" className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => setPendingDeleteLot(selectedBatch)}>
                     Supprimer lot
                   </button>
                 </div>
@@ -1198,7 +1226,7 @@ export default function LotsPage() {
           {editingStep && (
             <button
               type="button"
-              onClick={() => handleDeleteStep(editingStep)}
+              onClick={() => setPendingDeleteStep(editingStep)}
               className="text-xs font-semibold text-[var(--danger)] hover:underline"
             >
               Supprimer cette etape
@@ -1208,6 +1236,30 @@ export default function LotsPage() {
           {formError && <p className="rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">{formError}</p>}
         </form>
       </LiquidGlassModal>
+      <ConfirmActionModal
+        open={Boolean(pendingDeleteLot)}
+        title="Supprimer le lot"
+        message="Cette action supprimera définitivement ce lot."
+        confirmLabel="Supprimer"
+        onCancel={() => setPendingDeleteLot(null)}
+        onConfirm={() => {
+          if (!pendingDeleteLot) return;
+          void handleDeleteLot(pendingDeleteLot);
+          setPendingDeleteLot(null);
+        }}
+      />
+      <ConfirmActionModal
+        open={Boolean(pendingDeleteStep)}
+        title="Supprimer l'étape"
+        message="Cette action supprimera cette étape de process."
+        confirmLabel="Supprimer"
+        onCancel={() => setPendingDeleteStep(null)}
+        onConfirm={() => {
+          if (!pendingDeleteStep) return;
+          void handleDeleteStep(pendingDeleteStep);
+          setPendingDeleteStep(null);
+        }}
+      />
     </main>
   );
 }

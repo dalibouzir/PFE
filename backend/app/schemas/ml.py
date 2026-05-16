@@ -4,14 +4,18 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class MLTrainRequest(BaseModel):
+class MLSchemaBase(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+
+class MLTrainRequest(MLSchemaBase):
     run_name: str = Field(default="manual")
 
 
-class MLTrainMetrics(BaseModel):
+class MLTrainMetrics(MLSchemaBase):
     regression_mae: float
     regression_rmse: float
     classification_accuracy: float
@@ -35,7 +39,7 @@ class MLTrainMetrics(BaseModel):
     impact_used_auto_backfill: bool = False
 
 
-class MLTrainResponse(BaseModel):
+class MLTrainResponse(MLSchemaBase):
     run_id: UUID
     run_name: str
     trained_rows: int
@@ -44,7 +48,7 @@ class MLTrainResponse(BaseModel):
     completed_at: datetime
 
 
-class PredictiveFeaturePayload(BaseModel):
+class PredictiveFeaturePayload(MLSchemaBase):
     product: str
     process_type: str
     qty_in: float
@@ -69,18 +73,18 @@ class AssessmentFeaturePayload(PredictiveFeaturePayload):
     efficiency_pct: Optional[float] = None
 
 
-class MLPredictRequest(BaseModel):
+class MLPredictRequest(MLSchemaBase):
     features: List[PredictiveFeaturePayload]
     include_explanation: bool = False
 
 
-class MLAssessRequest(BaseModel):
+class MLAssessRequest(MLSchemaBase):
     batch_id: Optional[UUID] = None
     features: Optional[List[AssessmentFeaturePayload]] = None
     include_explanation: bool = False
 
 
-class MLPredictionOutput(BaseModel):
+class MLPredictionOutput(MLSchemaBase):
     mode: str
     batch_id: Optional[str]
     product: str
@@ -97,7 +101,7 @@ class MLPredictionOutput(BaseModel):
     latency_ms: Optional[float] = None
 
 
-class MLAssessmentOutput(BaseModel):
+class MLAssessmentOutput(MLSchemaBase):
     mode: str
     batch_id: Optional[str]
     product: str
@@ -111,14 +115,14 @@ class MLAssessmentOutput(BaseModel):
     top_signals: List[str]
 
 
-class RankedActionOutput(BaseModel):
+class RankedActionOutput(MLSchemaBase):
     action: str
     expected_loss_reduction: float
     harmful_probability: float
     confidence_score: float
 
 
-class RecommendationDecisionOutput(BaseModel):
+class RecommendationDecisionOutput(MLSchemaBase):
     selected_action: str
     expected_loss_reduction: float
     harmful_probability: float
@@ -133,7 +137,7 @@ class RecommendationDecisionOutput(BaseModel):
     ranked_actions: List[RankedActionOutput] = Field(default_factory=list)
 
 
-class RecommendationOutput(BaseModel):
+class RecommendationOutput(MLSchemaBase):
     issue_type: str
     critical_stage: str
     severity: str
@@ -142,21 +146,21 @@ class RecommendationOutput(BaseModel):
     decision: Optional[RecommendationDecisionOutput] = None
 
 
-class MLPredictResponse(BaseModel):
+class MLPredictResponse(MLSchemaBase):
     prediction: MLPredictionOutput
     recommendation: RecommendationOutput
     explanation: Optional[str] = None
     recommendation_log_id: Optional[UUID] = None
 
 
-class MLAssessResponse(BaseModel):
+class MLAssessResponse(MLSchemaBase):
     assessment: MLAssessmentOutput
     recommendation: RecommendationOutput
     explanation: Optional[str] = None
     recommendation_log_id: Optional[UUID] = None
 
 
-class MLHealthResponse(BaseModel):
+class MLHealthResponse(MLSchemaBase):
     models_ready: bool
     model_version: Optional[str]
     active_model_version: Optional[str] = None
@@ -164,12 +168,12 @@ class MLHealthResponse(BaseModel):
     available_artifacts: Dict[str, bool]
 
 
-class MLFeaturesResponse(BaseModel):
+class MLFeaturesResponse(MLSchemaBase):
     batch_id: UUID
     features: List[AssessmentFeaturePayload]
 
 
-class MLRecommendationResponse(BaseModel):
+class MLRecommendationResponse(MLSchemaBase):
     batch_id: UUID
     assessment: MLAssessmentOutput
     recommendation: RecommendationOutput
@@ -177,7 +181,7 @@ class MLRecommendationResponse(BaseModel):
     recommendation_log_id: Optional[UUID] = None
 
 
-class RecommendationFeedbackCreate(BaseModel):
+class RecommendationFeedbackCreate(MLSchemaBase):
     recommendation_log_id: Optional[UUID] = None
     batch_id: Optional[UUID] = None
     stage: Optional[str] = None
@@ -199,8 +203,8 @@ class RecommendationFeedbackCreate(BaseModel):
     comment: Optional[str] = None
 
 
-class RecommendationFeedbackRead(BaseModel):
-    model_config = {"from_attributes": True}
+class RecommendationFeedbackRead(MLSchemaBase):
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
     id: UUID
     recommendation_log_id: Optional[UUID] = None
@@ -223,7 +227,7 @@ class RecommendationFeedbackRead(BaseModel):
     created_at: datetime
 
 
-class MLReliabilityStatusResponse(BaseModel):
+class MLReliabilityStatusResponse(MLSchemaBase):
     impact_model_ready: bool
     offline_metrics: Dict[str, Any] = Field(default_factory=dict)
     calibration_drift: float = 0.0
@@ -233,7 +237,7 @@ class MLReliabilityStatusResponse(BaseModel):
     targets_met: bool = False
 
 
-class MLLogResponse(BaseModel):
+class MLLogResponse(MLSchemaBase):
     prediction_log_id: Optional[UUID] = None
     recommendation_log_id: Optional[UUID] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)

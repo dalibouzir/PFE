@@ -1,7 +1,7 @@
 import uuid
-from typing import List
+from typing import List, Optional
 
-from sqlalchemy import Enum, String
+from sqlalchemy import Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -23,7 +23,14 @@ class Cooperative(TimestampMixin, Base):
         nullable=False,
         default=CooperativeStatus.ACTIVE,
     )
+    institution_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid,
+        ForeignKey("institutions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
+    institution: Mapped[Optional["Institution"]] = relationship(back_populates="cooperatives")
     users: Mapped[List["User"]] = relationship(back_populates="cooperative")
     members: Mapped[List["Member"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")
     fields: Mapped[List["Field"]] = relationship(back_populates="cooperative", cascade="all, delete-orphan")

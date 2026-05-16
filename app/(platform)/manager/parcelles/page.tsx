@@ -2,9 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
+import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { ExportActions } from "@/components/ui/table/ExportActions";
+import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import {
   useActivatePreHarvest,
   useApproveBatchCharge,
@@ -17,14 +20,13 @@ import {
 } from "@/hooks/useBatches";
 import { useProducts } from "@/hooks/useProducts";
 import {
-  useCompletePreHarvestStep,
   useCreateParcel,
   useFarmers,
   useParcels,
-  usePreHarvestSteps,
-  useUpdatePreHarvestStep,
 } from "@/hooks/useParcellesCulture";
-import type { Batch, BatchCreate, ParcelCreate, PreHarvestStep, PreHarvestStepUpdate } from "@/lib/api/types";
+import type { Batch, BatchCreate, ParcelCreate } from "@/lib/api/types";
+import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
+import { useTableControls } from "@/lib/table/useTableControls";
 import { getProductStepTemplate } from "@/lib/workflow/productStepTemplates";
 
 type LotForm = {
@@ -36,14 +38,6 @@ type LotForm = {
   estimated_charge_fcfa?: number;
 };
 
-type StepForm = {
-  quantity_value?: number;
-  quantity_unit: string;
-  operation_cost_fcfa?: number;
-  realization_date: string;
-  observations: string;
-};
-
 type WorkflowDraftStep = {
   id: string;
   name: string;
@@ -51,23 +45,14 @@ type WorkflowDraftStep = {
 };
 
 type PreHarvestExecutionStatus = "todo" | "in_progress" | "done";
-
-const CATEGORY_TONE: Record<string, string> = {
-  entretien: "bg-[#FFEFD7] text-[#B25A00]",
-  traitement: "bg-[#FFE6E6] text-[#A53A3A]",
-  fertilisation: "bg-[#EAF8EE] text-[#0F7A3B]",
-  irrigation: "bg-[#EAF5FF] text-[#2A5FB3]",
-  recolte: "bg-[#FFF1E5] text-[#B65C1A]",
-  transport: "bg-[#EFF1F6] text-[#4F5F78]",
-};
-
-const STEP_QUANTITY_LABEL: Record<string, string> = {
-  pruning: "Quantité (arbres)",
-  phytosanitary_treatment: "Quantité / dose",
-  fertilization: "Quantité",
-  irrigation: "Volume / quantité",
-  harvest: "Quantité récoltée",
-  transport_to_storage: "Quantité transportée",
+type PreHarvestExecutionStep = {
+  index: number;
+  name: string;
+  status: PreHarvestExecutionStatus;
+  updated_at?: string | null;
+  execution_date?: string | null;
+  duration_minutes?: number | null;
+  summary?: string | null;
 };
 
 const INVALID_PRODUCT_TERMS = [
@@ -108,20 +93,25 @@ function isValidAgriculturalProductName(name?: string | null) {
   return !INVALID_PRODUCT_TERMS.some((term) => normalized.includes(term));
 }
 
-function getPreHarvestState(batch: Batch): "preparation" | "active" | "ready_post_recolte" {
-  if (batch.preharvest_completed_at && batch.confirmed_weight_kg) return "ready_post_recolte";
+function getPreHarvestState(batch: Batch): "preparation" | "active" | "ready_collecte" | "ready_post_recolte" {
+  if (batch.preharvest_completed_at && (batch.collecte_created || batch.stock_in_created || batch.confirmed_weight_kg)) {
+    return "ready_post_recolte";
+  }
+  if (batch.preharvest_completed_at) return "ready_collecte";
   if (batch.preharvest_activated_at && !batch.preharvest_completed_at) return "active";
   return "preparation";
 }
 
-function stateLabel(state: "preparation" | "active" | "ready_post_recolte") {
-  if (state === "ready_post_recolte") return "Prêt Post-récolte";
+function stateLabel(state: "preparation" | "active" | "ready_collecte" | "ready_post_recolte") {
+  if (state === "ready_post_recolte") return "Collecté · Prêt Post-récolte";
+  if (state === "ready_collecte") return "Prêt pour Collecte";
   if (state === "active") return "Actif";
   return "Préparation";
 }
 
-function stateTone(state: "preparation" | "active" | "ready_post_recolte"): "warning" | "info" | "success" {
+function stateTone(state: "preparation" | "active" | "ready_collecte" | "ready_post_recolte"): "warning" | "info" | "success" {
   if (state === "ready_post_recolte") return "success";
+  if (state === "ready_collecte") return "info";
   if (state === "active") return "info";
   return "warning";
 }
@@ -152,15 +142,15 @@ export default function ParcellesCulturePage() {
   const [search, setSearch] = useState("");
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [lotModalOpen, setLotModalOpen] = useState(false);
-  const [stepModalOpen, setStepModalOpen] = useState(false);
   const [workflowModalOpen, setWorkflowModalOpen] = useState(false);
-  const [confirmWeightModalOpen, setConfirmWeightModalOpen] = useState(false);
-  const [confirmedWeightInput, setConfirmedWeightInput] = useState("");
-  const [annexOpen, setAnnexOpen] = useState(false);
-  const [activeStep, setActiveStep] = useState<PreHarvestStep | null>(null);
+  const [completePreHarvestModalOpen, setCompletePreHarvestModalOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [workflowStepsDraft, setWorkflowStepsDraft] = useState<WorkflowDraftStep[]>([]);
+  const [workflowStepToAdd, setWorkflowStepToAdd] = useState("");
+  const [workflowCustomStep, setWorkflowCustomStep] = useState("");
+  const [executionDetailsDraft, setExecutionDetailsDraft] = useState<Record<number, { execution_date: string; duration_minutes: string; summary: string }>>({});
+  const [editingExecutionStepIndex, setEditingExecutionStepIndex] = useState<number | null>(null);
   const [isCreatingLot, setIsCreatingLot] = useState(false);
   const [pendingAction, setPendingAction] = useState<
     | null
@@ -171,6 +161,25 @@ export default function ParcellesCulturePage() {
     | "save_workflow"
     | "update_step_status"
   >(null);
+  const [pendingApproveCharge, setPendingApproveCharge] = useState(false);
+  const [pendingStopLot, setPendingStopLot] = useState(false);
+  const tableControls = useTableControls(
+    [
+      {
+        key: "state",
+        label: "État",
+        options: [
+          { value: "all", label: "Tous états" },
+          { value: "preparation", label: "Préparation" },
+          { value: "active", label: "Actif" },
+          { value: "ready_collecte", label: "Prêt collecte" },
+          { value: "ready_post_recolte", label: "Prêt post-récolte" },
+        ],
+        initialValue: "all",
+      },
+    ],
+    "desc",
+  );
 
   const farmersQuery = useFarmers();
   const { data: products = [] } = useProducts();
@@ -184,8 +193,6 @@ export default function ParcellesCulturePage() {
   const updatePreHarvestStepStatuses = useUpdatePreHarvestStepStatuses();
   const completePreHarvest = useCompletePreHarvest();
   const createParcel = useCreateParcel();
-  const updateStep = useUpdatePreHarvestStep();
-  const completeStep = useCompletePreHarvestStep();
 
   const farmers = useMemo(() => farmersQuery.data ?? [], [farmersQuery.data]);
   const farmersById = useMemo(() => new Map(farmers.map((item) => [item.id, item])), [farmers]);
@@ -205,35 +212,65 @@ export default function ParcellesCulturePage() {
     });
   }, [batches, farmersById, productsById, search]);
 
+  const visiblePreHarvestLots = useMemo(() => {
+    const stateValue = tableControls.filters.state;
+    const filtered = preHarvestLots.filter((item) => stateValue === "all" || getPreHarvestState(item) === stateValue);
+    const sorted = filtered.slice().sort((a, b) => a.creation_date.localeCompare(b.creation_date));
+    return tableControls.sortOrder === "asc" ? sorted : sorted.reverse();
+  }, [preHarvestLots, tableControls.filters.state, tableControls.sortOrder]);
+
   const selectedBatch = useMemo(() => {
-    if (!selectedBatchId) return preHarvestLots[0] ?? null;
-    return preHarvestLots.find((item) => item.id === selectedBatchId) ?? preHarvestLots[0] ?? null;
-  }, [preHarvestLots, selectedBatchId]);
+    if (!selectedBatchId) return visiblePreHarvestLots[0] ?? null;
+    return visiblePreHarvestLots.find((item) => item.id === selectedBatchId) ?? visiblePreHarvestLots[0] ?? null;
+  }, [selectedBatchId, visiblePreHarvestLots]);
 
   useEffect(() => {
-    if (!selectedBatch && preHarvestLots.length > 0) {
-      setSelectedBatchId(preHarvestLots[0].id);
+    if (!selectedBatch && visiblePreHarvestLots.length > 0) {
+      setSelectedBatchId(visiblePreHarvestLots[0].id);
       return;
     }
-    if (selectedBatchId && !preHarvestLots.find((item) => item.id === selectedBatchId)) {
-      setSelectedBatchId(preHarvestLots[0]?.id ?? null);
+    if (selectedBatchId && !visiblePreHarvestLots.find((item) => item.id === selectedBatchId)) {
+      setSelectedBatchId(visiblePreHarvestLots[0]?.id ?? null);
     }
-  }, [preHarvestLots, selectedBatch, selectedBatchId]);
+  }, [selectedBatch, selectedBatchId, visiblePreHarvestLots]);
+
+  const preHarvestExportColumns: ExportColumn<Batch>[] = [
+    { key: "code", header: "Lot" },
+    { key: "farmer", header: "Agriculteur", format: (_, row) => (row.member_id ? farmersById.get(row.member_id)?.full_name ?? "-" : "-") },
+    { key: "product", header: "Produit", format: (_, row) => productsById.get(row.product_id)?.name ?? "-" },
+    { key: "surface_ha", header: "Surface (ha)", format: (_, row) => (row.surface_ha ?? 0).toLocaleString("fr-FR") },
+    { key: "estimated_qty_kg", header: "Quantité estimée (kg)", format: (_, row) => (row.estimated_qty_kg ?? 0).toLocaleString("fr-FR") },
+    { key: "estimated_charge_fcfa", header: "Charge estimée (FCFA)", format: (_, row) => (row.estimated_charge_fcfa ?? 0).toLocaleString("fr-FR") },
+    { key: "state", header: "État", format: (_, row) => stateLabel(getPreHarvestState(row)) },
+  ];
 
   const selectedLotState = useMemo(
     () => (selectedBatch ? getPreHarvestState(selectedBatch) : null),
     [selectedBatch],
   );
 
-  const activeExecutionSteps = useMemo(() => {
+  const activeExecutionSteps = useMemo<PreHarvestExecutionStep[]>(() => {
     if (!selectedBatch) return [];
     const persisted = selectedBatch.preharvest_step_statuses ?? [];
-    if (persisted.length > 0) return persisted;
+    if (persisted.length > 0) {
+      return persisted.map((step) => ({
+        index: step.index,
+        name: step.name,
+        status: step.status,
+        updated_at: step.updated_at ?? null,
+        execution_date: step.execution_date ?? null,
+        duration_minutes: step.duration_minutes ?? null,
+        summary: step.summary ?? null,
+      }));
+    }
     return (selectedBatch.ordered_process_steps ?? []).map((label, index) => ({
       index,
       name: label,
       status: "todo" as PreHarvestExecutionStatus,
       updated_at: null,
+      execution_date: null,
+      duration_minutes: null,
+      summary: null,
     }));
   }, [selectedBatch]);
   const activeExecutionCompletedCount = useMemo(
@@ -253,6 +290,18 @@ export default function ParcellesCulturePage() {
     [activeExecutionSteps],
   );
 
+  useEffect(() => {
+    const draft: Record<number, { execution_date: string; duration_minutes: string; summary: string }> = {};
+    for (const step of activeExecutionSteps) {
+      draft[step.index] = {
+        execution_date: step.execution_date ?? "",
+        duration_minutes: step.duration_minutes !== null && step.duration_minutes !== undefined ? String(step.duration_minutes) : "",
+        summary: step.summary ?? "",
+      };
+    }
+    setExecutionDetailsDraft(draft);
+  }, [selectedBatch?.id, activeExecutionSteps]);
+
   const selectedFarmer = useMemo(() => {
     if (!selectedBatch?.member_id) return null;
     return farmersById.get(selectedBatch.member_id) ?? null;
@@ -267,16 +316,6 @@ export default function ParcellesCulturePage() {
     return selectedFarmerParcels.find((item) => item.id === selectedBatch.parcel_id) ?? null;
   }, [selectedBatch, selectedFarmerParcels]);
 
-  const stepsQuery = usePreHarvestSteps(selectedBatch?.parcel_id ?? null);
-  const steps = useMemo(() => stepsQuery.data ?? [], [stepsQuery.data]);
-  const completedCount = steps.filter((item) => item.status === "completed").length;
-  const progress = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
-  const latestCompletedStepId = useMemo(() => {
-    const completed = steps.filter((item) => item.status === "completed");
-    if (completed.length === 0) return null;
-    return completed.sort((a, b) => b.step_order - a.step_order)[0]?.id ?? null;
-  }, [steps]);
-
   const lotForm = useForm<LotForm>({
     defaultValues: {
       member_id: "",
@@ -288,15 +327,6 @@ export default function ParcellesCulturePage() {
     },
   });
 
-  const stepForm = useForm<StepForm>({
-    defaultValues: {
-      quantity_value: undefined,
-      quantity_unit: "",
-      operation_cost_fcfa: undefined,
-      realization_date: new Date().toISOString().slice(0, 10),
-      observations: "",
-    },
-  });
 
   const watchedFarmerId = lotForm.watch("member_id");
   useEffect(() => {
@@ -342,21 +372,12 @@ export default function ParcellesCulturePage() {
     return Math.max(surface * yieldKgHa - losses, 0);
   }, [lotForm]);
 
-  const openStepModal = (step: PreHarvestStep) => {
-    if (selectedLotState !== "preparation") {
-      window.alert("Ce lot n’est plus en préparation. Les étapes sont verrouillées.");
-      return;
-    }
-    setActiveStep(step);
-    stepForm.reset({
-      quantity_value: step.quantity_value ?? undefined,
-      quantity_unit: step.quantity_unit ?? "",
-      operation_cost_fcfa: step.operation_cost_fcfa ?? undefined,
-      realization_date: step.realization_date ?? new Date().toISOString().slice(0, 10),
-      observations: step.observations ?? "",
-    });
-    setStepModalOpen(true);
-  };
+  const preHarvestTemplateSteps = useMemo(() => {
+    if (!selectedBatch) return [];
+    const productName = productsById.get(selectedBatch.product_id)?.name ?? null;
+    return getProductStepTemplate(productName, "pre_harvest");
+  }, [productsById, selectedBatch]);
+
 
   const parseWorkflowStep = (value: string, index: number): WorkflowDraftStep => {
     const [rawName, ...rawDetails] = value.split(" — ");
@@ -434,29 +455,8 @@ export default function ParcellesCulturePage() {
     }
   });
 
-  const submitStep = stepForm.handleSubmit(async (values) => {
-    if (!selectedBatch?.parcel_id || !activeStep) return;
-    setFormError(null);
-    try {
-      const payload: PreHarvestStepUpdate = {
-        quantity_value: values.quantity_value !== undefined ? Number(values.quantity_value) : null,
-        quantity_unit: values.quantity_unit.trim() || null,
-        operation_cost_fcfa:
-          values.operation_cost_fcfa !== undefined ? Number(values.operation_cost_fcfa) : null,
-        realization_date: values.realization_date,
-        observations: values.observations.trim() || null,
-      };
-      await updateStep.mutateAsync({ parcelId: selectedBatch.parcel_id, stepId: activeStep.id, payload });
-      await completeStep.mutateAsync({ parcelId: selectedBatch.parcel_id, stepId: activeStep.id });
-      setStepModalOpen(false);
-    } catch (error) {
-      setFormError(getFrenchErrorMessage(error, "Impossible d'enregistrer l'étape."));
-    }
-  });
-
   const handleApproveLotCharge = async () => {
     if (!selectedBatch) return;
-    if (!window.confirm("Approuver la charge estimée et créer Avance Producteur + Trésorerie OUT ?")) return;
     try {
       setPendingAction("approve_charge");
       await approveBatchCharge.mutateAsync(selectedBatch.id);
@@ -485,7 +485,6 @@ export default function ParcellesCulturePage() {
       window.alert("Impossible de stopper un lot dont l’exécution a commencé.");
       return;
     }
-    if (!window.confirm("Le lot repassera en préparation et pourra être modifié.")) return;
     try {
       setPendingAction("stop");
       await stopPreHarvest.mutateAsync(selectedBatch.id);
@@ -505,15 +504,42 @@ export default function ParcellesCulturePage() {
     const source = selectedBatch.ordered_process_steps ?? [];
     const parsed = source.map((item, index) => parseWorkflowStep(item, index));
     setWorkflowStepsDraft(parsed);
+    setWorkflowStepToAdd("");
+    setWorkflowCustomStep("");
     setWorkflowError(null);
     setWorkflowModalOpen(true);
   };
 
   const handleAddWorkflowStep = () => {
+    const action = workflowStepToAdd.trim();
+    if (!action) return;
+    const exists = workflowStepsDraft.some((step) => step.name.trim().toLowerCase() === action.toLowerCase());
+    if (exists) {
+      setWorkflowError("Cette action est déjà dans le workflow.");
+      return;
+    }
     setWorkflowStepsDraft((current) => [
       ...current,
-      { id: `new-${Date.now()}-${current.length}`, name: "", details: "" },
+      { id: `new-${Date.now()}-${current.length}`, name: action, details: "" },
     ]);
+    setWorkflowStepToAdd("");
+    setWorkflowError(null);
+  };
+
+  const handleAddCustomWorkflowStep = () => {
+    const action = workflowCustomStep.trim();
+    if (!action) return;
+    const exists = workflowStepsDraft.some((step) => step.name.trim().toLowerCase() === action.toLowerCase());
+    if (exists) {
+      setWorkflowError("Cette action est déjà dans le workflow.");
+      return;
+    }
+    setWorkflowStepsDraft((current) => [
+      ...current,
+      { id: `custom-${Date.now()}-${current.length}`, name: action, details: "" },
+    ]);
+    setWorkflowCustomStep("");
+    setWorkflowError(null);
   };
 
   const handleUpdateWorkflowStep = (id: string, key: "name" | "details", value: string) => {
@@ -576,22 +602,27 @@ export default function ParcellesCulturePage() {
     }
   };
 
-  const updateExecutionStepStatus = async (stepIndex: number, status: PreHarvestExecutionStatus) => {
+  const updateExecutionStep = async (
+    stepIndex: number,
+    updates: Partial<Pick<PreHarvestExecutionStep, "status" | "execution_date" | "duration_minutes" | "summary">>,
+  ) => {
     if (!selectedBatch) return;
-    const isReadyPostRecolte = Boolean(selectedBatch.preharvest_completed_at && selectedBatch.confirmed_weight_kg);
+    const isReadyPostRecolte = Boolean(
+      selectedBatch.preharvest_completed_at && (selectedBatch.collecte_created || selectedBatch.stock_in_created || selectedBatch.confirmed_weight_kg),
+    );
     if (selectedLotState !== "active" || isReadyPostRecolte) {
       window.alert("Pré-récolte déjà confirmée. Les étapes d’exécution sont verrouillées.");
       return;
     }
-    const nextStatuses = activeExecutionSteps.map((step) =>
-      step.index === stepIndex
-        ? {
-            ...step,
-            status,
-            updated_at: new Date().toISOString(),
-          }
-        : step,
-    );
+    const nextStatuses = activeExecutionSteps.map((step) => {
+      if (step.index !== stepIndex) return step;
+      return {
+        ...step,
+        ...updates,
+        status: updates.status ?? step.status,
+        updated_at: new Date().toISOString(),
+      };
+    });
     try {
       setPendingAction("update_step_status");
       await updatePreHarvestStepStatuses.mutateAsync({
@@ -605,28 +636,41 @@ export default function ParcellesCulturePage() {
     }
   };
 
-  const handleOpenConfirmWeightModal = () => {
+  const handleOpenCompletePreHarvestModal = () => {
     if (!selectedBatch) return;
-    if (selectedLotState === "active" && !allExecutionStepsDone) {
-      window.alert("Toutes les étapes Pré-récolte doivent être terminées avant de confirmer le poids réel.");
+    if ((selectedLotState === "active" || selectedLotState === "preparation") && !allExecutionStepsDone) {
+      window.alert("Toutes les étapes Pré-récolte doivent être terminées avant de terminer la pré-récolte.");
       return;
     }
-    setConfirmedWeightInput(selectedBatch.confirmed_weight_kg?.toString() ?? "");
-    setConfirmWeightModalOpen(true);
+    setCompletePreHarvestModalOpen(true);
+  };
+
+  const saveExecutionDetails = async (stepIndex: number) => {
+    const draft = executionDetailsDraft[stepIndex] ?? { execution_date: "", duration_minutes: "", summary: "" };
+    await updateExecutionStep(stepIndex, {
+      execution_date: draft.execution_date || null,
+      duration_minutes: draft.duration_minutes ? Number(draft.duration_minutes) : null,
+      summary: draft.summary || null,
+    });
+  };
+
+  const completeExecutionStepWithDetails = async (stepIndex: number) => {
+    const draft = executionDetailsDraft[stepIndex] ?? { execution_date: "", duration_minutes: "", summary: "" };
+    await updateExecutionStep(stepIndex, {
+      status: "done",
+      execution_date: draft.execution_date || null,
+      duration_minutes: draft.duration_minutes ? Number(draft.duration_minutes) : null,
+      summary: draft.summary || null,
+    });
+    setEditingExecutionStepIndex(null);
   };
 
   const handleCompleteLotPreHarvest = async () => {
     if (!selectedBatch) return;
-    const confirmed = Number(confirmedWeightInput);
-    if (!Number.isFinite(confirmed) || confirmed <= 0) {
-      setFormError("Poids confirmé invalide.");
-      return;
-    }
-    if (!window.confirm("Confirmer la clôture pré-récolte et créer Collecte + Stock IN ?")) return;
     try {
       setPendingAction("complete_preharvest");
-      await completePreHarvest.mutateAsync({ id: selectedBatch.id, confirmed_weight_kg: confirmed });
-      setConfirmWeightModalOpen(false);
+      await completePreHarvest.mutateAsync({ id: selectedBatch.id });
+      setCompletePreHarvestModalOpen(false);
     } catch (error) {
       setFormError(getFrenchErrorMessage(error, "Impossible de compléter la pré-récolte."));
     } finally {
@@ -644,13 +688,27 @@ export default function ParcellesCulturePage() {
             <StatusBadge label="⚠️ 1 stock(s) bas" tone="warning" />
             <StatusBadge label="🔔 1 commande(s) à traiter" tone="info" />
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="wf-input h-10 w-64 px-3 text-sm"
-              placeholder="Rechercher lot, agriculteur, produit..."
+          <div className="w-full">
+            <TableToolbar
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Rechercher lot, agriculteur, produit..."
+              filters={tableControls.filterDefinitions}
+              onFilterChange={tableControls.setFilterValue}
+              sortOrder={tableControls.sortOrder}
+              onSortOrderChange={tableControls.setSortOrder}
+              sortAscLabel="Date asc"
+              sortDescLabel="Date desc"
+              rightActions={
+                <ExportActions
+                  onCsv={() => exportRowsToCsv({ filename: "lots-pre-recolte", title: "Lots Pré-récolte", columns: preHarvestExportColumns, rows: visiblePreHarvestLots })}
+                  onExcel={() => exportRowsToExcel({ filename: "lots-pre-recolte", title: "Lots Pré-récolte", columns: preHarvestExportColumns, rows: visiblePreHarvestLots })}
+                  onPdf={() => exportRowsToPdf({ filename: "lots-pre-recolte", title: "Lots Pré-récolte", columns: preHarvestExportColumns, rows: visiblePreHarvestLots })}
+                />
+              }
             />
+          </div>
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setLotModalOpen(true)}
@@ -670,13 +728,13 @@ export default function ParcellesCulturePage() {
           >
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-[var(--text)]">Lots Pré-récolte</h3>
-              <span className="text-xs text-[var(--muted)]">{preHarvestLots.length} lot(s)</span>
+              <span className="text-xs text-[var(--muted)]">{visiblePreHarvestLots.length} lot(s)</span>
             </div>
-            {preHarvestLots.length === 0 ? (
+            {visiblePreHarvestLots.length === 0 ? (
               <p className="text-xs text-[var(--muted)]">Aucun lot Pré-récolte disponible.</p>
             ) : (
               <div className="space-y-2">
-                {preHarvestLots.map((lot) => {
+                {visiblePreHarvestLots.map((lot) => {
                   const isActive = lot.id === selectedBatch?.id;
                   const farmerName = lot.member_id ? farmersById.get(lot.member_id)?.full_name ?? "-" : "-";
                   const productName = productsById.get(lot.product_id)?.name ?? "-";
@@ -761,7 +819,9 @@ export default function ParcellesCulturePage() {
                   <p>Rendement attendu: {(selectedBatch.expected_yield_kg_per_ha ?? 0).toLocaleString("fr-FR")} kg/ha</p>
                   <p>Pertes attendues: {(selectedBatch.expected_losses_kg ?? 0).toLocaleString("fr-FR")} kg</p>
                   <p>Activation: {selectedBatch.preharvest_activated_at ? "Actif" : "Préparation"}</p>
-                  <p>Poids réel confirmé: {(selectedBatch.confirmed_weight_kg ?? 0).toLocaleString("fr-FR")} kg</p>
+                  <p>
+                    Collecte liée: {selectedBatch.collecte_created ? "Créée" : selectedBatch.preharvest_completed_at ? "En attente" : "Non disponible"}
+                  </p>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {selectedLotState === "preparation" ? (
@@ -777,7 +837,7 @@ export default function ParcellesCulturePage() {
                   {selectedLotState === "active" ? (
                     <button
                       type="button"
-                      onClick={handleStopLot}
+                      onClick={() => setPendingStopLot(true)}
                       disabled={executionStarted || pendingAction !== null}
                       className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                       title={executionStarted ? "Impossible de stopper un lot dont l’exécution a commencé." : undefined}
@@ -797,7 +857,7 @@ export default function ParcellesCulturePage() {
                   ) : null}
                   <button
                     type="button"
-                    onClick={handleApproveLotCharge}
+                    onClick={() => setPendingApproveCharge(true)}
                     disabled={Boolean(selectedBatch.charge_approved_at) || pendingAction !== null}
                     className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -807,20 +867,20 @@ export default function ParcellesCulturePage() {
                         ? "Approbation en cours..."
                         : "Approuver charge"}
                   </button>
-                  {selectedLotState !== "ready_post_recolte" ? (
+                  {selectedLotState === "active" ? (
                     <button
                       type="button"
-                      onClick={handleOpenConfirmWeightModal}
-                      disabled={(selectedLotState === "active" && !allExecutionStepsDone) || pendingAction !== null}
+                      onClick={handleOpenCompletePreHarvestModal}
+                      disabled={!allExecutionStepsDone || pendingAction !== null}
                       className="soft-focus wf-btn-primary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {pendingAction === "complete_preharvest" ? "Clôture en cours..." : "Compléter pré-récolte"}
+                      {pendingAction === "complete_preharvest" ? "Clôture en cours..." : "Terminer Pré-récolte"}
                     </button>
                   ) : null}
                 </div>
                 {selectedLotState === "active" && !allExecutionStepsDone ? (
                   <p className="mt-2 text-xs text-[var(--muted)]">
-                    Terminez toutes les étapes d&apos;exécution avant de confirmer le poids réel.
+                    Terminez toutes les étapes d&apos;exécution avant de terminer la pré-récolte.
                   </p>
                 ) : null}
                 {selectedLotState === "active" && executionStarted ? (
@@ -830,7 +890,7 @@ export default function ParcellesCulturePage() {
                 ) : null}
                 {selectedLotState !== "ready_post_recolte" ? (
                   <p className="mt-2 text-xs text-[var(--muted)]">
-                    Le stock réel sera créé uniquement après saisie du poids confirmé.
+                    Le stock réel sera créé uniquement après la Collecte liée à ce lot.
                   </p>
                 ) : null}
               </article>
@@ -908,12 +968,22 @@ export default function ParcellesCulturePage() {
                       </div>
                       <div className="space-y-2">
                         {activeExecutionSteps.map((step) => {
-                          const statusLabel =
-                            step.status === "done" ? "Terminé" : step.status === "in_progress" ? "En cours" : "À faire";
-                          const tone =
-                            step.status === "done" ? "success" : step.status === "in_progress" ? "info" : "warning";
+                          const draft = executionDetailsDraft[step.index] ?? {
+                            execution_date: "",
+                            duration_minutes: "",
+                            summary: "",
+                          };
+                          const statusLabel = step.status === "done" ? "Terminé" : "En cours";
+                          const tone = step.status === "done" ? "success" : "info";
+                          const isDone = step.status === "done";
+                          const isEditing = editingExecutionStepIndex === step.index || !isDone;
                           return (
-                            <article key={`${step.index}-${step.name}`} className="rounded-xl border border-[var(--line)] bg-white p-3">
+                            <article
+                              key={`${step.index}-${step.name}`}
+                              className={`rounded-xl border p-3 ${
+                                isDone ? "border-[#9FD6B2] bg-[#F1FBF4]" : "border-[var(--line)] bg-white"
+                              }`}
+                            >
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <p className="text-sm font-semibold text-[var(--text)]">
                                   {step.index + 1}. {step.name}
@@ -923,32 +993,124 @@ export default function ParcellesCulturePage() {
                                   <StatusBadge label={statusLabel} tone={tone} />
                                 </div>
                               </div>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => updateExecutionStepStatus(step.index, "todo")}
-                                  disabled={pendingAction !== null}
-                                  className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  À faire
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateExecutionStepStatus(step.index, "in_progress")}
-                                  disabled={pendingAction !== null}
-                                  className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  En cours
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateExecutionStepStatus(step.index, "done")}
-                                  disabled={pendingAction !== null}
-                                  className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  Terminé
-                                </button>
-                              </div>
+                              {isDone && !isEditing ? (
+                                <div className="mt-3 space-y-2 rounded-xl border border-[#CFE7D8] bg-white px-3 py-2 text-xs text-[var(--muted)]">
+                                  <p>
+                                    <span className="font-semibold text-[var(--text)]">Date:</span>{" "}
+                                    {step.execution_date || "Non renseignée"}
+                                  </p>
+                                  <p>
+                                    <span className="font-semibold text-[var(--text)]">Durée:</span>{" "}
+                                    {step.duration_minutes != null ? `${step.duration_minutes} min` : "Non renseignée"}
+                                  </p>
+                                  <p>
+                                    <span className="font-semibold text-[var(--text)]">Résumé:</span>{" "}
+                                    {step.summary?.trim() ? step.summary : "Aucun résumé"}
+                                  </p>
+                                  <div className="flex justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingExecutionStepIndex(step.index)}
+                                      disabled={pendingAction !== null}
+                                      className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      Modifier
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                                <label className="block text-xs font-medium text-[var(--text)]">
+                                  Date d&apos;exécution
+                                  <input
+                                    type="date"
+                                    value={draft.execution_date}
+                                    onChange={(event) =>
+                                      setExecutionDetailsDraft((current) => ({
+                                        ...current,
+                                        [step.index]: {
+                                          ...(current[step.index] ?? { execution_date: "", duration_minutes: "", summary: "" }),
+                                          execution_date: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    className="wf-input mt-1 h-10 w-full px-2.5 text-xs"
+                                    disabled={pendingAction !== null}
+                                  />
+                                </label>
+                                <label className="block text-xs font-medium text-[var(--text)]">
+                                  Durée (minutes)
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={draft.duration_minutes}
+                                    onChange={(event) =>
+                                      setExecutionDetailsDraft((current) => ({
+                                        ...current,
+                                        [step.index]: {
+                                          ...(current[step.index] ?? { execution_date: "", duration_minutes: "", summary: "" }),
+                                          duration_minutes: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    className="wf-input mt-1 h-10 w-full px-2.5 text-xs"
+                                    disabled={pendingAction !== null}
+                                  />
+                                </label>
+                                <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-2.5 py-2 text-[11px] text-[var(--muted)]">
+                                  Suivi terrain uniquement
+                                  <br />
+                                  Aucun impact stock
+                                  </div>
+                                  </div>
+                                  <label className="mt-2 block text-xs font-medium text-[var(--text)]">
+                                    Résumé / notes
+                                    <textarea
+                                      value={draft.summary}
+                                      onChange={(event) =>
+                                        setExecutionDetailsDraft((current) => ({
+                                          ...current,
+                                          [step.index]: {
+                                            ...(current[step.index] ?? { execution_date: "", duration_minutes: "", summary: "" }),
+                                            summary: event.target.value,
+                                          },
+                                        }))
+                                      }
+                                      className="wf-input mt-1 min-h-[68px] w-full px-2.5 py-2 text-xs"
+                                      placeholder="Saisir un résumé de l&apos;intervention terrain..."
+                                      disabled={pendingAction !== null}
+                                    />
+                                  </label>
+                                  <div className="mt-2 flex justify-end gap-2">
+                                    {isDone ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingExecutionStepIndex(null)}
+                                        disabled={pendingAction !== null}
+                                        className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        Annuler
+                                      </button>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        isDone ? saveExecutionDetails(step.index) : completeExecutionStepWithDetails(step.index)
+                                      }
+                                      disabled={pendingAction !== null}
+                                      className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      {pendingAction === "update_step_status"
+                                        ? "Enregistrement..."
+                                        : isDone
+                                          ? "Enregistrer modifications"
+                                          : "Enregistrer suivi"}
+                                    </button>
+                                  </div>
+                                </>
+                              )}
                             </article>
                           );
                         })}
@@ -962,7 +1124,7 @@ export default function ParcellesCulturePage() {
                 <article className="mb-4 rounded-2xl border border-[var(--line)] bg-[#EAF8EE] p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-[var(--text)]">Résumé Pré-récolte terminé</p>
-                    <StatusBadge label="Prêt Post-récolte" tone="success" />
+                    <StatusBadge label="Collecté · Prêt Post-récolte" tone="success" />
                   </div>
                   <p className="mt-1 text-xs text-[var(--muted)]">
                     Workflow verrouillé et finalisé. Ce lot peut continuer en Post-récolte.
@@ -971,98 +1133,95 @@ export default function ParcellesCulturePage() {
                     <p>Étapes terminées: {activeExecutionCompletedCount}/{activeExecutionSteps.length || 0}</p>
                     <p>Poids confirmé: {(selectedBatch.confirmed_weight_kg ?? 0).toLocaleString("fr-FR")} kg</p>
                   </div>
+                  <div className="mt-3 rounded-xl border border-[var(--line)] bg-white p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                        Détail des étapes exécutées
+                      </p>
+                      <StatusBadge
+                        label={`${activeExecutionCompletedCount}/${activeExecutionSteps.length || 0} terminées`}
+                        tone="success"
+                      />
+                    </div>
+                    {activeExecutionSteps.length === 0 ? (
+                      <p className="text-xs text-[var(--muted)]">Aucune étape d&apos;exécution enregistrée.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {activeExecutionSteps.map((step) => (
+                          <article key={`ready-post-${step.index}`} className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--line)] bg-white text-sm">
+                                  {getWorkflowStepEmoji(step.name, step.index)}
+                                </div>
+                                <p className="text-sm font-semibold text-[var(--text)]">
+                                  {step.index + 1}. {step.name}
+                                </p>
+                              </div>
+                              <StatusBadge label={step.status === "done" ? "Terminé" : "En cours"} tone={step.status === "done" ? "success" : "info"} />
+                            </div>
+                            <div className="mt-2 grid gap-1 text-xs text-[var(--muted)] sm:grid-cols-2">
+                              <p>Date: {step.execution_date || "Non renseignée"}</p>
+                              <p>Durée: {step.duration_minutes != null ? `${step.duration_minutes} min` : "Non renseignée"}</p>
+                            </div>
+                            <p className="mt-1 text-xs text-[var(--muted)]">Résumé: {step.summary?.trim() ? step.summary : "Aucun résumé"}</p>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </article>
               ) : null}
 
-              <article className="rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--text)]">Annexe — Suivi agronomique de la parcelle</p>
-                    <p className="text-xs text-[var(--muted)]">
-                      Information secondaire. Le cycle officiel est géré par le lot Pré-récolte ci-dessus.
-                    </p>
+              {selectedLotState === "ready_collecte" ? (
+                <article className="mb-4 rounded-2xl border border-[var(--line)] bg-[#EEF5FF] p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-[var(--text)]">Pré-récolte terminée</p>
+                    <StatusBadge label="Prêt pour Collecte" tone="info" />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setAnnexOpen((current) => !current)}
-                    className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold"
-                  >
-                    {annexOpen ? "Masquer l’annexe agronomique" : "Afficher l’annexe agronomique"}
-                  </button>
-                </div>
-                {annexOpen ? (
-                  <div className="mt-3">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                      <StatusBadge label={selectedBatch.parcel_id ? "Parcelle liée" : "Sans parcelle"} tone={selectedBatch.parcel_id ? "info" : "warning"} />
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Le lot est prêt pour la Collecte liée. Le stock réel sera créé après enregistrement de cette collecte dans le module Collecte.
+                  </p>
+                  <div className="mt-3 rounded-xl border border-[var(--line)] bg-white p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                        Résumé des étapes exécutées
+                      </p>
+                      <StatusBadge
+                        label={`${activeExecutionCompletedCount}/${activeExecutionSteps.length || 0} terminées`}
+                        tone="success"
+                      />
                     </div>
-
-                    <article className="rounded-2xl border border-[var(--line)] bg-[#FFF9F1] p-3">
-                      <p className="text-sm font-semibold text-[var(--text)]">Suivi pré-récolte (annexe)</p>
-                      {selectedBatch.parcel_id ? (
-                        <>
-                          <div className="mb-3 mt-2">
-                            <p className="mb-1 text-xs text-[var(--muted)]">{completedCount}/{steps.length || 0} réalisées</p>
-                            <div className="h-2 w-full rounded-full bg-[#ECEFE8]">
-                              <div className="h-2 rounded-full bg-[#168A4A]" style={{ width: `${progress}%` }} />
+                    {activeExecutionSteps.length === 0 ? (
+                      <p className="text-xs text-[var(--muted)]">Aucune étape d&apos;exécution enregistrée.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {activeExecutionSteps.map((step) => (
+                          <article key={`ready-collecte-${step.index}`} className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--line)] bg-white text-sm">
+                                  {getWorkflowStepEmoji(step.name, step.index)}
+                                </div>
+                                <p className="text-sm font-semibold text-[var(--text)]">
+                                  {step.index + 1}. {step.name}
+                                </p>
+                              </div>
+                              <StatusBadge label={step.status === "done" ? "Terminé" : "Incomplet"} tone={step.status === "done" ? "success" : "warning"} />
                             </div>
-                          </div>
-                          {steps.length === 0 ? (
-                            <p className="text-xs text-[var(--muted)]">Aucune étape pré-récolte liée à cette parcelle.</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {steps.map((step) => {
-                                const canEditStep =
-                                  selectedLotState === "preparation" &&
-                                  (step.status !== "completed" || step.id === latestCompletedStepId);
-                                return (
-                                <article key={step.id} className="rounded-xl border border-[var(--line)] bg-white p-3">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-lg">{step.icon}</span>
-                                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${CATEGORY_TONE[step.category] ?? "bg-[#EEF2F5] text-[#4A5A71]"}`}>
-                                        {step.category}
-                                      </span>
-                                    </div>
-                                    <StatusBadge
-                                      label={step.status === "completed" ? "Terminé" : "À faire"}
-                                      tone={step.status === "completed" ? "success" : "warning"}
-                                    />
-                                  </div>
-                                  <p className="mt-1 text-sm font-semibold text-[var(--text)]">{step.label}</p>
-                                  <div className="mt-2 flex items-center justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (!canEditStep) {
-                                          window.alert(
-                                            selectedLotState === "preparation"
-                                              ? "Seule la dernière étape terminée peut être modifiée."
-                                              : "Ce lot n’est plus en préparation. Les étapes sont verrouillées.",
-                                          );
-                                          return;
-                                        }
-                                        openStepModal(step);
-                                      }}
-                                      disabled={!canEditStep}
-                                      className="soft-focus rounded-xl bg-[#D96A2B] px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      {!canEditStep ? "Verrouillée" : step.status === "completed" ? "Modifier" : "Saisir données"}
-                                    </button>
-                                  </div>
-                                </article>
-                              )})}
+                            <div className="mt-2 grid gap-1 text-xs text-[var(--muted)] sm:grid-cols-3">
+                              <p>📅 Date: {step.execution_date || "Non renseignée"}</p>
+                              <p>⏱️ Durée: {step.duration_minutes != null ? `${step.duration_minutes} min` : "Non renseignée"}</p>
+                              <p>📝 Résumé: {step.summary?.trim() ? step.summary : "Aucun résumé"}</p>
                             </div>
-                          )}
-                        </>
-                      ) : (
-                        <p className="mt-2 text-xs text-[var(--muted)]">
-                          Ce lot n&apos;est pas rattaché à une parcelle. Le workflow principal est porté par le lot.
-                        </p>
-                      )}
-                    </article>
+                          </article>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : null}
-              </article>
+                </article>
+              ) : null}
+
             </>
           )}
 
@@ -1071,38 +1230,26 @@ export default function ParcellesCulturePage() {
       </section>
 
       <LiquidGlassModal
-        open={confirmWeightModalOpen}
-        onClose={() => setConfirmWeightModalOpen(false)}
-        title="Confirmer le poids réel"
-        subtitle="Le stock réel sera créé uniquement après confirmation du poids réel."
+        open={completePreHarvestModalOpen}
+        onClose={() => setCompletePreHarvestModalOpen(false)}
+        title="Terminer Pré-récolte"
+        subtitle="Le lot passera en statut prêt pour Collecte."
         size="md"
       >
         <div className="space-y-3">
           <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 text-xs text-[var(--muted)]">
             <p>Lot: {selectedBatch?.code ?? "-"}</p>
             <p>Produit: {selectedBatch ? productsById.get(selectedBatch.product_id)?.name ?? "-" : "-"}</p>
-            <p>Poids estimé: {selectedBatch ? (selectedBatch.estimated_qty_kg ?? 0).toLocaleString("fr-FR") : 0} kg</p>
+            <p>Quantité estimée: {selectedBatch ? (selectedBatch.estimated_qty_kg ?? 0).toLocaleString("fr-FR") : 0} kg</p>
           </div>
-          <label className="block text-sm font-medium text-[var(--text)]">
-            Poids réel confirmé (kg)
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={confirmedWeightInput}
-              onChange={(event) => setConfirmedWeightInput(event.target.value)}
-              className="wf-input mt-2 h-11 w-full px-3 text-sm"
-              placeholder="ex: 1200"
-            />
-          </label>
-          <p className="text-xs text-[#A53A3A]">
-            Cette action créera une Collecte/Input et un mouvement Stock IN.
+          <p className="text-xs text-[var(--muted)]">
+            Le lot sera prêt pour la Collecte. Le stock réel sera créé uniquement après la Collecte liée à ce lot.
           </p>
           {formError ? <p className="text-xs text-[#A53A3A]">{formError}</p> : null}
           <div className="flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => setConfirmWeightModalOpen(false)}
+              onClick={() => setCompletePreHarvestModalOpen(false)}
               className="soft-focus wf-btn-secondary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
               disabled={pendingAction !== null}
             >
@@ -1114,83 +1261,10 @@ export default function ParcellesCulturePage() {
               className="soft-focus wf-btn-primary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
               disabled={pendingAction !== null}
             >
-              {pendingAction === "complete_preharvest" ? "Confirmation en cours..." : "Confirmer le poids"}
+              {pendingAction === "complete_preharvest" ? "Clôture en cours..." : "Terminer Pré-récolte"}
             </button>
           </div>
         </div>
-      </LiquidGlassModal>
-
-      <LiquidGlassModal
-        open={stepModalOpen}
-        onClose={() => setStepModalOpen(false)}
-        title={`Saisir — ${activeStep?.label ?? ""}`}
-        subtitle="Enregistrer les données d'exécution de cette étape."
-        size="md"
-      >
-        <form onSubmit={submitStep} className="space-y-3">
-          <label className="block text-sm font-medium text-[var(--text)]">
-            {STEP_QUANTITY_LABEL[activeStep?.step_key ?? ""] ?? "Quantité"}
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              {...stepForm.register("quantity_value", { valueAsNumber: true })}
-              className="wf-input mt-2 h-11 w-full px-3 text-sm"
-              placeholder="ex: 500"
-            />
-          </label>
-          <label className="block text-sm font-medium text-[var(--text)]">
-            Unité
-            <input
-              {...stepForm.register("quantity_unit")}
-              className="wf-input mt-2 h-11 w-full px-3 text-sm"
-              placeholder="ex: arbres / kg / L"
-            />
-          </label>
-          <label className="block text-sm font-medium text-[var(--text)]">
-            Coût de l’opération (FCFA)
-            <input
-              type="number"
-              min="0"
-              step="1"
-              {...stepForm.register("operation_cost_fcfa", { valueAsNumber: true })}
-              className="wf-input mt-2 h-11 w-full px-3 text-sm"
-              placeholder="ex: 25000"
-            />
-          </label>
-          <label className="block text-sm font-medium text-[var(--text)]">
-            Date de réalisation
-            <input
-              type="date"
-              {...stepForm.register("realization_date", { required: "Date requise." })}
-              className="wf-input mt-2 h-11 w-full px-3 text-sm"
-            />
-          </label>
-          <label className="block text-sm font-medium text-[var(--text)]">
-            Observations
-            <textarea
-              {...stepForm.register("observations")}
-              className="wf-input mt-2 w-full px-3 py-2.5 text-sm"
-              placeholder="Notes, remarques..."
-            />
-          </label>
-          {formError ? <p className="text-xs text-[#A53A3A]">{formError}</p> : null}
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setStepModalOpen(false)}
-              className="soft-focus wf-btn-secondary px-3 py-2 text-sm font-semibold"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              className="soft-focus rounded-xl bg-[#168A4A] px-3 py-2 text-sm font-semibold text-white"
-            >
-              Enregistrer
-            </button>
-          </div>
-        </form>
       </LiquidGlassModal>
 
       <LiquidGlassModal
@@ -1301,10 +1375,56 @@ export default function ParcellesCulturePage() {
         open={workflowModalOpen}
         onClose={() => setWorkflowModalOpen(false)}
         title="Modifier workflow Pré-récolte"
-        subtitle="Edition des étapes proposées avant activation."
+        subtitle="Sélection des actions terrain prévues avant activation."
         size="lg"
       >
         <div className="space-y-4">
+          <div className="rounded-xl border border-[#BDD6FB] bg-[#EEF5FF] px-3 py-2 text-xs text-[#2F80ED]">
+            Sélectionnez les actions terrain prévues pour ce lot. Après activation, elles seront exécutées avec date, durée et résumé.
+          </div>
+          <div className="space-y-2 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
+            <p className="text-sm font-semibold text-[var(--text)]">Actions Pré-récolte disponibles</p>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <select
+                value={workflowStepToAdd}
+                onChange={(event) => setWorkflowStepToAdd(event.target.value)}
+                className="wf-input h-10 w-full px-3 text-sm"
+                disabled={pendingAction !== null}
+              >
+                <option value="">Choisir une action standard</option>
+                {preHarvestTemplateSteps.map((step) => (
+                  <option key={step} value={step}>
+                    {step}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleAddWorkflowStep}
+                className="soft-focus wf-btn-secondary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!workflowStepToAdd || pendingAction !== null}
+              >
+                Ajouter
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input
+                value={workflowCustomStep}
+                onChange={(event) => setWorkflowCustomStep(event.target.value)}
+                className="wf-input h-10 w-full px-3 text-sm"
+                placeholder="Ajouter une action personnalisée"
+                disabled={pendingAction !== null}
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomWorkflowStep}
+                className="soft-focus wf-btn-secondary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!workflowCustomStep.trim() || pendingAction !== null}
+              >
+                Ajouter perso
+              </button>
+            </div>
+          </div>
           {workflowStepsDraft.length === 0 ? (
             <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] px-4 py-4 text-sm text-[var(--muted)]">
               Aucune étape proposée. Ajoutez une étape avant activation.
@@ -1312,9 +1432,14 @@ export default function ParcellesCulturePage() {
           ) : (
             <div className="space-y-2">
               {workflowStepsDraft.map((step, index) => (
-                <article key={step.id} className="rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
+                <article key={step.id} className="rounded-2xl border border-[var(--line)] bg-white p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Étape {index + 1}</p>
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--line)] bg-[#F8FBF6] text-xs">
+                        {getWorkflowStepEmoji(step.name || step.details, index)}
+                      </div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Étape {index + 1}</p>
+                    </div>
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
@@ -1342,23 +1467,14 @@ export default function ParcellesCulturePage() {
                       </button>
                     </div>
                   </div>
-                  <label className="block text-sm font-medium text-[var(--text)]">
-                    Nom de l&apos;étape
-                    <input
-                      value={step.name}
-                      onChange={(event) => handleUpdateWorkflowStep(step.id, "name", event.target.value)}
-                      className="wf-input mt-2 h-10 w-full px-3 text-sm"
-                      placeholder="Ex: Traitement phytosanitaire"
-                      disabled={pendingAction !== null}
-                    />
-                  </label>
+                  <p className="text-sm font-semibold text-[var(--text)]">{step.name || "Action sans nom"}</p>
                   <label className="mt-2 block text-sm font-medium text-[var(--text)]">
-                    Action / détails
+                    Détails / action terrain (optionnel)
                     <input
                       value={step.details}
                       onChange={(event) => handleUpdateWorkflowStep(step.id, "details", event.target.value)}
                       className="wf-input mt-2 h-10 w-full px-3 text-sm"
-                      placeholder="Ex: pulvérisation préventive"
+                      placeholder="Ex: équipe A, parcelle nord, matériel prévu..."
                       disabled={pendingAction !== null}
                     />
                   </label>
@@ -1397,6 +1513,30 @@ export default function ParcellesCulturePage() {
           </div>
         </div>
       </LiquidGlassModal>
+      <ConfirmActionModal
+        open={pendingApproveCharge}
+        title="Approuver la charge estimée"
+        message="Créer Avance Producteur + Trésorerie OUT pour ce lot ?"
+        confirmLabel="Approuver"
+        loading={pendingAction === "approve_charge"}
+        onCancel={() => setPendingApproveCharge(false)}
+        onConfirm={() => {
+          void handleApproveLotCharge();
+          setPendingApproveCharge(false);
+        }}
+      />
+      <ConfirmActionModal
+        open={pendingStopLot}
+        title="Stopper le lot"
+        message="Le lot repassera en préparation et pourra être modifié."
+        confirmLabel="Stopper"
+        loading={pendingAction === "stop"}
+        onCancel={() => setPendingStopLot(false)}
+        onConfirm={() => {
+          void handleStopLot();
+          setPendingStopLot(false);
+        }}
+      />
     </main>
   );
 }

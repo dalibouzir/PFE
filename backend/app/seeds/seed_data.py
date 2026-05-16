@@ -11,6 +11,7 @@ from app.models.cooperative import Cooperative
 from app.models.enums import CooperativeStatus, UserRole, UserStatus
 from app.models.field import Field
 from app.models.input import Input
+from app.models.institution import Institution
 from app.models.member import Member
 from app.models.process_step import ProcessStep
 from app.models.product import Product
@@ -23,9 +24,55 @@ from app.services import analytics as analytics_service
 from app.services import batches as batch_service
 from app.services import inputs as input_service
 from app.services import process_steps as process_step_service
+from app.utils.exceptions import ValidationError
 
 
 COOPERATIVE_NAME = "Cooperative Deggo Thies"
+
+
+def ensure_demo_institution(db):
+    institution = db.scalar(select(Institution).where(Institution.name == settings.seed_institution_name))
+    if institution is None:
+        institution = Institution(
+            name=settings.seed_institution_name,
+            description="Institution de demonstration WeeFarm",
+            region="Thies",
+            address="Route de Mbour, Thies",
+            phone="+221700000010",
+            email="institution.demo@weefarm.local",
+            status="active",
+        )
+        db.add(institution)
+        db.commit()
+        db.refresh(institution)
+    return institution
+
+
+def ensure_super_admin(db):
+    user = get_user_by_email(db, settings.seed_super_admin_email)
+    if user is None:
+        user = User(
+            full_name="WeeFarm Super Admin",
+            email=settings.seed_super_admin_email.lower(),
+            password_hash=get_password_hash(settings.seed_super_admin_password),
+            phone="+221700000009",
+            role=UserRole.SUPER_ADMIN,
+            status=UserStatus.ACTIVE,
+            cooperative_id=None,
+            institution_id=None,
+        )
+        db.add(user)
+    else:
+        user.full_name = "WeeFarm Super Admin"
+        user.password_hash = get_password_hash(settings.seed_super_admin_password)
+        user.phone = "+221700000009"
+        user.role = UserRole.SUPER_ADMIN
+        user.status = UserStatus.ACTIVE
+        user.cooperative_id = None
+        user.institution_id = None
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def ensure_admin(db):
@@ -66,6 +113,33 @@ def ensure_cooperative(db):
         db.commit()
         db.refresh(cooperative)
     return cooperative
+
+
+def ensure_institution_admin(db, institution):
+    user = get_user_by_email(db, settings.seed_institution_admin_email)
+    if user is None:
+        user = User(
+            full_name="Institution Admin WeeFarm",
+            email=settings.seed_institution_admin_email.lower(),
+            password_hash=get_password_hash(settings.seed_institution_admin_password),
+            phone="+221700000011",
+            role=UserRole.INSTITUTION_ADMIN,
+            status=UserStatus.ACTIVE,
+            cooperative_id=None,
+            institution_id=institution.id,
+        )
+        db.add(user)
+    else:
+        user.full_name = "Institution Admin WeeFarm"
+        user.password_hash = get_password_hash(settings.seed_institution_admin_password)
+        user.phone = "+221700000011"
+        user.role = UserRole.INSTITUTION_ADMIN
+        user.status = UserStatus.ACTIVE
+        user.cooperative_id = None
+        user.institution_id = institution.id
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def ensure_manager(db, cooperative):
@@ -282,39 +356,47 @@ def ensure_batch_and_steps(db, manager, products):
             select(ProcessStep).where(ProcessStep.batch_id == batch.id, ProcessStep.type == "cleaning")
         )
         if cleaning_step is None:
-            process_step_service.create_process_step(
-                db,
-                manager,
-                ProcessStepCreate(
-                    batch_id=batch.id,
-                    type="cleaning",
-                    date=date.today() - timedelta(days=2),
-                    loss_value=20.0,
-                    loss_unit="kg",
-                    notes="Initial cleaning and sorting.",
-                    duration_minutes=120,
-                ),
-            )
+            try:
+                process_step_service.create_process_step(
+                    db,
+                    manager,
+                    ProcessStepCreate(
+                        batch_id=batch.id,
+                        type="cleaning",
+                        date=date.today() - timedelta(days=2),
+                        loss_value=20.0,
+                        loss_unit="kg",
+                        notes="Initial cleaning and sorting.",
+                        duration_minutes=120,
+                    ),
+                )
+            except ValidationError:
+                pass
 
         drying_step = db.scalar(
             select(ProcessStep).where(ProcessStep.batch_id == batch.id, ProcessStep.type == "drying")
         )
         if drying_step is None:
-            drying_step = process_step_service.create_process_step(
-                db,
-                manager,
-                ProcessStepCreate(
-                    batch_id=batch.id,
-                    type="drying",
-                    date=date.today() - timedelta(days=1),
-                    loss_value=38.0,
-                    loss_unit="kg",
-                    notes="Controlled tray drying after cleaning.",
-                    duration_minutes=420,
-                ),
-            )
+            try:
+                drying_step = process_step_service.create_process_step(
+                    db,
+                    manager,
+                    ProcessStepCreate(
+                        batch_id=batch.id,
+                        type="drying",
+                        date=date.today() - timedelta(days=1),
+                        loss_value=38.0,
+                        loss_unit="kg",
+                        notes="Controlled tray drying after cleaning.",
+                        duration_minutes=420,
+                    ),
+                )
+            except ValidationError:
+                drying_step = db.scalar(
+                    select(ProcessStep).where(ProcessStep.batch_id == batch.id, ProcessStep.type == "drying")
+                )
 
-        if drying_step.status.value not in ("completed", "flagged"):
+        if drying_step is not None and drying_step.status.value not in ("completed", "flagged"):
             process_step_service.complete_process_step(
                 db,
                 manager,
@@ -328,7 +410,10 @@ def ensure_batch_and_steps(db, manager, products):
 def run_seed():
     db = SessionLocal()
     try:
+        super_admin = ensure_super_admin(db)
         admin = ensure_admin(db)
+        institution = ensure_demo_institution(db)
+        institution_admin = ensure_institution_admin(db, institution)
         cooperative = ensure_cooperative(db)
         manager = ensure_manager(db, cooperative)
         products = ensure_products(db, cooperative)
@@ -338,7 +423,9 @@ def run_seed():
         ensure_stock_thresholds(db, cooperative, products)
         ensure_batch_and_steps(db, manager, products)
         print("Seed completed successfully.")
+        print(f"Super Admin: {super_admin.email} / {settings.seed_super_admin_password}")
         print(f"Admin: {admin.email} / {settings.seed_admin_password}")
+        print(f"Institution Admin: {institution_admin.email} / {settings.seed_institution_admin_password}")
         print(f"Manager: {manager.email} / {settings.seed_manager_password}")
     finally:
         db.close()

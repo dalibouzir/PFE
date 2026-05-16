@@ -1,8 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
 import { PageIntro } from "@/components/ui/PageIntro";
+import { ExportActions } from "@/components/ui/table/ExportActions";
+import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import { useProducts } from "@/hooks/useProducts";
 import { useStocks } from "@/hooks/useStocks";
 import {
@@ -15,6 +18,8 @@ import {
   useUpdateCatalogProduct,
   useUpdateCommercialOrderStatus,
 } from "@/hooks/useCommercial";
+import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
+import { useTableControls } from "@/lib/table/useTableControls";
 import type { CatalogProduct, CommercialOrder, CommercialOrderStatus } from "@/lib/api/types";
 
 const ORDER_STATUS_LABEL: Record<CommercialOrderStatus, string> = {
@@ -107,6 +112,8 @@ export default function CommercialisationPage() {
   const [catalogViewMode, setCatalogViewMode] = useState<DataViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<"all" | CommercialOrderStatus>("all");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [pendingPaidOrder, setPendingPaidOrder] = useState<CommercialOrder | null>(null);
+  const [pendingDeleteCatalog, setPendingDeleteCatalog] = useState<CatalogProduct | null>(null);
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [formState, setFormState] = useState<CatalogFormState>({
@@ -131,6 +138,7 @@ export default function CommercialisationPage() {
   const deleteCatalogProduct = useDeleteCatalogProduct();
   const setCatalogProductStatus = useSetCatalogProductStatus();
   const updateOrderStatus = useUpdateCommercialOrderStatus();
+  const orderTableControls = useTableControls([], "desc");
 
   const visibleCatalog = useMemo(() => {
     return catalog.slice().sort((a, b) => a.name.localeCompare(b.name, "fr"));
@@ -159,6 +167,21 @@ export default function CommercialisationPage() {
 
   const lowStockCount = catalog.filter((item) => item.low_stock).length;
   const commandToHandle = (stats?.received ?? 0) + (stats?.confirmed ?? 0);
+  const visibleOrders = useMemo(() => {
+    const q = orderTableControls.search.trim().toLowerCase();
+    const searched = orders.filter((order) => {
+      if (!q) return true;
+      const lines = order.lines.map((line) => `${line.product_name} ${line.quantity} ${line.unit}`.toLowerCase()).join(" ");
+      return (
+        order.order_number.toLowerCase().includes(q) ||
+        order.customer_name.toLowerCase().includes(q) ||
+        (order.customer_phone ?? "").toLowerCase().includes(q) ||
+        lines.includes(q)
+      );
+    });
+    const sorted = searched.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return orderTableControls.sortOrder === "asc" ? sorted : sorted.reverse();
+  }, [orderTableControls.search, orderTableControls.sortOrder, orders]);
 
   function openCreateModal() {
     setEditingProduct(null);
@@ -253,7 +276,6 @@ export default function CommercialisationPage() {
   }
 
   async function handleDeleteCatalog(item: CatalogProduct) {
-    if (!window.confirm(`Supprimer "${item.name}" du catalogue ?`)) return;
     try {
       await deleteCatalogProduct.mutateAsync(item.id);
     } catch (error) {
@@ -262,6 +284,10 @@ export default function CommercialisationPage() {
   }
 
   async function handleOrderAction(order: CommercialOrder, nextStatus: CommercialOrderStatus) {
+    if (nextStatus === "paid") {
+      setPendingPaidOrder(order);
+      return;
+    }
     await updateOrderStatus.mutateAsync({
       id: order.id,
       payload: {
@@ -270,6 +296,25 @@ export default function CommercialisationPage() {
       },
     });
   }
+
+  async function confirmMarkPaid() {
+    if (!pendingPaidOrder) return;
+    await updateOrderStatus.mutateAsync({
+      id: pendingPaidOrder.id,
+      payload: { status: "paid" },
+    });
+    setPendingPaidOrder(null);
+  }
+
+  const orderExportColumns: ExportColumn<CommercialOrder>[] = [
+    { key: "order_number", header: "Commande" },
+    { key: "created_at", header: "Date", format: (_, row) => shortDate(row.created_at) },
+    { key: "customer_name", header: "Client" },
+    { key: "products", header: "Produits", format: (_, row) => row.lines.map((line) => `${line.quantity} ${line.unit} ${line.product_name}`).join(" | ") },
+    { key: "total_amount_fcfa", header: "Total (FCFA)", format: (_, row) => row.total_amount_fcfa.toLocaleString("fr-FR") },
+    { key: "payment_method", header: "Paiement", format: (_, row) => row.payment_method ?? "-" },
+    { key: "status", header: "Statut", format: (_, row) => ORDER_STATUS_LABEL[row.status] },
+  ];
 
   return (
     <main>
@@ -353,7 +398,7 @@ export default function CommercialisationPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteCatalog(item)}
+                          onClick={() => setPendingDeleteCatalog(item)}
                           disabled={deleteCatalogProduct.isPending}
                           className="soft-focus col-span-2 rounded-xl border border-[#E0A5A5] px-3 py-2 text-sm font-semibold text-[#A83C3C] hover:bg-[#FFF0F0] disabled:cursor-not-allowed disabled:opacity-60"
                         >
@@ -412,7 +457,7 @@ export default function CommercialisationPage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleDeleteCatalog(item)}
+                                onClick={() => setPendingDeleteCatalog(item)}
                                 disabled={deleteCatalogProduct.isPending}
                                 className="soft-focus rounded-xl border border-[#E0A5A5] px-3 py-1.5 text-sm font-semibold text-[#A83C3C] hover:bg-[#FFF0F0] disabled:cursor-not-allowed disabled:opacity-60"
                               >
@@ -473,6 +518,24 @@ export default function CommercialisationPage() {
           </section>
 
           <section className="premium-card mt-4 overflow-hidden rounded-2xl">
+            <div className="border-b border-[var(--line)] p-4">
+              <TableToolbar
+                search={orderTableControls.search}
+                onSearchChange={orderTableControls.setSearch}
+                searchPlaceholder="Recherche commande, client, téléphone, produit..."
+                sortOrder={orderTableControls.sortOrder}
+                onSortOrderChange={orderTableControls.setSortOrder}
+                sortAscLabel="Date asc"
+                sortDescLabel="Date desc"
+                rightActions={
+                  <ExportActions
+                    onCsv={() => exportRowsToCsv({ filename: "commandes", title: "Commandes", columns: orderExportColumns, rows: visibleOrders })}
+                    onExcel={() => exportRowsToExcel({ filename: "commandes", title: "Commandes", columns: orderExportColumns, rows: visibleOrders })}
+                    onPdf={() => exportRowsToPdf({ filename: "commandes", title: "Commandes", columns: orderExportColumns, rows: visibleOrders })}
+                  />
+                }
+              />
+            </div>
             <div className="overflow-x-auto">
               <table className="wf-table min-w-full text-sm">
                 <thead>
@@ -488,7 +551,7 @@ export default function CommercialisationPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((order) => (
+                  {visibleOrders.map((order) => (
                     <tr key={order.id}>
                       <td className="px-4 py-3 font-semibold text-[var(--primary)]">{order.order_number}</td>
                       <td className="px-4 py-3 text-[var(--muted)]">{shortDate(order.created_at)}</td>
@@ -526,7 +589,7 @@ export default function CommercialisationPage() {
                       </td>
                     </tr>
                   ))}
-                  {orders.length === 0 && (
+                  {visibleOrders.length === 0 && (
                     <tr>
                       <td className="px-4 py-5 text-center text-sm text-[var(--muted)]" colSpan={8}>
                         Aucune commande pour ce filtre.
@@ -687,6 +750,30 @@ export default function CommercialisationPage() {
           </div>
         </div>
       )}
+      <ConfirmActionModal
+        open={Boolean(pendingPaidOrder)}
+        title="Marquer la commande comme Payée"
+        message="Cette action confirme le paiement et déclenche la facture/revenu de trésorerie de façon idempotente."
+        confirmLabel="Oui, marquer Payée"
+        loading={updateOrderStatus.isPending}
+        onCancel={() => setPendingPaidOrder(null)}
+        onConfirm={() => {
+          void confirmMarkPaid();
+        }}
+      />
+      <ConfirmActionModal
+        open={Boolean(pendingDeleteCatalog)}
+        title="Supprimer le produit catalogue"
+        message={pendingDeleteCatalog ? `Supprimer "${pendingDeleteCatalog.name}" du catalogue ?` : "Supprimer ce produit du catalogue ?"}
+        confirmLabel="Supprimer"
+        loading={deleteCatalogProduct.isPending}
+        onCancel={() => setPendingDeleteCatalog(null)}
+        onConfirm={() => {
+          if (!pendingDeleteCatalog) return;
+          void handleDeleteCatalog(pendingDeleteCatalog);
+          setPendingDeleteCatalog(null);
+        }}
+      />
     </main>
   );
 }

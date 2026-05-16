@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_manager
@@ -59,3 +59,13 @@ def cancel_treasury_transaction(transaction_id: UUID, db: Session = Depends(get_
 @router.get("/stats", response_model=TreasuryStatsRead, summary="Get treasury KPI stats.")
 def get_treasury_stats(db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
     return treasury_service.get_treasury_stats(db, current_manager)
+
+
+@router.post("/{transaction_id}/justificatif", response_model=TreasuryTransactionRead, summary="Upload treasury justificatif.")
+def upload_treasury_justificatif(
+    transaction_id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_manager=Depends(get_current_manager),
+):
+    return treasury_service.upload_treasury_justificatif(db, current_manager, transaction_id, file)

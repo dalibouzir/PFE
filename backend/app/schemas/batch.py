@@ -36,6 +36,9 @@ class PreHarvestStepStatusItem(BaseModel):
     name: str = Field(min_length=1, max_length=500)
     status: str
     updated_at: Optional[datetime] = None
+    execution_date: Optional[date] = None
+    duration_minutes: Optional[int] = Field(default=None, ge=0)
+    summary: Optional[str] = Field(default=None, max_length=2000)
 
 class BatchPreHarvestStepStatusesUpdate(BaseModel):
     statuses: List[PreHarvestStepStatusItem]
@@ -93,6 +96,5 @@ class BatchApproveChargeResponse(BaseModel):
 
 
 class BatchCompletePreHarvestRequest(BaseModel):
-    confirmed_weight_kg: float = Field(gt=0)
     notes: Optional[str] = Field(default=None, max_length=1000)
     collecte_date: Optional[date] = None

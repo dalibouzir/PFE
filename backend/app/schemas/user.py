@@ -15,6 +15,47 @@ class ManagerCreate(BaseModel):
     cooperative_id: UUID
 
 
+class CooperativeUserCreate(BaseModel):
+    full_name: str = Field(min_length=2, max_length=160)
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+    phone: Optional[str] = Field(default=None, max_length=32)
+    role: str = Field(min_length=4, max_length=32)
+
+
+class CooperativeUserRead(ORMModel):
+    id: UUID
+    full_name: str
+    email: str
+    phone: Optional[str]
+    role: str
+    status: str
+    cooperative_id: Optional[UUID]
+    institution_id: Optional[UUID]
+    created_at: datetime
+    updated_at: datetime
+
+
+class InstitutionAdminCreate(BaseModel):
+    full_name: str = Field(min_length=2, max_length=160)
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+    phone: Optional[str] = Field(default=None, max_length=32)
+
+
+class InstitutionAdminRead(ORMModel):
+    id: UUID
+    full_name: str
+    email: str
+    phone: Optional[str]
+    role: str
+    status: str
+    cooperative_id: Optional[UUID]
+    institution_id: Optional[UUID]
+    created_at: datetime
+    updated_at: datetime
+
+
 class UserRead(ORMModel):
     id: UUID
     full_name: str

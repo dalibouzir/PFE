@@ -25,6 +25,7 @@ import {
   GitBranch,
   Landmark,
   LayoutDashboard,
+  LineChart,
   Map,
   ShoppingCart,
   Sprout,
@@ -52,9 +53,22 @@ type ProfileItem = {
   tone?: "default" | "danger";
 };
 
-export type AppRole = "admin" | "manager";
+export type AppRole = "admin" | "manager" | "super_admin" | "institution_admin";
 
 const navByRole: Record<AppRole, NavItem[]> = {
+  super_admin: [
+    { href: "/super-admin/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
+    { href: "/super-admin/oversight", label: "Insights coopératives", icon: LineChart },
+    { href: "/super-admin/institutions", label: "Institutions", icon: Landmark },
+    { href: "/super-admin/cooperatives", label: "Cooperatives", icon: Map },
+    { href: "/super-admin/hierarchy", label: "Hiérarchie", icon: Users },
+  ],
+  institution_admin: [
+    { href: "/institution-admin/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
+    { href: "/institution-admin/oversight", label: "Insights coopératives", icon: LineChart },
+    { href: "/institution-admin/institution", label: "Institution", icon: Landmark },
+    { href: "/institution-admin/cooperatives", label: "Cooperatives", icon: Map },
+  ],
   admin: [
     { href: "/admin/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
     { href: "/admin/cooperatives", label: "Cooperatives", icon: Map },
@@ -88,6 +102,24 @@ const shellMeta: Record<
     initials: string;
   }
 > = {
+  super_admin: {
+    name: "Super Admin",
+    roleLabel: "Super Admin WeeFarm",
+    cooperativeLabel: "Plateforme WeeFarm",
+    navLabel: "Navigation super administration",
+    locationLabel: "Plateforme Senegal",
+    searchPlaceholder: "Rechercher une institution, cooperative...",
+    initials: "SA",
+  },
+  institution_admin: {
+    name: "Institution Admin",
+    roleLabel: "Admin institution",
+    cooperativeLabel: "Institution",
+    navLabel: "Navigation institution",
+    locationLabel: "Plateforme Senegal",
+    searchPlaceholder: "Rechercher une cooperative...",
+    initials: "IA",
+  },
   admin: {
     name: "Mariam Seck",
     roleLabel: "Admin plateforme",
@@ -113,7 +145,14 @@ function cx(...classes: Array<string | false | null | undefined>) {
 }
 
 function buildProfileMenu(role: AppRole, onLogout: () => void): ProfileItem[] {
-  const settingsHref = role === "admin" ? "/admin/parametres" : "/manager/parametres";
+  const settingsHref =
+    role === "manager"
+      ? "/manager/parametres"
+      : role === "admin"
+        ? "/admin/parametres"
+        : role === "institution_admin"
+          ? "/institution-admin/institution"
+          : "/super-admin/dashboard";
 
   return [
     { label: "Mon profil", icon: ProfileIcon, href: settingsHref },
@@ -313,7 +352,7 @@ function SidebarBrand({
             )}
           >
             <p className="text-[20px] font-semibold leading-tight text-white">WeeFarm</p>
-            <p className="text-[11px] tracking-[0.06em] text-[#B6C0B9]">{role === "admin" ? "ADMIN CONSOLE" : "OPERATIONS COOP"}</p>
+            <p className="text-[11px] tracking-[0.06em] text-[#B6C0B9]">{role === "manager" ? "OPERATIONS COOP" : "ADMIN CONSOLE"}</p>
           </div>
         </div>
       </div>
@@ -359,15 +398,19 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
       .join("")
       .toUpperCase();
     const roleLabel =
-      user?.role === "admin"
-        ? "Admin plateforme"
-        : user?.role === "owner"
-          ? "Propriétaire coopérative"
-          : user?.role === "viewer"
-            ? "Observateur coopérative"
-            : user?.role === "manager"
-              ? "Manager cooperative"
-              : base.roleLabel;
+      user?.role === "super_admin"
+        ? "Super Admin WeeFarm"
+        : user?.role === "institution_admin"
+          ? "Admin institution"
+        : user?.role === "admin"
+          ? "Admin plateforme"
+          : user?.role === "owner"
+            ? "Propriétaire coopérative"
+            : user?.role === "viewer"
+              ? "Observateur coopérative"
+              : user?.role === "manager"
+                ? "Manager cooperative"
+                : base.roleLabel;
 
     return {
       ...base,

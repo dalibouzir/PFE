@@ -1,25 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
+import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
+import { ExportActions } from "@/components/ui/table/ExportActions";
+import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
+import { useTableControls } from "@/lib/table/useTableControls";
 import {
   useCancelTreasuryTransaction,
   useCreateTreasuryTransaction,
   useTreasuryStats,
   useTreasuryTransactions,
+  useUploadTreasuryJustificatif,
   useUpdateTreasuryTransaction,
 } from "@/hooks/useTreasury";
 import type {
+  TreasuryTransactionStatus,
   TreasuryTransaction,
   TreasuryTransactionCreate,
   TreasuryTransactionType,
 } from "@/lib/api/types";
 
 type FilterType = "all" | "income" | "expense";
-type SortOrder = "asc" | "desc";
 
 type TreasuryFormValues = {
   transaction_date: string;
@@ -28,7 +34,22 @@ type TreasuryFormValues = {
   label: string;
   amount_fcfa: number;
   note: string;
+  status: TreasuryTransactionStatus;
+  receipt_reference: string;
   source_type: string;
+};
+
+type ExportTreasuryRow = {
+  reference: string;
+  date: string;
+  type: string;
+  category_source: string;
+  label_description: string;
+  amount: string;
+  status: string;
+  related_entity: string;
+  note: string;
+  justificatif: string;
 };
 
 const typeBadge: Record<TreasuryTransactionType, { label: string; tone: "success" | "danger" }> = {
@@ -37,7 +58,9 @@ const typeBadge: Record<TreasuryTransactionType, { label: string; tone: "success
 };
 
 const statusBadge: Record<string, { label: string; tone: "success" | "danger" | "info" }> = {
-  recorded: { label: "Enregistré", tone: "success" },
+  non_enregistre: { label: "Non enregistré", tone: "info" },
+  enregistre_sans_justificatif: { label: "Enregistré sans justificatif", tone: "info" },
+  enregistre_complet: { label: "Enregistré complet", tone: "success" },
   cancelled: { label: "Annulé", tone: "danger" },
 };
 
@@ -53,33 +76,86 @@ function sourceLabel(sourceType: string) {
   if (sourceType === "farmer_advance") return "Avance producteur";
   if (sourceType === "management") return "Gestion";
   if (sourceType === "manual") return "Manuel";
+  if (sourceType === "commercial_invoice") return "Facture commerciale";
   return "Manuel / autre";
 }
 
-function formatExportDate(value: Date) {
-  return value.toLocaleString("fr-FR");
+function treasuryExportColumns(): ExportColumn<ExportTreasuryRow>[] {
+  return [
+    { key: "reference", header: "Référence" },
+    { key: "date", header: "Date" },
+    { key: "type", header: "Type" },
+    { key: "category_source", header: "Catégorie / source" },
+    { key: "label_description", header: "Libellé / description" },
+    { key: "amount", header: "Montant" },
+    { key: "status", header: "Statut" },
+    { key: "related_entity", header: "Entité liée" },
+    { key: "note", header: "Note" },
+    { key: "justificatif", header: "Justificatif" },
+  ];
+}
+
+function mapTransactionsForExport(transactions: TreasuryTransaction[]): ExportTreasuryRow[] {
+  return transactions.map((transaction) => ({
+    reference: transaction.reference,
+    date: formatDate(transaction.transaction_date),
+    type: typeBadge[transaction.type]?.label ?? transaction.type,
+    category_source: `${transaction.category} / ${sourceLabel(transaction.source_type)}`,
+    label_description: transaction.label,
+    amount: formatAmount(transaction.amount_fcfa),
+    status: statusBadge[transaction.status]?.label ?? transaction.status,
+    related_entity: transaction.farmer_name || transaction.source_id || "—",
+    note: transaction.note?.trim() || "—",
+    justificatif: transaction.justificatif_file
+      ? `Fichier: ${transaction.justificatif_file.filename}`
+      : transaction.justificatif_status,
+  }));
 }
 
 export default function TreasuryPage() {
-  const [typeFilter, setTypeFilter] = useState<FilterType>("all");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "farmer_advance" | "management" | "manual">("all");
-  const [search, setSearch] = useState("");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [formOpen, setFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<TreasuryTransaction | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [pendingCancelTransaction, setPendingCancelTransaction] = useState<TreasuryTransaction | null>(null);
+  const [pendingCompleteTransaction, setPendingCompleteTransaction] = useState<TreasuryTransaction | null>(null);
+  const [uploadingTransactionId, setUploadingTransactionId] = useState<string | null>(null);
+
+  const tableControls = useTableControls([
+    {
+      key: "type",
+      label: "Type",
+      options: [
+        { value: "all", label: "Tous types" },
+        { value: "income", label: "Recette" },
+        { value: "expense", label: "Dépense" },
+      ],
+      initialValue: "all",
+    },
+    {
+      key: "source_type",
+      label: "Source",
+      options: [
+        { value: "all", label: "Toutes sources" },
+        { value: "farmer_advance", label: "Avance producteur" },
+        { value: "management", label: "Gestion" },
+        { value: "manual", label: "Manuel / autre" },
+      ],
+      initialValue: "all",
+    },
+  ]);
 
   const transactionsQuery = useTreasuryTransactions({
-    type: typeFilter,
-    source_type: sourceFilter,
-    search,
-    sort: sortOrder,
+    type: tableControls.filters.type as FilterType,
+    source_type: tableControls.filters.source_type,
+    search: tableControls.search,
+    sort: tableControls.sortOrder,
   });
   const statsQuery = useTreasuryStats();
 
   const createTransaction = useCreateTreasuryTransaction();
   const updateTransaction = useUpdateTreasuryTransaction();
   const cancelTransaction = useCancelTreasuryTransaction();
+  const uploadJustificatif = useUploadTreasuryJustificatif();
 
   const { register, handleSubmit, reset, formState } = useForm<TreasuryFormValues>({
     defaultValues: {
@@ -89,12 +165,17 @@ export default function TreasuryPage() {
       label: "",
       amount_fcfa: 0,
       note: "",
+      status: "non_enregistre",
+      receipt_reference: "",
       source_type: "manual",
     },
   });
 
-  const transactions = transactionsQuery.data ?? [];
+  const transactions = useMemo(() => transactionsQuery.data ?? [], [transactionsQuery.data]);
   const stats = statsQuery.data;
+
+  const exportRows = useMemo(() => mapTransactionsForExport(transactions), [transactions]);
+  const exportColumns = useMemo(() => treasuryExportColumns(), []);
 
   const openCreateForm = () => {
     setEditingTransaction(null);
@@ -105,6 +186,8 @@ export default function TreasuryPage() {
       label: "",
       amount_fcfa: 0,
       note: "",
+      status: "non_enregistre",
+      receipt_reference: "",
       source_type: "manual",
     });
     setFormError(null);
@@ -120,6 +203,8 @@ export default function TreasuryPage() {
       label: transaction.label,
       amount_fcfa: transaction.amount_fcfa,
       note: transaction.note ?? "",
+      status: transaction.status,
+      receipt_reference: transaction.receipt_reference ?? "",
       source_type: transaction.source_type || "manual",
     });
     setFormError(null);
@@ -140,6 +225,8 @@ export default function TreasuryPage() {
       label: values.label.trim(),
       amount_fcfa: Number(values.amount_fcfa),
       note: values.note.trim() || null,
+      status: values.status,
+      receipt_reference: values.receipt_reference.trim() || null,
       source_type: values.source_type,
     };
 
@@ -155,83 +242,63 @@ export default function TreasuryPage() {
     }
   });
 
-  const handleCancelTransaction = async (transaction: TreasuryTransaction) => {
-    if (transaction.status === "cancelled") return;
-    if (!window.confirm("Annuler cette transaction ?")) return;
+  const handleUploadJustificatif = async (transaction: TreasuryTransaction, file: File | null) => {
+    if (!file) return;
+    setFormError(null);
+    setUploadingTransactionId(transaction.id);
     try {
-      await cancelTransaction.mutateAsync(transaction.id);
+      await uploadJustificatif.mutateAsync({ id: transaction.id, file });
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible d'uploader le justificatif.");
+    } finally {
+      setUploadingTransactionId(null);
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!pendingCancelTransaction || pendingCancelTransaction.status === "cancelled") {
+      setPendingCancelTransaction(null);
+      return;
+    }
+    try {
+      await cancelTransaction.mutateAsync(pendingCancelTransaction.id);
+      setPendingCancelTransaction(null);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Impossible d'annuler cette transaction.");
     }
   };
 
-  const exportPdf = () => {
-    const now = new Date();
-    const visibleRows = transactions
-      .map((transaction) => {
-        const type = typeBadge[transaction.type]?.label ?? transaction.type;
-        const status = statusBadge[transaction.status]?.label ?? transaction.status;
-        return `
-          <tr>
-            <td>${transaction.reference}</td>
-            <td>${formatDate(transaction.transaction_date)}</td>
-            <td>${type}</td>
-            <td>${transaction.category}</td>
-            <td>${transaction.label}</td>
-            <td>${formatAmount(transaction.amount_fcfa)}</td>
-            <td>${sourceLabel(transaction.source_type)}</td>
-            <td>${status}</td>
-          </tr>
-        `;
-      })
-      .join("");
+  const handleConfirmComplete = async () => {
+    if (!pendingCompleteTransaction) return;
+    try {
+      await updateTransaction.mutateAsync({
+        id: pendingCompleteTransaction.id,
+        payload: { status: "enregistre_complet" },
+      });
+      setPendingCompleteTransaction(null);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible de marquer complet.");
+    }
+  };
 
-    const html = `
-      <!doctype html>
-      <html lang="fr">
-        <head>
-          <meta charset="utf-8" />
-          <title>Rapport de trésorerie</title>
-          <style>
-            body { font-family: Arial, sans-serif; color: #1d2a24; padding: 24px; }
-            h1 { margin: 0 0 8px; color: #0d5a2b; }
-            .meta { margin-bottom: 16px; font-size: 12px; color: #44554c; }
-            .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
-            .kpi { border: 1px solid #d8e6dc; border-radius: 8px; padding: 8px; font-size: 12px; }
-            .kpi b { display: block; margin-top: 4px; font-size: 14px; color: #0f3b25; }
-            table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            th, td { border: 1px solid #dbe8df; padding: 8px; text-align: left; }
-            th { background: #eef7f1; color: #1f4d33; }
-          </style>
-        </head>
-        <body>
-          <h1>Rapport de trésorerie</h1>
-          <div class="meta">Date d'export: ${formatExportDate(now)}</div>
-          <div class="kpis">
-            <div class="kpi">Total donné<b>${formatAmount(stats?.total_given ?? 0)}</b></div>
-            <div class="kpi">Total dépenses<b>${formatAmount(stats?.total_expenses ?? 0)}</b></div>
-            <div class="kpi">Total recettes<b>${formatAmount(stats?.total_income ?? 0)}</b></div>
-            <div class="kpi">Solde actuel<b>${formatAmount(stats?.current_balance ?? 0)}</b></div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Référence</th><th>Date</th><th>Type</th><th>Catégorie</th><th>Libellé</th><th>Montant</th><th>Source</th><th>Statut</th>
-              </tr>
-            </thead>
-            <tbody>${visibleRows || '<tr><td colspan="8">Aucune donnée</td></tr>'}</tbody>
-          </table>
-        </body>
-      </html>
-    `;
+  const runExport = (kind: "csv" | "excel" | "pdf") => {
+    const options = {
+      filename: `tresorerie-${new Date().toISOString().slice(0, 10)}`,
+      title: "Rapport de trésorerie",
+      columns: exportColumns,
+      rows: exportRows,
+      generatedAt: new Date(),
+    };
 
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=900");
-    if (!printWindow) return;
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    if (kind === "csv") {
+      exportRowsToCsv(options);
+      return;
+    }
+    if (kind === "excel") {
+      exportRowsToExcel(options);
+      return;
+    }
+    exportRowsToPdf(options);
   };
 
   return (
@@ -258,39 +325,25 @@ export default function TreasuryPage() {
       </section>
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
-        <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
-          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as FilterType)} className="soft-focus wf-input px-3 py-2.5 text-sm">
-            <option value="all">Tous types</option>
-            <option value="income">Recette</option>
-            <option value="expense">Dépense</option>
-          </select>
-
-          <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as typeof sourceFilter)} className="soft-focus wf-input px-3 py-2.5 text-sm">
-            <option value="all">Toutes sources</option>
-            <option value="farmer_advance">Avance producteur</option>
-            <option value="management">Gestion</option>
-            <option value="manual">Manuel / autre</option>
-          </select>
-
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="soft-focus wf-input px-3 py-2.5 text-sm"
-            placeholder="Rechercher libellé ou producteur..."
-          />
-
-          <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as SortOrder)} className="soft-focus wf-input px-3 py-2.5 text-sm">
-            <option value="desc">Date desc</option>
-            <option value="asc">Date asc</option>
-          </select>
-
-          <button type="button" onClick={openCreateForm} className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold">
-            + Nouvelle transaction
-          </button>
-          <button type="button" onClick={exportPdf} className="soft-focus rounded-xl border border-[var(--line)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface-soft)]">
-            Export PDF
-          </button>
-        </div>
+        <TableToolbar
+          search={tableControls.search}
+          onSearchChange={tableControls.setSearch}
+          searchPlaceholder="Rechercher libellé ou producteur..."
+          filters={tableControls.filterDefinitions}
+          onFilterChange={tableControls.setFilterValue}
+          sortOrder={tableControls.sortOrder}
+          onSortOrderChange={tableControls.setSortOrder}
+          sortAscLabel="Date asc"
+          sortDescLabel="Date desc"
+          rightActions={
+            <>
+              <button type="button" onClick={openCreateForm} className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold">
+                + Nouvelle transaction
+              </button>
+              <ExportActions onCsv={() => runExport("csv")} onExcel={() => runExport("excel")} onPdf={() => runExport("pdf")} />
+            </>
+          }
+        />
       </section>
 
       {transactionsQuery.isLoading ? (
@@ -316,23 +369,25 @@ export default function TreasuryPage() {
           <div className="overflow-x-auto">
             <table className="wf-table min-w-full text-left text-sm">
               <thead>
-                <tr>
+	                <tr>
                   <th className="px-5 py-3.5">Référence</th>
                   <th className="px-5 py-3.5">Date</th>
                   <th className="px-5 py-3.5">Type</th>
                   <th className="px-5 py-3.5">Catégorie</th>
                   <th className="px-5 py-3.5">Libellé</th>
                   <th className="px-5 py-3.5">Montant</th>
-                  <th className="px-5 py-3.5">Source</th>
-                  <th className="px-5 py-3.5">Statut</th>
-                  <th className="px-5 py-3.5">Actions</th>
-                </tr>
+	                  <th className="px-5 py-3.5">Source</th>
+	                  <th className="px-5 py-3.5">Statut</th>
+	                  <th className="px-5 py-3.5">Justificatif</th>
+	                  <th className="px-5 py-3.5">Actions</th>
+	                </tr>
               </thead>
               <tbody>
                 {transactions.map((transaction) => {
                   const type = typeBadge[transaction.type] ?? { label: transaction.type, tone: "danger" as const };
                   const status = statusBadge[transaction.status] ?? { label: transaction.status, tone: "info" as const };
-                  const isFarmerAdvance = transaction.source_type === "farmer_advance";
+	                  const isFarmerAdvance = transaction.source_type === "farmer_advance";
+	                  const canEditOrCancel = !isFarmerAdvance && !transaction.is_locked && transaction.status !== "cancelled";
 
                   return (
                     <tr key={transaction.id}>
@@ -348,27 +403,57 @@ export default function TreasuryPage() {
                       </td>
                       <td className="px-5 py-4">{formatAmount(transaction.amount_fcfa)}</td>
                       <td className="px-5 py-4">{sourceLabel(transaction.source_type)}</td>
-                      <td className="px-5 py-4">
-                        <StatusBadge label={status.label} tone={status.tone} />
-                      </td>
-                      <td className="px-5 py-4">
-                        {isFarmerAdvance ? (
-                          <span className="text-xs text-[var(--muted)]">Géré via avances</span>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <button className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => openEditForm(transaction)} disabled={transaction.status === "cancelled"}>
-                              Modifier
-                            </button>
-                            <button
-                              className="text-xs font-semibold text-[var(--danger)] hover:underline disabled:opacity-40"
-                              onClick={() => handleCancelTransaction(transaction)}
-                              disabled={transaction.status === "cancelled" || cancelTransaction.isPending}
-                            >
-                              Annuler
-                            </button>
-                          </div>
-                        )}
-                      </td>
+	                      <td className="px-5 py-4">
+	                        <StatusBadge label={status.label} tone={status.tone} />
+	                      </td>
+	                      <td className="px-5 py-4 text-xs">
+	                        {transaction.justificatif_file ? (
+	                          <a className="font-semibold text-[var(--primary)] hover:underline" href={transaction.justificatif_file.file_url} target="_blank" rel="noreferrer">
+	                            {transaction.justificatif_file.filename}
+	                          </a>
+	                        ) : (
+	                          <span className="text-[var(--muted)]">{transaction.justificatif_status}</span>
+	                        )}
+	                      </td>
+	                      <td className="px-5 py-4">
+	                        {isFarmerAdvance ? (
+	                          <span className="text-xs text-[var(--muted)]">Géré via avances</span>
+	                        ) : (
+	                          <div className="flex items-center gap-2 flex-wrap">
+	                            <button className="text-xs font-semibold text-[var(--primary)] hover:underline disabled:opacity-40" onClick={() => openEditForm(transaction)} disabled={!canEditOrCancel}>
+	                              Modifier
+	                            </button>
+	                            <button
+	                              className="text-xs font-semibold text-[var(--danger)] hover:underline disabled:opacity-40"
+	                              onClick={() => setPendingCancelTransaction(transaction)}
+	                              disabled={!canEditOrCancel || cancelTransaction.isPending}
+	                            >
+	                              Annuler
+	                            </button>
+	                            <label className={`text-xs font-semibold ${transaction.is_locked ? "text-[var(--muted)]" : "text-[var(--text)]"} ${transaction.is_locked ? "" : "cursor-pointer hover:underline"}`}>
+	                              {uploadingTransactionId === transaction.id ? "Upload..." : "Uploader justificatif"}
+	                              <input
+	                                type="file"
+	                                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+	                                className="hidden"
+	                                disabled={transaction.is_locked || uploadJustificatif.isPending}
+	                                onChange={(event) => {
+	                                  const file = event.target.files?.[0] ?? null;
+	                                  void handleUploadJustificatif(transaction, file);
+	                                  event.currentTarget.value = "";
+	                                }}
+	                              />
+	                            </label>
+	                            <button
+	                              className="text-xs font-semibold text-[var(--success)] hover:underline disabled:opacity-40"
+	                              onClick={() => setPendingCompleteTransaction(transaction)}
+	                              disabled={transaction.is_locked || transaction.status === "cancelled" || updateTransaction.isPending}
+	                            >
+	                              Marquer complet
+	                            </button>
+	                          </div>
+	                        )}
+	                      </td>
                     </tr>
                   );
                 })}
@@ -450,6 +535,22 @@ export default function TreasuryPage() {
             <input {...register("label", { required: "Libellé requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm" placeholder="Transport vers entrepôt" />
           </label>
 
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Statut
+              <select {...register("status", { required: "Statut requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+                <option value="non_enregistre">Non enregistré</option>
+                <option value="enregistre_sans_justificatif">Enregistré sans justificatif</option>
+                <option value="enregistre_complet">Enregistré complet</option>
+              </select>
+            </label>
+
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Référence reçu/facture (optionnel)
+              <input {...register("receipt_reference")} className="wf-input mt-2 h-11 w-full px-3 text-sm" placeholder="INV-2026-001" />
+            </label>
+          </div>
+
           <label className="block text-sm font-medium text-[var(--text)]">
             Note
             <textarea {...register("note")} className="wf-input mt-2 min-h-[96px] w-full px-3 py-2 text-sm" placeholder="Commentaire optionnel..." />
@@ -462,6 +563,31 @@ export default function TreasuryPage() {
           )}
         </form>
       </LiquidGlassModal>
+
+      <ConfirmActionModal
+        open={Boolean(pendingCancelTransaction)}
+        title="Annuler la transaction"
+        message="Cette transaction passera au statut Annulé. Confirmez-vous l'action ?"
+        confirmLabel="Oui, annuler"
+        tone="danger"
+        loading={cancelTransaction.isPending}
+        onCancel={() => setPendingCancelTransaction(null)}
+        onConfirm={() => {
+          void handleConfirmCancel();
+        }}
+      />
+      <ConfirmActionModal
+        open={Boolean(pendingCompleteTransaction)}
+        title="Marquer enregistrement complet"
+        message="Cette action verrouille la transaction. Vérifiez qu'un justificatif ou une référence de reçu/facture est présent."
+        confirmLabel="Oui, marquer complet"
+        tone="primary"
+        loading={updateTransaction.isPending}
+        onCancel={() => setPendingCompleteTransaction(null)}
+        onConfirm={() => {
+          void handleConfirmComplete();
+        }}
+      />
     </main>
   );
 }

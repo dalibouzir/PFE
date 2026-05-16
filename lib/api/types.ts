@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "owner" | "manager" | "viewer";
+export type UserRole = "super_admin" | "institution_admin" | "admin" | "owner" | "manager" | "viewer";
 
 export type UserStatus = "active" | "disabled";
 
@@ -10,6 +10,7 @@ export type AuthUser = {
   role: UserRole;
   status: UserStatus;
   cooperative_id?: string | null;
+  institution_id?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -35,6 +36,7 @@ export type Cooperative = {
   address: string;
   phone: string;
   status: CooperativeStatus;
+  institution_id?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -45,6 +47,89 @@ export type CooperativeCreate = {
   address: string;
   phone: string;
   status?: CooperativeStatus;
+  institution_id?: string | null;
+};
+
+export type CooperativeUpdate = Partial<CooperativeCreate>;
+
+export type InstitutionStatus = "active" | "inactive" | "suspended" | string;
+
+export type Institution = {
+  id: string;
+  name: string;
+  description?: string | null;
+  region?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  status: InstitutionStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InstitutionCreate = {
+  name: string;
+  description?: string | null;
+  region?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  status?: InstitutionStatus;
+};
+
+export type InstitutionUpdate = Partial<InstitutionCreate>;
+
+export type InstitutionWithCooperatives = Institution & {
+  cooperatives: Cooperative[];
+};
+
+export type HierarchyOverview = {
+  institutions: InstitutionWithCooperatives[];
+  independent_cooperatives: Cooperative[];
+};
+
+export type OversightSummary = {
+  total_cooperatives: number;
+  total_users: number;
+  total_managers: number;
+  total_members: number;
+  total_parcels: number;
+  total_lots: number;
+  active_lots: number;
+  ready_post_recolte_lots: number;
+  total_available_stock_kg: number;
+  total_stock_kg: number;
+  avg_loss_rate: number;
+  avg_efficiency_rate: number;
+  low_stock_alerts_count: number;
+  recommendations_count: number;
+};
+
+export type CooperativeOversightRow = {
+  cooperative_id: string;
+  cooperative_name: string;
+  institution_id?: string | null;
+  institution_name?: string | null;
+  status: string;
+  users_count: number;
+  managers_count: number;
+  viewers_count: number;
+  members_count: number;
+  parcels_count: number;
+  lots_count: number;
+  active_lots_count: number;
+  ready_post_recolte_lots_count: number;
+  available_stock_kg: number;
+  total_stock_kg: number;
+  loss_rate: number;
+  efficiency_rate: number;
+  low_stock_alerts_count: number;
+  recommendations_count: number;
+};
+
+export type CooperativeOversightResponse = {
+  summary: OversightSummary;
+  cooperatives: CooperativeOversightRow[];
 };
 
 export type AdminUser = {
@@ -65,6 +150,49 @@ export type ManagerCreate = {
   password: string;
   phone?: string | null;
   cooperative_id: string;
+};
+
+export type CooperativeUserCreateRole = "manager" | "viewer";
+
+export type CooperativeUser = {
+  id: string;
+  full_name: string;
+  email: string;
+  phone?: string | null;
+  role: UserRole;
+  status: UserStatus;
+  cooperative_id?: string | null;
+  institution_id?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CooperativeUserCreate = {
+  full_name: string;
+  email: string;
+  password: string;
+  phone?: string | null;
+  role: CooperativeUserCreateRole;
+};
+
+export type InstitutionAdminCreate = {
+  full_name: string;
+  email: string;
+  password: string;
+  phone?: string | null;
+};
+
+export type InstitutionAdminUser = {
+  id: string;
+  full_name: string;
+  email: string;
+  phone?: string | null;
+  role: "institution_admin" | string;
+  status: UserStatus;
+  cooperative_id?: string | null;
+  institution_id?: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type MemberStatus = "active" | "inactive" | "seasonal";
@@ -238,6 +366,21 @@ export type ProductCreate = {
 
 export type ProductUpdate = Partial<ProductCreate>;
 
+export type UploadedFile = {
+  id: string;
+  cooperative_id: string;
+  entity_type: string;
+  entity_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  storage_path: string;
+  file_url: string;
+  uploaded_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Input = {
   id: string;
   cooperative_id: string;
@@ -249,8 +392,10 @@ export type Input = {
   quantity: number;
   grade: string;
   estimated_value?: number | null;
+  bl_number?: string | null;
   status: string;
   source_type: string;
+  justificatif_file?: UploadedFile | null;
   created_at: string;
   updated_at: string;
 };
@@ -265,6 +410,7 @@ export type InputCreate = {
   unit?: "kg" | "ton";
   grade: string;
   estimated_value?: number | null;
+  bl_number?: string | null;
   status?: string;
   source_type?: string;
 };
@@ -288,12 +434,14 @@ export type FarmerAdvance = {
   source_type: string;
   treasury_transaction_id?: string | null;
   batch_code?: string | null;
+  parcel_name?: string | null;
   product_name?: string | null;
   confirmed_weight_kg?: number | null;
   preharvest_completed_at?: string | null;
   collecte_created?: boolean;
   stock_in_created?: boolean;
   return_status?: string | null;
+  devis_file?: UploadedFile | null;
   created_at: string;
   updated_at: string;
 };
@@ -350,7 +498,11 @@ export type FarmerAdvanceFarmerDetailResponse = {
 };
 
 export type TreasuryTransactionType = "income" | "expense";
-export type TreasuryTransactionStatus = "recorded" | "cancelled";
+export type TreasuryTransactionStatus =
+  | "non_enregistre"
+  | "enregistre_sans_justificatif"
+  | "enregistre_complet"
+  | "cancelled";
 
 export type TreasuryTransaction = {
   id: string;
@@ -362,7 +514,11 @@ export type TreasuryTransaction = {
   label: string;
   amount_fcfa: number;
   note?: string | null;
+  receipt_reference?: string | null;
   status: TreasuryTransactionStatus;
+  is_locked: boolean;
+  justificatif_status: string;
+  justificatif_file?: UploadedFile | null;
   source_type: string;
   source_id?: string | null;
   farmer_id?: string | null;
@@ -378,6 +534,8 @@ export type TreasuryTransactionCreate = {
   label: string;
   amount_fcfa: number;
   note?: string | null;
+  status?: TreasuryTransactionStatus;
+  receipt_reference?: string | null;
   source_type?: string;
   farmer_id?: string | null;
 };
@@ -428,6 +586,48 @@ export type StockAdjustment = {
   amount: number;
 };
 
+
+export type StockMovement = {
+  id: string;
+  cooperative_id: string;
+  cooperative_name?: string | null;
+  movement_reference: string;
+  movement_type: string;
+  action_type: string;
+  source: string;
+  source_label: string;
+  traceability_status: "linked_lot" | "missing_lot" | "legacy_unlinked" | "unresolved_lot";
+  product_id: string;
+  product_name?: string | null;
+  batch_id?: string | null;
+  batch_reference?: string | null;
+  input_id?: string | null;
+  input_reference?: string | null;
+  input_reference_bl?: string | null;
+  member_id?: string | null;
+  member_name?: string | null;
+  workflow_step_id?: string | null;
+  quantity_kg: number;
+  movement_date: string;
+  notes?: string | null;
+  idempotency_key: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StockMovementFilters = {
+  date_from?: string;
+  date_to?: string;
+  product_id?: string;
+  movement_type?: string;
+  source?: string;
+  batch_reference?: string;
+  input_reference?: string;
+  member_id?: string;
+  search?: string;
+  sort?: "asc" | "desc";
+};
+
 export type Batch = {
   id: string;
   cooperative_id: string;
@@ -454,6 +654,9 @@ export type Batch = {
     name: string;
     status: "todo" | "in_progress" | "done";
     updated_at?: string | null;
+    execution_date?: string | null;
+    duration_minutes?: number | null;
+    summary?: string | null;
   }> | null;
   preharvest_completed_at?: string | null;
   confirmed_weight_kg?: number | null;
@@ -499,6 +702,9 @@ export type BatchPreHarvestStepStatusesUpdate = {
     name: string;
     status: "todo" | "in_progress" | "done";
     updated_at?: string | null;
+    execution_date?: string | null;
+    duration_minutes?: number | null;
+    summary?: string | null;
   }>;
 };
 

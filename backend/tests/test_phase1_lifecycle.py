@@ -11,9 +11,15 @@ from app.models.parcel import Parcel
 from app.models.product import Product
 from app.models.stock import Stock
 from app.models.stock_movement import StockMovement
+from app.models.farmer_advance import FarmerAdvance
+from app.models.treasury_transaction import TreasuryTransaction
 from app.models.user import User
 from app.schemas.batch import BatchCreate
+from app.schemas.process_step import ProcessStepCreate
 from app.services import batches as batch_service
+from app.services import inputs as inputs_service
+from app.services import process_steps as process_step_service
+from app.schemas.input import InputCreate
 from app.utils.exceptions import ValidationError
 
 
@@ -82,7 +88,7 @@ def test_estimated_quantity_does_not_increase_stock(db_session):
     assert stock_after.total_stock_kg == pytest.approx(before_total)
 
 
-def test_complete_preharvest_creates_single_collecte_and_stock_in(db_session):
+def test_complete_preharvest_marks_ready_for_collecte_without_creating_stock(db_session):
     manager = _manager(db_session)
     member, parcel, product = _member_parcel_product(db_session, manager)
     batch = batch_service.create_batch(
@@ -106,16 +112,75 @@ def test_complete_preharvest_creates_single_collecte_and_stock_in(db_session):
     assert stock_before is not None
     total_before = stock_before.total_stock_kg
 
-    batch_service.complete_preharvest(db_session, manager, batch.id, confirmed_weight_kg=7200)
-    batch_service.complete_preharvest(db_session, manager, batch.id, confirmed_weight_kg=7200)
+    batch_service.complete_preharvest(db_session, manager, batch.id)
+    batch_service.complete_preharvest(db_session, manager, batch.id)
+
+    refreshed = batch_service.require_batch(db_session, manager, batch.id, with_steps=True)
+    assert refreshed.preharvest_completed_at is not None
+    assert refreshed.confirmed_weight_kg is None
+    serialized = batch_service.serialize_batch(refreshed)
+    assert serialized.collecte_created is False
+    assert serialized.stock_in_created is False
 
     inputs = db_session.scalars(select(Input).where(Input.batch_id == batch.id)).all()
-    assert len(inputs) == 1
-    movements = db_session.scalars(select(StockMovement).where(StockMovement.batch_id == batch.id, StockMovement.movement_type == "in")).all()
-    assert len(movements) == 1
+    assert len(inputs) == 0
+    movements = db_session.scalars(
+        select(StockMovement).where(StockMovement.batch_id == batch.id, StockMovement.movement_type == "in")
+    ).all()
+    assert len(movements) == 0
     stock_after = db_session.scalar(select(Stock).where(Stock.id == stock_before.id))
     assert stock_after is not None
-    assert stock_after.total_stock_kg == pytest.approx(total_before + 7200)
+    assert stock_after.total_stock_kg == pytest.approx(total_before)
+
+
+def test_approve_estimated_charge_creates_farmer_advance_and_treasury_out(db_session):
+    manager = _manager(db_session)
+    member, parcel, product = _member_parcel_product(db_session, manager)
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            member_id=member.id,
+            parcel_id=parcel.id,
+            creation_date=date.today(),
+            initial_qty=1,
+            unit="kg",
+            process_steps=["sorting"],
+            surface_ha=2,
+            expected_yield_kg_per_ha=4000,
+            expected_losses_kg=500,
+            estimated_charge_fcfa=15000,
+        ),
+    )
+
+    refreshed = batch_service.approve_estimated_charge(db_session, manager, batch.id)
+    assert refreshed.charge_approved_at is not None
+
+    advance = db_session.scalar(
+        select(FarmerAdvance).where(
+            FarmerAdvance.cooperative_id == manager.cooperative_id,
+            FarmerAdvance.batch_id == batch.id,
+            FarmerAdvance.source_type == "pre_harvest_charge_approval",
+        )
+    )
+    assert advance is not None
+    assert advance.amount_fcfa == pytest.approx(15000)
+    assert advance.treasury_transaction_id is not None
+
+    treasury_row = db_session.scalar(
+        select(TreasuryTransaction).where(
+            TreasuryTransaction.cooperative_id == manager.cooperative_id,
+            TreasuryTransaction.id == advance.treasury_transaction_id,
+        )
+    )
+    assert treasury_row is not None
+    assert treasury_row.source_type == "farmer_advance"
+    assert treasury_row.farmer_id == member.id
+    assert treasury_row.amount_fcfa == pytest.approx(15000)
+
+    movements = db_session.scalars(select(StockMovement).where(StockMovement.batch_id == batch.id)).all()
+    assert len(movements) == 0
 
 
 def test_activate_preharvest_is_idempotent_and_does_not_change_stock(db_session):
@@ -181,7 +246,7 @@ def test_cannot_activate_completed_preharvest_batch(db_session):
             estimated_charge_fcfa=15000,
         ),
     )
-    batch_service.complete_preharvest(db_session, manager, batch.id, confirmed_weight_kg=7200)
+    batch_service.complete_preharvest(db_session, manager, batch.id)
 
     with pytest.raises(ValidationError, match="already completed|Cannot activate pre-harvest"):
         batch_service.activate_preharvest(db_session, manager, batch.id)
@@ -231,7 +296,7 @@ def test_preharvest_step_statuses_update_allowed_only_when_active(db_session):
     assert len(updated.preharvest_step_statuses) == 2
     assert updated.preharvest_step_statuses[0]["status"] == "done"
 
-    batch_service.complete_preharvest(db_session, manager, batch.id, confirmed_weight_kg=7200)
+    batch_service.complete_preharvest(db_session, manager, batch.id)
     with pytest.raises(ValidationError, match="ready post-harvest"):
         batch_service.update_preharvest_step_statuses(
             db_session,
@@ -315,7 +380,7 @@ def test_complete_preharvest_requires_all_persisted_statuses_done_for_active_lot
         ],
     )
     with pytest.raises(ValidationError, match="all active pre-harvest steps are done"):
-        batch_service.complete_preharvest(db_session, manager, batch.id, confirmed_weight_kg=7200)
+        batch_service.complete_preharvest(db_session, manager, batch.id)
 
     batch_service.update_preharvest_step_statuses(
         db_session,
@@ -326,8 +391,251 @@ def test_complete_preharvest_requires_all_persisted_statuses_done_for_active_lot
             {"index": 1, "name": "transport", "status": "done"},
         ],
     )
-    completed = batch_service.complete_preharvest(db_session, manager, batch.id, confirmed_weight_kg=7200)
+    completed = batch_service.complete_preharvest(db_session, manager, batch.id)
     assert completed.preharvest_completed_at is not None
+
+
+def test_linked_collecte_creates_stock_in_and_updates_batch_weight(db_session):
+    manager = _manager(db_session)
+    member, parcel, product = _member_parcel_product(db_session, manager)
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            member_id=member.id,
+            parcel_id=parcel.id,
+            creation_date=date.today(),
+            initial_qty=1,
+            unit="kg",
+            process_steps=["sorting"],
+            surface_ha=2,
+            expected_yield_kg_per_ha=4000,
+            expected_losses_kg=500,
+            estimated_charge_fcfa=15000,
+        ),
+    )
+    stock_before = db_session.scalar(select(Stock).where(Stock.cooperative_id == manager.cooperative_id, Stock.product_id == product.id))
+    assert stock_before is not None
+    total_before = stock_before.total_stock_kg
+
+    batch_service.complete_preharvest(db_session, manager, batch.id)
+    created = inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            batch_id=batch.id,
+            date=date.today(),
+            quantity=1200,
+            grade="A",
+            status="pending",
+            source_type="manual",
+        ),
+    )
+
+    assert created.batch_id == batch.id
+    assert created.source_type == "lot_linked_collecte"
+    assert created.status.value == "validated"
+    batch_after = batch_service.require_batch(db_session, manager, batch.id, with_steps=True)
+    assert batch_after.confirmed_weight_kg == pytest.approx(1200)
+    assert batch_after.current_qty == pytest.approx(1200)
+    serialized = batch_service.serialize_batch(batch_after)
+    assert serialized.collecte_created is True
+    assert serialized.stock_in_created is True
+
+    movements = db_session.scalars(
+        select(StockMovement).where(StockMovement.batch_id == batch.id, StockMovement.movement_type == "in")
+    ).all()
+    assert len(movements) == 1
+    stock_after = db_session.scalar(select(Stock).where(Stock.id == stock_before.id))
+    assert stock_after is not None
+    assert stock_after.total_stock_kg == pytest.approx(total_before + 1200)
+
+
+def test_duplicate_linked_collecte_for_same_batch_is_rejected(db_session):
+    manager = _manager(db_session)
+    member, parcel, product = _member_parcel_product(db_session, manager)
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            member_id=member.id,
+            parcel_id=parcel.id,
+            creation_date=date.today(),
+            initial_qty=1,
+            unit="kg",
+            process_steps=["sorting"],
+            surface_ha=2,
+            expected_yield_kg_per_ha=4000,
+            expected_losses_kg=500,
+            estimated_charge_fcfa=15000,
+        ),
+    )
+    batch_service.complete_preharvest(db_session, manager, batch.id)
+    inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            batch_id=batch.id,
+            date=date.today(),
+            quantity=1100,
+            grade="A",
+            status="validated",
+            source_type="lot_linked_collecte",
+        ),
+    )
+    with pytest.raises(ValidationError, match="collecte liée existe déjà"):
+        inputs_service.record_input(
+            db_session,
+            manager,
+            InputCreate(
+                member_id=member.id,
+                product_id=product.id,
+                batch_id=batch.id,
+                date=date.today(),
+                quantity=900,
+                grade="A",
+                status="validated",
+                source_type="lot_linked_collecte",
+            ),
+        )
+
+
+def test_delete_linked_collecte_reopens_lot_for_collecte(db_session):
+    manager = _manager(db_session)
+    member, parcel, product = _member_parcel_product(db_session, manager)
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            member_id=member.id,
+            parcel_id=parcel.id,
+            creation_date=date.today(),
+            initial_qty=1,
+            unit="kg",
+            process_steps=["sorting"],
+            surface_ha=2,
+            expected_yield_kg_per_ha=4000,
+            expected_losses_kg=500,
+            estimated_charge_fcfa=15000,
+        ),
+    )
+    batch_service.complete_preharvest(db_session, manager, batch.id)
+    linked = inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            batch_id=batch.id,
+            date=date.today(),
+            quantity=950,
+            grade="A",
+            status="validated",
+            source_type="lot_linked_collecte",
+        ),
+    )
+    batch_with_collecte = batch_service.require_batch(db_session, manager, batch.id, with_steps=True)
+    assert batch_with_collecte.confirmed_weight_kg == pytest.approx(950)
+    assert batch_service.serialize_batch(batch_with_collecte).stock_in_created is True
+
+    deleted = inputs_service.delete_input(db_session, manager, linked.id)
+    assert deleted["id"] == linked.id
+
+    batch_after_delete = batch_service.require_batch(db_session, manager, batch.id, with_steps=True)
+    serialized = batch_service.serialize_batch(batch_after_delete)
+    assert batch_after_delete.preharvest_completed_at is not None
+    assert batch_after_delete.confirmed_weight_kg is None
+    assert batch_after_delete.current_qty == pytest.approx(0.0)
+    assert serialized.collecte_created is False
+    assert serialized.stock_in_created is False
+
+
+def test_delete_linked_collecte_blocked_when_postharvest_started(db_session):
+    manager = _manager(db_session)
+    member, parcel, product = _member_parcel_product(db_session, manager)
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            member_id=member.id,
+            parcel_id=parcel.id,
+            creation_date=date.today(),
+            initial_qty=1,
+            unit="kg",
+            process_steps=["sorting"],
+            surface_ha=2,
+            expected_yield_kg_per_ha=4000,
+            expected_losses_kg=500,
+            estimated_charge_fcfa=15000,
+        ),
+    )
+    batch_service.complete_preharvest(db_session, manager, batch.id)
+    linked = inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            batch_id=batch.id,
+            date=date.today(),
+            quantity=980,
+            grade="A",
+            status="validated",
+            source_type="lot_linked_collecte",
+        ),
+    )
+
+    process_step_service.create_process_step(
+        db_session,
+        manager,
+        ProcessStepCreate(
+            batch_id=batch.id,
+            type="sorting",
+            date=date.today(),
+            loss_value=10,
+            loss_unit="kg",
+            notes="Demarrage post-recolte",
+            duration_minutes=30,
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="Post-récolte du lot est déjà en cours"):
+        inputs_service.delete_input(db_session, manager, linked.id)
+
+
+def test_independent_collecte_without_batch_still_works(db_session):
+    manager = _manager(db_session)
+    member, _parcel, product = _member_parcel_product(db_session, manager)
+    stock_before = db_session.scalar(select(Stock).where(Stock.cooperative_id == manager.cooperative_id, Stock.product_id == product.id))
+    assert stock_before is not None
+    total_before = stock_before.total_stock_kg
+
+    created = inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            batch_id=None,
+            date=date.today(),
+            quantity=350,
+            grade="B",
+            status="validated",
+            source_type="manual",
+        ),
+    )
+    assert created.batch_id is None
+    stock_after = db_session.scalar(select(Stock).where(Stock.id == stock_before.id))
+    assert stock_after is not None
+    assert stock_after.total_stock_kg == pytest.approx(total_before + 350)
 
 
 def test_stop_preharvest_returns_active_lot_to_preparation_when_execution_not_started(db_session):

@@ -2,17 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { ExportActions } from "@/components/ui/table/ExportActions";
+import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import {
   useCancelFarmerAdvance,
   useCreateFarmerAdvance,
   useFarmerAdvanceDetail,
   useFarmerAdvanceSummary,
+  useUploadFarmerAdvanceDevis,
   useUpdateFarmerAdvance,
 } from "@/hooks/useFarmerAdvances";
+import { useBatches } from "@/hooks/useBatches";
 import { useMembers } from "@/hooks/useMembers";
+import { useParcels } from "@/hooks/useParcellesCulture";
+import { useProducts } from "@/hooks/useProducts";
+import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
+import { useTableControls } from "@/lib/table/useTableControls";
 import type { FarmerAdvance, FarmerAdvanceCreate, FarmerAdvanceSummaryRow } from "@/lib/api/types";
 
 type SortByField = "last_modified" | "total_amount";
@@ -20,6 +29,10 @@ type SortOrder = "asc" | "desc";
 
 type AdvanceFormValues = {
   farmer_id: string;
+  batch_id: string;
+  parcel_id: string;
+  product_id: string;
+  source_type: string;
   amount_fcfa: number;
   reason: string;
   advance_date: string;
@@ -56,6 +69,8 @@ const advanceStatusConfig: Record<string, { label: string; tone: "success" | "da
 
 export default function FarmerAdvancesPage() {
   const { data: members = [] } = useMembers();
+  const { data: batches = [] } = useBatches();
+  const { data: products = [] } = useProducts();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortByField>("last_modified");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
@@ -63,6 +78,9 @@ export default function FarmerAdvancesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingAdvance, setEditingAdvance] = useState<FarmerAdvance | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [selectedDevisFile, setSelectedDevisFile] = useState<File | null>(null);
+  const [pendingCancelAdvance, setPendingCancelAdvance] = useState<FarmerAdvance | null>(null);
+  const tableControls = useTableControls([], "desc");
 
   const summaryQuery = useFarmerAdvanceSummary({
     search,
@@ -74,16 +92,24 @@ export default function FarmerAdvancesPage() {
   const createAdvance = useCreateFarmerAdvance();
   const updateAdvance = useUpdateFarmerAdvance();
   const cancelAdvance = useCancelFarmerAdvance();
+  const uploadDevis = useUploadFarmerAdvanceDevis();
 
-  const { register, handleSubmit, reset, formState } = useForm<AdvanceFormValues>({
+  const { register, handleSubmit, reset, formState, watch } = useForm<AdvanceFormValues>({
     defaultValues: {
       farmer_id: "",
+      batch_id: "",
+      parcel_id: "",
+      product_id: "",
+      source_type: "manual",
       amount_fcfa: 0,
       reason: "",
       advance_date: "",
       note: "",
     },
   });
+  const selectedFarmerId = watch("farmer_id");
+  const { data: farmerParcels = [] } = useParcels(selectedFarmerId || null);
+  const farmerBatches = batches.filter((item) => item.member_id === selectedFarmerId);
 
   useEffect(() => {
     if (!formOpen && members.length > 0) {
@@ -96,16 +122,26 @@ export default function FarmerAdvancesPage() {
 
   const rows = summaryQuery.data?.items ?? [];
   const stats = summaryQuery.data?.stats;
+  const visibleRows = rows.filter((row) => {
+    const q = tableControls.search.trim().toLowerCase();
+    if (!q) return true;
+    return row.farmer_name.toLowerCase().includes(q);
+  });
 
   const openCreateForm = () => {
     setEditingAdvance(null);
     reset({
       farmer_id: members[0]?.id ?? "",
+      batch_id: "",
+      parcel_id: "",
+      product_id: "",
+      source_type: "manual",
       amount_fcfa: 0,
       reason: "",
       advance_date: "",
       note: "",
     });
+    setSelectedDevisFile(null);
     setFormError(null);
     setFormOpen(true);
   };
@@ -114,11 +150,16 @@ export default function FarmerAdvancesPage() {
     setEditingAdvance(advance);
     reset({
       farmer_id: advance.farmer_id,
+      batch_id: advance.batch_id ?? "",
+      parcel_id: advance.parcel_id ?? "",
+      product_id: advance.product_id ?? "",
+      source_type: advance.source_type ?? "manual",
       amount_fcfa: advance.amount_fcfa,
       reason: advance.reason,
       advance_date: advance.advance_date,
       note: advance.note ?? "",
     });
+    setSelectedDevisFile(null);
     setFormError(null);
     setFormOpen(true);
   };
@@ -126,22 +167,31 @@ export default function FarmerAdvancesPage() {
   const closeForm = () => {
     setFormOpen(false);
     setFormError(null);
+    setSelectedDevisFile(null);
   };
 
   const submitAdvance = handleSubmit(async (values) => {
     setFormError(null);
     const payload: FarmerAdvanceCreate = {
       farmer_id: values.farmer_id,
+      batch_id: values.batch_id || null,
+      parcel_id: values.parcel_id || null,
+      product_id: values.product_id || null,
+      source_type: values.source_type || "manual",
       amount_fcfa: Number(values.amount_fcfa),
       reason: values.reason.trim(),
       advance_date: values.advance_date,
       note: values.note.trim() || null,
     };
     try {
+      let saved: FarmerAdvance;
       if (editingAdvance) {
-        await updateAdvance.mutateAsync({ id: editingAdvance.id, payload });
+        saved = await updateAdvance.mutateAsync({ id: editingAdvance.id, payload });
       } else {
-        await createAdvance.mutateAsync(payload);
+        saved = await createAdvance.mutateAsync(payload);
+      }
+      if (selectedDevisFile) {
+        await uploadDevis.mutateAsync({ id: saved.id, file: selectedDevisFile });
       }
       closeForm();
     } catch (error) {
@@ -151,13 +201,20 @@ export default function FarmerAdvancesPage() {
 
   const handleCancelAdvance = async (advance: FarmerAdvance) => {
     if (advance.status === "cancelled") return;
-    if (!window.confirm("Annuler cette avance ? La ligne liée en trésorerie sera également annulée.")) return;
     try {
       await cancelAdvance.mutateAsync(advance.id);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Impossible d'annuler cette avance.");
     }
   };
+
+  const exportColumns: ExportColumn<FarmerAdvanceSummaryRow>[] = [
+    { key: "farmer_name", header: "Producteur" },
+    { key: "total_collected_quantity", header: "Quantité collectée totale (kg)", format: (_, row) => row.total_collected_quantity.toLocaleString("fr-FR") },
+    { key: "total_amount_given", header: "Montant total donné (FCFA)", format: (_, row) => row.total_amount_given.toLocaleString("fr-FR") },
+    { key: "cost_per_kg", header: "Coût/kg", format: (_, row) => (row.cost_per_kg === null || row.cost_per_kg === undefined ? "—" : `${row.cost_per_kg.toLocaleString("fr-FR")} FCFA/kg`) },
+    { key: "last_modified", header: "Dernière modification", format: (_, row) => formatDateTime(row.last_modified) },
+  ];
 
   return (
     <main>
@@ -183,13 +240,29 @@ export default function FarmerAdvancesPage() {
       </section>
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
-        <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_auto]">
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="soft-focus wf-input px-3 py-2.5 text-sm"
-            placeholder="Rechercher un producteur..."
-          />
+        <TableToolbar
+          search={tableControls.search}
+          onSearchChange={(value) => {
+            tableControls.setSearch(value);
+            setSearch(value);
+          }}
+          searchPlaceholder="Rechercher un producteur..."
+          sortOrder={tableControls.sortOrder}
+          onSortOrderChange={(value) => {
+            tableControls.setSortOrder(value);
+            setSortOrder(value);
+          }}
+          sortAscLabel="Tri asc"
+          sortDescLabel="Tri desc"
+          rightActions={
+            <ExportActions
+              onCsv={() => exportRowsToCsv({ filename: "avances-producteurs", title: "Avances Producteurs", columns: exportColumns, rows: visibleRows })}
+              onExcel={() => exportRowsToExcel({ filename: "avances-producteurs", title: "Avances Producteurs", columns: exportColumns, rows: visibleRows })}
+              onPdf={() => exportRowsToPdf({ filename: "avances-producteurs", title: "Avances Producteurs", columns: exportColumns, rows: visibleRows })}
+            />
+          }
+        />
+        <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
           <select value={sortBy} onChange={(event) => setSortBy(event.target.value as SortByField)} className="soft-focus wf-input px-3 py-2.5 text-sm">
             <option value="last_modified">Dernière modification</option>
             <option value="total_amount">Montant total donné</option>
@@ -215,7 +288,7 @@ export default function FarmerAdvancesPage() {
             Réessayer
           </button>
         </section>
-      ) : rows.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "90ms" }}>
           <p className="text-sm text-[var(--muted)]">Aucune avance enregistrée pour le moment.</p>
           <button type="button" className="soft-focus wf-btn-primary mt-3 px-4 py-2 text-sm font-semibold" onClick={openCreateForm}>
@@ -237,7 +310,7 @@ export default function FarmerAdvancesPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {visibleRows.map((row) => (
                   <tr key={row.farmer_id}>
                     <td className="px-5 py-4 font-medium text-[var(--text)]">{row.farmer_name}</td>
                     <td className="px-5 py-4">{formatQuantity(row.total_collected_quantity)}</td>
@@ -314,7 +387,9 @@ export default function FarmerAdvancesPage() {
                       <th className="px-4 py-3">Montant</th>
                       <th className="px-4 py-3">Motif</th>
                       <th className="px-4 py-3">Lot / produit lié</th>
+                      <th className="px-4 py-3">Parcelle</th>
                       <th className="px-4 py-3">Retour produit</th>
+                      <th className="px-4 py-3">Devis</th>
                       <th className="px-4 py-3">Note</th>
                       <th className="px-4 py-3">Créé le / Modifié le</th>
                       <th className="px-4 py-3">Statut</th>
@@ -333,6 +408,7 @@ export default function FarmerAdvancesPage() {
                             <p className="font-semibold text-[var(--text)]">{advance.batch_code ?? "—"}</p>
                             <p className="text-[var(--muted)]">{advance.product_name ?? "—"}</p>
                           </td>
+                          <td className="px-4 py-3 text-xs">{advance.parcel_name || "—"}</td>
                           <td className="px-4 py-3 text-xs">
                             <p className="font-semibold text-[var(--text)]">
                               {advance.confirmed_weight_kg !== null && advance.confirmed_weight_kg !== undefined
@@ -347,6 +423,15 @@ export default function FarmerAdvancesPage() {
                                 {advance.stock_in_created ? "Stock IN créé" : ""}
                               </p>
                             ) : null}
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            {advance.devis_file ? (
+                              <a className="font-semibold text-[var(--primary)] hover:underline" href={advance.devis_file.file_url} target="_blank" rel="noreferrer">
+                                {advance.devis_file.filename}
+                              </a>
+                            ) : (
+                              <span className="text-[var(--muted)]">Absent</span>
+                            )}
                           </td>
                           <td className="px-4 py-3">{advance.note?.trim() ? advance.note : "—"}</td>
                           <td className="px-4 py-3 text-xs">
@@ -363,7 +448,7 @@ export default function FarmerAdvancesPage() {
                               </button>
                               <button
                                 className="text-xs font-semibold text-[var(--danger)] hover:underline disabled:opacity-40"
-                                onClick={() => handleCancelAdvance(advance)}
+                                onClick={() => setPendingCancelAdvance(advance)}
                                 disabled={advance.status === "cancelled" || cancelAdvance.isPending}
                               >
                                 Annuler
@@ -394,8 +479,8 @@ export default function FarmerAdvancesPage() {
             <button type="button" className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold" onClick={closeForm}>
               Annuler
             </button>
-            <button type="submit" form="advance-form" className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold" disabled={formState.isSubmitting}>
-              {formState.isSubmitting ? "Enregistrement..." : "Enregistrer"}
+            <button type="submit" form="advance-form" className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold" disabled={formState.isSubmitting || uploadDevis.isPending}>
+              {formState.isSubmitting || uploadDevis.isPending ? "Enregistrement..." : "Enregistrer"}
             </button>
           </div>
         }
@@ -413,6 +498,47 @@ export default function FarmerAdvancesPage() {
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Lot (optionnel)
+            <select {...register("batch_id")} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+              <option value="">Aucun lot</option>
+              {farmerBatches.map((batch) => (
+                <option key={batch.id} value={batch.id}>
+                  {batch.code}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Parcelle (optionnel)
+            <select {...register("parcel_id")} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+              <option value="">Aucune parcelle</option>
+              {farmerParcels.map((parcel) => (
+                <option key={parcel.id} value={parcel.id}>
+                  {parcel.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Produit (optionnel)
+            <select {...register("product_id")} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+              <option value="">Aucun produit</option>
+              {products.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Source
+            <input {...register("source_type")} className="wf-input mt-2 h-11 w-full px-3 text-sm" placeholder="manual" />
           </label>
 
           <label className="block text-sm font-medium text-[var(--text)]">
@@ -446,6 +572,16 @@ export default function FarmerAdvancesPage() {
             <textarea {...register("note")} className="wf-input mt-2 min-h-[96px] w-full px-3 py-2 text-sm" placeholder="Commentaire optionnel..." />
           </label>
 
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Devis (optionnel, PDF/JPG/JPEG/PNG/WEBP)
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+              className="wf-input mt-2 h-11 w-full px-3 text-sm"
+              onChange={(event) => setSelectedDevisFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+
           {formError && (
             <p className="rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">
               {formError}
@@ -459,6 +595,19 @@ export default function FarmerAdvancesPage() {
           {formError}
         </section>
       )}
+      <ConfirmActionModal
+        open={Boolean(pendingCancelAdvance)}
+        title="Annuler l'avance"
+        message="La ligne liée en trésorerie sera également annulée."
+        confirmLabel="Annuler l'avance"
+        loading={cancelAdvance.isPending}
+        onCancel={() => setPendingCancelAdvance(null)}
+        onConfirm={() => {
+          if (!pendingCancelAdvance) return;
+          void handleCancelAdvance(pendingCancelAdvance);
+          setPendingCancelAdvance(null);
+        }}
+      />
     </main>
   );
 }

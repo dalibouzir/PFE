@@ -1,7 +1,7 @@
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_manager
@@ -46,3 +46,14 @@ def update_input(
 def delete_input(input_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
     deleted = input_service.delete_input(db, current_manager, input_id)
     return InputRead.model_validate(deleted)
+
+
+@router.post("/{input_id}/justificatif", response_model=InputRead, summary="Upload collecte justificatif file.")
+def upload_input_justificatif(
+    input_id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_manager=Depends(get_current_manager),
+):
+    input_record = input_service.upload_input_justificatif(db, current_manager, input_id, file)
+    return InputRead.model_validate(input_record)

@@ -33,10 +33,17 @@ class TreasuryTransaction(TimestampMixin, Base):
     label: Mapped[str] = mapped_column(String(255), nullable=False)
     amount_fcfa: Mapped[float] = mapped_column(Float, nullable=False)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    justificatif_file_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid,
+        ForeignKey("uploaded_files.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    receipt_reference: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     status: Mapped[TreasuryTransactionStatus] = mapped_column(
         Enum(TreasuryTransactionStatus, native_enum=False),
         nullable=False,
-        default=TreasuryTransactionStatus.RECORDED,
+        default=TreasuryTransactionStatus.NON_ENREGISTRE,
     )
     source_type: Mapped[str] = mapped_column(String(64), nullable=False, default="manual", index=True)
     source_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True, index=True)
@@ -50,3 +57,4 @@ class TreasuryTransaction(TimestampMixin, Base):
     cooperative: Mapped["Cooperative"] = relationship(back_populates="treasury_transactions")
     farmer: Mapped[Optional["Member"]] = relationship(back_populates="treasury_transactions", foreign_keys=[farmer_id])
     farmer_advance: Mapped[Optional["FarmerAdvance"]] = relationship(back_populates="treasury_transaction", uselist=False)
+    justificatif_file: Mapped[Optional["UploadedFile"]] = relationship(foreign_keys=[justificatif_file_id])

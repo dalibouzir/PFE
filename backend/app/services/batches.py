@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session, selectinload
 
 from app.models.batch import Batch
-from app.models.enums import BatchStatus, InputStatus
+from app.models.enums import BatchStatus
 from app.models.input import Input
 from app.models.member import Member
 from app.models.parcel import Parcel
@@ -16,15 +16,14 @@ from app.models.user import User
 from app.models.mixins import current_utc
 from app.schemas.batch import BatchRead
 from app.schemas.farmer_advance import FarmerAdvanceCreate
-from app.schemas.input import InputCreate
 from app.services import farmer_advances as farmer_advance_service
-from app.services import inputs as inputs_service
 from app.services.helpers import from_kg, get_manager_cooperative_id, normalize_mass_unit, normalize_product_code, round_metric, to_kg
 from app.services.rag_reindex_hooks import reindex_batch_if_needed
 from app.services.stocks import apply_processed_output_delta, release_reserved_stock_for_lot, reserve_stock_for_lot
 from app.utils.exceptions import ConflictError, NotFoundError, ValidationError
 
 ALLOWED_PREHARVEST_STEP_STATUSES = {"todo", "in_progress", "done"}
+LINKED_COLLECTE_SOURCES = {"lot_linked_collecte", "pre_harvest_confirmed_weight"}
 
 
 def require_batch(db: Session, manager: User, batch_id, with_steps: bool = False) -> Batch:
@@ -88,10 +87,21 @@ def serialize_batch(batch: Batch) -> BatchRead:
         db = object_session(batch)
         if db is not None:
             collecte = db.scalar(
-                select(Input).where(Input.cooperative_id == batch.cooperative_id, Input.batch_id == batch.id, Input.source_type == "pre_harvest_confirmed_weight")
+                select(Input).where(
+                    Input.cooperative_id == batch.cooperative_id,
+                    Input.batch_id == batch.id,
+                    Input.source_type.in_(tuple(LINKED_COLLECTE_SOURCES)),
+                )
             )
             stock_in_exists = (
-                db.scalar(select(StockMovement.id).where(StockMovement.cooperative_id == batch.cooperative_id, StockMovement.batch_id == batch.id, StockMovement.movement_type == "in", StockMovement.source == "pre_harvest_confirmed_weight").limit(1))
+                db.scalar(
+                    select(StockMovement.id).where(
+                        StockMovement.cooperative_id == batch.cooperative_id,
+                        StockMovement.batch_id == batch.id,
+                        StockMovement.movement_type == "in",
+                        StockMovement.source.in_(tuple(LINKED_COLLECTE_SOURCES)),
+                    ).limit(1)
+                )
                 is not None
             )
     except Exception:
@@ -316,6 +326,9 @@ def _build_default_preharvest_step_statuses(ordered_steps: list[str]) -> list[di
             "name": step.strip(),
             "status": "todo",
             "updated_at": None,
+            "execution_date": None,
+            "duration_minutes": None,
+            "summary": None,
         }
         for index, step in enumerate(ordered_steps)
         if step and step.strip()
@@ -334,12 +347,31 @@ def _normalize_preharvest_step_statuses(statuses: list) -> list[dict]:
         if status not in ALLOWED_PREHARVEST_STEP_STATUSES:
             raise ValidationError("Invalid pre-harvest step status value.")
         updated_at = raw.updated_at if hasattr(raw, "updated_at") else raw.get("updated_at")
+        execution_date = raw.execution_date if hasattr(raw, "execution_date") else raw.get("execution_date")
+        duration_minutes = raw.duration_minutes if hasattr(raw, "duration_minutes") else raw.get("duration_minutes")
+        summary = raw.summary if hasattr(raw, "summary") else raw.get("summary")
+        if duration_minutes is not None:
+            try:
+                duration_minutes = int(duration_minutes)
+            except (TypeError, ValueError):
+                raise ValidationError("Invalid pre-harvest step duration value.")
+            if duration_minutes < 0:
+                raise ValidationError("Invalid pre-harvest step duration value.")
+        if summary is not None:
+            summary = str(summary).strip()
+            if not summary:
+                summary = None
         normalized.append(
             {
                 "index": index,
                 "name": name,
                 "status": status,
                 "updated_at": updated_at.isoformat() if hasattr(updated_at, "isoformat") and updated_at is not None else None,
+                "execution_date": execution_date.isoformat()
+                if hasattr(execution_date, "isoformat") and execution_date is not None
+                else (str(execution_date).strip() if execution_date else None),
+                "duration_minutes": duration_minutes,
+                "summary": summary,
             }
         )
     return sorted(normalized, key=lambda item: item["index"])
@@ -348,7 +380,7 @@ def update_preharvest_step_statuses(db: Session, manager: User, batch_id, status
     batch = require_batch(db, manager, batch_id, with_steps=True)
     if batch.preharvest_activated_at is None:
         raise ValidationError("Cannot update pre-harvest step statuses while lot is in preparation.")
-    if batch.preharvest_completed_at is not None and batch.confirmed_weight_kg is not None:
+    if batch.preharvest_completed_at is not None:
         raise ValidationError("Cannot update pre-harvest step statuses for a ready post-harvest lot.")
     normalized = _normalize_preharvest_step_statuses(statuses)
     batch.preharvest_step_statuses = normalized
@@ -363,10 +395,8 @@ def _all_preharvest_statuses_done(batch: Batch) -> bool:
     return all(str(item.get("status", "")).lower() == "done" for item in statuses)
 
 
-def complete_preharvest(db: Session, manager: User, batch_id, confirmed_weight_kg: float, notes: str | None = None, collecte_date: date | None = None):
+def complete_preharvest(db: Session, manager: User, batch_id, notes: str | None = None, collecte_date: date | None = None):
     batch = require_batch(db, manager, batch_id, with_steps=True)
-    if confirmed_weight_kg <= 0:
-        raise ValidationError("Confirmed real weight must be greater than zero.")
     if batch.preharvest_activated_at is not None and not _all_preharvest_statuses_done(batch):
         raise ValidationError("Cannot complete pre-harvest before all active pre-harvest steps are done.")
 
@@ -381,45 +411,13 @@ def complete_preharvest(db: Session, manager: User, batch_id, confirmed_weight_k
         select(Input).where(
             Input.cooperative_id == batch.cooperative_id,
             Input.batch_id == batch.id,
-            Input.source_type == "pre_harvest_confirmed_weight",
+            Input.source_type.in_(tuple(LINKED_COLLECTE_SOURCES)),
         )
     )
-    if existing_collecte is None:
-        if batch.member_id is None:
-            raise ValidationError("Farmer/member is required to create collecte input.")
-        created_input = inputs_service.record_input(
-            db,
-            manager,
-            InputCreate(
-                member_id=batch.member_id,
-                product_id=batch.product_id,
-                batch_id=batch.id,
-                date=collecte_date or date.today(),
-                quantity=confirmed_weight_kg,
-                grade="A",
-                estimated_value=None,
-                status=InputStatus.VALIDATED.value,
-                source_type="pre_harvest_confirmed_weight",
-            ),
-        )
-        movement = StockMovement(
-            cooperative_id=batch.cooperative_id,
-            product_id=batch.product_id,
-            batch_id=batch.id,
-            input_id=created_input.id,
-            movement_type="in",
-            action_type="collecte",
-            source="pre_harvest_confirmed_weight",
-            quantity_kg=round_metric(confirmed_weight_kg),
-            movement_date=collecte_date or date.today(),
-            idempotency_key=f"batch:{batch.id}:preharvest:stock_in",
-            notes=notes,
-        )
-        db.add(movement)
-
-    batch.preharvest_completed_at = batch.preharvest_completed_at or batch.updated_at
-    batch.confirmed_weight_kg = round_metric(confirmed_weight_kg)
-    batch.current_qty = round_metric(confirmed_weight_kg)
+    batch.preharvest_completed_at = batch.preharvest_completed_at or current_utc()
+    if existing_collecte is not None:
+        batch.confirmed_weight_kg = round_metric(existing_collecte.quantity)
+        batch.current_qty = round_metric(existing_collecte.quantity)
     batch.status_note = notes.strip() if notes else batch.status_note
     db.commit()
     db.refresh(batch)
@@ -503,7 +501,7 @@ def delete_batch(db: Session, manager: User, batch_id):
         select(Input).where(
             Input.cooperative_id == batch.cooperative_id,
             Input.batch_id == batch.id,
-            Input.source_type == "pre_harvest_confirmed_weight",
+            Input.source_type.in_(tuple(LINKED_COLLECTE_SOURCES)),
         )
     ).all()
     for input_row in input_rows:

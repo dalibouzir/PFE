@@ -9,6 +9,7 @@ from app.models.farmer_advance import FarmerAdvance
 from app.models.field import Field
 from app.models.global_charge import GlobalCharge
 from app.models.input import Input
+from app.models.institution import Institution
 from app.models.member import Member
 from app.models.parcel import Parcel
 from app.models.pre_harvest_step import PreHarvestStep
@@ -19,6 +20,7 @@ from app.models.recommendation import Recommendation
 from app.models.stock import Stock
 from app.models.stock_movement import StockMovement
 from app.models.treasury_transaction import TreasuryTransaction
+from app.models.uploaded_file import UploadedFile
 from app.models.user import User
 
 __all__ = [
@@ -36,6 +38,7 @@ __all__ = [
     "Field",
     "GlobalCharge",
     "Input",
+    "Institution",
     "Member",
     "Parcel",
     "PreHarvestStep",
@@ -47,5 +50,6 @@ __all__ = [
     "Stock",
     "StockMovement",
     "TreasuryTransaction",
+    "UploadedFile",
     "User",
 ]

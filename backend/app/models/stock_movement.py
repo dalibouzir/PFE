@@ -21,6 +21,7 @@ class StockMovement(TimestampMixin, Base):
     product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("batches.id", ondelete="SET NULL"), nullable=True, index=True)
     input_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("inputs.id", ondelete="SET NULL"), nullable=True, index=True)
+    process_step_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("process_steps.id", ondelete="SET NULL"), nullable=True, index=True)
     workflow_step_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("process_steps.id", ondelete="SET NULL"), nullable=True, index=True)
     movement_type: Mapped[str] = mapped_column(String(16), nullable=False)
     action_type: Mapped[str] = mapped_column(String(80), nullable=False)

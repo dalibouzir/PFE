@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.uploaded_file import UploadedFileRead
+
 
 class TreasuryTransactionCreate(BaseModel):
     transaction_date: date
@@ -14,6 +16,8 @@ class TreasuryTransactionCreate(BaseModel):
     label: str = Field(min_length=1, max_length=255)
     amount_fcfa: float = Field(gt=0)
     note: Optional[str] = Field(default=None, max_length=2000)
+    status: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    receipt_reference: Optional[str] = Field(default=None, max_length=120)
     source_type: str = Field(default="manual", min_length=1, max_length=64)
     farmer_id: Optional[UUID] = None
 
@@ -27,6 +31,8 @@ class TreasuryTransactionUpdate(BaseModel):
     note: Optional[str] = Field(default=None, max_length=2000)
     source_type: Optional[str] = Field(default=None, min_length=1, max_length=64)
     farmer_id: Optional[UUID] = None
+    status: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    receipt_reference: Optional[str] = Field(default=None, max_length=120)
 
 
 class TreasuryTransactionRead(BaseModel):
@@ -39,7 +45,11 @@ class TreasuryTransactionRead(BaseModel):
     label: str
     amount_fcfa: float
     note: Optional[str]
+    receipt_reference: Optional[str]
     status: str
+    is_locked: bool
+    justificatif_status: str
+    justificatif_file: Optional[UploadedFileRead]
     source_type: str
     source_id: Optional[UUID]
     farmer_id: Optional[UUID]

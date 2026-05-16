@@ -9,6 +9,7 @@ from app.models.farmer_advance import FarmerAdvance
 from app.models.global_charge import GlobalCharge
 from app.models.input import Input
 from app.models.member import Member
+from app.models.parcel import Parcel
 from app.models.product import Product
 from app.models.stock_movement import StockMovement
 from app.models.user import User
@@ -22,6 +23,7 @@ from app.schemas.farmer_advance import (
 )
 from app.services.helpers import get_manager_cooperative_id, round_metric
 from app.services import treasury as treasury_service
+from app.services import uploads as upload_service
 from app.utils.exceptions import NotFoundError, ValidationError
 
 
@@ -47,6 +49,42 @@ def _compute_cost_per_kg(total_amount: float, total_quantity: float):
     return round_metric(total_amount / total_quantity)
 
 
+def _require_batch_in_scope(db: Session, cooperative_id, batch_id):
+    batch = db.scalar(select(Batch).where(Batch.id == batch_id, Batch.cooperative_id == cooperative_id))
+    if batch is None:
+        raise NotFoundError("Lot non trouvé dans la coopérative courante.")
+    return batch
+
+
+def _require_parcel_in_scope(db: Session, cooperative_id, parcel_id):
+    parcel = db.scalar(select(Parcel).where(Parcel.id == parcel_id, Parcel.cooperative_id == cooperative_id))
+    if parcel is None:
+        raise NotFoundError("Parcelle non trouvée dans la coopérative courante.")
+    return parcel
+
+
+def _require_product_in_scope(db: Session, cooperative_id, product_id):
+    product = db.scalar(select(Product).where(Product.id == product_id, Product.cooperative_id == cooperative_id))
+    if product is None:
+        raise NotFoundError("Produit non trouvé dans la coopérative courante.")
+    return product
+
+
+def _validate_traceability_links(db: Session, cooperative_id, farmer: Member, *, batch_id, parcel_id, product_id):
+    if batch_id is not None:
+        batch = _require_batch_in_scope(db, cooperative_id, batch_id)
+        if batch.member_id is not None and batch.member_id != farmer.id:
+            raise ValidationError("Le lot sélectionné n'appartient pas au producteur choisi.")
+        if product_id is not None and batch.product_id != product_id:
+            raise ValidationError("Le produit ne correspond pas au lot sélectionné.")
+    if parcel_id is not None:
+        parcel = _require_parcel_in_scope(db, cooperative_id, parcel_id)
+        if parcel.member_id != farmer.id:
+            raise ValidationError("La parcelle sélectionnée n'appartient pas au producteur choisi.")
+    if product_id is not None:
+        _require_product_in_scope(db, cooperative_id, product_id)
+
+
 def _serialize_advance(db: Session, advance: FarmerAdvance) -> FarmerAdvanceRead:
     batch = None
     if advance.batch_id is not None:
@@ -61,6 +99,12 @@ def _serialize_advance(db: Session, advance: FarmerAdvance) -> FarmerAdvanceRead
             select(Product).where(Product.id == product_id, Product.cooperative_id == advance.cooperative_id)
         )
         product_name = product.name if product is not None else None
+    parcel_name = None
+    if advance.parcel_id is not None:
+        parcel = db.scalar(
+            select(Parcel).where(Parcel.id == advance.parcel_id, Parcel.cooperative_id == advance.cooperative_id)
+        )
+        parcel_name = parcel.name if parcel is not None else None
 
     collecte_created = False
     stock_in_created = False
@@ -70,7 +114,7 @@ def _serialize_advance(db: Session, advance: FarmerAdvance) -> FarmerAdvanceRead
                 select(Input.id).where(
                     Input.cooperative_id == advance.cooperative_id,
                     Input.batch_id == batch.id,
-                    Input.source_type == "pre_harvest_confirmed_weight",
+                    Input.source_type.in_(("lot_linked_collecte", "pre_harvest_confirmed_weight")),
                 ).limit(1)
             )
             is not None
@@ -81,7 +125,7 @@ def _serialize_advance(db: Session, advance: FarmerAdvance) -> FarmerAdvanceRead
                     StockMovement.cooperative_id == advance.cooperative_id,
                     StockMovement.batch_id == batch.id,
                     StockMovement.movement_type == "in",
-                    StockMovement.source == "pre_harvest_confirmed_weight",
+                    StockMovement.source.in_(("lot_linked_collecte", "pre_harvest_confirmed_weight")),
                 ).limit(1)
             )
             is not None
@@ -109,12 +153,14 @@ def _serialize_advance(db: Session, advance: FarmerAdvance) -> FarmerAdvanceRead
         source_type=advance.source_type,
         treasury_transaction_id=advance.treasury_transaction_id,
         batch_code=batch.code if batch is not None else None,
+        parcel_name=parcel_name,
         product_name=product_name,
         confirmed_weight_kg=batch.confirmed_weight_kg if batch is not None else None,
         preharvest_completed_at=batch.preharvest_completed_at if batch is not None else None,
         collecte_created=collecte_created,
         stock_in_created=stock_in_created,
         return_status=return_status,
+        devis_file=advance.devis_file,
         created_at=advance.created_at,
         updated_at=advance.updated_at,
     )
@@ -160,6 +206,14 @@ def _validated_collecte_subquery(cooperative_id):
 def create_farmer_advance(db: Session, manager: User, payload) -> FarmerAdvanceRead:
     cooperative_id = get_manager_cooperative_id(manager)
     farmer = _require_farmer_in_scope(db, cooperative_id, payload.farmer_id)
+    _validate_traceability_links(
+        db,
+        cooperative_id,
+        farmer,
+        batch_id=payload.batch_id,
+        parcel_id=payload.parcel_id,
+        product_id=payload.product_id,
+    )
 
     advance = FarmerAdvance(
         cooperative_id=cooperative_id,
@@ -202,9 +256,28 @@ def update_farmer_advance(db: Session, manager: User, advance_id, payload) -> Fa
 
     data = payload.model_dump(exclude_unset=True)
     farmer = _require_farmer_in_scope(db, cooperative_id, data["farmer_id"]) if "farmer_id" in data else _require_farmer_in_scope(db, cooperative_id, advance.farmer_id)
+    next_batch_id = data["batch_id"] if "batch_id" in data else advance.batch_id
+    next_parcel_id = data["parcel_id"] if "parcel_id" in data else advance.parcel_id
+    next_product_id = data["product_id"] if "product_id" in data else advance.product_id
+    _validate_traceability_links(
+        db,
+        cooperative_id,
+        farmer,
+        batch_id=next_batch_id,
+        parcel_id=next_parcel_id,
+        product_id=next_product_id,
+    )
 
     if "farmer_id" in data and data["farmer_id"] is not None:
         advance.farmer_id = farmer.id
+    if "batch_id" in data:
+        advance.batch_id = data["batch_id"]
+    if "parcel_id" in data:
+        advance.parcel_id = data["parcel_id"]
+    if "product_id" in data:
+        advance.product_id = data["product_id"]
+    if "source_type" in data and data["source_type"] is not None:
+        advance.source_type = data["source_type"].strip() or "manual"
     if "amount_fcfa" in data and data["amount_fcfa"] is not None:
         advance.amount_fcfa = round_metric(data["amount_fcfa"])
     if "reason" in data and data["reason"] is not None:
@@ -238,6 +311,21 @@ def update_farmer_advance(db: Session, manager: User, advance_id, payload) -> Fa
             note=advance.note,
         )
 
+    db.commit()
+    db.refresh(advance)
+    return _serialize_advance(db, advance)
+
+
+def upload_farmer_advance_devis(db: Session, manager: User, advance_id, file) -> FarmerAdvanceRead:
+    cooperative_id = get_manager_cooperative_id(manager)
+    advance = _require_advance(db, cooperative_id, advance_id)
+    uploaded = upload_service.save_farmer_advance_devis(
+        db,
+        manager,
+        entity_id=advance.id,
+        file=file,
+    )
+    advance.devis_file_id = uploaded.id
     db.commit()
     db.refresh(advance)
     return _serialize_advance(db, advance)

@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.base import ORMModel
+from app.schemas.uploaded_file import UploadedFileRead
 
 
 class FarmerAdvanceCreate(BaseModel):
@@ -23,6 +24,10 @@ class FarmerAdvanceCreate(BaseModel):
 
 class FarmerAdvanceUpdate(BaseModel):
     farmer_id: Optional[UUID] = None
+    batch_id: Optional[UUID] = None
+    parcel_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
+    source_type: Optional[str] = Field(default=None, max_length=64)
     amount_fcfa: Optional[float] = Field(default=None, gt=0)
     reason: Optional[str] = Field(default=None, min_length=1, max_length=255)
     advance_date: Optional[date] = None
@@ -44,12 +49,14 @@ class FarmerAdvanceRead(ORMModel):
     source_type: str
     treasury_transaction_id: Optional[UUID]
     batch_code: Optional[str] = None
+    parcel_name: Optional[str] = None
     product_name: Optional[str] = None
     confirmed_weight_kg: Optional[float] = None
     preharvest_completed_at: Optional[datetime] = None
     collecte_created: bool = False
     stock_in_created: bool = False
     return_status: Optional[str] = None
+    devis_file: Optional[UploadedFileRead] = None
     created_at: datetime
     updated_at: datetime
 

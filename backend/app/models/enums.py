@@ -2,6 +2,8 @@ from enum import Enum
 
 
 class UserRole(str, Enum):
+    SUPER_ADMIN = "super_admin"
+    INSTITUTION_ADMIN = "institution_admin"
     ADMIN = "admin"
     OWNER = "owner"
     MANAGER = "manager"
@@ -42,8 +44,11 @@ class TreasuryTransactionType(str, Enum):
 
 
 class TreasuryTransactionStatus(str, Enum):
-    RECORDED = "recorded"
+    NON_ENREGISTRE = "non_enregistre"
+    ENREGISTRE_SANS_JUSTIFICATIF = "enregistre_sans_justificatif"
+    ENREGISTRE_COMPLET = "enregistre_complet"
     CANCELLED = "cancelled"
+    RECORDED = "RECORDED"
 
 
 class BatchStatus(str, Enum):

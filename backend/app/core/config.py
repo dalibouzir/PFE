@@ -74,8 +74,15 @@ class Settings(BaseSettings):
 
     seed_admin_email: str = "admin@weefarm.local"
     seed_admin_password: str = "Admin123!"
+    seed_super_admin_email: str = "superadmin@weefarm.local"
+    seed_super_admin_password: str = "SuperAdmin123!"
+    seed_institution_admin_email: str = "institution.admin@weefarm.local"
+    seed_institution_admin_password: str = "InstitutionAdmin123!"
+    seed_institution_name: str = "Institution Demo WeeFarm"
     seed_manager_email: str = "manager@weefarm.local"
     seed_manager_password: str = "Manager123!"
+
+    uploads_dir: str = str(BACKEND_DIR / "uploads")
 
     # Environment parity properties
     @property

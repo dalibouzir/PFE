@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.base import ORMModel
+from app.schemas.uploaded_file import UploadedFileRead
 
 
 class InputCreate(BaseModel):
@@ -20,6 +21,7 @@ class InputCreate(BaseModel):
     unit: Optional[str] = Field(default=None, min_length=1, max_length=16)
     grade: str = Field(min_length=1, max_length=40)
     estimated_value: Optional[float] = Field(default=None, ge=0)
+    bl_number: Optional[str] = Field(default=None, max_length=80)
     status: str = Field(default="pending")
     source_type: Optional[str] = Field(default="manual", max_length=64)
 
@@ -34,6 +36,7 @@ class InputUpdate(BaseModel):
     unit: Optional[str] = Field(default=None, min_length=1, max_length=16)
     grade: Optional[str] = Field(default=None, min_length=1, max_length=40)
     estimated_value: Optional[float] = Field(default=None, ge=0)
+    bl_number: Optional[str] = Field(default=None, max_length=80)
     status: Optional[str] = None
     source_type: Optional[str] = Field(default=None, max_length=64)
 
@@ -49,7 +52,9 @@ class InputRead(ORMModel):
     quantity: float
     grade: str
     estimated_value: Optional[float]
+    bl_number: Optional[str]
     status: str
     source_type: str
     created_at: datetime_type
+    justificatif_file: Optional[UploadedFileRead] = None
     updated_at: datetime_type

@@ -81,13 +81,12 @@ def update_preharvest_step_statuses(batch_id: UUID, payload: BatchPreHarvestStep
     return batch_service.serialize_batch(batch)
 
 
-@router.post("/{batch_id}/complete-preharvest", response_model=BatchRead, summary="Complete pre-harvest with confirmed weight and create collecte + stock in once.")
+@router.post("/{batch_id}/complete-preharvest", response_model=BatchRead, summary="Complete pre-harvest and mark lot ready for linked collecte.")
 def complete_preharvest(batch_id: UUID, payload: BatchCompletePreHarvestRequest, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
     batch = batch_service.complete_preharvest(
         db,
         current_manager,
         batch_id,
-        confirmed_weight_kg=payload.confirmed_weight_kg,
         notes=payload.notes,
         collecte_date=payload.collecte_date,
     )

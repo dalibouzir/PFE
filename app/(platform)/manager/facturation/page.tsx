@@ -1,9 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { PageIntro } from "@/components/ui/PageIntro";
+import { ExportActions } from "@/components/ui/table/ExportActions";
+import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import { useAuth } from "@/context/auth/AuthContext";
 import { useCommercialInvoiceStats, useCommercialInvoices } from "@/hooks/useCommercial";
+import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
+import { useTableControls } from "@/lib/table/useTableControls";
 import type { CommercialInvoice } from "@/lib/api/types";
 
 const COOPERATIVE_PROFILE = {
@@ -37,89 +41,52 @@ export default function FacturationPage() {
   const { data: stats } = useCommercialInvoiceStats();
   const { data: invoices = [] } = useCommercialInvoices();
   const invoiceRef = useRef<HTMLDivElement>(null);
+  const tableControls = useTableControls(
+    [
+      {
+        key: "status",
+        label: "Statut",
+        options: [
+          { value: "all", label: "Tous statuts" },
+          { value: "paid", label: "Payée" },
+          { value: "pending", label: "En attente" },
+        ],
+        initialValue: "all",
+      },
+    ],
+    "desc",
+  );
+  const visibleInvoices = useMemo(() => {
+    const q = tableControls.search.trim().toLowerCase();
+    const filtered = invoices.filter((invoice) => {
+      const byStatus = tableControls.filters.status === "all" || invoice.status === tableControls.filters.status;
+      if (!byStatus) return false;
+      if (!q) return true;
+      return (
+        invoice.invoice_number.toLowerCase().includes(q) ||
+        invoice.order_number.toLowerCase().includes(q) ||
+        invoice.customer_name.toLowerCase().includes(q)
+      );
+    });
+    const sorted = filtered.slice().sort((a, b) => a.issue_date.localeCompare(b.issue_date));
+    return tableControls.sortOrder === "asc" ? sorted : sorted.reverse();
+  }, [invoices, tableControls.filters.status, tableControls.search, tableControls.sortOrder]);
 
   const selected = useMemo(() => {
-    if (!invoices.length) return null;
-    if (!selectedId) return invoices[0];
-    return invoices.find((invoice) => invoice.id === selectedId) ?? invoices[0];
-  }, [invoices, selectedId]);
+    if (!visibleInvoices.length) return null;
+    if (!selectedId) return visibleInvoices[0];
+    return visibleInvoices.find((invoice) => invoice.id === selectedId) ?? visibleInvoices[0];
+  }, [selectedId, visibleInvoices]);
 
-  const exportCsv = useCallback(() => {
-    if (!selected) return;
-
-    const rows = [
-      ["Facture", selected.invoice_number],
-      ["Commande", selected.order_number],
-      ["Client", selected.customer_name],
-      ["Date emission", fmtDate(selected.issue_date)],
-      ["Echeance", selected.due_date ? fmtDate(selected.due_date) : "-"],
-      ["Cooperative", COOPERATIVE_PROFILE.name],
-      [],
-      ["Description", "Unite", "Quantite", "Prix unitaire FCFA", "Total ligne FCFA"],
-      ...selected.lines.map((line) => [line.description, line.unit, String(line.quantity), String(line.unit_price_fcfa), String(line.line_total_fcfa)]),
-      [],
-      ["Sous total HT", String(selected.subtotal_fcfa)],
-      ["TVA", String(selected.tax_amount_fcfa)],
-      ["Total TTC", String(selected.total_amount_fcfa)],
-    ];
-
-    const content = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${selected.invoice_number}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-  }, [selected]);
-
-  const exportPdf = useCallback(() => {
-    if (!selected || !invoiceRef.current) return;
-
-    const invoiceHtml = invoiceRef.current.innerHTML;
-    const documentHtml = `
-      <!doctype html>
-      <html lang="fr">
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width,initial-scale=1" />
-          <title>${selected.invoice_number}</title>
-          <style>
-            :root { color-scheme: light; }
-            * { box-sizing: border-box; }
-            body { margin: 0; padding: 24px; font-family: Inter, Segoe UI, Arial, sans-serif; background: #f3f7fb; color: #0f1f2f; }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #dbe5f0; font-size: 12px; }
-            th { color: #4d6276; font-weight: 600; background: #f7fafe; }
-            @media print { body { padding: 0; background: #ffffff; } }
-          </style>
-        </head>
-        <body>${invoiceHtml}</body>
-      </html>
-    `;
-
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=980,height=1280");
-    if (!printWindow) {
-      const blob = new Blob([documentHtml], { type: "text/html;charset=utf-8" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${selected.invoice_number}.html`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      return;
-    }
-
-    printWindow.document.open();
-    printWindow.document.write(documentHtml);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-  }, [selected]);
+  const invoiceExportColumns: ExportColumn<CommercialInvoice>[] = [
+    { key: "invoice_number", header: "Facture" },
+    { key: "order_number", header: "Commande" },
+    { key: "customer_name", header: "Client" },
+    { key: "issue_date", header: "Date emission", format: (_, row) => fmtDate(row.issue_date) },
+    { key: "due_date", header: "Echeance", format: (_, row) => (row.due_date ? fmtDate(row.due_date) : "-") },
+    { key: "total_amount_fcfa", header: "Total TTC (FCFA)", format: (_, row) => row.total_amount_fcfa.toLocaleString("fr-FR") },
+    { key: "status", header: "Statut", format: (_, row) => (row.status === "paid" ? "Payee" : "En attente") },
+  ];
 
   return (
     <main>
@@ -150,14 +117,36 @@ export default function FacturationPage() {
 
       <section className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.6fr]">
         <article className="premium-card overflow-hidden rounded-2xl">
-          <div className="border-b border-[var(--line)] px-4 py-3">
-            <h3 className="text-sm font-semibold text-[var(--text)]">Factures</h3>
+          <div className="border-b border-[var(--line)] p-5 sm:p-6">
+            <h3 className="mb-3 text-base font-semibold text-[var(--text)]">Factures</h3>
+            <div className="overflow-x-auto">
+              <div className="min-w-[780px]">
+                <TableToolbar
+                  search={tableControls.search}
+                  onSearchChange={tableControls.setSearch}
+                  searchPlaceholder="Recherche n°, commande, client..."
+                  filters={tableControls.filterDefinitions}
+                  onFilterChange={tableControls.setFilterValue}
+                  sortOrder={tableControls.sortOrder}
+                  onSortOrderChange={tableControls.setSortOrder}
+                  sortAscLabel="Date asc"
+                  sortDescLabel="Date desc"
+                  rightActions={
+                    <ExportActions
+                      onCsv={() => exportRowsToCsv({ filename: "factures", title: "Factures", columns: invoiceExportColumns, rows: visibleInvoices })}
+                      onExcel={() => exportRowsToExcel({ filename: "factures", title: "Factures", columns: invoiceExportColumns, rows: visibleInvoices })}
+                      onPdf={() => exportRowsToPdf({ filename: "factures", title: "Factures", columns: invoiceExportColumns, rows: visibleInvoices })}
+                    />
+                  }
+                />
+              </div>
+            </div>
           </div>
           <div className="max-h-[640px] overflow-y-auto">
-            {invoices.length === 0 ? (
+            {visibleInvoices.length === 0 ? (
               <p className="px-4 py-5 text-sm text-[var(--muted)]">Aucune facture generee pour l&apos;instant.</p>
             ) : (
-              invoices.map((invoice) => {
+              visibleInvoices.map((invoice) => {
                 const active = selected?.id === invoice.id;
                 return (
                   <button
@@ -188,20 +177,11 @@ export default function FacturationPage() {
           ) : (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
-                <button
-                  type="button"
-                  onClick={exportCsv}
-                  className="soft-focus rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--surface-soft)]"
-                >
-                  Export CSV
-                </button>
-                <button
-                  type="button"
-                  onClick={exportPdf}
-                  className="soft-focus rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--primary-hover)]"
-                >
-                  Export PDF / Print
-                </button>
+                <ExportActions
+                  onCsv={() => exportRowsToCsv({ filename: selected.invoice_number, title: `Facture ${selected.invoice_number}`, columns: invoiceExportColumns, rows: [selected] })}
+                  onExcel={() => exportRowsToExcel({ filename: selected.invoice_number, title: `Facture ${selected.invoice_number}`, columns: invoiceExportColumns, rows: [selected] })}
+                  onPdf={() => exportRowsToPdf({ filename: selected.invoice_number, title: `Facture ${selected.invoice_number}`, columns: invoiceExportColumns, rows: [selected] })}
+                />
               </div>
 
               <div ref={invoiceRef} className="rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-6">

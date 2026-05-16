@@ -37,6 +37,12 @@ class FarmerAdvance(TimestampMixin, Base):
         default=FarmerAdvanceStatus.ACTIVE,
     )
     source_type: Mapped[str] = mapped_column(String(64), nullable=False, default="manual")
+    devis_file_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid,
+        ForeignKey("uploaded_files.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     treasury_transaction_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         Uuid,
         ForeignKey("treasury_transactions.id", ondelete="SET NULL"),
@@ -51,3 +57,4 @@ class FarmerAdvance(TimestampMixin, Base):
         foreign_keys=[treasury_transaction_id],
         uselist=False,
     )
+    devis_file: Mapped[Optional["UploadedFile"]] = relationship(foreign_keys=[devis_file_id])

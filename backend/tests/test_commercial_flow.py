@@ -3,7 +3,7 @@ from sqlalchemy import select
 from app.models.commercial_catalog_product import CommercialCatalogProduct
 from app.models.commercial_invoice import CommercialInvoice
 from app.models.commercial_order import CommercialOrder
-from app.models.enums import CommercialOrderStatus, InvoiceStatus, TreasuryTransactionType
+from app.models.enums import CommercialOrderStatus, InvoiceStatus, TreasuryTransactionStatus, TreasuryTransactionType
 from app.models.product import Product
 from app.models.stock import Stock
 from app.models.treasury_transaction import TreasuryTransaction
@@ -123,3 +123,30 @@ def test_catalog_order_invoice_payment_flow(db_session):
         )
     )
     assert treasury is not None
+    assert treasury.status == TreasuryTransactionStatus.ENREGISTRE_COMPLET
+    assert treasury.receipt_reference == invoice.invoice_number
+
+    # Idempotency guard: repeating "paid" should not duplicate invoice, lines, or treasury income
+    order = commercial_service.update_order_status(
+        db_session,
+        manager,
+        order.id,
+        CommercialOrderStatusUpdate(status="paid"),
+    )
+    assert order.status == CommercialOrderStatus.PAID.value
+
+    invoice_rows = db_session.scalars(select(CommercialInvoice).where(CommercialInvoice.order_id == order.id)).all()
+    assert len(invoice_rows) == 1
+    assert invoice_rows[0].status == InvoiceStatus.PAID
+    assert len(invoice_rows[0].lines) == len(order.lines)
+
+    treasury_rows = db_session.scalars(
+        select(TreasuryTransaction).where(
+            TreasuryTransaction.source_type == "commercial_invoice",
+            TreasuryTransaction.type == TreasuryTransactionType.INCOME,
+            TreasuryTransaction.source_id == invoice_rows[0].id,
+            TreasuryTransaction.status != TreasuryTransactionStatus.CANCELLED,
+        )
+    ).all()
+    assert len(treasury_rows) == 1
+    assert treasury_rows[0].status == TreasuryTransactionStatus.ENREGISTRE_COMPLET

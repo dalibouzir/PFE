@@ -18,7 +18,19 @@ export function ProtectedRoute({ children, role }: { children: React.ReactNode; 
     }
     const allowed = Array.isArray(role) ? role : role ? [role] : [];
     if (allowed.length > 0 && !allowed.includes(user.role)) {
-      router.replace(user.role === "admin" ? "/admin/dashboard" : "/manager/dashboard");
+      if (user.role === "super_admin") {
+        router.replace("/super-admin/dashboard");
+        return;
+      }
+      if (user.role === "institution_admin") {
+        router.replace("/institution-admin/dashboard");
+        return;
+      }
+      if (user.role === "admin") {
+        router.replace("/admin/dashboard");
+        return;
+      }
+      router.replace("/manager/dashboard");
     }
   }, [loading, user, role, router]);
 

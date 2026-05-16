@@ -97,10 +97,10 @@ export function useStopPreHarvest() {
 export function useCompletePreHarvest() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, confirmed_weight_kg, notes }: { id: string; confirmed_weight_kg: number; notes?: string | null }) =>
+    mutationFn: ({ id, notes }: { id: string; notes?: string | null }) =>
       apiFetch<Batch>(endpoints.batches.completePreHarvest(id), {
         method: "POST",
-        body: { confirmed_weight_kg, notes },
+        body: { notes },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["batches"] });

@@ -31,6 +31,8 @@ class Input(TimestampMixin, Base):
     quantity: Mapped[float] = mapped_column(Float, nullable=False)
     grade: Mapped[str] = mapped_column(String(40), nullable=False)
     estimated_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    bl_number: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, index=True)
+    justificatif_file_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("uploaded_files.id", ondelete="SET NULL"), nullable=True, index=True)
     status: Mapped[InputStatus] = mapped_column(
         Enum(InputStatus, native_enum=False),
         nullable=False,
@@ -42,3 +44,4 @@ class Input(TimestampMixin, Base):
     member: Mapped["Member"] = relationship(back_populates="inputs")
     product: Mapped["Product"] = relationship(back_populates="inputs")
     field: Mapped[Optional["Field"]] = relationship()
+    justificatif_file: Mapped[Optional["UploadedFile"]] = relationship(foreign_keys=[justificatif_file_id])

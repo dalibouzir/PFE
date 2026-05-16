@@ -517,7 +517,31 @@ def _deduct_on_delivery(order: CommercialOrder):
 
 def _create_invoice_for_order(db: Session, order: CommercialOrder) -> CommercialInvoice:
     if order.invoice is not None:
-        return order.invoice
+        invoice = order.invoice
+    else:
+        invoice = db.scalar(
+            select(CommercialInvoice)
+            .options(selectinload(CommercialInvoice.lines))
+            .where(
+                CommercialInvoice.cooperative_id == order.cooperative_id,
+                CommercialInvoice.order_id == order.id,
+            )
+        )
+    if invoice is not None:
+        if len(invoice.lines) == 0:
+            for line in order.lines:
+                db.add(
+                    CommercialInvoiceLine(
+                        invoice_id=invoice.id,
+                        description=line.product_name_snapshot,
+                        unit=line.unit_snapshot,
+                        quantity=round_metric(line.quantity),
+                        unit_price_fcfa=round_metric(line.unit_price_fcfa),
+                        line_total_fcfa=round_metric(line.line_total_fcfa),
+                    )
+                )
+            db.flush()
+        return invoice
 
     issue = date.today()
     due = issue + timedelta(days=30)
@@ -566,11 +590,21 @@ def _mark_paid(db: Session, order: CommercialOrder):
         select(TreasuryTransaction).where(
             TreasuryTransaction.cooperative_id == order.cooperative_id,
             TreasuryTransaction.source_type == "commercial_invoice",
-            TreasuryTransaction.source_id == invoice.id,
-            TreasuryTransaction.status == TreasuryTransactionStatus.RECORDED,
+            or_(
+                TreasuryTransaction.source_id == invoice.id,
+                TreasuryTransaction.receipt_reference == invoice.invoice_number,
+            ),
+            TreasuryTransaction.type == TreasuryTransactionType.INCOME,
+            TreasuryTransaction.status != TreasuryTransactionStatus.CANCELLED,
         )
     )
     if already is not None:
+        if already.source_id is None:
+            already.source_id = invoice.id
+        if not already.receipt_reference:
+            already.receipt_reference = invoice.invoice_number
+        if already.status != TreasuryTransactionStatus.ENREGISTRE_COMPLET:
+            already.status = TreasuryTransactionStatus.ENREGISTRE_COMPLET
         return
 
     db.add(
@@ -583,9 +617,10 @@ def _mark_paid(db: Session, order: CommercialOrder):
             label=f"Paiement facture {invoice.invoice_number}",
             amount_fcfa=round_metric(invoice.total_amount_fcfa),
             note=f"Commande {order.order_number}",
-            status=TreasuryTransactionStatus.RECORDED,
+            status=TreasuryTransactionStatus.ENREGISTRE_COMPLET,
             source_type="commercial_invoice",
             source_id=invoice.id,
+            receipt_reference=invoice.invoice_number,
             farmer_id=None,
         )
     )

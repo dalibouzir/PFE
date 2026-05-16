@@ -2,15 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
+import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { useCreateInput, useDeleteInput, useInputs, useUpdateInput } from "@/hooks/useInputs";
+import { ExportActions } from "@/components/ui/table/ExportActions";
+import { TableToolbar } from "@/components/ui/table/TableToolbar";
+import { useBatches } from "@/hooks/useBatches";
+import { useCreateInput, useDeleteInput, useInputs, useUpdateInput, useUploadInputJustificatif } from "@/hooks/useInputs";
 import { ApiError } from "@/lib/api/client";
 import { useMembers } from "@/hooks/useMembers";
 import { useProducts } from "@/hooks/useProducts";
-import type { Input, InputCreate } from "@/lib/api/types";
+import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
+import { useTableControls } from "@/lib/table/useTableControls";
+import type { Batch, Input, InputCreate } from "@/lib/api/types";
 
 const statusTone: Record<string, "success" | "warning" | "info"> = {
   validated: "success",
@@ -90,11 +96,13 @@ function mergeMemberProductTokens(products?: string[] | null, mainProduct?: stri
 
 export default function InputsPage() {
   const { data: inputs = [] } = useInputs();
+  const { data: batches = [] } = useBatches();
   const { data: members = [] } = useMembers();
   const { data: products = [] } = useProducts();
   const createInput = useCreateInput();
   const updateInput = useUpdateInput();
   const deleteInput = useDeleteInput();
+  const uploadJustificatif = useUploadInputJustificatif();
 
   const [productId, setProductId] = useState<string>("Tous");
   const [fromDate, setFromDate] = useState("");
@@ -103,6 +111,27 @@ export default function InputsPage() {
   const [statusEditingId, setStatusEditingId] = useState<string | null>(null);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [collecteMode, setCollecteMode] = useState<"linked" | "independent">("linked");
+  const [selectedLotId, setSelectedLotId] = useState<string>("");
+  const [selectedJustificatif, setSelectedJustificatif] = useState<File | null>(null);
+  const [pendingValidationItem, setPendingValidationItem] = useState<Input | null>(null);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<Input | null>(null);
+  const tableControls = useTableControls(
+    [
+      {
+        key: "status",
+        label: "Statut",
+        options: [
+          { value: "all", label: "Tous statuts" },
+          { value: "pending", label: "En attente" },
+          { value: "quality_control", label: "Controle qualite" },
+          { value: "validated", label: "Valide" },
+        ],
+        initialValue: "all",
+      },
+    ],
+    "desc",
+  );
 
   const { register, handleSubmit, reset, setValue, watch, getValues, formState } = useForm<InputCreate>({
     defaultValues: {
@@ -111,6 +140,7 @@ export default function InputsPage() {
       date: "",
       quantity: 0,
       grade: "",
+      bl_number: "",
       status: "pending",
       estimated_value: undefined,
     },
@@ -123,9 +153,25 @@ export default function InputsPage() {
     return inputs.filter((item) => {
       const byProduct = productId === "Tous" || item.product_id === productId;
       const byDate = fromDate ? item.date >= fromDate : true;
-      return byProduct && byDate;
+      const byStatus = tableControls.filters.status === "all" || item.status === tableControls.filters.status;
+      const q = tableControls.search.trim().toLowerCase();
+      const memberName = (memberLookup.get(item.member_id) ?? "").toLowerCase();
+      const productName = (productLookup.get(item.product_id) ?? "").toLowerCase();
+      const bySearch =
+        q.length === 0 ||
+        memberName.includes(q) ||
+        productName.includes(q) ||
+        item.date.toLowerCase().includes(q) ||
+        (item.bl_number ?? "").toLowerCase().includes(q) ||
+        item.grade.toLowerCase().includes(q);
+      return byProduct && byDate && byStatus && bySearch;
     });
-  }, [inputs, productId, fromDate]);
+  }, [fromDate, inputs, memberLookup, productId, productLookup, tableControls.filters.status, tableControls.search]);
+
+  const sortedFiltered = useMemo(() => {
+    const sorted = filtered.slice().sort((a, b) => a.date.localeCompare(b.date));
+    return tableControls.sortOrder === "asc" ? sorted : sorted.reverse();
+  }, [filtered, tableControls.sortOrder]);
 
   const totalKg = filtered.reduce((sum, item) => sum + item.quantity, 0);
   const pendingCount = filtered.filter((item) => item.status !== "validated").length;
@@ -142,9 +188,7 @@ export default function InputsPage() {
     const map = new Map<string, (typeof products)[number]>();
     for (const product of products) {
       const key = normalizeToken(product.name);
-      if (!map.has(key)) {
-        map.set(key, product);
-      }
+      if (!map.has(key)) map.set(key, product);
     }
     return map;
   }, [products]);
@@ -164,6 +208,26 @@ export default function InputsPage() {
     return ordered;
   }, [selectedMemberId, selectedMemberSpecialtyTokens, productByNormalizedName]);
 
+  const readyForCollecteLots = useMemo(() => {
+    return [...batches]
+      .filter((batch) =>
+        Boolean(
+          batch.member_id &&
+            batch.parcel_id &&
+            batch.preharvest_completed_at &&
+            !batch.collecte_created &&
+            !batch.stock_in_created &&
+            !batch.confirmed_weight_kg,
+        ),
+      )
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [batches]);
+
+  const selectedLot = useMemo<Batch | null>(
+    () => readyForCollecteLots.find((batch) => batch.id === selectedLotId) ?? null,
+    [readyForCollecteLots, selectedLotId],
+  );
+
   useEffect(() => {
     if (!formOpen) return;
     const currentProductId = getValues("product_id");
@@ -180,10 +244,14 @@ export default function InputsPage() {
       date: "",
       quantity: 0,
       grade: "",
+      bl_number: "",
       status: "pending",
       estimated_value: undefined,
     });
     setFormError(null);
+    setCollecteMode("linked");
+    setSelectedLotId(readyForCollecteLots[0]?.id ?? "");
+    setSelectedJustificatif(null);
     setFormOpen(true);
   };
 
@@ -195,6 +263,37 @@ export default function InputsPage() {
   const submitInput = handleSubmit(async (values) => {
     setFormError(null);
     try {
+      if (collecteMode === "linked") {
+        if (!selectedLot) {
+          setFormError("Sélectionnez un lot prêt pour Collecte.");
+          return;
+        }
+        if (!selectedLot.member_id || !selectedLot.product_id) {
+          setFormError("Lot invalide: membre/produit manquant.");
+          return;
+        }
+        const payload: InputCreate = {
+          member_id: selectedLot.member_id,
+          product_id: selectedLot.product_id,
+          batch_id: selectedLot.id,
+          field_id: null,
+          date: values.date,
+          quantity: Number(values.quantity),
+          grade: values.grade.trim() || "A",
+          bl_number: values.bl_number?.trim() || null,
+          status: "validated",
+          source_type: "lot_linked_collecte",
+          estimated_value: toNullableFiniteNumber(values.estimated_value),
+        };
+        const created = await createInput.mutateAsync(payload);
+        if (selectedJustificatif) {
+          await uploadJustificatif.mutateAsync({ id: created.id, file: selectedJustificatif });
+        }
+        closeForm();
+        setSelectedJustificatif(null);
+        return;
+      }
+
       if (!values.product_id) {
         setFormError("Produit requis.");
         return;
@@ -206,21 +305,29 @@ export default function InputsPage() {
         date: values.date,
         quantity: Number(values.quantity),
         grade: values.grade.trim(),
+        bl_number: values.bl_number?.trim() || null,
         status: values.status || "pending",
         estimated_value: toNullableFiniteNumber(values.estimated_value),
       };
-      await createInput.mutateAsync(payload);
+      const created = await createInput.mutateAsync(payload);
+      if (selectedJustificatif) {
+        await uploadJustificatif.mutateAsync({ id: created.id, file: selectedJustificatif });
+      }
       closeForm();
+      setSelectedJustificatif(null);
     } catch (error) {
       setFormError(formatApiError(error, "Impossible d'enregistrer la collecte."));
     }
   });
 
-  const handleStatusUpdate = async (item: Input, nextStatus: string) => {
-    if (!nextStatus || nextStatus === item.status) {
-      setStatusEditingId(null);
-      return;
+  useEffect(() => {
+    if (!formOpen || collecteMode !== "linked") return;
+    if (!selectedLotId && readyForCollecteLots.length > 0) {
+      setSelectedLotId(readyForCollecteLots[0].id);
     }
+  }, [collecteMode, formOpen, readyForCollecteLots, selectedLotId]);
+
+  const applyStatusUpdate = async (item: Input, nextStatus: string) => {
     setFormError(null);
     setStatusSavingId(item.id);
     try {
@@ -233,8 +340,19 @@ export default function InputsPage() {
     }
   };
 
+  const handleStatusUpdate = async (item: Input, nextStatus: string) => {
+    if (!nextStatus || nextStatus === item.status) {
+      setStatusEditingId(null);
+      return;
+    }
+    if (nextStatus === "validated" && item.status !== "validated") {
+      setPendingValidationItem(item);
+      return;
+    }
+    await applyStatusUpdate(item, nextStatus);
+  };
+
   const handleDeleteInput = async (item: Input) => {
-    if (!window.confirm("Supprimer cette collecte ?")) return;
     try {
       await deleteInput.mutateAsync(item.id);
     } catch (error) {
@@ -243,6 +361,17 @@ export default function InputsPage() {
       window.alert(message);
     }
   };
+
+  const exportColumns: ExportColumn<Input>[] = [
+    { key: "date", header: "Date" },
+    { key: "member_id", header: "Producteur", format: (_, row) => memberLookup.get(row.member_id) ?? row.member_id },
+    { key: "product_id", header: "Produit", format: (_, row) => productLookup.get(row.product_id) ?? row.product_id },
+    { key: "quantity", header: "Quantite (kg)", format: (_, row) => row.quantity.toLocaleString("fr-FR") },
+    { key: "bl_number", header: "BL", format: (_, row) => row.bl_number || "—" },
+    { key: "grade", header: "Grade", format: (_, row) => row.grade.toUpperCase() },
+    { key: "status", header: "Statut", format: (_, row) => statusLabel[row.status] ?? row.status },
+    { key: "justificatif", header: "Justificatif", format: (_, row) => (row.justificatif_file ? "Présent" : "Absent") },
+  ];
 
   return (
     <main>
@@ -269,34 +398,36 @@ export default function InputsPage() {
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
         <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto_auto]">
-          <select
-            value={productId}
-            onChange={(event) => setProductId(event.target.value)}
-            className="soft-focus wf-input px-3 py-2.5 text-sm"
-          >
+          <select value={productId} onChange={(event) => setProductId(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm">
             <option value="Tous">Tous produits</option>
             {products.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
+              <option key={item.id} value={item.id}>{item.name}</option>
             ))}
           </select>
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(event) => setFromDate(event.target.value)}
-            className="soft-focus wf-input px-3 py-2.5 text-sm"
+          <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm" />
+          <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2.5 text-sm text-[var(--muted)]">{filtered.length} enregistrements</div>
+          <button type="button" onClick={openCreateForm} className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold">Nouvelle collecte</button>
+        </div>
+
+        <div className="mt-3">
+          <TableToolbar
+            search={tableControls.search}
+            onSearchChange={tableControls.setSearch}
+            searchPlaceholder="Recherche date, producteur, produit, BL, grade..."
+            filters={tableControls.filterDefinitions}
+            onFilterChange={tableControls.setFilterValue}
+            sortOrder={tableControls.sortOrder}
+            onSortOrderChange={tableControls.setSortOrder}
+            sortAscLabel="Date asc"
+            sortDescLabel="Date desc"
+            rightActions={
+              <ExportActions
+                onCsv={() => exportRowsToCsv({ filename: "collectes", title: "Collectes", columns: exportColumns, rows: sortedFiltered })}
+                onExcel={() => exportRowsToExcel({ filename: "collectes", title: "Collectes", columns: exportColumns, rows: sortedFiltered })}
+                onPdf={() => exportRowsToPdf({ filename: "collectes", title: "Collectes", columns: exportColumns, rows: sortedFiltered })}
+              />
+            }
           />
-          <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2.5 text-sm text-[var(--muted)]">
-            {filtered.length} enregistrements
-          </div>
-          <button
-            type="button"
-            onClick={openCreateForm}
-            className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold"
-          >
-            Nouvelle collecte
-          </button>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -310,17 +441,15 @@ export default function InputsPage() {
               <p className="text-lg font-semibold text-[var(--text)]">{pendingCount}</p>
             </div>
           </div>
-
           <GlassViewToggle value={viewMode} onChange={setViewMode} className="shrink-0" />
         </div>
       </section>
+
       {formError ? (
-        <section className="mb-4 rounded-xl border border-[#f2c7c7] bg-[#fff1f1] px-4 py-3 text-sm text-[#8f2f2f]">
-          {formError}
-        </section>
+        <section className="mb-4 rounded-xl border border-[#f2c7c7] bg-[#fff1f1] px-4 py-3 text-sm text-[#8f2f2f]">{formError}</section>
       ) : null}
 
-      {filtered.length === 0 ? (
+      {sortedFiltered.length === 0 ? (
         <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "100ms" }}>
           <p className="text-sm text-[var(--muted)]">Aucune collecte ne correspond aux filtres.</p>
         </section>
@@ -334,21 +463,22 @@ export default function InputsPage() {
                   <th className="px-5 py-3.5">Agriculteur</th>
                   <th className="px-5 py-3.5">Produit</th>
                   <th className="px-5 py-3.5">Quantite</th>
+                  <th className="px-5 py-3.5">BL</th>
                   <th className="px-5 py-3.5">Grade</th>
                   <th className="px-5 py-3.5">Statut</th>
+                  <th className="px-5 py-3.5">Justificatif</th>
                   <th className="px-5 py-3.5">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item) => (
+                {sortedFiltered.map((item) => (
                   <tr key={item.id}>
                     <td className="px-5 py-4">{item.date}</td>
                     <td className="px-5 py-4 font-medium text-[var(--text)]">{memberLookup.get(item.member_id) ?? item.member_id.slice(0, 8)}</td>
                     <td className="px-5 py-4">{productLookup.get(item.product_id) ?? item.product_id.slice(0, 8)}</td>
                     <td className="px-5 py-4">{item.quantity.toLocaleString("fr-FR")} kg</td>
-                    <td className="px-5 py-4">
-                      <StatusBadge label={item.grade.toUpperCase()} tone={gradeTone[item.grade.toUpperCase()] ?? "info"} />
-                    </td>
+                    <td className="px-5 py-4">{item.bl_number || "—"}</td>
+                    <td className="px-5 py-4"><StatusBadge label={item.grade.toUpperCase()} tone={gradeTone[item.grade.toUpperCase()] ?? "info"} /></td>
                     <td className="px-5 py-4">
                       {statusEditingId === item.id ? (
                         <select
@@ -368,21 +498,23 @@ export default function InputsPage() {
                           <option value="validated">Valide</option>
                         </select>
                       ) : (
-                        <button
-                          type="button"
-                          className="text-left"
-                          onClick={() => setStatusEditingId(item.id)}
-                          title="Changer le statut"
-                        >
+                        <button type="button" className="text-left" onClick={() => setStatusEditingId(item.id)} title="Changer le statut">
                           <StatusBadge label={statusLabel[item.status] ?? item.status} tone={statusTone[item.status] ?? "info"} />
                         </button>
                       )}
                     </td>
+                    <td className="px-5 py-4 text-xs">
+                      {item.justificatif_file ? (
+                        <a className="font-semibold text-[var(--primary)] hover:underline" href={item.justificatif_file.file_url} target="_blank" rel="noreferrer">
+                          {item.justificatif_file.filename}
+                        </a>
+                      ) : (
+                        <span className="text-[var(--muted)]">Absent</span>
+                      )}
+                    </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
-                        <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => handleDeleteInput(item)}>
-                          Supprimer
-                        </button>
+                        <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => setPendingDeleteItem(item)}>Supprimer</button>
                       </div>
                     </td>
                   </tr>
@@ -393,7 +525,7 @@ export default function InputsPage() {
         </section>
       ) : (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((item, index) => (
+          {sortedFiltered.map((item, index) => (
             <article key={item.id} className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: `${100 + index * 30}ms` }}>
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -418,12 +550,7 @@ export default function InputsPage() {
                     <option value="validated">Valide</option>
                   </select>
                 ) : (
-                  <button
-                    type="button"
-                    className="text-left"
-                    onClick={() => setStatusEditingId(item.id)}
-                    title="Changer le statut"
-                  >
+                  <button type="button" className="text-left" onClick={() => setStatusEditingId(item.id)} title="Changer le statut">
                     <StatusBadge label={statusLabel[item.status] ?? item.status} tone={statusTone[item.status] ?? "info"} />
                   </button>
                 )}
@@ -441,11 +568,11 @@ export default function InputsPage() {
               </div>
 
               <p className="mt-3 text-xs text-[var(--muted)]">Grade {item.grade}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">BL: {item.bl_number || "—"}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Justificatif: {item.justificatif_file ? item.justificatif_file.filename : "Absent"}</p>
 
               <div className="mt-3 flex items-center gap-2">
-                <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => handleDeleteInput(item)}>
-                  Supprimer
-                </button>
+                <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => setPendingDeleteItem(item)}>Supprimer</button>
               </div>
             </article>
           ))}
@@ -456,68 +583,91 @@ export default function InputsPage() {
         open={formOpen}
         onClose={closeForm}
         title="Nouvelle collecte"
-        subtitle="Les collectes actualisent automatiquement les stocks."
+        subtitle="La collecte liée confirme la quantité réelle du lot, alimente le stock et débloque la Post-récolte."
         size="lg"
         footer={
           <div className="flex items-center justify-between gap-3">
-            <button type="button" className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold" onClick={closeForm}>
-              Annuler
-            </button>
-            <button type="submit" form="input-form" className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold" disabled={formState.isSubmitting}>
-              {formState.isSubmitting ? "Enregistrement..." : "Enregistrer"}
+            <button type="button" className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold" onClick={closeForm}>Annuler</button>
+            <button type="submit" form="input-form" className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold" disabled={formState.isSubmitting || uploadJustificatif.isPending}>
+              {formState.isSubmitting || uploadJustificatif.isPending ? "Enregistrement..." : "Enregistrer"}
             </button>
           </div>
         }
       >
         <form id="input-form" onSubmit={submitInput} className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm font-medium text-[var(--text)] sm:col-span-2">
+            Mode de collecte
+            <select value={collecteMode} onChange={(event) => setCollecteMode(event.target.value as "linked" | "independent")} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+              <option value="linked">Collecte liée à un lot</option>
+              <option value="independent">Collecte indépendante</option>
+            </select>
+          </label>
+          {collecteMode === "linked" ? (
+            <>
+              <label className="block text-sm font-medium text-[var(--text)] sm:col-span-2">
+                Lot prêt pour Collecte
+                <select value={selectedLotId} onChange={(event) => setSelectedLotId(event.target.value)} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+                  {readyForCollecteLots.length === 0 ? (
+                    <option value="">Aucun lot prêt pour Collecte</option>
+                  ) : (
+                    readyForCollecteLots.map((lot) => (
+                      <option key={lot.id} value={lot.id}>{lot.code} — {(productLookup.get(lot.product_id) ?? lot.product_id).toString()}</option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <div className="sm:col-span-2 rounded-xl border border-[#BDD6FB] bg-[#EEF5FF] px-3 py-2 text-xs text-[#2F80ED]">
+                La quantité réelle du lot est confirmée ici. Elle alimente le stock et débloque la Post-récolte.
+              </div>
+            </>
+          ) : null}
+
           <label className="block text-sm font-medium text-[var(--text)]">
             Agriculteur
-            <select {...register("member_id", { required: "Agriculteur requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
-              <option value="" disabled>
-                Selectionner un agriculteur
-              </option>
+            <select {...register("member_id", { required: "Agriculteur requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm" disabled={collecteMode === "linked"}>
+              <option value="" disabled>Selectionner un agriculteur</option>
               {members.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.full_name}
-                </option>
+                <option key={member.id} value={member.id}>{member.full_name}</option>
               ))}
             </select>
           </label>
+
           <label className="block text-sm font-medium text-[var(--text)]">
             Produit
-            <select {...register("product_id", { required: "Produit requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
+            <select {...register("product_id", { required: "Produit requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm" disabled={collecteMode === "linked"}>
               {!selectedMemberId ? (
-                <option value="" disabled>
-                  Selectionner un agriculteur d&apos;abord
-                </option>
+                <option value="" disabled>Selectionner un agriculteur d&apos;abord</option>
               ) : availableProducts.length === 0 ? (
-                <option value="" disabled>
-                  Aucun produit disponible pour cet agriculteur
-                </option>
+                <option value="" disabled>Aucun produit disponible pour cet agriculteur</option>
               ) : (
-                <option value="" disabled>
-                  Selectionner un produit
-                </option>
+                <option value="" disabled>Selectionner un produit</option>
               )}
               {availableProducts.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
+                <option key={product.id} value={product.id}>{product.name}</option>
               ))}
             </select>
           </label>
+
           <label className="block text-sm font-medium text-[var(--text)]">
             Date
             <input type="date" {...register("date", { required: "Date requise." })} className="wf-input mt-2 h-11 w-full px-3 text-sm" />
           </label>
+
           <label className="block text-sm font-medium text-[var(--text)]">
             Quantite (kg)
             <input type="number" step="0.1" min="0" {...register("quantity", { required: "Quantite requise.", valueAsNumber: true })} className="wf-input mt-2 h-11 w-full px-3 text-sm" />
           </label>
+
           <label className="block text-sm font-medium text-[var(--text)]">
             Grade
             <input {...register("grade", { required: "Grade requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm" placeholder="A" />
           </label>
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            BL / Bon de livraison
+            <input {...register("bl_number")} className="wf-input mt-2 h-11 w-full px-3 text-sm" placeholder="BL001-15052026" />
+          </label>
+
           <label className="block text-sm font-medium text-[var(--text)]">
             Statut
             <select {...register("status")} className="wf-input mt-2 h-11 w-full px-3 text-sm">
@@ -526,17 +676,55 @@ export default function InputsPage() {
               <option value="validated">Valide</option>
             </select>
           </label>
+
           <label className="block text-sm font-medium text-[var(--text)]">
             Valeur estimee (optionnel)
             <input type="number" step="0.1" min="0" {...register("estimated_value", { valueAsNumber: true })} className="wf-input mt-2 h-11 w-full px-3 text-sm" />
           </label>
-          {formError && (
-            <p className="sm:col-span-2 rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">
-              {formError}
-            </p>
-          )}
+
+          <label className="block text-sm font-medium text-[var(--text)] sm:col-span-2">
+            Justificatif (PDF/JPG/JPEG/PNG/WEBP)
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+              className="wf-input mt-2 h-11 w-full px-3 text-sm"
+              onChange={(event) => setSelectedJustificatif(event.target.files?.[0] ?? null)}
+            />
+          </label>
+
+          {formError ? (
+            <p className="sm:col-span-2 rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">{formError}</p>
+          ) : null}
         </form>
       </LiquidGlassModal>
+
+      <ConfirmActionModal
+        open={Boolean(pendingValidationItem)}
+        onCancel={() => {
+          setPendingValidationItem(null);
+          setStatusEditingId(null);
+        }}
+        onConfirm={() => {
+          if (!pendingValidationItem) return;
+          void applyStatusUpdate(pendingValidationItem, "validated");
+          setPendingValidationItem(null);
+        }}
+        title="Valider la collecte"
+        message="Cette action confirme le statut de la collecte. Le stock n'est pas recréé dans cette étape."
+        confirmLabel="Valider"
+      />
+      <ConfirmActionModal
+        open={Boolean(pendingDeleteItem)}
+        onCancel={() => setPendingDeleteItem(null)}
+        onConfirm={() => {
+          if (!pendingDeleteItem) return;
+          void handleDeleteInput(pendingDeleteItem);
+          setPendingDeleteItem(null);
+        }}
+        title="Supprimer la collecte"
+        message="Cette action supprimera définitivement cette collecte."
+        confirmLabel="Supprimer"
+      />
     </main>
   );
 }

@@ -21,12 +21,10 @@ export function LotActiveSidebar({
   items,
   selectedId,
   onSelect,
-  onCreateLot,
 }: {
   items: ActiveLotItem[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onCreateLot: () => void;
 }) {
   return (
     <aside
@@ -78,14 +76,6 @@ export function LotActiveSidebar({
           })
         )}
       </div>
-
-      <button
-        type="button"
-        onClick={onCreateLot}
-        className="soft-focus mt-3 w-full rounded-xl bg-[var(--info)] px-3 py-2.5 text-sm font-semibold text-white hover:brightness-105"
-      >
-        + Nouveau lot
-      </button>
     </aside>
   );
 }
