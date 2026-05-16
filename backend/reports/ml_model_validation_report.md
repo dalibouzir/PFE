@@ -1,14 +1,14 @@
 # ML Full Demo Validation Report
 
-Generated: 2026-05-08T21:48:58.962560+00:00
+Generated: 2026-05-13T10:44:32.817896+00:00
 Status: ok
 
 ## Dataset
-- Rows: 1517
-- Products: {'Mangue': 517, 'Arachide': 500, 'Mil': 492, 'Bissap': 8}
-- Stages (raw): {'Nettoyage': 384, 'Tri': 380, 'Séchage': 377, 'Emballage': 373, 'Sechage': 2, 'Conditionnement': 1}
-- Stages (canonical): {'cleaning': 384, 'sorting': 380, 'drying': 379, 'packaging': 374}
-- Risk classes: {'low': 1258, 'medium': 206, 'high': 53}
+- Rows: 52
+- Products: {'mango': 20, 'Mangue': 11, 'Arachide': 8, 'Mil': 8, 'Bissap': 5}
+- Stages (raw): {'Nettoyage': 12, 'Tri': 9, 'Séchage': 7, 'cleaning': 5, 'drying': 5, 'sorting': 5, 'packaging': 5, 'Emballage': 3, 'Conditionnement': 1}
+- Stages (canonical): {'cleaning': 17, 'sorting': 14, 'drying': 12, 'packaging': 9}
+- Risk classes: {'low': 48, 'medium': 3, 'high': 1}
 
 ## Model/Service
 - Regression: RandomForestRegressor (time-based evaluation split)
@@ -16,18 +16,18 @@ Status: ok
 - Anomaly: IsolationForest (exploratory review)
 
 ## Classification Metrics
-- Accuracy: 0.8294573643410853
-- Precision (macro): 0.43561076604554866
-- Recall (macro): 0.45172564438619484
-- F1 (macro): 0.44345238095238093
-- F1 (weighted): 0.8084856035437431
+- Accuracy: 0.9166666666666666
+- Precision (macro): 0.3055555555555555
+- Recall (macro): 0.3333333333333333
+- F1 (macro): 0.4782608695652174
+- F1 (weighted): 0.8768115942028986
 - Confusion matrix labels: ['low', 'medium', 'high']
-- Confusion matrix: [[101, 8, 0], [8, 6, 0], [6, 0, 0]]
+- Confusion matrix: [[11, 0, 0], [1, 0, 0], [0, 0, 0]]
 
 ## Regression Metrics
-- MAE: 4.015032910777352
-- RMSE: 7.280572723452175
-- R²: 0.06511232771235986
+- MAE: 2.366245496533157
+- RMSE: 3.640381427682027
+- R²: -0.4634031610206406
 
 ## Anomaly Metrics
 - True positives: None
@@ -36,24 +36,20 @@ Status: ok
 - Note: No labeled anomaly ground truth in current schema; only exploratory anomaly flag-rate metrics are available.
 
 ## Strongest Cases
-- {'product': 'Mil', 'stage_canonical': 'packaging', 'row_count': 8, 'mae': 1.03, 'mean_actual_loss_pct': 2.2, 'mean_predicted_loss_pct': 2.47}
-- {'product': 'Mangue', 'stage_canonical': 'packaging', 'row_count': 9, 'mae': 1.23, 'mean_actual_loss_pct': 1.8, 'mean_predicted_loss_pct': 2.57}
-- {'product': 'Mangue', 'stage_canonical': 'cleaning', 'row_count': 13, 'mae': 1.24, 'mean_actual_loss_pct': 2.31, 'mean_predicted_loss_pct': 3.06}
-- {'product': 'Mil', 'stage_canonical': 'cleaning', 'row_count': 9, 'mae': 1.24, 'mean_actual_loss_pct': 3.38, 'mean_predicted_loss_pct': 3.05}
-- {'product': 'Arachide', 'stage_canonical': 'cleaning', 'row_count': 11, 'mae': 1.8, 'mean_actual_loss_pct': 3.6, 'mean_predicted_loss_pct': 3.0}
-- {'product': 'Arachide', 'stage_canonical': 'packaging', 'row_count': 10, 'mae': 3.09, 'mean_actual_loss_pct': 3.59, 'mean_predicted_loss_pct': 3.26}
-- {'product': 'Arachide', 'stage_canonical': 'drying', 'row_count': 8, 'mae': 3.41, 'mean_actual_loss_pct': 8.71, 'mean_predicted_loss_pct': 12.12}
-- {'product': 'Bissap', 'stage_canonical': 'cleaning', 'row_count': 3, 'mae': 4.01, 'mean_actual_loss_pct': 1.0, 'mean_predicted_loss_pct': 5.01}
+- {'product': 'mango', 'stage_canonical': 'packaging', 'row_count': 4, 'mae': 1.08, 'mean_actual_loss_pct': 4.75, 'mean_predicted_loss_pct': 5.28}
+- {'product': 'mango', 'stage_canonical': 'cleaning', 'row_count': 2, 'mae': 1.49, 'mean_actual_loss_pct': 4.5, 'mean_predicted_loss_pct': 3.01}
+- {'product': 'mango', 'stage_canonical': 'sorting', 'row_count': 3, 'mae': 2.12, 'mean_actual_loss_pct': 6.67, 'mean_predicted_loss_pct': 4.55}
+- {'product': 'mango', 'stage_canonical': 'drying', 'row_count': 3, 'mae': 4.91, 'mean_actual_loss_pct': 9.33, 'mean_predicted_loss_pct': 4.75}
 
 ## Weakest Cases
-- {'product': 'Bissap', 'process_type': 'Sechage', 'stage_canonical': 'drying', 'actual_loss_pct': 68.0, 'predicted_loss_pct': 5.81, 'abs_error': 62.19}
-- {'product': 'Arachide', 'process_type': 'Tri', 'stage_canonical': 'sorting', 'actual_loss_pct': 1.5, 'predicted_loss_pct': 15.51, 'abs_error': 14.01}
-- {'product': 'Arachide', 'process_type': 'Tri', 'stage_canonical': 'sorting', 'actual_loss_pct': 20.79, 'predicted_loss_pct': 6.81, 'abs_error': 13.99}
-- {'product': 'Arachide', 'process_type': 'Tri', 'stage_canonical': 'sorting', 'actual_loss_pct': 18.78, 'predicted_loss_pct': 7.88, 'abs_error': 10.91}
-- {'product': 'Mil', 'process_type': 'Séchage', 'stage_canonical': 'drying', 'actual_loss_pct': 4.0, 'predicted_loss_pct': 14.86, 'abs_error': 10.87}
-- {'product': 'Mangue', 'process_type': 'Tri', 'stage_canonical': 'sorting', 'actual_loss_pct': 19.21, 'predicted_loss_pct': 8.47, 'abs_error': 10.73}
-- {'product': 'Bissap', 'process_type': 'Tri', 'stage_canonical': 'sorting', 'actual_loss_pct': 2.0, 'predicted_loss_pct': 12.46, 'abs_error': 10.46}
-- {'product': 'Mangue', 'process_type': 'Sechage', 'stage_canonical': 'drying', 'actual_loss_pct': 5.05, 'predicted_loss_pct': 15.46, 'abs_error': 10.41}
+- {'product': 'mango', 'process_type': 'drying', 'stage_canonical': 'drying', 'actual_loss_pct': 14.0, 'predicted_loss_pct': 3.77, 'abs_error': 10.23}
+- {'product': 'mango', 'process_type': 'sorting', 'stage_canonical': 'sorting', 'actual_loss_pct': 8.0, 'predicted_loss_pct': 3.36, 'abs_error': 4.64}
+- {'product': 'mango', 'process_type': 'drying', 'stage_canonical': 'drying', 'actual_loss_pct': 9.0, 'predicted_loss_pct': 4.99, 'abs_error': 4.01}
+- {'product': 'mango', 'process_type': 'packaging', 'stage_canonical': 'packaging', 'actual_loss_pct': 2.0, 'predicted_loss_pct': 4.55, 'abs_error': 2.55}
+- {'product': 'mango', 'process_type': 'cleaning', 'stage_canonical': 'cleaning', 'actual_loss_pct': 5.0, 'predicted_loss_pct': 2.55, 'abs_error': 2.45}
+- {'product': 'mango', 'process_type': 'sorting', 'stage_canonical': 'sorting', 'actual_loss_pct': 6.0, 'predicted_loss_pct': 4.38, 'abs_error': 1.62}
+- {'product': 'mango', 'process_type': 'packaging', 'stage_canonical': 'packaging', 'actual_loss_pct': 3.0, 'predicted_loss_pct': 3.67, 'abs_error': 0.67}
+- {'product': 'mango', 'process_type': 'packaging', 'stage_canonical': 'packaging', 'actual_loss_pct': 7.0, 'predicted_loss_pct': 6.43, 'abs_error': 0.57}
 
 ## Limitations
 - Evaluation uses synthetic/demo operational data and may not reflect production field variability.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import Select, and_, func, select
@@ -37,6 +37,32 @@ class SQLTools:
             return bool(inspect(self.db.get_bind()).has_table(table_name))
         except Exception:
             return False
+
+    def get_module_capabilities(self) -> dict[str, dict[str, Any]]:
+        module_tables = {
+            "members": ("members",),
+            "parcels": ("parcels",),
+            "inputs": ("inputs",),
+            "stocks": ("stocks", "products"),
+            "lots": ("batches",),
+            "process_steps": ("process_steps",),
+            "material_balance": ("batches", "process_steps"),
+            "ml_logs": ("ml_prediction_logs", "ml_recommendation_logs"),
+            "rag": ("rag_documents", "rag_chunks"),
+            "recommendations": ("recommendations",),
+            "commercial": ("commercial_orders",),
+            "invoices": ("commercial_invoices",),
+            "finance": ("treasury_transactions", "global_charges"),
+        }
+        capabilities: dict[str, dict[str, Any]] = {}
+        for module, tables in module_tables.items():
+            available_tables = [table for table in tables if self.module_available(table)]
+            capabilities[module] = {
+                "tables": list(tables),
+                "available_tables": available_tables,
+                "available": len(available_tables) > 0,
+            }
+        return capabilities
 
     def get_current_stock(self, product: str | None = None) -> dict[str, Any]:
         stmt = (
@@ -439,7 +465,7 @@ class SQLTools:
             select(Member.id, Member.full_name, Member.code, func.coalesce(func.sum(Input.quantity), 0.0).label("qty"))
             .join(Input, Input.member_id == Member.id)
             .join(Product, Product.id == Input.product_id)
-            .where(Member.cooperative_id == self.cooperative_id)
+            .where(Member.cooperative_id == self.cooperative_id, Input.cooperative_id == self.cooperative_id)
             .group_by(Member.id, Member.full_name, Member.code)
             .order_by(func.coalesce(func.sum(Input.quantity), 0.0).desc())
             .limit(10)
@@ -730,6 +756,169 @@ class SQLTools:
             ],
             "warnings": ["NO_SQL_DATA"] if not items else [],
         }
+
+    # Deterministic tools for strict query plans.
+    def top_grade_by_volume(self, days: int) -> dict[str, Any]:
+        since = date.today() - timedelta(days=max(1, int(days)))
+        rows = self.db.execute(
+            select(Input.grade, func.coalesce(func.sum(Input.quantity), 0.0).label("kg"))
+            .where(Input.cooperative_id == self.cooperative_id, Input.date >= since)
+            .group_by(Input.grade)
+            .order_by(func.coalesce(func.sum(Input.quantity), 0.0).desc())
+            .limit(1)
+        ).all()
+        items = [{"grade": str(g), "kg": float(kg or 0.0)} for g, kg in rows]
+        return {"items": items, "sources": [{"type": "sql", "table": "inputs", "label": "Top grade by volume", "record_count": len(items)}], "warnings": ["NO_SQL_DATA"] if not items else []}
+
+    def top_collection_days(self, days: int, limit: int) -> dict[str, Any]:
+        since = date.today() - timedelta(days=max(1, int(days)))
+        rows = self.db.execute(
+            select(Input.date, func.coalesce(func.sum(Input.quantity), 0.0).label("kg"))
+            .where(Input.cooperative_id == self.cooperative_id, Input.date >= since)
+            .group_by(Input.date)
+            .order_by(func.coalesce(func.sum(Input.quantity), 0.0).desc())
+            .limit(max(1, int(limit)))
+        ).all()
+        items = [{"date": str(d), "kg": float(kg or 0.0)} for d, kg in rows]
+        return {"items": items, "sources": [{"type": "sql", "table": "inputs", "label": "Top collection days", "record_count": len(items)}], "warnings": ["NO_SQL_DATA"] if not items else []}
+
+    def lowest_nonzero_member_contributor(self) -> dict[str, Any]:
+        rows = self.db.execute(
+            select(Member.full_name, func.coalesce(func.sum(Input.quantity), 0.0).label("kg"))
+            .join(Input, Input.member_id == Member.id)
+            .where(Member.cooperative_id == self.cooperative_id, Input.cooperative_id == self.cooperative_id)
+            .group_by(Member.full_name)
+            .having(func.coalesce(func.sum(Input.quantity), 0.0) > 0)
+            .order_by(func.coalesce(func.sum(Input.quantity), 0.0).asc())
+            .limit(1)
+        ).all()
+        items = [{"member_name": str(name), "kg": float(kg or 0.0)} for name, kg in rows]
+        return {"items": items, "sources": [{"type": "sql", "table": "members,inputs", "label": "Lowest non-zero contributor", "record_count": len(items)}], "warnings": ["NO_SQL_DATA"] if not items else []}
+
+    def largest_parcel_by_product(self, product: str) -> dict[str, Any]:
+        rows = self.db.execute(
+            select(Parcel.name, Parcel.surface_ha, Member.full_name, Parcel.main_culture)
+            .join(Member, Member.id == Parcel.member_id)
+            .where(Parcel.cooperative_id == self.cooperative_id)
+            .order_by(Parcel.surface_ha.desc())
+        ).all()
+        items: list[dict[str, Any]] = []
+        for name, area, member, culture in rows:
+            if product and _canonical_product_name(culture or "") != _canonical_product_name(product or ""):
+                continue
+            items = [{"parcel_name": str(name), "surface_ha": float(area or 0.0), "member_name": str(member)}]
+            break
+        return {"items": items, "sources": [{"type": "sql", "table": "parcels,members", "label": "Largest parcel by product", "record_count": len(items)}], "warnings": ["NO_SQL_DATA"] if not items else []}
+
+    def available_stock_gap(self, product: str) -> dict[str, Any]:
+        rows = self.get_current_stock(product=product).get("items", [])
+        if not rows:
+            return {"items": [], "sources": [{"type": "sql", "table": "stocks", "label": "Available stock gap", "record_count": 0}], "warnings": ["NO_SQL_DATA"]}
+        row = rows[0]
+        available = float(row.get("available_stock_kg", 0.0) or 0.0)
+        threshold = float(row.get("threshold_kg", 0.0) or 0.0)
+        return {"items": [{"product": row.get("product"), "available_kg": available, "gap_kg": available - threshold}], "sources": [{"type": "sql", "table": "stocks", "label": "Available stock gap", "record_count": 1}], "warnings": []}
+
+    def oldest_open_lot(self) -> dict[str, Any]:
+        rows = self.db.execute(
+            select(Batch.code, Batch.creation_date, Batch.status)
+            .where(Batch.cooperative_id == self.cooperative_id)
+            .order_by(Batch.creation_date.asc())
+        ).all()
+        items: list[dict[str, Any]] = []
+        for code, created, status in rows:
+            s = str(status.value if hasattr(status, "value") else status).lower()
+            if s in {"completed", "cancelled", "archived"}:
+                continue
+            items = [{"lot_code": str(code), "creation_date": str(created)}]
+            break
+        return {"items": items, "sources": [{"type": "sql", "table": "batches", "label": "Oldest open lot", "record_count": len(items)}], "warnings": ["NO_SQL_DATA"] if not items else []}
+
+    def process_stage_loss_ranking(self, days: int) -> dict[str, Any]:
+        since = date.today() - timedelta(days=max(1, int(days)))
+        rows = self.db.execute(
+            select(ProcessStep.type, func.coalesce(func.sum(ProcessStep.loss_value), 0.0).label("kg_loss"))
+            .join(Batch, Batch.id == ProcessStep.batch_id)
+            .where(Batch.cooperative_id == self.cooperative_id, ProcessStep.date >= since)
+            .group_by(ProcessStep.type)
+            .order_by(func.coalesce(func.sum(ProcessStep.loss_value), 0.0).desc())
+            .limit(1)
+        ).all()
+        items = [{"stage": str(stage), "kg_loss": float(kg or 0.0)} for stage, kg in rows]
+        return {"items": items, "sources": [{"type": "sql", "table": "process_steps", "label": "Process stage loss ranking", "record_count": len(items)}], "warnings": ["NO_SQL_DATA"] if not items else []}
+
+    def avg_paid_invoices_current_quarter(self) -> dict[str, Any]:
+        today = date.today()
+        q_start_month = ((today.month - 1) // 3) * 3 + 1
+        start = date(today.year, q_start_month, 1)
+        rows = self.db.execute(
+            select(CommercialInvoice.total_amount_fcfa, CommercialInvoice.status, CommercialInvoice.issue_date)
+            .where(CommercialInvoice.cooperative_id == self.cooperative_id, CommercialInvoice.issue_date >= start)
+        ).all()
+        paid_values: list[float] = []
+        for total, status, _ in rows:
+            s = str(status.value if hasattr(status, "value") else status).lower()
+            if s == "paid":
+                paid_values.append(float(total or 0.0))
+        avg_value = (sum(paid_values) / len(paid_values)) if paid_values else None
+        items = [{"avg_paid_invoice_fcfa": float(avg_value)}] if avg_value is not None else []
+        return {"items": items, "sources": [{"type": "sql", "table": "commercial_invoices", "label": "Average paid invoice (current quarter)", "record_count": len(items)}], "warnings": ["NO_SQL_DATA"] if not items else []}
+
+    def top_customer_by_orders(self) -> dict[str, Any]:
+        rows = self.db.execute(
+            select(CommercialOrder.customer_name, func.coalesce(func.sum(CommercialOrder.total_amount_fcfa), 0.0).label("total"))
+            .where(CommercialOrder.cooperative_id == self.cooperative_id)
+            .group_by(CommercialOrder.customer_name)
+            .order_by(func.coalesce(func.sum(CommercialOrder.total_amount_fcfa), 0.0).desc())
+            .limit(1)
+        ).all()
+        items = [{"customer_name": str(name), "total_amount_fcfa": float(total or 0.0)} for name, total in rows]
+        return {"items": items, "sources": [{"type": "sql", "table": "commercial_orders", "label": "Top customer by orders", "record_count": len(items)}], "warnings": ["NO_SQL_DATA"] if not items else []}
+
+    def month_vs_month_charges(self) -> dict[str, Any]:
+        today = date.today()
+        start_current = date(today.year, today.month, 1)
+        if today.month == 1:
+            start_previous = date(today.year - 1, 12, 1)
+        else:
+            start_previous = date(today.year, today.month - 1, 1)
+        end_previous = start_current - timedelta(days=1)
+
+        current_total = 0.0
+        previous_total = 0.0
+        using_global = self.module_available("global_charges")
+        if using_global:
+            gc_rows = self.db.execute(
+                select(GlobalCharge.date, GlobalCharge.amount_fcfa).where(GlobalCharge.cooperative_id == self.cooperative_id)
+            ).all()
+            for dt, amt in gc_rows:
+                if dt is None:
+                    continue
+                value = float(amt or 0.0)
+                if dt >= start_current:
+                    current_total += value
+                elif start_previous <= dt <= end_previous:
+                    previous_total += value
+        elif self.module_available("treasury_transactions"):
+            tx_rows = self.db.execute(
+                select(TreasuryTransaction.transaction_date, TreasuryTransaction.amount_fcfa, TreasuryTransaction.type, TreasuryTransaction.status).where(
+                    TreasuryTransaction.cooperative_id == self.cooperative_id
+                )
+            ).all()
+            for dt, amt, tx_type, tx_status in tx_rows:
+                if dt is None:
+                    continue
+                tx_type_value = str(tx_type.value if hasattr(tx_type, "value") else tx_type).lower()
+                tx_status_value = str(tx_status.value if hasattr(tx_status, "value") else tx_status).lower()
+                if tx_type_value != "expense" or tx_status_value == "cancelled":
+                    continue
+                value = float(amt or 0.0)
+                if dt >= start_current:
+                    current_total += value
+                elif start_previous <= dt <= end_previous:
+                    previous_total += value
+        items = [{"current_month_fcfa": current_total, "previous_month_fcfa": previous_total}]
+        return {"items": items, "sources": [{"type": "sql", "table": "global_charges,treasury_transactions", "label": "Month vs month charges", "record_count": 1}], "warnings": []}
 
 
 def _parse_date_values(date_range: list[str] | None) -> tuple[date | None, date | None]:

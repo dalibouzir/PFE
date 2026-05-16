@@ -41,10 +41,11 @@ import {
   stageLabelFromType,
   type WorkflowStageDef,
 } from "@/lib/ui/lot-workflow";
+import { getProductStepTemplate } from "@/lib/workflow/productStepTemplates";
 
 const KG_PER_TON = 1000;
 const todayIso = new Date().toISOString().slice(0, 10);
-const defaultSteps = ["Nettoyage", "Sechage", "Tri", "Emballage"];
+const defaultSteps = getProductStepTemplate(null, "post_harvest");
 
 type MassUnit = "kg" | "ton";
 type StagePreset = Pick<WorkflowStageDef, "key" | "label" | "icon" | "typeTag">;
@@ -91,6 +92,27 @@ function parseImpactedStep(item: Recommendation): string {
   const text = `${item.rationale} ${item.suggested_action}`.toLowerCase();
   const workflowStage = LOT_WORKFLOW_STAGES.find((stage) => stage.aliases.some((alias) => text.includes(alias)));
   return workflowStage?.label ?? "Process global";
+}
+
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isExitStep(stepType: string): boolean {
+  const text = normalizeText(stepType);
+  return ["vente", "sale", "livraison", "delivery", "transfert", "transfer", "expedition", "sortie"].some((token) =>
+    text.includes(token),
+  );
+}
+
+function isLossStep(stepType: string): boolean {
+  const text = normalizeText(stepType);
+  return ["perte", "loss", "dommage", "damage", "rejet", "rejection", "casse", "avarie"].some((token) =>
+    text.includes(token),
+  );
 }
 
 export default function LotsPage() {
@@ -154,9 +176,21 @@ export default function LotsPage() {
   const previewReference = useBatchReferencePreview(watchedProductId || null);
 
   const productLookup = useMemo(() => new Map(products.map((p) => [p.id, p.name])), [products]);
+  const availableProductIds = useMemo(
+    () => new Set(stocks.filter((stock) => stock.available_stock_kg > 0).map((stock) => stock.product_id)),
+    [stocks],
+  );
+  const productsInStock = useMemo(
+    () => products.filter((product) => availableProductIds.has(product.id)),
+    [products, availableProductIds],
+  );
 
   const filteredBatches = useMemo(() => {
-    const base = [...batches].sort((a, b) => b.creation_date.localeCompare(a.creation_date));
+    const base = [...batches]
+      .filter((item) =>
+        Boolean(item.member_id && item.parcel_id && item.preharvest_completed_at && item.confirmed_weight_kg),
+      )
+      .sort((a, b) => b.creation_date.localeCompare(a.creation_date));
     return base.filter((item) => {
       const productName = productLookup.get(item.product_id) ?? "";
       const text = `${item.code} ${item.product_id} ${productName}`.toLowerCase();
@@ -239,6 +273,27 @@ export default function LotsPage() {
     const efficiencyPct = qtyIn > 0 ? (qtyOut / qtyIn) * 100 : 0;
     return { qtyIn, qtyOut, lossKg, efficiencyPct };
   }, [selectedSteps]);
+
+  const materialBalance = useMemo(() => {
+    const initialKg = selectedBatch?.confirmed_weight_kg ?? 0;
+    const currentKg = selectedBatch?.current_qty ?? selectedBatch?.confirmed_weight_kg ?? 0;
+
+    const exitsKg = selectedSteps.reduce((sum, step) => {
+      if (!isExitStep(step.type)) return sum;
+      return sum + Math.max(step.normalized_loss_value || 0, 0);
+    }, 0);
+
+    const explicitLossesKg = selectedSteps.reduce((sum, step) => {
+      if (!isLossStep(step.type)) return sum;
+      return sum + Math.max(step.normalized_loss_value || 0, 0);
+    }, 0);
+
+    const computedGapKg = Math.max(initialKg - currentKg - exitsKg, 0);
+    const lossesKg = Math.max(explicitLossesKg, computedGapKg);
+    const lossPct = initialKg > 0 ? (lossesKg / initialKg) * 100 : 0;
+
+    return { initialKg, currentKg, exitsKg, lossesKg, lossPct };
+  }, [selectedBatch?.confirmed_weight_kg, selectedBatch?.current_qty, selectedSteps]);
 
   const stageMetrics = useMemo(() => {
     const grouped = new Map<
@@ -362,9 +417,16 @@ export default function LotsPage() {
   const anomalyCount = selectedSteps.filter((step) => step.warning || step.loss_pct >= 12).length;
   const latestRecommendation = recommendationCards[0] ?? null;
   const selectedSeason = selectedBatch ? buildSeasonFromDate(selectedBatch.creation_date) : "";
-  const selectedLossPct = selectedBatch?.initial_qty
-    ? Math.max(((selectedBatch.initial_qty - selectedBatch.current_qty) / selectedBatch.initial_qty) * 100, 0)
-    : 0;
+  const postHarvestInitialQty = materialBalance.initialKg;
+  const postHarvestCurrentQty = materialBalance.currentKg;
+  const selectedLossPct = materialBalance.lossPct;
+  const forecastQty = selectedBatch?.estimated_qty_kg ?? null;
+  const forecastGap = useMemo(() => {
+    if (forecastQty === null || forecastQty === undefined || !selectedBatch?.confirmed_weight_kg) return null;
+    const delta = selectedBatch.confirmed_weight_kg - forecastQty;
+    const pct = forecastQty > 0 ? (delta / forecastQty) * 100 : 0;
+    return { delta, pct };
+  }, [forecastQty, selectedBatch?.confirmed_weight_kg]);
 
   const selectedProductStock = useMemo(() => {
     if (!watchedProductId) return null;
@@ -389,12 +451,12 @@ export default function LotsPage() {
       {
         id: `batch-${selectedBatch.id}`,
         title: `Lot ${selectedBatch.code} cree`,
-        detail: `Quantite initiale ${selectedBatch.initial_qty.toFixed(2)} ${selectedBatch.unit}`,
+        detail: `Stock initial Post-recolte ${materialBalance.initialKg.toFixed(2)} kg · Stock actuel ${materialBalance.currentKg.toFixed(2)} kg`,
         date: selectedBatch.creation_date,
       },
       ...stepItems,
     ];
-  }, [selectedBatch, selectedSteps]);
+  }, [selectedBatch, selectedSteps, materialBalance.initialKg, materialBalance.currentKg]);
 
   const postHarvestInsights = useMemo<AIInsightItem[]>(() => {
     if (!selectedBatch) return [];
@@ -466,31 +528,21 @@ export default function LotsPage() {
   };
 
   const openCreateLot = () => {
-    setEditingBatch(null);
-    lotForm.reset({
-      product_id: products[0]?.id ?? "",
-      creation_date: todayIso,
-      initial_qty: 0,
-      unit: "kg",
-      process_steps: defaultSteps,
-    });
-    setPlannedStepsDraft(defaultSteps);
-    setStepToAdd("");
-    setCustomStepInput("");
-    setFormError(null);
-    setLotFormOpen(true);
+    setFormError("Post-récolte continue le même batch. Démarrez le lot depuis Parcelles.");
   };
 
   const openEditLot = (batch: Batch) => {
+    const productName = productLookup.get(batch.product_id) ?? null;
+    const fallbackSteps = getProductStepTemplate(productName, "post_harvest");
     setEditingBatch(batch);
     lotForm.reset({
       product_id: batch.product_id,
       creation_date: batch.creation_date,
       initial_qty: batch.initial_qty,
       unit: (batch.unit || "kg") as MassUnit,
-      process_steps: batch.ordered_process_steps?.length ? batch.ordered_process_steps : defaultSteps,
+      process_steps: batch.ordered_process_steps?.length ? batch.ordered_process_steps : fallbackSteps,
     });
-    setPlannedStepsDraft(batch.ordered_process_steps?.length ? batch.ordered_process_steps : defaultSteps);
+    setPlannedStepsDraft(batch.ordered_process_steps?.length ? batch.ordered_process_steps : fallbackSteps);
     setStepToAdd("");
     setCustomStepInput("");
     setFormError(null);
@@ -584,6 +636,10 @@ export default function LotsPage() {
         });
         setSelectedBatchId(updated.id);
       } else {
+        if (!availableProductIds.has(values.product_id)) {
+          setFormError("Sélectionnez un produit actuellement disponible en stock.");
+          return;
+        }
         const lotUnit = (values.unit || "kg") as MassUnit;
         const requestedQty = Number(values.initial_qty);
         const requestedQtyKg = toKg(requestedQty, lotUnit);
@@ -678,6 +734,10 @@ export default function LotsPage() {
   return (
     <main className="min-w-0 overflow-x-hidden">
       <PageIntro title="Flux matiere" />
+      <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "20ms" }}>
+        <p className="text-sm font-semibold text-[var(--text)]">Continuation Post-récolte du même lot</p>
+        <p className="text-xs text-[var(--muted)]">Les lots prêts depuis Pré-récolte sont prioritaires. Cette page ne crée pas un nouveau lot.</p>
+      </section>
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "30ms" }}>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -710,7 +770,9 @@ export default function LotsPage() {
 
       {!selectedBatch ? (
         <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "60ms" }}>
-          <p className="text-sm text-[var(--muted)]">Aucun lot disponible. Creez un lot pour demarrer le pilotage.</p>
+          <p className="text-sm text-[var(--muted)]">
+            Aucun lot prêt pour la Post-récolte. Confirmez le poids réel en Pré-récolte pour débloquer un lot.
+          </p>
         </section>
       ) : (
         <section className="min-w-0 grid gap-4 xl:grid-cols-[300px_1fr]">
@@ -727,13 +789,25 @@ export default function LotsPage() {
               productName={productLookup.get(selectedBatch.product_id) ?? selectedBatch.product_id.slice(0, 8)}
               seasonLabel={selectedSeason}
               unit={selectedBatch.unit}
-              initialQty={selectedBatch.initial_qty}
-              currentQty={selectedBatch.current_qty}
+              initialQty={postHarvestInitialQty}
+              currentQty={postHarvestCurrentQty}
               lossPct={selectedLossPct}
               statusLabel={batchStatusLabel[selectedBatch.status] ?? selectedBatch.status}
               statusTone={batchStatusTone[selectedBatch.status] ?? "info"}
               onEditLot={() => openEditLot(selectedBatch)}
             />
+            {forecastGap ? (
+              <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "45ms" }}>
+                <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Écart prévision / poids confirmé</p>
+                <p className="mt-1 text-sm text-[var(--text)]">
+                  Prévision: {forecastQty?.toLocaleString("fr-FR")} kg · Poids confirmé: {selectedBatch.confirmed_weight_kg?.toLocaleString("fr-FR")} kg
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[var(--text)]">
+                  Écart: {forecastGap.delta >= 0 ? "+" : ""}
+                  {forecastGap.delta.toLocaleString("fr-FR")} kg ({forecastGap.pct.toFixed(1)}%)
+                </p>
+              </article>
+            ) : null}
 
             <LotWorkspaceTabs activeTab={activeTab} onChange={handleSwitchTab} includeHistory />
 
@@ -758,8 +832,8 @@ export default function LotsPage() {
                       <p className={`text-sm font-semibold ${anomalyCount > 0 ? "text-[var(--danger)]" : "text-[var(--info)]"}`}>{anomalyCount}</p>
                     </div>
                     <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
-                      <p className="text-[11px] text-[var(--muted)]">Efficacite globale</p>
-                      <p className="text-sm font-semibold text-[var(--text)]">{lotTotals.efficiencyPct.toFixed(1)}%</p>
+                      <p className="text-[11px] text-[var(--muted)]">Pertes Post-récolte</p>
+                      <p className="text-sm font-semibold text-[var(--text)]">{materialBalance.lossesKg.toFixed(2)} kg</p>
                     </div>
                     <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
                       <p className="text-[11px] text-[var(--muted)]">Statut lot</p>
@@ -770,6 +844,16 @@ export default function LotsPage() {
                         />
                       </div>
                     </div>
+                  </div>
+                  <div className="mt-3 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
+                    <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Bilan matière Post-récolte</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <p className="text-xs text-[var(--muted)]">Stock initial Post-récolte: <span className="font-semibold text-[var(--text)]">{materialBalance.initialKg.toFixed(2)} kg</span></p>
+                      <p className="text-xs text-[var(--muted)]">Pertes Post-récolte: <span className="font-semibold text-[var(--text)]">{materialBalance.lossesKg.toFixed(2)} kg</span></p>
+                      <p className="text-xs text-[var(--muted)]">Sorties stock: <span className="font-semibold text-[var(--text)]">{materialBalance.exitsKg.toFixed(2)} kg</span></p>
+                      <p className="text-xs text-[var(--muted)]">Stock actuel: <span className="font-semibold text-[var(--text)]">{materialBalance.currentKg.toFixed(2)} kg</span></p>
+                    </div>
+                    <p className="mt-2 text-xs text-[var(--muted)]">Perte %: <span className="font-semibold text-[var(--text)]">{materialBalance.lossPct.toFixed(2)}%</span></p>
                   </div>
                 </article>
 
@@ -834,7 +918,7 @@ export default function LotsPage() {
 
             {activeTab === "history" && (
               <article className="premium-card reveal rounded-2xl p-5" style={{ ["--delay" as string]: "110ms" }}>
-                <h3 className="text-base font-semibold text-[var(--text)]">Historique lot</h3>
+                <h3 className="text-base font-semibold text-[var(--text)]">Journal des mouvements du lot courant</h3>
                 <div className="mt-3 space-y-2">
                   {historyItems.length === 0 ? (
                     <p className="text-sm text-[var(--muted)]">Aucun historique disponible.</p>
@@ -918,7 +1002,7 @@ export default function LotsPage() {
                 <option value="" disabled>
                   Selectionner
                 </option>
-                {products.map((product) => (
+                {productsInStock.map((product) => (
                   <option key={product.id} value={product.id}>
                     {product.name}
                   </option>
@@ -961,6 +1045,11 @@ export default function LotsPage() {
               {selectedProductStock ? ` (=${availableStockKg.toFixed(2)} kg)` : ""}
             </div>
           )}
+          {!editingBatch && productsInStock.length === 0 ? (
+            <div className="rounded-xl border border-[#F2D8C7] bg-[#FFF4EE] px-3 py-2 text-xs text-[#9B4B2A]">
+              Aucun produit n&apos;a de stock disponible pour créer un lot.
+            </div>
+          ) : null}
 
           <div className="space-y-2 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
             <p className="text-sm font-semibold text-[var(--text)]">Etapes ordonnees</p>

@@ -243,12 +243,14 @@ export type Input = {
   cooperative_id: string;
   member_id: string;
   product_id: string;
+  batch_id?: string | null;
   field_id?: string | null;
   date: string;
   quantity: number;
   grade: string;
   estimated_value?: number | null;
   status: string;
+  source_type: string;
   created_at: string;
   updated_at: string;
 };
@@ -256,6 +258,7 @@ export type Input = {
 export type InputCreate = {
   member_id: string;
   product_id: string;
+  batch_id?: string | null;
   field_id?: string | null;
   date: string;
   quantity: number;
@@ -263,6 +266,7 @@ export type InputCreate = {
   grade: string;
   estimated_value?: number | null;
   status?: string;
+  source_type?: string;
 };
 
 export type InputUpdate = Partial<InputCreate>;
@@ -273,18 +277,33 @@ export type FarmerAdvance = {
   id: string;
   cooperative_id: string;
   farmer_id: string;
+  batch_id?: string | null;
+  parcel_id?: string | null;
+  product_id?: string | null;
   amount_fcfa: number;
   reason: string;
   advance_date: string;
   note?: string | null;
   status: FarmerAdvanceStatus;
+  source_type: string;
   treasury_transaction_id?: string | null;
+  batch_code?: string | null;
+  product_name?: string | null;
+  confirmed_weight_kg?: number | null;
+  preharvest_completed_at?: string | null;
+  collecte_created?: boolean;
+  stock_in_created?: boolean;
+  return_status?: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type FarmerAdvanceCreate = {
   farmer_id: string;
+  batch_id?: string | null;
+  parcel_id?: string | null;
+  product_id?: string | null;
+  source_type?: string;
   amount_fcfa: number;
   reason: string;
   advance_date: string;
@@ -413,12 +432,36 @@ export type Batch = {
   id: string;
   cooperative_id: string;
   product_id: string;
+  member_id?: string | null;
+  parcel_id?: string | null;
   code: string;
   creation_date: string;
   unit: "kg" | "ton";
   ordered_process_steps: string[];
   initial_qty: number;
   current_qty: number;
+  surface_ha?: number | null;
+  expected_yield_kg_per_ha?: number | null;
+  expected_losses_kg?: number | null;
+  estimated_qty_kg?: number | null;
+  estimated_qty_override_reason?: string | null;
+  estimated_charge_fcfa?: number | null;
+  charge_approved_at?: string | null;
+  charge_approved_by_user_id?: string | null;
+  preharvest_activated_at?: string | null;
+  preharvest_step_statuses?: Array<{
+    index: number;
+    name: string;
+    status: "todo" | "in_progress" | "done";
+    updated_at?: string | null;
+  }> | null;
+  preharvest_completed_at?: string | null;
+  confirmed_weight_kg?: number | null;
+  collecte_input_id?: string | null;
+  collecte_created?: boolean;
+  stock_in_created?: boolean;
+  postharvest_started_at?: string | null;
+  status_note?: string | null;
   initial_qty_display: number;
   current_qty_display: number;
   status: string;
@@ -429,10 +472,17 @@ export type Batch = {
 
 export type BatchCreate = {
   product_id: string;
+  member_id?: string | null;
+  parcel_id?: string | null;
   creation_date: string;
   initial_qty: number;
   unit: "kg" | "ton";
   process_steps: string[];
+  surface_ha?: number | null;
+  expected_yield_kg_per_ha?: number | null;
+  expected_losses_kg?: number | null;
+  estimated_qty_override_reason?: string | null;
+  estimated_charge_fcfa?: number | null;
 };
 
 export type BatchUpdate = {
@@ -441,6 +491,15 @@ export type BatchUpdate = {
 
 export type BatchStatusUpdate = {
   status: string;
+};
+
+export type BatchPreHarvestStepStatusesUpdate = {
+  statuses: Array<{
+    index: number;
+    name: string;
+    status: "todo" | "in_progress" | "done";
+    updated_at?: string | null;
+  }>;
 };
 
 export type StockAlert = {

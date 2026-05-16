@@ -72,15 +72,20 @@ export function LoginExperience() {
                   </p>
                 </div>
 
-                <div className="wf-liquid-card mt-7 rounded-2xl p-5 sm:mt-8 sm:p-6">
-                  <ul className="space-y-1.5 text-[14px] font-medium leading-relaxed text-[#163529]">
-                    <li>- Gestion cooperatives et managers (admin)</li>
-                    <li>- Suivi membres, parcelles, stocks et lots (manager)</li>
-                    <li>- Transformations et analytique operationnelle</li>
-                  </ul>
-                  <p className="mt-3 text-[13px] leading-relaxed text-[#1e4335]/90">
-                    Support: <span className="font-semibold text-[#18392c]">support@wefarm.sn</span>
-                  </p>
+                <div className="wf-liquid-card mt-6 overflow-hidden rounded-2xl p-0 sm:mt-7">
+                  <div className="bg-gradient-to-r from-[#0f7a3b] via-[#178a49] to-[#2ea55f] px-5 py-4 text-white sm:px-6">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/85">Plateforme coopérative</p>
+                    <p className="mt-1 text-[18px] font-semibold leading-tight">Pilotage unifié WeeFarm</p>
+                    <p className="mt-1 text-[12px] text-white/90">Administration, exécution terrain et suivi opérationnel.</p>
+                  </div>
+                  <div className="grid gap-2 px-5 py-4 text-[13px] text-[#173b2d] sm:px-6 sm:py-5">
+                    <div className="rounded-xl border border-[#d4e7da] bg-white/70 px-3 py-2">Gestion des coopératives et managers (admin)</div>
+                    <div className="rounded-xl border border-[#d4e7da] bg-white/70 px-3 py-2">Suivi membres, parcelles, stocks et lots (manager)</div>
+                    <div className="rounded-xl border border-[#d4e7da] bg-white/70 px-3 py-2">Transformations et analytique opérationnelle</div>
+                    <p className="pt-1 text-[12px] text-[#254a3a]">
+                      Support: <span className="font-semibold text-[#1a3d2f]">support@wefarm.sn</span>
+                    </p>
+                  </div>
                 </div>
               </aside>
 

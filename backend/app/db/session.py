@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,9 +16,13 @@ def _get_engine():
     global _engine
     if _engine is None:
         db_url = settings.effective_database_url
-        connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
-        _engine = create_engine(db_url, pool_pre_ping=True, connect_args=connect_args)
+        _engine = create_engine(db_url, pool_pre_ping=True)
     return _engine
+
+
+def get_engine():
+    """Public engine accessor for startup checks/maintenance."""
+    return _get_engine()
 
 
 def _get_session_local():
@@ -28,6 +34,22 @@ def _get_session_local():
             bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, class_=Session
         )
     return _session_local
+
+
+class _LazySessionLocal:
+    """Compatibility shim for scripts/tests importing `SessionLocal`.
+
+    This keeps lazy initialization semantics so pytest audit modes can swap
+    database targets before the first session is created.
+    """
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Session:
+        session_factory = _get_session_local()
+        return session_factory(*args, **kwargs)
+
+
+# Public compatibility handle used across scripts/tests.
+SessionLocal = _LazySessionLocal()
 
 
 def reset_engine():
@@ -46,4 +68,3 @@ def get_db():
         yield db
     finally:
         db.close()
-

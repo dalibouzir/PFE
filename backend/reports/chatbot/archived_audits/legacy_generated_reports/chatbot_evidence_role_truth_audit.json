@@ -1,0 +1,616 @@
+{
+  "generated_at": "2026-05-13T10:43:10.099016+00:00",
+  "audit_name": "chatbot_evidence_role_truth_audit",
+  "summary": {
+    "PASS": 19,
+    "PARTIAL": 1,
+    "FAIL": 1,
+    "TOTAL": 21
+  },
+  "cases": [
+    {
+      "case_id": "sql-members-list",
+      "module": "members",
+      "chatbot_question": "Lister les membres de notre coopérative.",
+      "direct_truth_summary": "members_rows=3",
+      "chatbot_answer_summary": "1. Résultat principal La coopérative compte 3 membre(s) inscrit(s). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members 5. Avertissements si nécessaires Aucun avertissement critique.",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_FACT_ROWS",
+      "content_validation": {
+        "refs_expected": [
+          "awa ndiaye",
+          "ibrahima diallo",
+          "mamadou ba"
+        ],
+        "refs_found": [],
+        "expected_block_types": [
+          "sources",
+          "summary",
+          "table",
+          "warnings"
+        ],
+        "actual_block_types": [
+          "sources",
+          "summary",
+          "warnings"
+        ]
+      },
+      "mismatch_labels": [
+        "MISSING_EXPECTED_ROWS",
+        "MISSING_RESPONSE_BLOCKS"
+      ],
+      "verdict": "FAIL",
+      "suspected_root_cause": "La réponse finale ne restitue pas toutes les lignes attendues de la vérité SQL."
+    },
+    {
+      "case_id": "sql-parcels-list",
+      "module": "parcels",
+      "chatbot_question": "Liste les parcelles enregistrées.",
+      "direct_truth_summary": "parcels_rows=3",
+      "chatbot_answer_summary": "1. Résultat principal Parcelles enregistrées (3): - PARCELLE-AN-01: 1.10 ha - PARCELLE-ID-01: 0.90 ha - PARCELLE-MB-01: 1.40 ha 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members - SQL: parcels",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_FACT_ROWS",
+      "content_validation": {
+        "refs_expected": [
+          "parcelle-an-01",
+          "parcelle-id-01",
+          "parcelle-mb-01"
+        ],
+        "refs_found": [
+          "parcelle-an-01",
+          "parcelle-id-01",
+          "parcelle-mb-01"
+        ]
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-collections-today",
+      "module": "collections",
+      "chatbot_question": "Quelle quantité a été collectée aujourd’hui ?",
+      "direct_truth_summary": "collections_today_kg=650.0",
+      "chatbot_answer_summary": "1. Résultat principal Quantité collectée observée: 650.0 kg. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: inputs 5. Avertissements si nécessaires Aucun avertissement critique.",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_FACT_ROWS",
+      "content_validation": {
+        "qty": 650.0
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-lots-in-progress",
+      "module": "lots/batches",
+      "chatbot_question": "Quels lots sont en cours ?",
+      "direct_truth_summary": "in_progress_lots=2 | refs=MANG-004, MANG-005",
+      "chatbot_answer_summary": "1. Résultat principal Lots en cours (2): - MANG-005: perte 13.3 % | efficacité 86.7 % - MANG-004: perte 28.0 % | efficacité 72.0 % 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: batches 5. Avertiss",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_FACT_ROWS",
+      "content_validation": {
+        "refs_expected": [
+          "mang-004",
+          "mang-005"
+        ],
+        "refs_found": [
+          "mang-004",
+          "mang-005"
+        ],
+        "principal_line": "Lots en cours (2):"
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-low-efficiency",
+      "module": "loss/efficiency",
+      "chatbot_question": "Quels lots ont une efficacité faible ?",
+      "direct_truth_summary": "low_efficiency_lots=4 | refs=BATCH-0001, BATCH-0002, BATCH-0003, MANG-004",
+      "chatbot_answer_summary": "1. Résultat principal Lots à efficacité faible (4): - MANG-004: efficacité 72.0 % | perte 28.0 % - BATCH-0003: efficacité 79.7 % | perte 20.3 % - BATCH-0002: efficacité 79.7 % | perte 20.3 % - BATCH-0001: efficacité 79.7 % | perte 20.3 % 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations ",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_FACT_ROWS",
+      "content_validation": {
+        "refs_expected": [
+          "batch-0001",
+          "batch-0002",
+          "batch-0003",
+          "mang-004"
+        ],
+        "refs_found": [
+          "batch-0001",
+          "batch-0002",
+          "batch-0003",
+          "mang-004"
+        ],
+        "principal_line": "Lots à efficacité faible (4):"
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "rag-drying-best-practices",
+      "module": "RAG knowledge",
+      "chatbot_question": "Comment réduire les pertes pendant le séchage de la mangue ?",
+      "direct_truth_summary": "rag_drying_chunks=1 | titles=Bonnes pratiques de séchage de la mangue",
+      "chatbot_answer_summary": "1. Résultat principal Le bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité. 2. Explication courte Bonnes pratiques: Le bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité 3. Re",
+      "expected_route": "RAG_ONLY",
+      "actual_route": "RAG_ONLY",
+      "expected_source_types": [
+        "rag"
+      ],
+      "actual_source_types": [
+        "rag"
+      ],
+      "expected_evidence_role": "RAG_EXPLANATION",
+      "content_validation": {
+        "rag_terms_expected": [
+          "humidité",
+          "retourner",
+          "claies",
+          "surcharge",
+          "bonnes pratiques",
+          "séchage"
+        ],
+        "rag_terms_found": [
+          "bonnes pratiques",
+          "séchage"
+        ],
+        "principal_line": "Le bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité."
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "rag-sorting-best-practices",
+      "module": "RAG knowledge",
+      "chatbot_question": "Quelles sont les bonnes pratiques pour le tri des mangues ?",
+      "direct_truth_summary": "rag_sorting_chunks=1",
+      "chatbot_answer_summary": "1. Résultat principal Le tri des mangues doit éliminer les fruits blessés, séparer par maturité et standardiser les grades pour réduire les pertes post-récolte. 2. Explication courte Bonnes pratiques: Le tri des mangues doit éliminer les fruits blessés ; séparer par maturité et standardiser les grades pour réduire les ",
+      "expected_route": "RAG_ONLY",
+      "actual_route": "RAG_ONLY",
+      "expected_source_types": [
+        "rag"
+      ],
+      "actual_source_types": [
+        "rag"
+      ],
+      "expected_evidence_role": "RAG_EXPLANATION",
+      "content_validation": {
+        "rag_terms_expected": [
+          "maturité",
+          "grades",
+          "blessés",
+          "tri",
+          "bonnes pratiques"
+        ],
+        "rag_terms_found": [
+          "maturité",
+          "grades",
+          "blessés",
+          "tri",
+          "bonnes pratiques"
+        ],
+        "principal_line": "Le tri des mangues doit éliminer les fruits blessés, séparer par maturité et standardiser les grades pour réduire les pertes post-récolte."
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "hybrid-balance-mang004",
+      "module": "material balance",
+      "chatbot_question": "Explique le bilan matière du lot MANG-004.",
+      "direct_truth_summary": "MANG-004: loss=28.0% eff=72.0% + rag_material_balance_chunk",
+      "chatbot_answer_summary": "1. Résultat principal Le bilan matière du lot MANG-004 montre une perte de 28.0 % et une efficacité de 72.0 %. 2. Explication courte Mesures SQL: perte 28.0% et efficacité 72.0% Explication RAG: Le bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité",
+      "expected_route": "HYBRID_SQL_RAG",
+      "actual_route": "HYBRID_SQL_RAG",
+      "expected_source_types": [
+        "rag",
+        "sql"
+      ],
+      "actual_source_types": [
+        "rag",
+        "sql"
+      ],
+      "expected_evidence_role": "HYBRID_SQL_RAG",
+      "content_validation": {
+        "sql_terms_expected": [
+          "MANG-004",
+          "28.0",
+          "72.0",
+          "bilan matière"
+        ],
+        "sql_terms_found": [
+          "MANG-004",
+          "28.0",
+          "72.0",
+          "bilan matière"
+        ],
+        "rag_terms_expected": [
+          "quantités entrantes",
+          "sortantes",
+          "identifier les pertes",
+          "efficacité"
+        ],
+        "rag_terms_found": [
+          "quantités entrantes",
+          "sortantes",
+          "identifier les pertes",
+          "efficacité"
+        ],
+        "principal_line": "Le bilan matière du lot MANG-004 montre une perte de 28.0 % et une efficacité de 72.0 %."
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "hybrid-ml-risk",
+      "module": "ML prediction logs",
+      "chatbot_question": "Quels sont les lots avec risque élevé ?",
+      "direct_truth_summary": "ml_high_risk_refs=MANG-004",
+      "chatbot_answer_summary": "1. Résultat principal Lots à risque élevé (5): - MANG-004: perte 28.0 % | efficacité 72.0 % - BATCH-0003: perte 20.3 % | efficacité 79.7 % - BATCH-0002: perte 20.3 % | efficacité 79.7 % - BATCH-0001: perte 20.3 % | efficacité 79.7 % - MANG-005: perte 13.3 % | efficacité 86.7 % 2. Explication courte Signal ML: risque ME",
+      "expected_route": "HYBRID_SQL_ML",
+      "actual_route": "HYBRID_SQL_ML",
+      "expected_source_types": [
+        "ml"
+      ],
+      "actual_source_types": [
+        "ml",
+        "sql"
+      ],
+      "expected_evidence_role": "HYBRID_SQL_ML",
+      "content_validation": {
+        "refs_expected": [
+          "mang-004"
+        ],
+        "refs_found": [
+          "batch-0001",
+          "batch-0002",
+          "batch-0003",
+          "mang-004",
+          "mang-005"
+        ],
+        "principal_line": "Lots à risque élevé (5):"
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "hybrid-recommendation",
+      "module": "recommendations",
+      "chatbot_question": "Donne-moi les recommandations IA pour le lot MANG-004.",
+      "direct_truth_summary": "recommendation_rows=0",
+      "chatbot_answer_summary": "1. Résultat principal Le lot MANG-004 présente une perte de 28.0% et une efficacité de 72.0%. 2. Explication courte Explication RAG: Le bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité. 3. Recommandations si pertinentes 1. [HIGH] Isoler le lot MA",
+      "expected_route": "HYBRID_FULL",
+      "actual_route": "HYBRID_FULL",
+      "expected_source_types": [
+        "recommendation"
+      ],
+      "actual_source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "expected_evidence_role": "RECOMMENDATION_GROUNDED",
+      "content_validation": {
+        "recommendation_rows": 0,
+        "recommendations_returned": 0,
+        "principal_line": "Le lot MANG-004 présente une perte de 28.0% et une efficacité de 72.0%."
+      },
+      "mismatch_labels": [
+        "WRONG_FINAL_FOCUS"
+      ],
+      "verdict": "PARTIAL",
+      "suspected_root_cause": "Le focus final de la réponse est orienté sur un mauvais type de preuve."
+    },
+    {
+      "case_id": "sql-stock-global",
+      "module": "stocks",
+      "chatbot_question": "Quel est le stock ?",
+      "direct_truth_summary": "batches_rows=2",
+      "chatbot_answer_summary": "1. Résultat principal Les stocks actuels (2 produits) sont: - Mangue: 500.0 kg disponibles - Arachide: 80.0 kg disponibles 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: stocks 5. Avertissements si",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_FACT_ROWS",
+      "content_validation": {
+        "principal_line": "Les stocks actuels (2 produits) sont:"
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-stock-mango",
+      "module": "stocks",
+      "chatbot_question": "Quel est le stock de mangue ?",
+      "direct_truth_summary": "mango_stock_probe=1",
+      "chatbot_answer_summary": "1. Résultat principal Les stocks actuels (1 produits) sont: - Mangue: 500.0 kg disponibles 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: stocks 5. Avertissements si nécessaires Aucun avertissement",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_FACT_ROWS",
+      "content_validation": {
+        "principal_line": "1. résultat principal"
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-stage-compare",
+      "module": "loss/efficiency",
+      "chatbot_question": "Compare les pertes entre séchage et tri.",
+      "direct_truth_summary": "stage_compare_drying_sorting",
+      "chatbot_answer_summary": "1. Résultat principal Comparaison des pertes: Séchage 7.6% vs Tri 6.4%. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: process_steps 5. Avertissements si nécessaires Aucun avertissement critique.",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_FACT_ROWS",
+      "content_validation": {
+        "drying": 7.599999999999994,
+        "sorting": 6.399668776642464
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-member-top-kg",
+      "module": "members ranking",
+      "chatbot_question": "Quel membre a livré le plus de kg ?",
+      "direct_truth_summary": "member_ranking_kg=Mamadou Ba:1070.0, Awa Ndiaye:850.0, Ibrahima Diallo:280.0",
+      "chatbot_answer_summary": "1. Résultat principal Classement des membres par quantité collectée (3): - Mamadou Ba (MBR-001): 1070.0 kg - Awa Ndiaye (MBR-002): 850.0 kg - Ibrahima Diallo (MBR-003): 280.0 kg 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. ",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_MEMBER_RANKING",
+      "content_validation": {
+        "expected_names": [
+          "mamadou ba",
+          "awa ndiaye",
+          "ibrahima diallo"
+        ],
+        "found_names": [
+          "mamadou ba",
+          "awa ndiaye",
+          "ibrahima diallo"
+        ]
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-member-ranking-kg",
+      "module": "members ranking",
+      "chatbot_question": "Classe les membres par quantité collectée.",
+      "direct_truth_summary": "member_ranking_kg=Mamadou Ba:1070.0, Awa Ndiaye:850.0, Ibrahima Diallo:280.0",
+      "chatbot_answer_summary": "1. Résultat principal Classement des membres par quantité collectée (3): - Mamadou Ba (MBR-001): 1070.0 kg - Awa Ndiaye (MBR-002): 850.0 kg - Ibrahima Diallo (MBR-003): 280.0 kg 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. ",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_MEMBER_RANKING",
+      "content_validation": {
+        "expected_names": [
+          "mamadou ba",
+          "awa ndiaye",
+          "ibrahima diallo"
+        ],
+        "found_names": [
+          "mamadou ba",
+          "awa ndiaye",
+          "ibrahima diallo"
+        ]
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-member-top-value",
+      "module": "members value ranking",
+      "chatbot_question": "Quel membre a généré le plus de valeur ?",
+      "direct_truth_summary": "member_value_module_exists=True | rows=0",
+      "chatbot_answer_summary": "1. Résultat principal Les données disponibles ne permettent pas de confirmer ce point. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: global_charges - SQL: members 5. Avertissements si nécessaires ",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_MEMBER_VALUE_OR_UNAVAILABLE",
+      "content_validation": {
+        "rows_count": 0
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-invoices-list",
+      "module": "invoices",
+      "chatbot_question": "Liste les factures.",
+      "direct_truth_summary": "invoices_module_exists=True | rows=0",
+      "chatbot_answer_summary": "1. Résultat principal Aucune facture n’est disponible dans les données actuelles. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: commercial_invoices 5. Avertissements si nécessaires - Aucune donnée",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_INVOICES_OR_UNAVAILABLE",
+      "content_validation": {
+        "rows_count": 0,
+        "module_exists": true
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-invoices-status",
+      "module": "invoices",
+      "chatbot_question": "Quel est le statut des factures ?",
+      "direct_truth_summary": "invoices_module_exists=True | rows=0",
+      "chatbot_answer_summary": "1. Résultat principal Aucune facture n’est disponible dans les données actuelles. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: commercial_invoices 5. Avertissements si nécessaires - Aucune donnée",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_INVOICES_OR_UNAVAILABLE",
+      "content_validation": {
+        "rows_count": 0,
+        "module_exists": true
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-commercial-orders",
+      "module": "commercialisation",
+      "chatbot_question": "Quelles commandes commerciales sont en cours ?",
+      "direct_truth_summary": "commercial_orders_module_exists=True | rows=0",
+      "chatbot_answer_summary": "1. Résultat principal Aucune commande commerciale n’est disponible dans les données actuelles. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: commercial_orders 5. Avertissements si nécessaires - Au",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_COMMERCIAL_OR_UNAVAILABLE",
+      "content_validation": {
+        "rows_count": 0,
+        "module_exists": true
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-commercial-total",
+      "module": "commercialisation",
+      "chatbot_question": "Quel est le chiffre d’affaires ou total commercial ?",
+      "direct_truth_summary": "commercial_orders_module_exists=True | rows=0",
+      "chatbot_answer_summary": "1. Résultat principal Aucune commande commerciale n’est disponible dans les données actuelles. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: commercial_orders 5. Avertissements si nécessaires - Au",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_COMMERCIAL_OR_UNAVAILABLE",
+      "content_validation": {
+        "rows_count": 0,
+        "module_exists": true
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    },
+    {
+      "case_id": "sql-finance",
+      "module": "finance",
+      "chatbot_question": "Quelles charges ou dépenses avons-nous ?",
+      "direct_truth_summary": "finance_module_exists=True | rows=0",
+      "chatbot_answer_summary": "1. Résultat principal Aucune charge ou dépense n’est disponible dans les données actuelles. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: global_charges - SQL: treasury_transactions 5. Avertisseme",
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "expected_source_types": [
+        "sql"
+      ],
+      "actual_source_types": [
+        "sql"
+      ],
+      "expected_evidence_role": "SQL_FINANCE_OR_UNAVAILABLE",
+      "content_validation": {
+        "rows_count": 0,
+        "module_exists": true
+      },
+      "mismatch_labels": [],
+      "verdict": "PASS",
+      "suspected_root_cause": "Aucune anomalie détectée."
+    }
+  ]
+}

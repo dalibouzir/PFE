@@ -25,6 +25,7 @@ class Input(TimestampMixin, Base):
     )
     member_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("members.id", ondelete="CASCADE"), nullable=False)
     product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("batches.id", ondelete="SET NULL"), nullable=True, index=True)
     field_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("fields.id", ondelete="SET NULL"), nullable=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     quantity: Mapped[float] = mapped_column(Float, nullable=False)
@@ -35,6 +36,7 @@ class Input(TimestampMixin, Base):
         nullable=False,
         default=InputStatus.PENDING,
     )
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False, default="manual")
 
     cooperative: Mapped["Cooperative"] = relationship(back_populates="inputs")
     member: Mapped["Member"] = relationship(back_populates="inputs")

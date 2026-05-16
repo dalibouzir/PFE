@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import time
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -19,6 +20,7 @@ from app.ai.orchestrator.source_formatter import build_source_contract, merge_an
 from app.ai.schemas.agent_schemas import AgentResult, AgentRoute, FinalAgentResponse
 from app.models.user import User
 from app.models.batch import Batch
+from app.models.chat import ChatMessage
 
 
 class AgentOrchestrator:
@@ -46,10 +48,12 @@ class AgentOrchestrator:
         user_id: str | None,
     ) -> FinalAgentResponse:
         started_at = time.perf_counter()
+        previous_user_query = self._get_previous_user_message(conversation_id) if conversation_id else None
         decision: IntentRouteDecision = self.router.classify(
             message,
             language_hint=language,
             known_batch_refs=self._known_batch_refs(),
+            previous_user_query=previous_user_query,
         )
 
         context = build_agent_context(
@@ -118,8 +122,9 @@ class AgentOrchestrator:
             results=agent_results,
         )
 
-        if verification.missing_expected_source:
-            answer = f"{answer}\n\nLes données disponibles ne permettent pas de confirmer ce point."
+        if verification.missing_expected_source and decision.route not in {AgentRoute.SMALL_TALK, AgentRoute.OUT_OF_SCOPE}:
+            if "Les données disponibles ne permettent pas de confirmer ce point." not in answer:
+                answer = f"{answer}\n\nLes données disponibles ne permettent pas de confirmer ce point."
 
         final_confidence = compute_final_confidence(
             agent_results=agent_results,
@@ -191,6 +196,29 @@ class AgentOrchestrator:
         except Exception:
             return set()
         return {str(row).upper() for row in rows if str(row or "").strip()}
+
+    def _get_previous_user_message(self, conversation_id: str | None) -> str | None:
+        if not conversation_id:
+            return None
+        try:
+            session_id = UUID(str(conversation_id))
+        except ValueError:
+            return None
+        try:
+            rows = self.db.scalars(
+                select(ChatMessage.content)
+                .where(ChatMessage.session_id == session_id, ChatMessage.role == "user")
+                .order_by(ChatMessage.created_at.desc())
+                .limit(3)
+            ).all()
+        except Exception:
+            return None
+        snippets = [str(item).strip() for item in rows if str(item or "").strip()]
+        if not snippets:
+            return None
+        # Keep oldest->newest in the hint string to preserve conversational progression.
+        snippets.reverse()
+        return " || ".join(snippets)
 
 
 def _build_final_answer(*, route: AgentRoute, agent_results: list[AgentResult], language: str, detected_entities: dict | None = None) -> str:

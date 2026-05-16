@@ -32,6 +32,12 @@ def disable_user(user_id: UUID, db: Session = Depends(get_db), current_admin=Dep
     return UserRead.model_validate(user)
 
 
+@router.patch("/users/{user_id}/enable", response_model=UserRead, summary="Enable a user account.")
+def enable_user(user_id: UUID, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+    user = admin_service.enable_user(db, user_id)
+    return UserRead.model_validate(user)
+
+
 @router.get("/users", response_model=List[UserRead], summary="List all users.")
 def list_users(db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     users = admin_service.list_users(db)

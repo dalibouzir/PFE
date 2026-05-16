@@ -313,6 +313,8 @@ export default function FarmerAdvancesPage() {
                       <th className="px-4 py-3">Date</th>
                       <th className="px-4 py-3">Montant</th>
                       <th className="px-4 py-3">Motif</th>
+                      <th className="px-4 py-3">Lot / produit lié</th>
+                      <th className="px-4 py-3">Retour produit</th>
                       <th className="px-4 py-3">Note</th>
                       <th className="px-4 py-3">Créé le / Modifié le</th>
                       <th className="px-4 py-3">Statut</th>
@@ -327,6 +329,25 @@ export default function FarmerAdvancesPage() {
                           <td className="px-4 py-3">{formatDate(advance.advance_date)}</td>
                           <td className="px-4 py-3 font-medium text-[var(--text)]">{formatAmount(advance.amount_fcfa)}</td>
                           <td className="px-4 py-3">{advance.reason}</td>
+                          <td className="px-4 py-3 text-xs">
+                            <p className="font-semibold text-[var(--text)]">{advance.batch_code ?? "—"}</p>
+                            <p className="text-[var(--muted)]">{advance.product_name ?? "—"}</p>
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <p className="font-semibold text-[var(--text)]">
+                              {advance.confirmed_weight_kg !== null && advance.confirmed_weight_kg !== undefined
+                                ? `${advance.confirmed_weight_kg.toLocaleString("fr-FR")} kg`
+                                : "—"}
+                            </p>
+                            <p className="text-[var(--muted)]">{advance.return_status ?? "En attente de produit"}</p>
+                            {advance.collecte_created || advance.stock_in_created ? (
+                              <p className="text-[var(--muted)]">
+                                {advance.collecte_created ? "Collecte créée" : ""}
+                                {advance.collecte_created && advance.stock_in_created ? " · " : ""}
+                                {advance.stock_in_created ? "Stock IN créé" : ""}
+                              </p>
+                            ) : null}
+                          </td>
                           <td className="px-4 py-3">{advance.note?.trim() ? advance.note : "—"}</td>
                           <td className="px-4 py-3 text-xs">
                             <p>{formatDateTime(advance.created_at)}</p>

@@ -77,11 +77,21 @@ def create_parcel(db: Session, current_user: User, payload) -> Parcel:
     ensure_can_write(current_user)
     cooperative_id = get_manager_cooperative_id(current_user)
     member = _require_member_in_scope(db, cooperative_id, payload.farmer_id)
+    normalized_name = payload.name.strip()
+    duplicate = db.scalar(
+        select(Parcel).where(
+            Parcel.cooperative_id == cooperative_id,
+            Parcel.member_id == member.id,
+            func.lower(Parcel.name) == normalized_name.lower(),
+        )
+    )
+    if duplicate is not None:
+        raise ValidationError("Une parcelle avec ce nom existe déjà pour cet agriculteur.")
 
     parcel = Parcel(
         cooperative_id=cooperative_id,
         member_id=member.id,
-        name=payload.name.strip(),
+        name=normalized_name,
         surface_ha=float(payload.surface_ha),
         main_culture=payload.main_culture.strip(),
         variety=payload.variety.strip() if payload.variety else None,

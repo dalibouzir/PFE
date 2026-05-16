@@ -42,10 +42,12 @@ class ResponseVerifier:
     ) -> VerificationResult:
         warnings: list[str] = [warning for res in results for warning in res.warnings]
         source_types = {src.get("type") for res in results for src in res.sources}
-        has_sql = "sql" in source_types
-        has_rag = "rag" in source_types
-        has_ml = "ml" in source_types
+        has_sql = "sql" in source_types or _has_sql_evidence(results)
+        has_rag = "rag" in source_types or _has_rag_evidence(results)
+        has_ml = "ml" in source_types or _has_ml_evidence(results)
+        has_recommendation_evidence = _has_recommendation_evidence(results)
         has_recommendation_agent = any(res.agent_name == "RecommendationAgent" for res in results)
+        has_any_evidence = has_sql or has_rag or has_ml or has_recommendation_evidence
 
         numeric_claim = _has_operational_numeric_claim(answer or "")
         if numeric_claim and not (has_sql or has_ml or (route == AgentRoute.RAG_ONLY and has_rag)):
@@ -118,14 +120,19 @@ class ResponseVerifier:
         if _has_prompt_injection(results):
             warnings.append("PROMPT_INJECTION_DETECTED")
 
-        missing_expected_source = bool(
+        route_missing_expected_source = bool(
             (route in {AgentRoute.SQL_ONLY, AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_SQL_ML, AgentRoute.HYBRID_FULL} and not has_sql)
             or (route in {AgentRoute.ML_ONLY, AgentRoute.HYBRID_SQL_ML, AgentRoute.HYBRID_FULL} and not has_ml)
             or (rag_needed and not has_rag)
         )
         if route in {AgentRoute.RECOMMENDATION_ONLY, AgentRoute.HYBRID_RAG_RECOMMENDATION, AgentRoute.HYBRID_FULL} and not has_recommendation_agent:
-            missing_expected_source = True
+            route_missing_expected_source = True
             warnings.append("MISSING_RECOMMENDATION_SOURCE")
+        if route_missing_expected_source:
+            warnings.append("MISSING_EXPECTED_ROUTE_EVIDENCE")
+
+        # Safety fallback should be reserved for true no-evidence situations.
+        missing_expected_source = not has_any_evidence
 
         grounded = not missing_expected_source and "NUMERIC_CLAIMS_NOT_GROUNDED" not in warnings
         return VerificationResult(
@@ -245,4 +252,61 @@ def _has_prompt_injection(results: list[AgentResult]) -> bool:
             text = str((chunk or {}).get("content", "")).lower()
             if any(marker in text for marker in PROMPT_INJECTION_MARKERS):
                 return True
+    return False
+
+
+def _has_sql_evidence(results: list[AgentResult]) -> bool:
+    sql_result = next((res for res in results if res.agent_name == "SQLAnalyticsAgent"), None)
+    if not sql_result or not isinstance(sql_result.data, dict):
+        return False
+    ignored_keys = {"detected_module", "query_text", "requested_batch_ref"}
+    for key, value in sql_result.data.items():
+        if key in ignored_keys:
+            continue
+        if isinstance(value, list) and value:
+            return True
+        if isinstance(value, dict) and value:
+            return True
+        if isinstance(value, (int, float)) and float(value) != 0.0:
+            return True
+        if isinstance(value, str) and value.strip():
+            return True
+    return False
+
+
+def _has_rag_evidence(results: list[AgentResult]) -> bool:
+    rag_result = next((res for res in results if res.agent_name == "RAGKnowledgeAgent"), None)
+    if not rag_result:
+        return False
+    if rag_result.sources:
+        return True
+    if not isinstance(rag_result.data, dict):
+        return False
+    chunks = rag_result.data.get("chunks") or []
+    if not isinstance(chunks, list):
+        return False
+    for chunk in chunks:
+        if isinstance(chunk, dict) and str(chunk.get("content") or "").strip():
+            return True
+    return False
+
+
+def _has_ml_evidence(results: list[AgentResult]) -> bool:
+    ml_result = next((res for res in results if res.agent_name == "MLLossAgent"), None)
+    if not ml_result or not isinstance(ml_result.data, dict):
+        return False
+    payload = ml_result.data
+    signal_keys = {"risk_level", "anomaly_detected", "predicted_loss_pct", "observed_loss_pct", "expected_loss_pct", "confidence"}
+    if any(key in payload and payload.get(key) not in (None, "", []) for key in signal_keys):
+        return True
+    return bool(payload)
+
+
+def _has_recommendation_evidence(results: list[AgentResult]) -> bool:
+    rec_result = next((res for res in results if res.agent_name == "RecommendationAgent"), None)
+    if not rec_result or not isinstance(rec_result.data, dict):
+        return False
+    recs = rec_result.data.get("recommendations") or []
+    if isinstance(recs, list) and recs:
+        return True
     return False

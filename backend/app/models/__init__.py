@@ -17,6 +17,7 @@ from app.models.product import Product
 from app.models.rag import RAGChunk, RAGDocument
 from app.models.recommendation import Recommendation
 from app.models.stock import Stock
+from app.models.stock_movement import StockMovement
 from app.models.treasury_transaction import TreasuryTransaction
 from app.models.user import User
 
@@ -44,6 +45,7 @@ __all__ = [
     "RAGDocument",
     "Recommendation",
     "Stock",
+    "StockMovement",
     "TreasuryTransaction",
     "User",
 ]

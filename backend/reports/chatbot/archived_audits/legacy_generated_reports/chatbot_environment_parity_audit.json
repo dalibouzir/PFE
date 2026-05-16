@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-05-13T10:43:09.941208+00:00",
+  "audit_mode": "local_test",
+  "metadata": {
+    "audit_mode": "local_test",
+    "database_provider": "SQLite",
+    "database_dialect": "sqlite",
+    "database_url_masked": "weefarm.db",
+    "rag_source": "SQLite (no pgvector)",
+    "pgvector_enabled": false,
+    "read_only_mode": false
+  },
+  "test_results": {
+    "mode_option_works": true,
+    "dialect_correct": true,
+    "pgvector_enabled": false,
+    "read_only_mode": false
+  }
+}

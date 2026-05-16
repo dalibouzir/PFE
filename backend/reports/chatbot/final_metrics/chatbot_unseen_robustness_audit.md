@@ -1,0 +1,63 @@
+# Chatbot Unseen Robustness Audit
+
+- Timestamp UTC: 2026-05-13T18:28:02.030720+00:00
+- Total Cases: 47
+- PASS: 47
+- PARTIAL: 0
+- FAIL: 0
+- PASS rate: 100.0%
+- False fallback count: 0
+- Indirect recommendation routed SQL_ONLY count: 0
+
+## Memory Audit
+- follow-up pass: 3 / 3
+- context reset pass: 4 / 4
+
+## Case Results
+- st-01 [PASS] route=SMALL_TALK sources=none
+- st-02 [PASS] route=SMALL_TALK sources=none
+- st-03 [PASS] route=SMALL_TALK sources=none
+- st-04 [PASS] route=SQL_ONLY sources=sql
+- st-05 [PASS] route=HYBRID_FULL sources=ml,rag,recommendation,sql
+- reco-01 [PASS] route=RECOMMENDATION_ONLY sources=ml,recommendation,sql
+- reco-02 [PASS] route=HYBRID_FULL sources=ml,rag,recommendation,sql
+- reco-03 [PASS] route=HYBRID_FULL sources=ml,rag,recommendation,sql
+- reco-04 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- reco-05 [PASS] route=RECOMMENDATION_ONLY sources=ml,recommendation,sql
+- reco-06 [PASS] route=RECOMMENDATION_ONLY sources=ml,recommendation,sql
+- reco-07 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- reco-08 [PASS] route=HYBRID_FULL sources=ml,rag,recommendation,sql
+- hyb-01 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- hyb-02 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- hyb-03 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- hyb-04 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- hyb-05 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- hyb-06 [PASS] route=HYBRID_FULL sources=ml,rag,recommendation,sql
+- hyb-07 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- hyb-08 [PASS] route=HYBRID_FULL sources=ml,rag,recommendation,sql
+- hyb-09 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- hyb-10 [PASS] route=HYBRID_FULL sources=ml,rag,recommendation,sql
+- typ-01 [PASS] route=SQL_ONLY sources=sql
+- typ-02 [PASS] route=SQL_ONLY sources=sql
+- typ-03 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- typ-04 [PASS] route=RECOMMENDATION_ONLY sources=ml,recommendation,sql
+- typ-05 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- typ-06 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- mem-01 [PASS] route=SQL_ONLY sources=sql
+- mem-02 [PASS] route=SQL_ONLY sources=sql
+- mem-03 [PASS] route=HYBRID_FULL sources=ml,rag,recommendation,sql
+- mem-04 [PASS] route=SMALL_TALK sources=none
+- mem-05 [PASS] route=HYBRID_SQL_RAG sources=rag,sql
+- mem-06 [PASS] route=SQL_ONLY sources=sql
+- mem-07 [PASS] route=OUT_OF_SCOPE sources=none
+- mem-08 [PASS] route=SQL_ONLY sources=sql
+- mem-09 [PASS] route=SQL_ONLY sources=sql
+- mem-10 [PASS] route=SQL_ONLY sources=sql
+- mem-11 [PASS] route=SMALL_TALK sources=none
+- mem-12 [PASS] route=OUT_OF_SCOPE sources=none
+- fb-01 [PASS] route=SQL_ONLY sources=sql
+- fb-02 [PASS] route=SQL_ONLY sources=sql
+- fb-03 [PASS] route=SQL_ONLY sources=sql
+- fb-04 [PASS] route=SQL_ONLY sources=sql
+- fb-05 [PASS] route=SQL_ONLY sources=sql
+- fb-06 [PASS] route=HYBRID_SQL_RAG sources=rag,sql

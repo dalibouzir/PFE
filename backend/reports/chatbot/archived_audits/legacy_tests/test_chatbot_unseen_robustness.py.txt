@@ -1,0 +1,316 @@
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.ai.utils.audit_environment import EnvironmentParityAudit
+from app.ai.utils.test_auth import get_or_create_test_user, get_test_auth_header
+from app.core.config import settings
+from app.db.session import get_db
+from app.main import app
+from app.models.batch import Batch
+from app.models.product import Product
+
+
+REPORT_DIR = Path(__file__).resolve().parents[2] / "reports"
+JSON_REPORT_PATH = REPORT_DIR / "chatbot_unseen_robustness_audit.json"
+MD_REPORT_PATH = REPORT_DIR / "chatbot_unseen_robustness_audit.md"
+FALLBACK_MARKER = "les données disponibles ne permettent pas de confirmer ce point"
+
+
+@dataclass(frozen=True)
+class Case:
+    case_id: str
+    question: str
+    expected_routes: set[str]
+    required_sources: set[str]
+    forbid_sql_only: bool = False
+    allow_fallback: bool = False
+    session_key: str | None = None
+    followup_expect_batch: bool = False
+    followup_reset: bool = False
+
+
+def _pick_first(values: list[str], fallback: str, index: int = 0) -> str:
+    if not values:
+        return fallback
+    return values[index % len(values)]
+
+
+def _snapshot(db: Session, cooperative_id: Any) -> dict[str, Any]:
+    products = [
+        str(row)
+        for row in db.scalars(
+            select(Product.name).where(Product.cooperative_id == cooperative_id).order_by(Product.name.asc()).limit(10)
+        ).all()
+        if str(row or "").strip()
+    ]
+    lots = [
+        str(row)
+        for row in db.scalars(
+            select(Batch.code).where(Batch.cooperative_id == cooperative_id).order_by(Batch.creation_date.desc()).limit(20)
+        ).all()
+        if str(row or "").strip()
+    ]
+    return {"products": products, "lots": lots}
+
+
+def _normalize_route(route: str) -> str:
+    return str(route or "").strip().upper()
+
+
+def _source_types(payload: dict[str, Any]) -> set[str]:
+    types: set[str] = set()
+    for src in payload.get("sources") or []:
+        token = str((src or {}).get("type") or "").strip().lower()
+        if token:
+            types.add(token)
+    return types
+
+
+def _evaluate_case(case: Case, payload: dict[str, Any], status_code: int) -> dict[str, Any]:
+    issues: list[str] = []
+    route = _normalize_route(payload.get("route"))
+    answer = str(payload.get("answer") or "")
+    source_types = _source_types(payload)
+    entities = ((payload.get("metadata") or {}).get("detected_entities") or {}) if isinstance(payload, dict) else {}
+
+    if status_code != 200:
+        issues.append(f"HTTP_{status_code}")
+
+    if route not in {item.upper() for item in case.expected_routes}:
+        issues.append(f"route={route} not in {sorted(case.expected_routes)}")
+
+    if case.forbid_sql_only and route == "SQL_ONLY":
+        issues.append("unexpected_sql_only_route")
+
+    if case.required_sources and not case.required_sources.issubset(source_types):
+        missing = sorted(case.required_sources - source_types)
+        issues.append(f"missing_sources={missing}")
+
+    if not case.allow_fallback and FALLBACK_MARKER in answer.lower():
+        if case.required_sources or route not in {"SMALL_TALK", "OUT_OF_SCOPE"}:
+            issues.append("fallback_answer")
+
+    if case.followup_expect_batch and not str((entities or {}).get("batch_ref") or "").strip():
+        issues.append("followup_batch_not_reused")
+
+    if case.followup_reset and str((entities or {}).get("batch_ref") or "").strip():
+        issues.append("context_not_reset")
+
+    if not issues:
+        status = "PASS"
+    elif len(issues) == 1:
+        status = "PARTIAL"
+    else:
+        status = "FAIL"
+
+    return {
+        "case_id": case.case_id,
+        "question": case.question,
+        "status": status,
+        "issues": issues,
+        "route": route,
+        "source_types": sorted(source_types),
+        "detected_entities": entities,
+        "answer_preview": answer[:280],
+    }
+
+
+def _build_cases(snapshot: dict[str, Any]) -> list[Case]:
+    products = snapshot.get("products") or []
+    lots = snapshot.get("lots") or []
+
+    p1 = _pick_first(products, "Mangue", 0)
+    p2 = _pick_first(products, "Mil", 1)
+    p3 = _pick_first(products, "Arachide", 2)
+    lot1 = _pick_first(lots, "MANG-005", 0)
+    lot2 = _pick_first(lots, "MANG-004", 1)
+
+    cases: list[Case] = [
+        # 0) general small-talk and capability behavior
+        Case("st-01", "salut cava", {"SMALL_TALK"}, set()),
+        Case("st-02", "merci", {"SMALL_TALK"}, set()),
+        Case("st-03", "tu peux m’aider à faire quoi ?", {"SMALL_TALK"}, set()),
+        Case("st-04", "donne moi une vue globale de la coopérative", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}),
+        Case("st-05", "j’ai un problème de pertes, tu me conseilles quoi ?", {"HYBRID_FULL", "HYBRID_SQL_RAG", "RECOMMENDATION_ONLY"}, {"sql"}, forbid_sql_only=True),
+
+        # 1) indirect recommendation/action routing
+        Case("reco-01", f"On devrait faire quoi pour améliorer {p1} ?", {"HYBRID_FULL", "RECOMMENDATION_ONLY", "HYBRID_RAG_RECOMMENDATION"}, {"recommendation"}, forbid_sql_only=True),
+        Case("reco-02", f"Actions prioritaires pour réduire les pertes de {p1} ?", {"HYBRID_FULL", "RECOMMENDATION_ONLY", "HYBRID_RAG_RECOMMENDATION", "HYBRID_SQL_RAG"}, {"recommendation"}, forbid_sql_only=True),
+        Case("reco-03", f"Comment améliorer le rendement de {p2} maintenant ?", {"HYBRID_FULL", "HYBRID_SQL_RAG", "RECOMMENDATION_ONLY"}, {"sql"}, forbid_sql_only=True),
+        Case("reco-04", f"Comment réduire les pertes sur {lot1} ?", {"HYBRID_FULL", "HYBRID_SQL_RAG"}, {"sql", "rag"}, forbid_sql_only=True),
+        Case("reco-05", "Que doit-on faire en premier ?", {"HYBRID_FULL", "RECOMMENDATION_ONLY", "HYBRID_RAG_RECOMMENDATION"}, {"recommendation"}, forbid_sql_only=True),
+        Case("reco-06", f"Plan d'action concret pour {p3}.", {"HYBRID_FULL", "RECOMMENDATION_ONLY", "HYBRID_RAG_RECOMMENDATION"}, {"recommendation"}, forbid_sql_only=True),
+        Case("reco-07", f"Mieux sécher {p1}: quelles actions ?", {"HYBRID_FULL", "HYBRID_SQL_RAG", "RECOMMENDATION_ONLY"}, {"rag"}, forbid_sql_only=True),
+        Case("reco-08", f"Donne des actions concrètes pour {lot2}.", {"HYBRID_FULL", "RECOMMENDATION_ONLY"}, {"recommendation"}, forbid_sql_only=True),
+
+        # 2) rag/hybrid route robustness
+        Case("hyb-01", f"Pourquoi les pertes sont élevées au séchage pour {p1} ?", {"HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql", "rag"}, forbid_sql_only=True),
+        Case("hyb-02", f"Comment réduire les pertes pendant le séchage de {p1} ?", {"HYBRID_SQL_RAG", "HYBRID_FULL", "RAG_ONLY"}, {"rag"}, forbid_sql_only=True),
+        Case("hyb-03", f"Stock actuel de {p1} et meilleures pratiques de tri dans la même réponse.", {"HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql", "rag"}, forbid_sql_only=True),
+        Case("hyb-04", f"Compare {lot1} et {lot2} puis explique les écarts.", {"HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql", "rag"}, forbid_sql_only=True),
+        Case("hyb-05", f"Bilan matière de {lot1} avec bonnes pratiques.", {"HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql", "rag"}, forbid_sql_only=True),
+        Case("hyb-06", f"Donne les risques opérationnels et comment les réduire pour {p2}.", {"HYBRID_FULL", "HYBRID_SQL_RAG"}, {"sql"}, forbid_sql_only=True),
+        Case("hyb-07", "Quelles références de séchage avec actions priorisées ?", {"HYBRID_FULL", "HYBRID_RAG_RECOMMENDATION", "HYBRID_SQL_RAG"}, {"rag"}, forbid_sql_only=True),
+        Case("hyb-08", f"Pourquoi {lot1} sous-performe, et que faire ?", {"HYBRID_FULL", "HYBRID_SQL_RAG"}, {"sql"}, forbid_sql_only=True),
+        Case("hyb-09", f"Comment améliorer le tri pour {p3} avec chiffres et sources ?", {"HYBRID_SQL_RAG", "HYBRID_FULL"}, {"rag"}, forbid_sql_only=True),
+        Case("hyb-10", "Conseille un plan contre les pertes avec preuves.", {"HYBRID_FULL", "HYBRID_RAG_RECOMMENDATION", "HYBRID_SQL_RAG"}, {"recommendation"}, forbid_sql_only=True),
+
+        # 3) typo/entity robustness
+        Case("typ-01", f"Quelle est la sitation du lot {lot1} ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}),
+        Case("typ-02", f"Quel est le statut du lot {lot1.replace('00', '0', 1)} ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}),
+        Case("typ-03", "Comment reduire les pertes sur mangu au sechage ?", {"HYBRID_SQL_RAG", "HYBRID_FULL", "RAG_ONLY"}, {"rag"}, forbid_sql_only=True),
+        Case("typ-04", "actions prioritairs pour la mangue ?", {"HYBRID_FULL", "RECOMMENDATION_ONLY", "HYBRID_RAG_RECOMMENDATION"}, {"recommendation"}, forbid_sql_only=True),
+        Case("typ-05", f"pk pertes hautes sur {lot2} ?", {"HYBRID_SQL_RAG", "HYBRID_FULL", "HYBRID_SQL_ML"}, {"sql"}, forbid_sql_only=True),
+        Case("typ-06", f"mieux secher {p1} : quoi faire", {"HYBRID_FULL", "HYBRID_SQL_RAG", "RECOMMENDATION_ONLY"}, {"rag"}, forbid_sql_only=True),
+
+        # 4) memory follow-up/context reset audits
+        Case("mem-01", f"Quel est le statut du lot {lot1} ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, session_key="mem-a"),
+        Case("mem-02", "et celui-ci ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, session_key="mem-a", followup_expect_batch=True),
+        Case("mem-03", "ce lot, que faire maintenant ?", {"HYBRID_FULL", "HYBRID_SQL_RAG", "RECOMMENDATION_ONLY"}, {"recommendation"}, session_key="mem-a", followup_expect_batch=True, forbid_sql_only=True),
+        Case("mem-04", "bonjour", {"SMALL_TALK"}, set(), session_key="mem-a", followup_reset=True),
+
+        Case("mem-05", f"Pourquoi pertes élevées sur {lot2} ?", {"HYBRID_SQL_RAG", "HYBRID_FULL", "HYBRID_SQL_ML"}, {"sql"}, session_key="mem-b"),
+        Case("mem-06", "ce lot", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, session_key="mem-b", followup_expect_batch=True),
+        Case("mem-07", "Quelle météo demain à New York ?", {"OUT_OF_SCOPE"}, set(), session_key="mem-b", followup_reset=True),
+        Case("mem-08", f"et pour la {p1} ?", {"HYBRID_SQL_RAG", "HYBRID_FULL", "RECOMMENDATION_ONLY", "SQL_ONLY"}, {"sql"}, session_key="mem-b"),
+
+        Case("mem-09", f"Analyse les pertes au séchage pour {p1}.", {"HYBRID_SQL_RAG", "HYBRID_FULL", "SQL_ONLY"}, {"sql"}, session_key="mem-c"),
+        Case("mem-10", "pour la mangue, quel est le stock actuel ?", {"HYBRID_SQL_RAG", "HYBRID_FULL", "RECOMMENDATION_ONLY", "SQL_ONLY"}, {"sql"}, session_key="mem-c"),
+        Case("mem-11", "ok", {"SMALL_TALK"}, set(), session_key="mem-c", followup_reset=True),
+        Case("mem-12", "quel film me conseilles-tu ?", {"OUT_OF_SCOPE"}, set(), session_key="mem-c", followup_reset=True),
+
+        # 5) fallback suppression checks when evidence exists
+        Case("fb-01", f"Combien de membres sont inscrits dans ma coopérative ?", {"SQL_ONLY"}, {"sql"}),
+        Case("fb-02", "Quelles étapes du process génèrent les plus grandes pertes ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}),
+        Case("fb-03", "Donne le bilan matière global des lots.", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}),
+        Case("fb-04", f"Quel est le stock actuel par produit pour {p1} ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}),
+        Case("fb-05", f"Quels lots ont une faible efficacité ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_SQL_ML"}, {"sql"}),
+        Case("fb-06", f"Quelles sont les meilleures pratiques de séchage pour {p1} ?", {"RAG_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"rag"}),
+    ]
+
+    assert len(cases) >= 42
+    return cases
+
+
+def _write_report(payload: dict[str, Any]) -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    JSON_REPORT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    summary = payload["summary"]
+    lines: list[str] = [
+        "# Chatbot Unseen Robustness Audit",
+        "",
+        f"- Timestamp UTC: {payload['timestamp_utc']}",
+        f"- Total Cases: {summary['total_cases']}",
+        f"- PASS: {summary['pass_count']}",
+        f"- PARTIAL: {summary['partial_count']}",
+        f"- FAIL: {summary['fail_count']}",
+        f"- PASS rate: {summary['pass_rate']:.1%}",
+        f"- False fallback count: {summary['false_fallback_count']}",
+        f"- Indirect recommendation routed SQL_ONLY count: {summary['indirect_reco_sql_only_count']}",
+        "",
+        "## Memory Audit",
+        f"- follow-up pass: {summary['memory_followup_pass']} / {summary['memory_followup_total']}",
+        f"- context reset pass: {summary['memory_reset_pass']} / {summary['memory_reset_total']}",
+        "",
+        "## Case Results",
+    ]
+
+    for row in payload["cases"]:
+        lines.append(f"- {row['case_id']} [{row['status']}] route={row['route']} sources={','.join(row['source_types']) or 'none'}")
+        if row["issues"]:
+            for issue in row["issues"]:
+                lines.append(f"  - issue: {issue}")
+
+    MD_REPORT_PATH.write_text("\n".join(lines), encoding="utf-8")
+
+
+class TestChatbotUnseenRobustness:
+    @pytest.fixture(autouse=True, scope="function")
+    def _setup(self):
+        REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        if settings.audit_mode != "supabase_readonly":
+            pytest.skip(f"Expected --env=supabase_readonly, got {settings.audit_mode}")
+        EnvironmentParityAudit.log_parity_header("chatbot_unseen_robustness", settings)
+
+    def test_unseen_robustness_audit(self):
+        db = next(get_db())
+        try:
+            user = get_or_create_test_user(db)
+            if user.cooperative_id is None:
+                pytest.skip("Test user has no cooperative_id")
+            snapshot = _snapshot(db, user.cooperative_id)
+        finally:
+            db.close()
+
+        headers = get_test_auth_header(user.id)
+        client = TestClient(app, raise_server_exceptions=False)
+
+        session_ids: dict[str, str] = {}
+        results: list[dict[str, Any]] = []
+
+        cases = _build_cases(snapshot)
+        for case in cases:
+            if case.session_key:
+                if case.session_key not in session_ids:
+                    session_resp = client.post("/chat/sessions", json={"title": f"Unseen-{case.session_key}"}, headers=headers)
+                    assert session_resp.status_code == 200
+                    session_ids[case.session_key] = str(session_resp.json()["id"])
+                conversation_id = session_ids[case.session_key]
+            else:
+                conversation_id = None
+
+            resp = client.post(
+                "/chat/agent",
+                json={"message": case.question, "conversation_id": conversation_id, "language": "fr"},
+                headers=headers,
+            )
+            payload = resp.json() if resp.status_code == 200 else {}
+            results.append(_evaluate_case(case, payload, resp.status_code))
+
+        pass_count = sum(1 for row in results if row["status"] == "PASS")
+        partial_count = sum(1 for row in results if row["status"] == "PARTIAL")
+        fail_count = sum(1 for row in results if row["status"] == "FAIL")
+
+        false_fallback_count = sum(1 for row in results if "fallback_answer" in row["issues"])
+        indirect_reco_sql_only_count = sum(
+            1
+            for row in results
+            if row["case_id"].startswith("reco-") and row["route"] == "SQL_ONLY"
+        )
+
+        memory_followup_rows = [row for row in results if row["case_id"] in {"mem-02", "mem-03", "mem-06"}]
+        memory_reset_rows = [row for row in results if row["case_id"] in {"mem-04", "mem-07", "mem-11", "mem-12"}]
+        memory_followup_pass = sum(1 for row in memory_followup_rows if row["status"] == "PASS")
+        memory_reset_pass = sum(1 for row in memory_reset_rows if row["status"] == "PASS")
+
+        report = {
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "summary": {
+                "total_cases": len(results),
+                "pass_count": pass_count,
+                "partial_count": partial_count,
+                "fail_count": fail_count,
+                "pass_rate": (pass_count / len(results)) if results else 0.0,
+                "false_fallback_count": false_fallback_count,
+                "indirect_reco_sql_only_count": indirect_reco_sql_only_count,
+                "memory_followup_pass": memory_followup_pass,
+                "memory_followup_total": len(memory_followup_rows),
+                "memory_reset_pass": memory_reset_pass,
+                "memory_reset_total": len(memory_reset_rows),
+            },
+            "cases": results,
+        }
+        _write_report(report)
+
+        assert len(results) >= 42

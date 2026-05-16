@@ -1,0 +1,1372 @@
+{
+  "timestamp_utc": "2026-05-13T18:28:02.030720+00:00",
+  "summary": {
+    "total_cases": 47,
+    "pass_count": 47,
+    "partial_count": 0,
+    "fail_count": 0,
+    "pass_rate": 1.0,
+    "false_fallback_count": 0,
+    "indirect_reco_sql_only_count": 0,
+    "memory_followup_pass": 3,
+    "memory_followup_total": 3,
+    "memory_reset_pass": 4,
+    "memory_reset_total": 4
+  },
+  "cases": [
+    {
+      "case_id": "st-01",
+      "question": "salut cava",
+      "status": "PASS",
+      "issues": [],
+      "route": "SMALL_TALK",
+      "source_types": [],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "global",
+        "registry_module": null,
+        "module_supported": false,
+        "intent_family": "greeting"
+      },
+      "answer_preview": "Salut, ça va bien. Je suis là pour t’aider sur les données de ta coopérative."
+    },
+    {
+      "case_id": "st-02",
+      "question": "merci",
+      "status": "PASS",
+      "issues": [],
+      "route": "SMALL_TALK",
+      "source_types": [],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "global",
+        "registry_module": null,
+        "module_supported": false,
+        "intent_family": "greeting"
+      },
+      "answer_preview": "Avec plaisir. Si tu veux, on peut continuer avec une question sur tes lots, pertes, stocks ou recommandations."
+    },
+    {
+      "case_id": "st-03",
+      "question": "tu peux m’aider à faire quoi ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SMALL_TALK",
+      "source_types": [],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "global",
+        "registry_module": null,
+        "module_supported": false,
+        "intent_family": "capability"
+      },
+      "answer_preview": "Oui, je peux t’aider. Je peux analyser les données de la coopérative sur membres, parcelles, collectes, stocks, lots, étapes de process, bilan matière, signaux ML, et aussi donner des explications, prioriser des actions et comparer les risques."
+    },
+    {
+      "case_id": "st-04",
+      "question": "donne moi une vue globale de la coopérative",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "cooperative_summary",
+        "registry_module": "cooperative_summary",
+        "module_supported": true,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nRésumé coopérative: 17 membre(s), 18 parcelle(s), 17 lot(s) dont 12 en cours, stock total 5510.0 kg, perte moyenne 5.8%.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire conf"
+    },
+    {
+      "case_id": "st-05",
+      "question": "j’ai un problème de pertes, tu me conseilles quoi ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_FULL",
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "post_harvest",
+        "registry_module": null,
+        "module_supported": false,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\nPerte observée sur séchage du lot LOT-BISS-002: 68.0% (150.0 kg -> 48.0 kg).\n\n2. Explication courte\nMesures SQL: étape critique Sechage (68.0%). Explication RAG: Agronomic knowledge reference for Multi-produit in Thies, Senegal. Topic: Prévention pertes. Sou"
+    },
+    {
+      "case_id": "reco-01",
+      "question": "On devrait faire quoi pour améliorer Arachide ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "RECOMMENDATION_ONLY",
+      "source_types": [
+        "ml",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "peanut"
+        ],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "recommendations",
+        "registry_module": null,
+        "module_supported": true,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\n5 action(s) priorisée(s) générée(s), dont 3 priorité haute. Action principale: Isoler le lot LOT-BISS-002, renforcer le contrôle au séchage, puis reclasser les intrants dégradés. (cible: LOT-BISS-002 / Bissap / séchage).\n\n2. Explication courte\nPriorisation: "
+    },
+    {
+      "case_id": "reco-02",
+      "question": "Actions prioritaires pour réduire les pertes de Arachide ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_FULL",
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "peanut"
+        ],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "recommendations",
+        "registry_module": "recommendations",
+        "module_supported": true,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\nPerte observée sur tri du lot DEMOFP-LOT-ARAC-005: 3.0% (842.8 kg -> 817.5 kg).\n\n2. Explication courte\nMesures SQL: étape critique Tri (3.0%). Explication RAG: Le séchage est une étape critique pour réduire les pertes post-récolte. L'humidité relative doit ê"
+    },
+    {
+      "case_id": "reco-03",
+      "question": "Comment améliorer le rendement de Banane maintenant ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_FULL",
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "recommendations",
+        "registry_module": "material_balance",
+        "module_supported": true,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\nMembre cooperative - Nom: Fatou Fall - Code: FB-0 - Village: Thies - Produit principal: Bissap - Produits secondaires: Arachide; Banane; Cajou - Specialite: Bissap - Parcelles: 1 - Surface (ha): 10.0 - Date adhesion: 2026-04-28 - Statut: active\n\n2. Explicati"
+    },
+    {
+      "case_id": "reco-04",
+      "question": "Comment réduire les pertes sur LOT-MANG-001 ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": "LOT-MANG-001",
+        "batch_ref_candidate": "LOT-MANG-001",
+        "specific_batch_requested": true,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "batch",
+        "module": "recommendations",
+        "registry_module": "lots",
+        "module_supported": true,
+        "intent_family": "hybrid_analysis"
+      },
+      "answer_preview": "1. Résultat principal\nPerte observée sur séchage du lot LOT-MANG-001: 5.1% (99.0 kg -> 94.0 kg).\n\n2. Explication courte\nMesures SQL: étape critique Sechage (5.1%). Explication RAG: Comment utiliser le bilan matière : 1. Enregistrez le poids à chaque étape de transformation. 2. Ca"
+    },
+    {
+      "case_id": "reco-05",
+      "question": "Que doit-on faire en premier ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "RECOMMENDATION_ONLY",
+      "source_types": [
+        "ml",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "recommendations",
+        "registry_module": null,
+        "module_supported": true,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\n5 action(s) priorisée(s) générée(s), dont 3 priorité haute. Action principale: Isoler le lot LOT-BISS-002, renforcer le contrôle au séchage, puis reclasser les intrants dégradés. (cible: LOT-BISS-002 / Bissap / séchage).\n\n2. Explication courte\nPriorisation: "
+    },
+    {
+      "case_id": "reco-06",
+      "question": "Plan d'action concret pour Bissap.",
+      "status": "PASS",
+      "issues": [],
+      "route": "RECOMMENDATION_ONLY",
+      "source_types": [
+        "ml",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "bissap"
+        ],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "recommendations",
+        "registry_module": "recommendations",
+        "module_supported": true,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\n5 action(s) priorisée(s) générée(s), dont 3 priorité haute. Action principale: Isoler le lot LOT-BISS-002, renforcer le contrôle au séchage, puis reclasser les intrants dégradés. (cible: LOT-BISS-002 / Bissap / séchage).\n\n2. Explication courte\nPriorisation: "
+    },
+    {
+      "case_id": "reco-07",
+      "question": "Mieux sécher Arachide: quelles actions ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "peanut"
+        ],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "recommendations",
+        "registry_module": null,
+        "module_supported": true,
+        "intent_family": "explanation"
+      },
+      "answer_preview": "1. Résultat principal\nMembre cooperative - Nom: Awa Ndiaye - Code: DEMOFP-M-002 - Village: Mbour - Produit principal: Arachide - Produits secondaires: Mil;Bissap - Specialite: Post-récolte - Parcelles: 1 - Surface (ha): 1.7 - Date adhesion: 2023-03-04 - Statut: active\n\n2. Explica"
+    },
+    {
+      "case_id": "reco-08",
+      "question": "Donne des actions concrètes pour LOT-BISS-001.",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_FULL",
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": "LOT-BISS-001",
+        "batch_ref_candidate": "LOT-BISS-001",
+        "specific_batch_requested": true,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "batch",
+        "module": "post_harvest",
+        "registry_module": "lots",
+        "module_supported": false,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-BISS-001 présente une perte de 0.0% et une efficacité de 100.0%.\n\n2. Explication courte\nExplication RAG: Lot LOT-BISS-001 processed 450.0 kg of Bissap through no recorded steps. Current quantity is 450.0 kg, representing a total loss of 0.0% (0.0 "
+    },
+    {
+      "case_id": "hyb-01",
+      "question": "Pourquoi les pertes sont élevées au séchage pour Arachide ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "peanut"
+        ],
+        "stage": [
+          "drying"
+        ],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "post_harvest",
+        "registry_module": "process_steps",
+        "module_supported": false,
+        "intent_family": "hybrid_analysis"
+      },
+      "answer_preview": "1. Résultat principal\nLe séchage est une étape critique pour réduire les pertes post-récolte. L'humidité relative doit être maintenue entre 60-70% pour éviter la pourriture et le sur-séchage. Une température de 30-40°C est idéale pour la plupart des fruits tropicaux. Le temps de "
+    },
+    {
+      "case_id": "hyb-02",
+      "question": "Comment réduire les pertes pendant le séchage de Arachide ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "peanut"
+        ],
+        "stage": [
+          "drying"
+        ],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "recommendations",
+        "registry_module": "process_steps",
+        "module_supported": true,
+        "intent_family": "hybrid_analysis"
+      },
+      "answer_preview": "1. Résultat principal\nLe séchage est une étape critique pour réduire les pertes post-récolte. L'humidité relative doit être maintenue entre 60-70% pour éviter la pourriture et le sur-séchage. Une température de 30-40°C est idéale pour la plupart des fruits tropicaux. Le temps de "
+    },
+    {
+      "case_id": "hyb-03",
+      "question": "Stock actuel de Arachide et meilleures pratiques de tri dans la même réponse.",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "peanut"
+        ],
+        "stage": [
+          "sorting"
+        ],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "stock"
+        ],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "stocks",
+        "registry_module": "stocks",
+        "module_supported": true,
+        "intent_family": "multi_intent"
+      },
+      "answer_preview": "1. Résultat principal\nStocks disponibles: 1 produit(s), total 1140.0 kg.\nBonnes pratiques: Le tri est essentiel pour garantir la qualité finale et réduire les pertes. Classez les mangues selon trois grades : Grade A (fruits sans défaut, lisses, couleu...\n\n2. Explication courte\nMe"
+    },
+    {
+      "case_id": "hyb-04",
+      "question": "Compare LOT-MANG-001 et LOT-BISS-001 puis explique les écarts.",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": "LOT-MANG-001",
+        "batch_ref_candidate": "LOT-MANG-001",
+        "specific_batch_requested": true,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "batch",
+        "module": "post_harvest",
+        "registry_module": "lots",
+        "module_supported": false,
+        "intent_family": "hybrid_analysis"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-MANG-001 présente une perte de 6.0% et une efficacité de 94.0%.\n\n2. Explication courte\nExplication RAG: For product Mangue at stage Nettoyage, lot LOT-MANG-001 processed 100.0 kg into 99.0 kg with 1.0% loss and 99.0% efficiency. Recent product-sta"
+    },
+    {
+      "case_id": "hyb-05",
+      "question": "Bilan matière de LOT-MANG-001 avec bonnes pratiques.",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": "LOT-MANG-001",
+        "batch_ref_candidate": "LOT-MANG-001",
+        "specific_batch_requested": true,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "batch",
+        "module": "material_balance",
+        "registry_module": "lots",
+        "module_supported": true,
+        "intent_family": "explanation"
+      },
+      "answer_preview": "1. Résultat principal\nLe bilan matière du lot LOT-MANG-001 montre une perte de 6.0 % et une efficacité de 94.0 %.\n\n2. Explication courte\nMesures SQL: perte 6.0% et efficacité 94.0% Explication RAG: Comment utiliser le bilan matière : 1. Enregistrez le poids à chaque étape de tran"
+    },
+    {
+      "case_id": "hyb-06",
+      "question": "Donne les risques opérationnels et comment les réduire pour Banane.",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_FULL",
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "risk"
+        ],
+        "language": "fr",
+        "scope": "global",
+        "module": "ml_risk",
+        "registry_module": "ml_logs",
+        "module_supported": false,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\nComment utiliser le bilan matière : 1. Enregistrez le poids à chaque étape de transformation. 2. Calculez les pertes par étape : (Qté_entrée - Qté_sortie) / Qté_entrée * 100. 3. Comparez avec les pertes normales attendues (benchmarks). 4. Investiguer si pert"
+    },
+    {
+      "case_id": "hyb-07",
+      "question": "Quelles références de séchage avec actions priorisées ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [
+          "drying"
+        ],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "post_harvest",
+        "registry_module": "process_steps",
+        "module_supported": false,
+        "intent_family": "explanation"
+      },
+      "answer_preview": "1. Résultat principal\nPerte observée sur séchage du lot LOT-BISS-002: 68.0% (150.0 kg -> 48.0 kg).\n\n2. Explication courte\nMesures SQL: étape critique Sechage (68.0%). Explication RAG: Le séchage est une étape critique pour réduire les pertes post-récolte. L'humidité relative doit"
+    },
+    {
+      "case_id": "hyb-08",
+      "question": "Pourquoi LOT-MANG-001 sous-performe, et que faire ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_FULL",
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": "LOT-MANG-001",
+        "batch_ref_candidate": "LOT-MANG-001",
+        "specific_batch_requested": true,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "batch",
+        "module": "recommendations",
+        "registry_module": "lots",
+        "module_supported": true,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-MANG-001 présente une perte de 6.0% et une efficacité de 94.0%.\n\n2. Explication courte\nExplication RAG: For product Mangue at stage Nettoyage, lot LOT-MANG-001 processed 100.0 kg into 99.0 kg with 1.0% loss and 99.0% efficiency. Recent product-sta"
+    },
+    {
+      "case_id": "hyb-09",
+      "question": "Comment améliorer le tri pour Bissap avec chiffres et sources ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "bissap"
+        ],
+        "stage": [
+          "sorting"
+        ],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "recommendations",
+        "registry_module": "process_steps",
+        "module_supported": true,
+        "intent_family": "explanation"
+      },
+      "answer_preview": "1. Résultat principal\nPerte observée sur tri du lot LOT-BISS-002: 4.2% (48.0 kg -> 46.0 kg).\n\n2. Explication courte\nMesures SQL: étape critique Tri (4.2%). Explication RAG: Procédure optimale de tri pour la mangue : 1. Réalisez un pré-tri pour enlever les fruits abîmés (réduction"
+    },
+    {
+      "case_id": "hyb-10",
+      "question": "Conseille un plan contre les pertes avec preuves.",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_FULL",
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "post_harvest",
+        "registry_module": null,
+        "module_supported": false,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\nPerte observée sur séchage du lot LOT-BISS-002: 68.0% (150.0 kg -> 48.0 kg).\n\n2. Explication courte\nMesures SQL: étape critique Sechage (68.0%). Explication RAG: Agronomic knowledge reference for Multi-produit in Thies, Senegal. Topic: Prévention pertes. Sou"
+    },
+    {
+      "case_id": "typ-01",
+      "question": "Quelle est la sitation du lot LOT-MANG-001 ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": "LOT-MANG-001",
+        "batch_ref_candidate": "LOT-MANG-001",
+        "specific_batch_requested": true,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "batch",
+        "module": "post_harvest",
+        "registry_module": "lots",
+        "module_supported": false,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-MANG-001 présente une perte de 6.0% et une efficacité de 94.0%.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: batches\n\n5"
+    },
+    {
+      "case_id": "typ-02",
+      "question": "Quel est le statut du lot LOT-MANG-01 ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": "LOT-MANG-001",
+        "batch_ref_candidate": "LOT-MANG-01",
+        "specific_batch_requested": true,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "batch",
+        "module": "post_harvest",
+        "registry_module": "lots",
+        "module_supported": false,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-MANG-001 présente une perte de 6.0% et une efficacité de 94.0%.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: batches\n\n5"
+    },
+    {
+      "case_id": "typ-03",
+      "question": "Comment reduire les pertes sur mangu au sechage ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "mango"
+        ],
+        "stage": [
+          "drying"
+        ],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "post_harvest",
+        "registry_module": "process_steps",
+        "module_supported": false,
+        "intent_family": "hybrid_analysis"
+      },
+      "answer_preview": "1. Résultat principal\nPerte observée sur séchage du lot DEMOFP-LOT-MANG-013: 22.0% (441.0 kg -> 344.0 kg).\n\n2. Explication courte\nMesures SQL: étape critique Séchage (22.0%). Explication RAG: Le séchage est une étape critique pour réduire les pertes post-récolte. L'humidité relat"
+    },
+    {
+      "case_id": "typ-04",
+      "question": "actions prioritairs pour la mangue ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "RECOMMENDATION_ONLY",
+      "source_types": [
+        "ml",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "mango"
+        ],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "global",
+        "registry_module": null,
+        "module_supported": false,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\n5 action(s) priorisée(s) générée(s), dont 3 priorité haute. Action principale: Isoler le lot LOT-BISS-002, renforcer le contrôle au séchage, puis reclasser les intrants dégradés. (cible: LOT-BISS-002 / Bissap / séchage).\n\n2. Explication courte\nPriorisation: "
+    },
+    {
+      "case_id": "typ-05",
+      "question": "pk pertes hautes sur LOT-BISS-001 ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": "LOT-BISS-001",
+        "batch_ref_candidate": "LOT-BISS-001",
+        "specific_batch_requested": true,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "batch",
+        "module": "post_harvest",
+        "registry_module": "lots",
+        "module_supported": false,
+        "intent_family": "hybrid_analysis"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-BISS-001 présente une perte de 0.0% et une efficacité de 100.0%.\n\n2. Explication courte\nExplication RAG: Lot LOT-BISS-001 processed 450.0 kg of Bissap through no recorded steps. Current quantity is 450.0 kg, representing a total loss of 0.0% (0.0 "
+    },
+    {
+      "case_id": "typ-06",
+      "question": "mieux secher Arachide : quoi faire",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "peanut"
+        ],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "recommendations",
+        "registry_module": null,
+        "module_supported": true,
+        "intent_family": "explanation"
+      },
+      "answer_preview": "1. Résultat principal\nMembre cooperative - Nom: Awa Ndiaye - Code: DEMOFP-M-002 - Village: Mbour - Produit principal: Arachide - Produits secondaires: Mil;Bissap - Specialite: Post-récolte - Parcelles: 1 - Surface (ha): 1.7 - Date adhesion: 2023-03-04 - Statut: active\n\n2. Explica"
+    },
+    {
+      "case_id": "mem-01",
+      "question": "Quel est le statut du lot LOT-MANG-001 ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": "LOT-MANG-001",
+        "batch_ref_candidate": "LOT-MANG-001",
+        "specific_batch_requested": true,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "batch",
+        "module": "post_harvest",
+        "registry_module": "lots",
+        "module_supported": false,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-MANG-001 présente une perte de 6.0% et une efficacité de 94.0%.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: batches\n\n5"
+    },
+    {
+      "case_id": "mem-02",
+      "question": "et celui-ci ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "scope": "global",
+        "module": "global",
+        "batch_ref": "LOT-MANG-001",
+        "specific_batch_requested": false,
+        "language": "fr",
+        "module_supported": false,
+        "intent_family": "followup_reference"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-MANG-001 présente une perte de 6.0% et une efficacité de 94.0%.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: batches\n\n5"
+    },
+    {
+      "case_id": "mem-03",
+      "question": "ce lot, que faire maintenant ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_FULL",
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "detected_entities": {
+        "scope": "post_harvest",
+        "module": "recommendations",
+        "batch_ref": "LOT-MANG-001",
+        "specific_batch_requested": false,
+        "language": "fr",
+        "registry_module": "lots",
+        "module_supported": true,
+        "intent_family": "action_recommendation"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-MANG-001 présente une perte de 6.0% et une efficacité de 94.0%.\n\n2. Explication courte\nExplication RAG: Stock cooperative - Produit: Mangue - Stock total kg: 5200.0 - Reserve lot kg: 1941.69 - Sortie process kg: 1140.41 - Seuil: 1200.0 - Unite: kg"
+    },
+    {
+      "case_id": "mem-04",
+      "question": "bonjour",
+      "status": "PASS",
+      "issues": [],
+      "route": "SMALL_TALK",
+      "source_types": [],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "global",
+        "registry_module": null,
+        "module_supported": false,
+        "intent_family": "greeting"
+      },
+      "answer_preview": "Salut, ça va bien. Je suis là pour t’aider sur les données de ta coopérative."
+    },
+    {
+      "case_id": "mem-05",
+      "question": "Pourquoi pertes élevées sur LOT-BISS-001 ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": "LOT-BISS-001",
+        "batch_ref_candidate": "LOT-BISS-001",
+        "specific_batch_requested": true,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "batch",
+        "module": "post_harvest",
+        "registry_module": "lots",
+        "module_supported": false,
+        "intent_family": "hybrid_analysis"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-BISS-001 présente une perte de 0.0% et une efficacité de 100.0%.\n\n2. Explication courte\nExplication RAG: Lot LOT-BISS-001 processed 450.0 kg of Bissap through no recorded steps. Current quantity is 450.0 kg, representing a total loss of 0.0% (0.0 "
+    },
+    {
+      "case_id": "mem-06",
+      "question": "ce lot",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "scope": "post_harvest",
+        "module": "post_harvest",
+        "batch_ref": "LOT-BISS-001",
+        "specific_batch_requested": false,
+        "language": "fr",
+        "registry_module": "lots",
+        "module_supported": false,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-BISS-001 présente une perte de 0.0% et une efficacité de 100.0%.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: batches\n\n"
+    },
+    {
+      "case_id": "mem-07",
+      "question": "Quelle météo demain à New York ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "OUT_OF_SCOPE",
+      "source_types": [],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "global",
+        "registry_module": null,
+        "module_supported": false,
+        "intent_family": "unsupported"
+      },
+      "answer_preview": "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, transformation, recommandations et connaissances post-récolte. Je ne dispose pas de contexte fiable pour répondre à cette question."
+    },
+    {
+      "case_id": "mem-08",
+      "question": "et pour la Arachide ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "scope": "global",
+        "module": "global",
+        "batch_ref": "LOT-BISS-001",
+        "product": [
+          "peanut"
+        ],
+        "specific_batch_requested": false,
+        "language": "fr",
+        "module_supported": false,
+        "intent_family": "followup_reference"
+      },
+      "answer_preview": "1. Résultat principal\nLe lot LOT-BISS-001 présente une perte de 0.0% et une efficacité de 100.0%.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: batches\n\n"
+    },
+    {
+      "case_id": "mem-09",
+      "question": "Analyse les pertes au séchage pour Arachide.",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "peanut"
+        ],
+        "stage": [
+          "drying"
+        ],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "post_harvest",
+        "registry_module": "process_steps",
+        "module_supported": false,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nJe n’ai pas trouvé de preuve opérationnelle exploitable pour répondre précisément à cette demande.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources uti"
+    },
+    {
+      "case_id": "mem-10",
+      "question": "pour la mangue, quel est le stock actuel ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "scope": "global",
+        "module": "stocks",
+        "stage": [
+          "séchage"
+        ],
+        "product": [
+          "mango"
+        ],
+        "specific_batch_requested": false,
+        "metric": [
+          "stock"
+        ],
+        "language": "fr",
+        "registry_module": "stocks",
+        "module_supported": true,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nLes stocks actuels (1 produits) sont:\n- Mangue: 2750.0 kg disponibles\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: stocks\n\n5. Aver"
+    },
+    {
+      "case_id": "mem-11",
+      "question": "ok",
+      "status": "PASS",
+      "issues": [],
+      "route": "SMALL_TALK",
+      "source_types": [],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "global",
+        "registry_module": null,
+        "module_supported": false,
+        "intent_family": "greeting"
+      },
+      "answer_preview": "Je suis là pour t’aider. Pose-moi une question sur les opérations de la coopérative et je te réponds."
+    },
+    {
+      "case_id": "mem-12",
+      "question": "quel film me conseilles-tu ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "OUT_OF_SCOPE",
+      "source_types": [],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "global",
+        "registry_module": null,
+        "module_supported": false,
+        "intent_family": "unsupported"
+      },
+      "answer_preview": "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, transformation, recommandations et connaissances post-récolte. Je ne dispose pas de contexte fiable pour répondre à cette question."
+    },
+    {
+      "case_id": "fb-01",
+      "question": "Combien de membres sont inscrits dans ma coopérative ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "global",
+        "module": "members",
+        "registry_module": "members",
+        "module_supported": true,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nLa coopérative compte 17 membre(s) inscrit(s).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: members\n\n5. Avertissements si nécessai"
+    },
+    {
+      "case_id": "fb-02",
+      "question": "Quelles étapes du process génèrent les plus grandes pertes ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "loss"
+        ],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "post_harvest",
+        "registry_module": "process_steps",
+        "module_supported": false,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nPerte observée sur séchage du lot LOT-BISS-002: 68.0% (150.0 kg -> 48.0 kg).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: process_"
+    },
+    {
+      "case_id": "fb-03",
+      "question": "Donne le bilan matière global des lots.",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "material_balance",
+        "registry_module": "lots",
+        "module_supported": true,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nBilan matière global: entrée 12140.0 kg, sortie 11022.5 kg, perte 9.2%.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: batches\n- SQL"
+    },
+    {
+      "case_id": "fb-04",
+      "question": "Quel est le stock actuel par produit pour Arachide ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "peanut"
+        ],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "stock"
+        ],
+        "language": "fr",
+        "scope": "global",
+        "module": "stocks",
+        "registry_module": "stocks",
+        "module_supported": true,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nLes stocks actuels (1 produits) sont:\n- Arachide: 1140.0 kg disponibles\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: stocks\n\n5. Av"
+    },
+    {
+      "case_id": "fb-05",
+      "question": "Quels lots ont une faible efficacité ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [],
+        "stage": [],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [
+          "efficiency"
+        ],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "post_harvest",
+        "registry_module": "lots",
+        "module_supported": false,
+        "intent_family": "factual_sql"
+      },
+      "answer_preview": "1. Résultat principal\nLots à efficacité faible (4):\n- LOT-BISS-002: efficacité 30.7 % | perte 69.3 %\n- DEMOFP-LOT-MANG-013: efficacité 76.4 % | perte 23.6 %\n- DEMOFP-LOT-MIL-009: efficacité 76.8 % | perte 23.2 %\n- DEMOFP-LOT-MANG-003: efficacité 81.5 % | perte 18.5 %\n\n2. Explicat"
+    },
+    {
+      "case_id": "fb-06",
+      "question": "Quelles sont les meilleures pratiques de séchage pour Arachide ?",
+      "status": "PASS",
+      "issues": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "detected_entities": {
+        "product": [
+          "peanut"
+        ],
+        "stage": [
+          "drying"
+        ],
+        "batch_ref": null,
+        "batch_ref_candidate": null,
+        "specific_batch_requested": false,
+        "member_name": null,
+        "date_range": [],
+        "metric": [],
+        "language": "fr",
+        "scope": "post_harvest",
+        "module": "post_harvest",
+        "registry_module": "process_steps",
+        "module_supported": false,
+        "intent_family": "explanation"
+      },
+      "answer_preview": "1. Résultat principal\nLe séchage est une étape critique pour réduire les pertes post-récolte. L'humidité relative doit être maintenue entre 60-70% pour éviter la pourriture et le sur-séchage. Une température de 30-40°C est idéale pour la plupart des fruits tropicaux. Le temps de "
+    }
+  ]
+}

@@ -34,5 +34,5 @@
     "*.d.ts",
     "next.config.ts"
   ],
-  "exclude": ["node_modules", "prisma/seed.ts", "src/**", "backend/**"]
+  "exclude": ["node_modules", "_archive/**", "backend/**"]
 }

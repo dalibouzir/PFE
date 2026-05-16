@@ -1,6 +1,6 @@
 {
   "created_at": "2026-05-07T15:53:54.905890+00:00",
-  "updated_at": "2026-05-07T15:56:57.325616+00:00",
+  "updated_at": "2026-05-15T21:48:01.449201+00:00",
   "versions": [
     {
       "model_version": "20260507155401",
@@ -221,7 +221,7 @@
         "feature_metadata": "artifacts/versions/20260507155633/feature_metadata.json"
       },
       "git_sha": "3299331d8d9bed1d73c3e65c475539972dea193b",
-      "status": "active",
+      "status": "archived",
       "notes": "Phase5 manual activation after validation gates",
       "validation": {
         "expected_feature_schema_version": "phase4-v1",
@@ -249,7 +249,7 @@
           "production_readiness_claimed": false
         }
       },
-      "updated_at": "2026-05-07T15:56:57.325614+00:00",
+      "updated_at": "2026-05-13T10:40:52.377005+00:00",
       "mvp_demo_allowed": true,
       "production_ready": false,
       "contains_demo_seed_data": true,
@@ -303,6 +303,1070 @@
           "days_since_previous_batch": 0.0,
           "rolling_loss_last_n_batches": 0.0,
           "rolling_efficiency_last_n_batches": 0.0,
+          "date_ordinal": 0.0
+        }
+      }
+    },
+    {
+      "model_version": "v-ready",
+      "trained_at": "2026-05-15T21:47:38.776800+00:00",
+      "run_name": "phase5",
+      "feature_schema_version": "phase4-v1",
+      "training_rows": 1485,
+      "metrics": {
+        "regression_mae": 3.78,
+        "regression_stage_mean_mae": 2.66,
+        "regression_product_stage_mean_mae": 2.67,
+        "false_low_high_risk_rate": 0.0
+      },
+      "artifact_paths": {
+        "loss_regressor": "artifacts/versions/v-ready/loss_regressor.joblib",
+        "risk_classifier": "artifacts/versions/v-ready/risk_classifier.joblib",
+        "anomaly_detector": "artifacts/versions/v-ready/anomaly_detector.joblib",
+        "feature_metadata": "artifacts/versions/v-ready/feature_metadata.json"
+      },
+      "git_sha": "504687e174f32b6ba1d9be74be70c5157db578b3",
+      "status": "archived",
+      "notes": "",
+      "validation": {
+        "mvp_demo_allowed": true,
+        "production_ready": false
+      },
+      "updated_at": "2026-05-15T21:47:39.723448+00:00",
+      "mvp_demo_allowed": true,
+      "production_ready": false
+    },
+    {
+      "model_version": "v1",
+      "trained_at": "2026-05-15T21:47:39.698569+00:00",
+      "run_name": "run-v1",
+      "feature_schema_version": "phase4-v1",
+      "training_rows": 600,
+      "metrics": {
+        "regression_mae": 3.2,
+        "false_low_high_risk_rate": 0.1
+      },
+      "artifact_paths": {
+        "loss_regressor": "artifacts/versions/v1/loss_regressor.joblib",
+        "risk_classifier": "artifacts/versions/v1/risk_classifier.joblib",
+        "anomaly_detector": "artifacts/versions/v1/anomaly_detector.joblib",
+        "feature_metadata": "artifacts/versions/v1/feature_metadata.json"
+      },
+      "git_sha": "504687e174f32b6ba1d9be74be70c5157db578b3",
+      "status": "archived",
+      "notes": "Rollback activated",
+      "validation": {
+        "mvp_demo_allowed": true,
+        "production_ready": false
+      },
+      "updated_at": "2026-05-15T21:47:39.764651+00:00",
+      "mvp_demo_allowed": true,
+      "production_ready": false
+    },
+    {
+      "model_version": "v2",
+      "trained_at": "2026-05-15T21:47:39.711398+00:00",
+      "run_name": "run-v2",
+      "feature_schema_version": "phase4-v1",
+      "training_rows": 700,
+      "metrics": {
+        "regression_mae": 3.1,
+        "false_low_high_risk_rate": 0.1
+      },
+      "artifact_paths": {
+        "loss_regressor": "artifacts/versions/v2/loss_regressor.joblib",
+        "risk_classifier": "artifacts/versions/v2/risk_classifier.joblib",
+        "anomaly_detector": "artifacts/versions/v2/anomaly_detector.joblib",
+        "feature_metadata": "artifacts/versions/v2/feature_metadata.json"
+      },
+      "git_sha": "504687e174f32b6ba1d9be74be70c5157db578b3",
+      "status": "archived",
+      "notes": "",
+      "validation": {
+        "mvp_demo_allowed": true,
+        "production_ready": false
+      },
+      "updated_at": "2026-05-15T21:47:39.726958+00:00",
+      "mvp_demo_allowed": true,
+      "production_ready": false
+    },
+    {
+      "model_version": "v-active",
+      "trained_at": "2026-05-15T21:47:39.751578+00:00",
+      "run_name": "monitoring",
+      "feature_schema_version": "phase4-v1",
+      "training_rows": 1200,
+      "metrics": {
+        "regression_mae": 3.8,
+        "regression_stage_mean_mae": 2.7,
+        "false_low_high_risk_rate": 0.1
+      },
+      "artifact_paths": {
+        "loss_regressor": "artifacts/versions/v-active/loss_regressor.joblib",
+        "risk_classifier": "artifacts/versions/v-active/risk_classifier.joblib",
+        "anomaly_detector": "artifacts/versions/v-active/anomaly_detector.joblib",
+        "feature_metadata": "artifacts/versions/v-active/feature_metadata.json"
+      },
+      "git_sha": "504687e174f32b6ba1d9be74be70c5157db578b3",
+      "status": "active",
+      "notes": "",
+      "validation": {
+        "mvp_demo_allowed": true,
+        "production_ready": false
+      },
+      "updated_at": "2026-05-15T21:47:39.764655+00:00",
+      "mvp_demo_allowed": true,
+      "production_ready": false,
+      "dataset_profile": {
+        "product_distribution": {
+          "mango": 12
+        },
+        "stage_distribution": {
+          "drying": 6
+        },
+        "risk_distribution": {
+          "low": 10,
+          "medium": 2
+        }
+      },
+      "contains_demo_seed_data": true
+    },
+    {
+      "model_version": "20260513104055",
+      "trained_at": "2026-05-13T10:40:56.306758+00:00",
+      "run_name": "seed-clean-check",
+      "feature_schema_version": "phase4-v1",
+      "training_rows": 512,
+      "metrics": {
+        "regression_mae": 3.5810327678170317,
+        "regression_rmse": 4.775929784941198,
+        "regression_r2": 0.27881599580814465,
+        "regression_baseline_mae": 4.40803290708909,
+        "regression_baseline_rmse": 5.652378794271897,
+        "regression_stage_mean_mae": 3.2404260969843146,
+        "regression_product_stage_mean_mae": 3.2722249828168555,
+        "classification_accuracy": 0.826530612244898,
+        "classification_macro_f1": 0.34893731503901,
+        "classification_f1": 0.7724053301708093,
+        "classification_majority_baseline_accuracy": 0.8367346938775511,
+        "thresholded_risk_accuracy": 0.5204081632653061,
+        "thresholded_risk_macro_f1": 0.36088565852345383,
+        "false_low_high_risk_rate": 0.0,
+        "risk_thresholds_used": {
+          "low_to_medium": 6.0,
+          "medium_to_high": 12.0
+        },
+        "classification_per_class": {
+          "low": {
+            "precision": 0.8421052631578947,
+            "recall": 0.975609756097561,
+            "f1": 0.903954802259887,
+            "support": 82
+          },
+          "medium": {
+            "precision": 0.3333333333333333,
+            "recall": 0.09090909090909091,
+            "f1": 0.14285714285714285,
+            "support": 11
+          },
+          "high": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 5
+          }
+        },
+        "classification_confusion_matrix": [
+          [
+            80,
+            2,
+            0
+          ],
+          [
+            10,
+            1,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ]
+        ],
+        "anomaly_ratio": 0.12244897959183673,
+        "recommendation_action_coverage": 1.0,
+        "recommendation_issue_alignment": 1.0,
+        "split_details": {
+          "strategy": "time_based",
+          "split_cutoff_date_ordinal": 739581,
+          "train_rows": 414,
+          "test_rows": 98
+        },
+        "impact_model_ready": true,
+        "impact_feedback_rows": 512,
+        "impact_holdout_rows": 103,
+        "impact_holdout_ratio": 0.201171875,
+        "impact_real_feedback_rows": 0,
+        "impact_proxy_feedback_rows": 512,
+        "impact_precision_at_1": 0.8333333333333334,
+        "impact_harmful_rate": 0.0,
+        "impact_calibration_error": 0.007667291760628414,
+        "impact_mean_loss_reduction_after_action": 4.448400000000001,
+        "impact_coverage": 0.11650485436893204,
+        "impact_recommended_rows": 12,
+        "impact_targets_met": true,
+        "impact_used_auto_backfill": true
+      },
+      "artifact_paths": {
+        "loss_regressor": "artifacts/versions/20260513104055/loss_regressor.joblib",
+        "risk_classifier": "artifacts/versions/20260513104055/risk_classifier.joblib",
+        "anomaly_detector": "artifacts/versions/20260513104055/anomaly_detector.joblib",
+        "feature_metadata": "artifacts/versions/20260513104055/feature_metadata.json"
+      },
+      "git_sha": "504687e174f32b6ba1d9be74be70c5157db578b3",
+      "status": "candidate",
+      "notes": "Candidate registered after validation. mvp_demo_allowed=True production_ready=False",
+      "validation": {
+        "expected_feature_schema_version": "phase4-v1",
+        "feature_schema_version": "phase4-v1",
+        "trained_rows": 512,
+        "model_mae": 3.5810327678170317,
+        "stage_mean_mae": 3.2404260969843146,
+        "product_stage_mean_mae": 3.2722249828168555,
+        "false_low_high_risk_rate": 0.0,
+        "underperforms_stage_baseline": true,
+        "underperforms_product_stage_baseline": true,
+        "beats_strong_baselines": false,
+        "all_required_passed": true,
+        "can_activate": true,
+        "mvp_demo_allowed": true,
+        "production_ready": false,
+        "gates": {
+          "artifact_compatibility": true,
+          "predictive_leakage_clean": true,
+          "trained_rows_minimum": true,
+          "feature_schema_match": true,
+          "regression_mae_finite": true,
+          "false_low_high_risk_rate_ok": true,
+          "anomaly_validation_required": false,
+          "production_readiness_claimed": false
+        }
+      },
+      "updated_at": "2026-05-13T10:40:56.319066+00:00",
+      "mvp_demo_allowed": true,
+      "production_ready": false,
+      "contains_demo_seed_data": true,
+      "dataset_profile": {
+        "product_distribution": {
+          "Mangue": 168,
+          "Arachide": 168,
+          "Mil": 164,
+          "mango": 12
+        },
+        "stage_distribution": {
+          "cleaning": 128,
+          "drying": 128,
+          "sorting": 128,
+          "packaging": 128
+        },
+        "risk_distribution": {
+          "low": 405,
+          "medium": 85,
+          "high": 22
+        },
+        "missing_feature_rate": {
+          "product": 0.0,
+          "process_type": 0.0,
+          "stage_canonical": 0.0,
+          "product_stage_key": 0.0,
+          "season": 0.0,
+          "qty_in": 0.0,
+          "qty_in_log": 0.0,
+          "batch_size": 0.0,
+          "batch_size_log": 0.0,
+          "stock_level": 0.0,
+          "stock_pressure_ratio": 0.0,
+          "month": 0.0,
+          "week_of_year": 0.0,
+          "stage_order": 0.0,
+          "is_drying_stage": 0.0,
+          "is_sorting_stage": 0.0,
+          "is_packaging_stage": 0.0,
+          "historical_avg_loss_same_product": 0.0,
+          "historical_avg_loss_same_stage": 0.0,
+          "historical_avg_efficiency_same_stage": 0.0,
+          "product_stage_historical_avg_loss": 0.0,
+          "product_stage_historical_median_loss": 0.0,
+          "product_stage_rolling_loss_last_5": 0.0,
+          "product_stage_rolling_loss_last_10": 0.0,
+          "stage_season_avg_loss": 0.0,
+          "product_stage_season_avg_loss": 0.0,
+          "loss_volatility_product_stage": 0.0,
+          "previous_batch_loss": 0.0,
+          "days_since_previous_batch": 0.0,
+          "rolling_loss_last_n_batches": 0.0,
+          "rolling_efficiency_last_n_batches": 0.0,
+          "date_ordinal": 0.0
+        }
+      }
+    },
+    {
+      "model_version": "20260513104335",
+      "trained_at": "2026-05-13T10:43:36.292181+00:00",
+      "run_name": "seed-clean-check",
+      "feature_schema_version": "phase4-v1",
+      "training_rows": 512,
+      "metrics": {
+        "regression_mae": 3.5664049044758785,
+        "regression_rmse": 4.692798890937548,
+        "regression_r2": 0.3037036716893974,
+        "regression_baseline_mae": 4.408032907089089,
+        "regression_baseline_rmse": 5.652378794271897,
+        "regression_stage_mean_mae": 3.240426096984315,
+        "regression_product_stage_mean_mae": 3.2722249828168555,
+        "classification_accuracy": 0.8367346938775511,
+        "classification_macro_f1": 0.3546528377989053,
+        "classification_f1": 0.7787910324025895,
+        "classification_majority_baseline_accuracy": 0.8367346938775511,
+        "thresholded_risk_accuracy": 0.5306122448979592,
+        "thresholded_risk_macro_f1": 0.38837853601633127,
+        "false_low_high_risk_rate": 0.0,
+        "risk_thresholds_used": {
+          "low_to_medium": 6.0,
+          "medium_to_high": 12.0
+        },
+        "classification_per_class": {
+          "low": {
+            "precision": 0.84375,
+            "recall": 0.9878048780487805,
+            "f1": 0.9101123595505618,
+            "support": 82
+          },
+          "medium": {
+            "precision": 0.5,
+            "recall": 0.09090909090909091,
+            "f1": 0.15384615384615385,
+            "support": 11
+          },
+          "high": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 5
+          }
+        },
+        "classification_confusion_matrix": [
+          [
+            81,
+            1,
+            0
+          ],
+          [
+            10,
+            1,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ]
+        ],
+        "anomaly_ratio": 0.061224489795918366,
+        "recommendation_action_coverage": 1.0,
+        "recommendation_issue_alignment": 1.0,
+        "split_details": {
+          "strategy": "time_based",
+          "split_cutoff_date_ordinal": 739581,
+          "train_rows": 414,
+          "test_rows": 98
+        },
+        "impact_model_ready": true,
+        "impact_feedback_rows": 512,
+        "impact_holdout_rows": 103,
+        "impact_holdout_ratio": 0.201171875,
+        "impact_real_feedback_rows": 0,
+        "impact_proxy_feedback_rows": 512,
+        "impact_precision_at_1": 0.75,
+        "impact_harmful_rate": 0.0,
+        "impact_calibration_error": 0.031974743038906406,
+        "impact_mean_loss_reduction_after_action": 3.8576499999999996,
+        "impact_coverage": 0.11650485436893204,
+        "impact_recommended_rows": 12,
+        "impact_targets_met": true,
+        "impact_used_auto_backfill": true
+      },
+      "artifact_paths": {
+        "loss_regressor": "artifacts/versions/20260513104335/loss_regressor.joblib",
+        "risk_classifier": "artifacts/versions/20260513104335/risk_classifier.joblib",
+        "anomaly_detector": "artifacts/versions/20260513104335/anomaly_detector.joblib",
+        "feature_metadata": "artifacts/versions/20260513104335/feature_metadata.json"
+      },
+      "git_sha": "504687e174f32b6ba1d9be74be70c5157db578b3",
+      "status": "candidate",
+      "notes": "Candidate registered after validation. mvp_demo_allowed=True production_ready=False",
+      "validation": {
+        "expected_feature_schema_version": "phase4-v1",
+        "feature_schema_version": "phase4-v1",
+        "trained_rows": 512,
+        "model_mae": 3.5664049044758785,
+        "stage_mean_mae": 3.240426096984315,
+        "product_stage_mean_mae": 3.2722249828168555,
+        "false_low_high_risk_rate": 0.0,
+        "underperforms_stage_baseline": true,
+        "underperforms_product_stage_baseline": true,
+        "beats_strong_baselines": false,
+        "all_required_passed": true,
+        "can_activate": true,
+        "mvp_demo_allowed": true,
+        "production_ready": false,
+        "gates": {
+          "artifact_compatibility": true,
+          "predictive_leakage_clean": true,
+          "trained_rows_minimum": true,
+          "feature_schema_match": true,
+          "regression_mae_finite": true,
+          "false_low_high_risk_rate_ok": true,
+          "anomaly_validation_required": false,
+          "production_readiness_claimed": false
+        }
+      },
+      "updated_at": "2026-05-13T10:43:36.308153+00:00",
+      "mvp_demo_allowed": true,
+      "production_ready": false,
+      "contains_demo_seed_data": true,
+      "dataset_profile": {
+        "product_distribution": {
+          "Mangue": 168,
+          "Arachide": 168,
+          "Mil": 164,
+          "mango": 12
+        },
+        "stage_distribution": {
+          "cleaning": 128,
+          "drying": 128,
+          "sorting": 128,
+          "packaging": 128
+        },
+        "risk_distribution": {
+          "low": 405,
+          "medium": 85,
+          "high": 22
+        },
+        "missing_feature_rate": {
+          "product": 0.0,
+          "process_type": 0.0,
+          "stage_canonical": 0.0,
+          "product_stage_key": 0.0,
+          "season": 0.0,
+          "qty_in": 0.0,
+          "qty_in_log": 0.0,
+          "batch_size": 0.0,
+          "batch_size_log": 0.0,
+          "stock_level": 0.0,
+          "stock_pressure_ratio": 0.0,
+          "month": 0.0,
+          "week_of_year": 0.0,
+          "stage_order": 0.0,
+          "is_drying_stage": 0.0,
+          "is_sorting_stage": 0.0,
+          "is_packaging_stage": 0.0,
+          "historical_avg_loss_same_product": 0.0,
+          "historical_avg_loss_same_stage": 0.0,
+          "historical_avg_efficiency_same_stage": 0.0,
+          "product_stage_historical_avg_loss": 0.0,
+          "product_stage_historical_median_loss": 0.0,
+          "product_stage_rolling_loss_last_5": 0.0,
+          "product_stage_rolling_loss_last_10": 0.0,
+          "stage_season_avg_loss": 0.0,
+          "product_stage_season_avg_loss": 0.0,
+          "loss_volatility_product_stage": 0.0,
+          "previous_batch_loss": 0.0,
+          "days_since_previous_batch": 0.0,
+          "rolling_loss_last_n_batches": 0.0,
+          "rolling_efficiency_last_n_batches": 0.0,
+          "date_ordinal": 0.0
+        }
+      }
+    },
+    {
+      "model_version": "20260515210928",
+      "trained_at": "2026-05-15T21:09:47.332281+00:00",
+      "run_name": "seed-clean-check",
+      "feature_schema_version": "phase4-v1",
+      "training_rows": 512,
+      "metrics": {
+        "regression_mae": 3.5330768980048233,
+        "regression_rmse": 4.661917977401764,
+        "regression_r2": 0.3128374613481636,
+        "regression_baseline_mae": 4.408032907089089,
+        "regression_baseline_rmse": 5.652378794271897,
+        "regression_stage_mean_mae": 3.2404260969843146,
+        "regression_product_stage_mean_mae": 3.2722249828168555,
+        "classification_accuracy": 0.826530612244898,
+        "classification_macro_f1": 0.34893731503901,
+        "classification_f1": 0.7724053301708093,
+        "classification_majority_baseline_accuracy": 0.8367346938775511,
+        "thresholded_risk_accuracy": 0.5918367346938775,
+        "thresholded_risk_macro_f1": 0.4703715015683252,
+        "false_low_high_risk_rate": 0.0,
+        "risk_thresholds_used": {
+          "low_to_medium": 6.0,
+          "medium_to_high": 12.0
+        },
+        "classification_per_class": {
+          "low": {
+            "precision": 0.8421052631578947,
+            "recall": 0.975609756097561,
+            "f1": 0.903954802259887,
+            "support": 82
+          },
+          "medium": {
+            "precision": 0.3333333333333333,
+            "recall": 0.09090909090909091,
+            "f1": 0.14285714285714285,
+            "support": 11
+          },
+          "high": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 5
+          }
+        },
+        "classification_confusion_matrix": [
+          [
+            80,
+            2,
+            0
+          ],
+          [
+            10,
+            1,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ]
+        ],
+        "anomaly_ratio": 0.10204081632653061,
+        "recommendation_action_coverage": 1.0,
+        "recommendation_issue_alignment": 1.0,
+        "split_details": {
+          "strategy": "time_based",
+          "split_cutoff_date_ordinal": 739583,
+          "train_rows": 414,
+          "test_rows": 98
+        },
+        "impact_model_ready": true,
+        "impact_feedback_rows": 512,
+        "impact_holdout_rows": 103,
+        "impact_holdout_ratio": 0.201171875,
+        "impact_real_feedback_rows": 0,
+        "impact_proxy_feedback_rows": 512,
+        "impact_precision_at_1": 1.0,
+        "impact_harmful_rate": 0.0,
+        "impact_calibration_error": 0.24842405588528027,
+        "impact_mean_loss_reduction_after_action": 8.0179,
+        "impact_coverage": 0.038834951456310676,
+        "impact_recommended_rows": 4,
+        "impact_targets_met": false,
+        "impact_used_auto_backfill": true
+      },
+      "artifact_paths": {
+        "loss_regressor": "artifacts/versions/20260515210928/loss_regressor.joblib",
+        "risk_classifier": "artifacts/versions/20260515210928/risk_classifier.joblib",
+        "anomaly_detector": "artifacts/versions/20260515210928/anomaly_detector.joblib",
+        "feature_metadata": "artifacts/versions/20260515210928/feature_metadata.json"
+      },
+      "git_sha": "504687e174f32b6ba1d9be74be70c5157db578b3",
+      "status": "candidate",
+      "notes": "Candidate registered after validation. mvp_demo_allowed=True production_ready=False",
+      "validation": {
+        "expected_feature_schema_version": "phase4-v1",
+        "feature_schema_version": "phase4-v1",
+        "trained_rows": 512,
+        "model_mae": 3.5330768980048233,
+        "stage_mean_mae": 3.2404260969843146,
+        "product_stage_mean_mae": 3.2722249828168555,
+        "false_low_high_risk_rate": 0.0,
+        "underperforms_stage_baseline": true,
+        "underperforms_product_stage_baseline": true,
+        "beats_strong_baselines": false,
+        "all_required_passed": true,
+        "can_activate": true,
+        "mvp_demo_allowed": true,
+        "production_ready": false,
+        "gates": {
+          "artifact_compatibility": true,
+          "predictive_leakage_clean": true,
+          "trained_rows_minimum": true,
+          "feature_schema_match": true,
+          "regression_mae_finite": true,
+          "false_low_high_risk_rate_ok": true,
+          "anomaly_validation_required": false,
+          "production_readiness_claimed": false
+        }
+      },
+      "updated_at": "2026-05-15T21:09:47.355639+00:00",
+      "mvp_demo_allowed": true,
+      "production_ready": false,
+      "contains_demo_seed_data": true,
+      "dataset_profile": {
+        "product_distribution": {
+          "Mangue": 168,
+          "Arachide": 168,
+          "Mil": 164,
+          "mango": 12
+        },
+        "stage_distribution": {
+          "cleaning": 128,
+          "drying": 128,
+          "sorting": 128,
+          "packaging": 128
+        },
+        "risk_distribution": {
+          "low": 405,
+          "medium": 85,
+          "high": 22
+        },
+        "missing_feature_rate": {
+          "product": 0.0,
+          "process_type": 0.0,
+          "stage_canonical": 0.0,
+          "product_stage_key": 0.0,
+          "season": 0.0,
+          "qty_in": 0.0,
+          "qty_in_log": 0.0,
+          "batch_size": 0.0,
+          "batch_size_log": 0.0,
+          "stock_level": 0.0,
+          "stock_pressure_ratio": 0.0,
+          "month": 0.0,
+          "week_of_year": 0.0,
+          "stage_order": 0.0,
+          "is_drying_stage": 0.0,
+          "is_sorting_stage": 0.0,
+          "is_packaging_stage": 0.0,
+          "historical_avg_loss_same_product": 0.0,
+          "historical_avg_loss_same_stage": 0.0,
+          "historical_avg_efficiency_same_stage": 0.0,
+          "product_stage_historical_avg_loss": 0.0,
+          "product_stage_historical_median_loss": 0.0,
+          "product_stage_rolling_loss_last_5": 0.0,
+          "product_stage_rolling_loss_last_10": 0.0,
+          "stage_season_avg_loss": 0.0,
+          "product_stage_season_avg_loss": 0.0,
+          "loss_volatility_product_stage": 0.0,
+          "previous_batch_loss": 0.0,
+          "days_since_previous_batch": 0.0,
+          "rolling_loss_last_n_batches": 0.0,
+          "rolling_efficiency_last_n_batches": 0.0,
+          "weather_available": 0.0,
+          "weather_avg_humidity_window": 0.0,
+          "weather_max_humidity_window": 0.0,
+          "weather_avg_temperature_window": 0.0,
+          "weather_avg_dew_point_window": 0.0,
+          "weather_avg_wind_speed_window": 0.0,
+          "weather_avg_surface_pressure_window": 0.0,
+          "weather_rain_flag_window": 0.0,
+          "weather_precip_total_window": 0.0,
+          "weather_is_forecast": 0.0,
+          "weather_is_observed": 0.0,
+          "weather_product_humidity_interaction": 0.0,
+          "weather_stage_humidity_interaction": 0.0,
+          "weather_season_humidity_interaction": 0.0,
+          "weather_feature_timestamp_ordinal": 0.0,
+          "date_ordinal": 0.0
+        }
+      }
+    },
+    {
+      "model_version": "20260515213533",
+      "trained_at": "2026-05-15T21:35:53.584193+00:00",
+      "run_name": "seed-clean-check",
+      "feature_schema_version": "phase4-v1",
+      "training_rows": 512,
+      "metrics": {
+        "regression_mae": 3.5390354306019263,
+        "regression_rmse": 4.687324445671346,
+        "regression_r2": 0.30532727110354085,
+        "regression_baseline_mae": 4.408032907089089,
+        "regression_baseline_rmse": 5.652378794271897,
+        "regression_stage_mean_mae": 3.2404260969843146,
+        "regression_product_stage_mean_mae": 3.2722249828168555,
+        "classification_accuracy": 0.8367346938775511,
+        "classification_macro_f1": 0.3546528377989053,
+        "classification_f1": 0.7787910324025895,
+        "classification_majority_baseline_accuracy": 0.8367346938775511,
+        "thresholded_risk_accuracy": 0.6122448979591837,
+        "thresholded_risk_macro_f1": 0.4844118844118844,
+        "false_low_high_risk_rate": 0.0,
+        "risk_thresholds_used": {
+          "low_to_medium": 6.0,
+          "medium_to_high": 12.0
+        },
+        "classification_per_class": {
+          "low": {
+            "precision": 0.84375,
+            "recall": 0.9878048780487805,
+            "f1": 0.9101123595505618,
+            "support": 82
+          },
+          "medium": {
+            "precision": 0.5,
+            "recall": 0.09090909090909091,
+            "f1": 0.15384615384615385,
+            "support": 11
+          },
+          "high": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 5
+          }
+        },
+        "classification_confusion_matrix": [
+          [
+            81,
+            1,
+            0
+          ],
+          [
+            10,
+            1,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ]
+        ],
+        "anomaly_ratio": 0.09183673469387756,
+        "recommendation_action_coverage": 1.0,
+        "recommendation_issue_alignment": 1.0,
+        "split_details": {
+          "strategy": "time_based",
+          "split_cutoff_date_ordinal": 739583,
+          "train_rows": 414,
+          "test_rows": 98
+        },
+        "impact_model_ready": true,
+        "impact_feedback_rows": 512,
+        "impact_holdout_rows": 103,
+        "impact_holdout_ratio": 0.201171875,
+        "impact_real_feedback_rows": 0,
+        "impact_proxy_feedback_rows": 512,
+        "impact_precision_at_1": 1.0,
+        "impact_harmful_rate": 0.0,
+        "impact_calibration_error": 0.13546522131227626,
+        "impact_mean_loss_reduction_after_action": 6.660679999999999,
+        "impact_coverage": 0.04854368932038835,
+        "impact_recommended_rows": 5,
+        "impact_targets_met": false,
+        "impact_used_auto_backfill": true
+      },
+      "artifact_paths": {
+        "loss_regressor": "artifacts/versions/20260515213533/loss_regressor.joblib",
+        "risk_classifier": "artifacts/versions/20260515213533/risk_classifier.joblib",
+        "anomaly_detector": "artifacts/versions/20260515213533/anomaly_detector.joblib",
+        "feature_metadata": "artifacts/versions/20260515213533/feature_metadata.json"
+      },
+      "git_sha": "504687e174f32b6ba1d9be74be70c5157db578b3",
+      "status": "candidate",
+      "notes": "Candidate registered after validation. mvp_demo_allowed=True production_ready=False",
+      "validation": {
+        "expected_feature_schema_version": "phase4-v1",
+        "feature_schema_version": "phase4-v1",
+        "trained_rows": 512,
+        "model_mae": 3.5390354306019263,
+        "stage_mean_mae": 3.2404260969843146,
+        "product_stage_mean_mae": 3.2722249828168555,
+        "false_low_high_risk_rate": 0.0,
+        "underperforms_stage_baseline": true,
+        "underperforms_product_stage_baseline": true,
+        "beats_strong_baselines": false,
+        "all_required_passed": true,
+        "can_activate": true,
+        "mvp_demo_allowed": true,
+        "production_ready": false,
+        "gates": {
+          "artifact_compatibility": true,
+          "predictive_leakage_clean": true,
+          "trained_rows_minimum": true,
+          "feature_schema_match": true,
+          "regression_mae_finite": true,
+          "false_low_high_risk_rate_ok": true,
+          "anomaly_validation_required": false,
+          "production_readiness_claimed": false
+        }
+      },
+      "updated_at": "2026-05-15T21:35:53.595664+00:00",
+      "mvp_demo_allowed": true,
+      "production_ready": false,
+      "contains_demo_seed_data": true,
+      "dataset_profile": {
+        "product_distribution": {
+          "Mangue": 168,
+          "Arachide": 168,
+          "Mil": 164,
+          "mango": 12
+        },
+        "stage_distribution": {
+          "cleaning": 128,
+          "drying": 128,
+          "sorting": 128,
+          "packaging": 128
+        },
+        "risk_distribution": {
+          "low": 405,
+          "medium": 85,
+          "high": 22
+        },
+        "missing_feature_rate": {
+          "product": 0.0,
+          "process_type": 0.0,
+          "stage_canonical": 0.0,
+          "product_stage_key": 0.0,
+          "season": 0.0,
+          "qty_in": 0.0,
+          "qty_in_log": 0.0,
+          "batch_size": 0.0,
+          "batch_size_log": 0.0,
+          "stock_level": 0.0,
+          "stock_pressure_ratio": 0.0,
+          "month": 0.0,
+          "week_of_year": 0.0,
+          "stage_order": 0.0,
+          "is_drying_stage": 0.0,
+          "is_sorting_stage": 0.0,
+          "is_packaging_stage": 0.0,
+          "historical_avg_loss_same_product": 0.0,
+          "historical_avg_loss_same_stage": 0.0,
+          "historical_avg_efficiency_same_stage": 0.0,
+          "product_stage_historical_avg_loss": 0.0,
+          "product_stage_historical_median_loss": 0.0,
+          "product_stage_rolling_loss_last_5": 0.0,
+          "product_stage_rolling_loss_last_10": 0.0,
+          "stage_season_avg_loss": 0.0,
+          "product_stage_season_avg_loss": 0.0,
+          "loss_volatility_product_stage": 0.0,
+          "previous_batch_loss": 0.0,
+          "days_since_previous_batch": 0.0,
+          "rolling_loss_last_n_batches": 0.0,
+          "rolling_efficiency_last_n_batches": 0.0,
+          "weather_available": 0.0,
+          "weather_avg_humidity_window": 0.0,
+          "weather_max_humidity_window": 0.0,
+          "weather_avg_temperature_window": 0.0,
+          "weather_avg_dew_point_window": 0.0,
+          "weather_avg_wind_speed_window": 0.0,
+          "weather_avg_surface_pressure_window": 0.0,
+          "weather_rain_flag_window": 0.0,
+          "weather_precip_total_window": 0.0,
+          "weather_is_forecast": 0.0,
+          "weather_is_observed": 0.0,
+          "weather_product_humidity_interaction": 0.0,
+          "weather_stage_humidity_interaction": 0.0,
+          "weather_season_humidity_interaction": 0.0,
+          "weather_feature_timestamp_ordinal": 0.0,
+          "date_ordinal": 0.0
+        }
+      }
+    },
+    {
+      "model_version": "20260515214742",
+      "trained_at": "2026-05-15T21:48:01.429335+00:00",
+      "run_name": "seed-clean-check",
+      "feature_schema_version": "phase4-v1",
+      "training_rows": 512,
+      "metrics": {
+        "regression_mae": 3.4663298443874564,
+        "regression_rmse": 4.64282711788606,
+        "regression_r2": 0.31845388915610884,
+        "regression_baseline_mae": 4.408032907089089,
+        "regression_baseline_rmse": 5.652378794271897,
+        "regression_stage_mean_mae": 3.240426096984315,
+        "regression_product_stage_mean_mae": 3.2722249828168555,
+        "classification_accuracy": 0.826530612244898,
+        "classification_macro_f1": 0.34893731503901,
+        "classification_f1": 0.7724053301708093,
+        "classification_majority_baseline_accuracy": 0.8367346938775511,
+        "thresholded_risk_accuracy": 0.5816326530612245,
+        "thresholded_risk_macro_f1": 0.4471537076188239,
+        "false_low_high_risk_rate": 0.0,
+        "risk_thresholds_used": {
+          "low_to_medium": 6.0,
+          "medium_to_high": 12.0
+        },
+        "classification_per_class": {
+          "low": {
+            "precision": 0.8421052631578947,
+            "recall": 0.975609756097561,
+            "f1": 0.903954802259887,
+            "support": 82
+          },
+          "medium": {
+            "precision": 0.3333333333333333,
+            "recall": 0.09090909090909091,
+            "f1": 0.14285714285714285,
+            "support": 11
+          },
+          "high": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 5
+          }
+        },
+        "classification_confusion_matrix": [
+          [
+            80,
+            2,
+            0
+          ],
+          [
+            10,
+            1,
+            0
+          ],
+          [
+            5,
+            0,
+            0
+          ]
+        ],
+        "anomaly_ratio": 0.030612244897959183,
+        "recommendation_action_coverage": 1.0,
+        "recommendation_issue_alignment": 1.0,
+        "split_details": {
+          "strategy": "time_based",
+          "split_cutoff_date_ordinal": 739583,
+          "train_rows": 414,
+          "test_rows": 98
+        },
+        "impact_model_ready": true,
+        "impact_feedback_rows": 512,
+        "impact_holdout_rows": 103,
+        "impact_holdout_ratio": 0.201171875,
+        "impact_real_feedback_rows": 0,
+        "impact_proxy_feedback_rows": 512,
+        "impact_precision_at_1": 1.0,
+        "impact_harmful_rate": 0.0,
+        "impact_calibration_error": 0.15440955399765566,
+        "impact_mean_loss_reduction_after_action": 8.384220000000001,
+        "impact_coverage": 0.04854368932038835,
+        "impact_recommended_rows": 5,
+        "impact_targets_met": false,
+        "impact_used_auto_backfill": true
+      },
+      "artifact_paths": {
+        "loss_regressor": "artifacts/versions/20260515214742/loss_regressor.joblib",
+        "risk_classifier": "artifacts/versions/20260515214742/risk_classifier.joblib",
+        "anomaly_detector": "artifacts/versions/20260515214742/anomaly_detector.joblib",
+        "feature_metadata": "artifacts/versions/20260515214742/feature_metadata.json"
+      },
+      "git_sha": "504687e174f32b6ba1d9be74be70c5157db578b3",
+      "status": "candidate",
+      "notes": "Candidate registered after validation. mvp_demo_allowed=True production_ready=False",
+      "validation": {
+        "expected_feature_schema_version": "phase4-v1",
+        "feature_schema_version": "phase4-v1",
+        "trained_rows": 512,
+        "model_mae": 3.4663298443874564,
+        "stage_mean_mae": 3.240426096984315,
+        "product_stage_mean_mae": 3.2722249828168555,
+        "false_low_high_risk_rate": 0.0,
+        "underperforms_stage_baseline": true,
+        "underperforms_product_stage_baseline": true,
+        "beats_strong_baselines": false,
+        "all_required_passed": true,
+        "can_activate": true,
+        "mvp_demo_allowed": true,
+        "production_ready": false,
+        "gates": {
+          "artifact_compatibility": true,
+          "predictive_leakage_clean": true,
+          "trained_rows_minimum": true,
+          "feature_schema_match": true,
+          "regression_mae_finite": true,
+          "false_low_high_risk_rate_ok": true,
+          "anomaly_validation_required": false,
+          "production_readiness_claimed": false
+        }
+      },
+      "updated_at": "2026-05-15T21:48:01.449126+00:00",
+      "mvp_demo_allowed": true,
+      "production_ready": false,
+      "contains_demo_seed_data": true,
+      "dataset_profile": {
+        "product_distribution": {
+          "Mangue": 168,
+          "Arachide": 168,
+          "Mil": 164,
+          "mango": 12
+        },
+        "stage_distribution": {
+          "cleaning": 128,
+          "drying": 128,
+          "sorting": 128,
+          "packaging": 128
+        },
+        "risk_distribution": {
+          "low": 405,
+          "medium": 85,
+          "high": 22
+        },
+        "missing_feature_rate": {
+          "product": 0.0,
+          "process_type": 0.0,
+          "stage_canonical": 0.0,
+          "product_stage_key": 0.0,
+          "season": 0.0,
+          "qty_in": 0.0,
+          "qty_in_log": 0.0,
+          "batch_size": 0.0,
+          "batch_size_log": 0.0,
+          "stock_level": 0.0,
+          "stock_pressure_ratio": 0.0,
+          "month": 0.0,
+          "week_of_year": 0.0,
+          "stage_order": 0.0,
+          "is_drying_stage": 0.0,
+          "is_sorting_stage": 0.0,
+          "is_packaging_stage": 0.0,
+          "historical_avg_loss_same_product": 0.0,
+          "historical_avg_loss_same_stage": 0.0,
+          "historical_avg_efficiency_same_stage": 0.0,
+          "product_stage_historical_avg_loss": 0.0,
+          "product_stage_historical_median_loss": 0.0,
+          "product_stage_rolling_loss_last_5": 0.0,
+          "product_stage_rolling_loss_last_10": 0.0,
+          "stage_season_avg_loss": 0.0,
+          "product_stage_season_avg_loss": 0.0,
+          "loss_volatility_product_stage": 0.0,
+          "previous_batch_loss": 0.0,
+          "days_since_previous_batch": 0.0,
+          "rolling_loss_last_n_batches": 0.0,
+          "rolling_efficiency_last_n_batches": 0.0,
+          "weather_available": 0.0,
+          "weather_avg_humidity_window": 0.0,
+          "weather_max_humidity_window": 0.0,
+          "weather_avg_temperature_window": 0.0,
+          "weather_avg_dew_point_window": 0.0,
+          "weather_avg_wind_speed_window": 0.0,
+          "weather_avg_surface_pressure_window": 0.0,
+          "weather_rain_flag_window": 0.0,
+          "weather_precip_total_window": 0.0,
+          "weather_is_forecast": 0.0,
+          "weather_is_observed": 0.0,
+          "weather_product_humidity_interaction": 0.0,
+          "weather_stage_humidity_interaction": 0.0,
+          "weather_season_humidity_interaction": 0.0,
+          "weather_feature_timestamp_ordinal": 0.0,
           "date_ordinal": 0.0
         }
       }

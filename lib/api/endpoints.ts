@@ -88,6 +88,11 @@ export const endpoints = {
     detail: (id: string) => `/batches/${id}`,
     update: (id: string) => `/batches/${id}`,
     updateStatus: (id: string) => `/batches/${id}/status`,
+    approveCharge: (id: string) => `/batches/${id}/approve-charge`,
+    activatePreHarvest: (id: string) => `/batches/${id}/activate-preharvest`,
+    stopPreHarvest: (id: string) => `/batches/${id}/stop-preharvest`,
+    updatePreHarvestStepStatuses: (id: string) => `/batches/${id}/preharvest-step-statuses`,
+    completePreHarvest: (id: string) => `/batches/${id}/complete-preharvest`,
     delete: (id: string) => `/batches/${id}`,
   },
   processSteps: {

@@ -4,7 +4,7 @@ import type { QuickAction } from "@/lib/ui/types";
 export function QuickActions() {
   const actions: QuickAction[] = [
     { label: "Ajouter membre", href: "/manager/membres", tone: "accent" },
-    { label: "Nouvelle parcelle", href: "/manager/parcelles" },
+    { label: "Nouveau lot", href: "/manager/lots" },
     { label: "Nouvel input", href: "/manager/inputs" },
     { label: "Suivi stocks", href: "/manager/stocks" },
   ];

@@ -1,0 +1,204 @@
+# Chatbot Full Platform Coverage Audit
+
+## Overview
+- Generated at: 2026-05-13T10:44:27.070645+00:00
+- Total questions: 112
+- Overall pass rate: 0.75
+
+## Pass Rate by Intent
+- HYBRID: 13/31 (0.4194)
+- RAG_ONLY: 2/9 (0.2222)
+- SMALL_TALK: 4/4 (1.0)
+- SQL_ONLY: 61/64 (0.9531)
+- UNSUPPORTED: 4/4 (1.0)
+
+## Pass Rate by Module
+- collections: 6/7 (0.8571)
+- finance: 6/7 (0.8571)
+- hybrid: 7/14 (0.5)
+- invoices: 8/8 (1.0)
+- lots: 3/7 (0.4286)
+- members: 11/11 (1.0)
+- ml: 4/6 (0.6667)
+- orders: 8/9 (0.8889)
+- parcels: 8/8 (1.0)
+- process: 2/3 (0.6667)
+- recommendations: 3/7 (0.4286)
+- reference: 2/9 (0.2222)
+- small_talk: 4/4 (1.0)
+- stocks: 8/8 (1.0)
+- unsupported: 4/4 (1.0)
+
+## Coverage & Risk
+- Seeded modules: ['members', 'parcels', 'collections', 'stocks', 'lots', 'process', 'recommendations', 'orders', 'invoices', 'finance', 'ml', 'reference']
+- Tested modules: ['collections', 'finance', 'invoices', 'lots', 'members', 'ml', 'orders', 'parcels', 'process', 'recommendations', 'reference', 'stocks']
+- Module coverage rate: 1.0
+- Fake-entity high-risk hallucinations: 0
+- Stale response issues: 0
+- UI/debug leakage issues: 7
+
+## Acceptance Targets
+- overall >= 85%: False
+- SQL_ONLY >= 90%: True
+- RAG_ONLY >= 85%: False
+- HYBRID >= 80%: False
+- SMALL_TALK = 100%: True
+- UNSUPPORTED = 100%: True
+- fake entity high-risk hallucination = 0: True
+- stale response issues = 0: True
+- UI/debug leakage = 0: False
+- module coverage >= 80%: True
+- major seeded modules all tested: True
+- at least 100 questions: True
+
+## Top Failures
+- `col-04` [HYBRID/collections] Distribution des grades de collecte
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: sql:ops-member-efficiency:top_collected_kg (top_collected_kg); sql:ops-member-efficiency:best_net_
+  - citations=3 sql=['inputs'] tables=['collections', 'ml_recommendation_logs', 'recommendations', 'sql']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `lot-01` [SQL_ONLY/lots] Quel est le statut du lot MANG-005 ?
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=False
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 sql=['batches'] tables=['batches', 'lots']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `lot-03` [HYBRID/lots] Combien de lots complétés ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-002 (Tri). Données SQL clés: rag_hit_count=0.0 count; loss_rate=12.01 %.
+  - citations=1 sql=['batches'] tables=['batches', 'lots', 'recommendations']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `lot-04` [HYBRID/process] Pertes moyennes par étape
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-008 (Prévention pertes). Données SQL clés: rag_hit_
+  - citations=3 sql=['losses'] tables=['batches', 'process', 'process_steps']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `lot-06` [SQL_ONLY/lots] status lot MANG-004
+  - expected/actual: ['SQL_ONLY'] -> SQL_ONLY | pass=False
+  - snippet: Je ne trouve pas cette donnée dans la base opérationnelle. Aucune donnée vérifiable n'est disponible pour cette demande. Veuillez vérifier le produit, le lot, le producteur ou l’étape demandée.
+  - citations=0 sql=['batches'] tables=['batches', 'lots']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `rec-02` [HYBRID/recommendations] Recommandations pour Mangue
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-002 (Tri). Données SQL clés: rag_hit_count=0.0 coun
+  - citations=4 sql=['dashboard'] tables=['dashboard', 'ml_recommendation_logs', 'recommendations']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `rec-03` [HYBRID/recommendations] recommendations by lot MANG-005
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: sql:ops-batch-loss-summary:avg_batch_loss_pct (avg_batch_loss_pct); sql:ops-batch-loss-summary:wor
+  - citations=2 sql=['batches', 'recommendations'] tables=['batches', 'lots', 'ml_recommendation_logs', 'recommendations', 'sql']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `rec-06` [HYBRID/recommendations] Pourquoi les recommandations sur MANG-004 restent prioritaires et quelles actions immédiates ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Aucune preuve de référence n'a été récupérée pour étayer cette analyse opérationnelle. Je ne peux pas fournir une synthèse HYBRID fiable pour le moment.
+  - citations=0 sql=['dashboard'] tables=['batches', 'dashboard', 'ml_recommendation_logs', 'recommendations']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `ord-05` [HYBRID/orders] Risque commercial: commande DEMOFP-ORD-010 vs stock disponible, explique les écarts.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-003 (Stockage); DEMOFP-SRC-KNOW-007 (Humidité). Données SQL clés: rag_hit_count=0.
+  - citations=2 sql=['stocks', 'commercial_orders'] tables=['batches', 'commercial_catalog_products', 'commercial_invoices', 'commercial_orders', 'orders', 'process_steps', 'stocks']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `fin-06` [HYBRID/finance] Impact des coûts logistiques sur l'efficacité de Nettoyage, avec actions.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-004 (Séchage); DEMOFP-SRC-KNOW-005 (Tri). Données SQL clés: rag_hit_count=0.0 coun
+  - citations=3 sql=['dashboard'] tables=['batches', 'dashboard', 'ml_recommendation_logs', 'recommendations']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `ml-04` [HYBRID/ml] Croise la dernière prédiction de risque et les pertes observées sur MANG-005.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-008 (Prévention pertes). Données SQL clés: rag_hit_
+  - citations=3 sql=['losses', 'ml_metrics'] tables=['batches', 'ml', 'ml_model_registry', 'ml_prediction_logs', 'ml_training_runs', 'process', 'process_steps']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `ml-05` [HYBRID/ml] Explique les signaux ML à haut risque et leurs implications opérationnelles.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Aucune preuve de référence n'a été récupérée pour étayer cette analyse opérationnelle. Je ne peux pas fournir une synthèse HYBRID fiable pour le moment.
+  - citations=0 sql=['ml_metrics'] tables=['ml', 'ml_model_registry', 'ml_prediction_logs', 'ml_training_runs']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `rag-01` [RAG_ONLY/reference] Quelles bonnes pratiques de séchage pour Mangue ?
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Références récupérées: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-002 (Tri); DEMOFP-SRC-KNOW-003 (Stockage). Synthèse déterministe: [DEMOFP-SRC-KNOW-001] [DEMOFP] Contrôler humidi
+  - citations=4 sql=[] tables=['process_steps']
+  - hallucination=low stale=low debug=high
+  - notes: Raw JSON visible in manager-facing answer.
+- `rag-02` [RAG_ONLY/reference] Quels benchmarks de pertes pour le mil ?
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Références récupérées: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-002 (Tri); DEMOFP-SRC-KNOW-003 (Stockage). Synthèse déterministe: [DEMOFP-SRC-KNOW-001] [DEMOFP] Contrôler humidi
+  - citations=4 sql=[] tables=['batches', 'process_steps']
+  - hallucination=low stale=low debug=high
+  - notes: Raw JSON visible in manager-facing answer.
+- `rag-03` [RAG_ONLY/reference] Conseils post-récolte pour la conservation avec sources
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Références récupérées: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-002 (Tri); DEMOFP-SRC-KNOW-003 (Stockage). Synthèse déterministe: [DEMOFP-SRC-KNOW-001] [DEMOFP] Contrôler humidi
+  - citations=4 sql=[] tables=['knowledge_chunks', 'reference_metrics']
+  - hallucination=low stale=low debug=high
+  - notes: Raw JSON visible in manager-facing answer.
+- `rag-04` [RAG_ONLY/reference] Bonnes pratiques d'emballage pour limiter l'humidité
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Références récupérées: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-002 (Tri); DEMOFP-SRC-KNOW-003 (Stockage). Synthèse déterministe: [DEMOFP-SRC-KNOW-001] [DEMOFP] Contrôler humidi
+  - citations=4 sql=[] tables=['knowledge_chunks', 'reference_metrics']
+  - hallucination=low stale=low debug=high
+  - notes: Raw JSON visible in manager-facing answer.
+- `rag-05` [RAG_ONLY/reference] références sur le contrôle d'humidité/moisture
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Références récupérées: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-003 (Stockage); DEMOFP-SRC-KNOW-004 (Séchage). Synthèse déterministe: [DEMOFP-SRC-KNOW-001] [DEMOFP] Contrôler hu
+  - citations=3 sql=[] tables=['knowledge_chunks', 'reference_metrics']
+  - hallucination=low stale=low debug=high
+  - notes: Raw JSON visible in manager-facing answer.
+- `rag-07` [RAG_ONLY/reference] sources agronomiques sur prévention des pertes
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Références récupérées: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-008 (Prévention pertes); HARNESS-SRC-KNOW-001 (Séchage). Synthèse déterministe: [DEMOFP-SRC-KNOW-001] [DEMOFP] Co
+  - citations=3 sql=[] tables=['batches', 'process_steps']
+  - hallucination=low stale=low debug=high
+  - notes: Raw JSON visible in manager-facing answer.
+- `rag-08` [RAG_ONLY/reference] guidance de tri et nettoyage avec sources
+  - expected/actual: ['RAG_ONLY'] -> RAG_ONLY | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Références récupérées: DEMOFP-SRC-KNOW-004 (Séchage); DEMOFP-SRC-KNOW-005 (Tri); DEMOFP-SRC-KNOW-008 (Prévention pertes). Synthèse déterministe: [DEMOFP-SRC-KNOW-004] [DEMOFP] Privilé
+  - citations=3 sql=[] tables=['process_steps']
+  - hallucination=low stale=low debug=high
+  - notes: Raw JSON visible in manager-facing answer.
+- `hyb-01` [HYBRID/hybrid] Compare la performance des lots MANG-005 et MANG-004 et explique les écarts.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-002 (Tri). Données SQL clés: rag_hit_count=0.0 count; loss_rate=12.01 %.
+  - citations=1 sql=['batches'] tables=['batches', 'lots', 'recommendations']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `hyb-02` [HYBRID/hybrid] Fais un bilan matière du lot MANG-005 avec les risques associés.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-004 (Séchage); DEMOFP-SRC-KNOW-008 (Prévention pertes). Données SQL clés: rag_hit_
+  - citations=2 sql=['batches'] tables=['batches', 'lots', 'recommendations']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `hyb-03` [HYBRID/hybrid] Pourquoi les pertes sont élevées au stade Nettoyage pour Mangue ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-002 (Tri). Données SQL clés: rag_hit_count=0.0 coun
+  - citations=4 sql=['losses'] tables=['batches', 'process', 'process_steps']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `hyb-05` [HYBRID/hybrid] Relie approvisionnement membre DEMOFP-M-014 et risque sur lot BATCH-0003.
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: sql:ops-batch-loss-summary:avg_batch_loss_pct (avg_batch_loss_pct); sql:ops-batch-loss-summary:wor
+  - citations=4 sql=['batches', 'members'] tables=['batches', 'lots', 'members', 'recommendations', 'sql']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `hyb-06` [HYBRID/hybrid] Recommandations + tendance pertes: où prioriser pour Arachide ?
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-001 (Séchage); DEMOFP-SRC-KNOW-002 (Tri). Données SQL clés: rag_hit_count=0.0 coun
+  - citations=4 sql=['losses'] tables=['batches', 'process', 'process_steps']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.
+- `hyb-07` [HYBRID/hybrid] Analyse risque commercial + rupture stock + actions
+  - expected/actual: ['HYBRID'] -> HYBRID | pass=False
+  - snippet: Le fournisseur LLM est indisponible. Analyse limitée aux données structurées et aux références disponibles. Sources clés: DEMOFP-SRC-KNOW-003 (Stockage); DEMOFP-SRC-KNOW-007 (Humidité). Données SQL clés: rag_hit_count=0.
+  - citations=2 sql=['stocks'] tables=['batches', 'commercial_catalog_products', 'commercial_invoices', 'commercial_orders', 'ml_recommendation_logs', 'recommendations', 'stocks']
+  - hallucination=low stale=low debug=low
+  - notes: Unexpected missing-data response for non-fake case.

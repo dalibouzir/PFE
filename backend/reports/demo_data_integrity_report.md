@@ -1,18 +1,18 @@
 # Demo Data Integrity Report
 
-Generated: 2026-05-08T20:29:38.639106+00:00
+Generated: 2026-05-13T10:43:58.824417+00:00
 
 ## Checked Tables
-- batches: 387 records checked
-- commercial_invoice_lines: 15 records checked
-- commercial_invoices: 8 records checked
-- commercial_order_lines: 24 records checked
-- commercial_orders: 14 records checked
-- farmer_advances: 16 records checked
+- batches: 19 records checked
+- commercial_invoice_lines: 14 records checked
+- commercial_invoices: 7 records checked
+- commercial_order_lines: 20 records checked
+- commercial_orders: 10 records checked
+- farmer_advances: 15 records checked
 - global_charges: 24 records checked
-- process_steps: 1517 records checked
-- stocks: 7 records checked
-- treasury_transactions: 7 records checked
+- process_steps: 52 records checked
+- stocks: 6 records checked
+- treasury_transactions: 6 records checked
 
 ## Inconsistency Summary
 - Total inconsistencies: 0
@@ -25,10 +25,10 @@ Generated: 2026-05-08T20:29:38.639106+00:00
 ## Findings
 
 ## Applied Reconciliation Fixes
-- batch_current_qty_synced: 0
+- batch_current_qty_synced: 2
 - stock_reserved_synced: 0
 - stock_available_synced: 0
-- stock_total_raised_to_reserved: 1
+- stock_total_raised_to_reserved: 0
 - No inconsistencies found.
 ## Final Assessment
 - Final grade: PASS

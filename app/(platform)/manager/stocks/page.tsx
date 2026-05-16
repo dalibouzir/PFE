@@ -1,19 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AIInsightsStrip, type AIInsightItem } from "@/components/ui/AIInsightsStrip";
+import { useCallback, useMemo, useState } from "react";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useBatches } from "@/hooks/useBatches";
 import { useCatalogProducts, useCommercialOrders } from "@/hooks/useCommercial";
 import { useInputs } from "@/hooks/useInputs";
+import { useProcessSteps } from "@/hooks/useProcessSteps";
 import { useProducts } from "@/hooks/useProducts";
 import { useStocks } from "@/hooks/useStocks";
 import type { Stock } from "@/lib/api/types";
 
 type ViewMode = "cards" | "table";
 type LogOrder = "newest" | "oldest";
-type MovementReason = "collecte" | "lot" | "commercialisation";
+type MovementReason = "collecte" | "commercialisation" | "perte_lot" | "sortie_lot";
 
 type StockMovementEvent = {
   id: string;
@@ -36,6 +36,7 @@ export default function StocksPage() {
   const { data: products = [] } = useProducts();
   const { data: inputs = [] } = useInputs();
   const { data: batches = [] } = useBatches();
+  const { data: processSteps = [] } = useProcessSteps();
   const { data: orders = [] } = useCommercialOrders();
   const { data: catalogProducts = [] } = useCatalogProducts();
 
@@ -53,15 +54,45 @@ export default function StocksPage() {
     return map;
   }, [products]);
 
+  const batchById = useMemo(() => {
+    return new Map(batches.map((batch) => [batch.id, batch]));
+  }, [batches]);
+
+  const currentQtyByProductKg = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const batch of batches) {
+      if (!batch.confirmed_weight_kg) continue;
+      const currentKg = Math.max(batch.current_qty ?? batch.confirmed_weight_kg ?? 0, 0);
+      map.set(batch.product_id, (map.get(batch.product_id) ?? 0) + currentKg);
+    }
+    return map;
+  }, [batches]);
+
+  const remainingKgForProduct = useCallback(
+    (item: Stock) => {
+      const fromLots = currentQtyByProductKg.get(item.product_id);
+      if (fromLots === undefined) return item.available_stock_kg;
+      return fromLots;
+    },
+    [currentQtyByProductKg],
+  );
+
   const filtered = useMemo(() => {
     return stocks.filter((item) => (productId === "Tous" ? true : item.product_id === productId));
   }, [stocks, productId]);
 
   const filteredByUrgency = useMemo(() => {
-    return filtered.slice().sort((a, b) => stockUrgencyScore(a) - stockUrgencyScore(b));
-  }, [filtered]);
+    return filtered.slice().sort((a, b) => {
+      const remainingA = remainingKgForProduct(a);
+      const remainingB = remainingKgForProduct(b);
+      return stockUrgencyScore(a.total_stock_kg, remainingA) - stockUrgencyScore(b.total_stock_kg, remainingB);
+    });
+  }, [filtered, remainingKgForProduct]);
 
-  const criticalCount = useMemo(() => filtered.filter((item) => isCriticalStock(item)).length, [filtered]);
+  const criticalCount = useMemo(
+    () => filtered.filter((item) => isCriticalStock(item.total_stock_kg, remainingKgForProduct(item))).length,
+    [filtered, remainingKgForProduct],
+  );
 
   const collectedByProductKg = useMemo(() => {
     const map = new Map<string, number>();
@@ -90,16 +121,21 @@ export default function StocksPage() {
       });
     }
 
-    for (const batch of batches) {
-      const qtyKg = toKg(batch.initial_qty, batch.unit);
+    for (const step of processSteps) {
+      const batch = batchById.get(step.batch_id);
+      if (!batch) continue;
+      const qtyKg = Math.max(step.normalized_loss_value ?? 0, 0);
+      if (qtyKg <= 0) continue;
+      const reason: MovementReason = isExitReason(step.type) ? "sortie_lot" : "perte_lot";
       events.push({
-        id: `lot-${batch.id}`,
+        id: `step-${step.id}`,
         product_id: batch.product_id,
-        date: batch.created_at || `${batch.creation_date}T00:00:00Z`,
+        date: step.created_at || step.updated_at || `${step.date}T00:00:00Z`,
         quantity_kg: qtyKg,
         delta_kg: -qtyKg,
-        reason: "lot",
+        reason,
         reference: batch.code,
+        note: `${step.type}${step.notes ? ` · ${step.notes}` : ""}`,
       });
     }
 
@@ -130,7 +166,7 @@ export default function StocksPage() {
     }
 
     return events;
-  }, [batches, catalogById, inputs, orders, productByNormalizedName]);
+  }, [batchById, catalogById, inputs, orders, processSteps, productByNormalizedName]);
 
   const stockByProduct = useMemo(() => {
     return new Map(filtered.map((item) => [item.product_id, item]));
@@ -161,55 +197,6 @@ export default function StocksPage() {
     const ordered = logOrder === "newest" ? computed : computed.slice().reverse();
     return ordered.slice(0, 120);
   }, [logOrder, movementEvents, stockByProduct]);
-
-  const stockInsights = useMemo<AIInsightItem[]>(() => {
-    const trackedCount = filtered.length;
-    const critical = filtered.filter((item) => isCriticalStock(item));
-    const avgRemainingRatio =
-      filtered.length > 0
-        ? filtered.reduce((sum, item) => {
-            const total = item.total_stock > 0 ? item.total_stock : 1;
-            return sum + item.available_stock / total;
-          }, 0) / filtered.length
-        : 0;
-
-    const biggestDeficit = critical
-      .slice()
-      .sort((a, b) => (b.total_stock * 0.2 - b.available_stock) - (a.total_stock * 0.2 - a.available_stock))[0];
-
-    const items: AIInsightItem[] = [
-      {
-        id: "critical-stock-count",
-        title: critical.length > 0 ? "Rupture potentielle detectee" : "Stock global stable",
-        message:
-          critical.length > 0
-            ? `${critical.length}/${trackedCount} produit(s) sous seuil critique.`
-            : `${trackedCount} produit(s) suivis sans alerte critique.`,
-        tone: critical.length > 0 ? "critical" : "success",
-        actionLabel: "Ouvrir recommandations IA",
-        href: "/manager/lots?tab=recommendations",
-      },
-      {
-        id: "remaining-ratio",
-        title: "Pression stock",
-        message: `Niveau moyen restant: ${(avgRemainingRatio * 100).toFixed(1)}% du stock total.`,
-        tone: avgRemainingRatio < 0.3 ? "warning" : "info",
-        meta: avgRemainingRatio < 0.3 ? "Replanifier collectes et lots pour eviter rupture." : "Marge exploitable pour les prochains lots.",
-      },
-    ];
-
-    if (biggestDeficit) {
-      items.push({
-        id: "top-deficit",
-        title: "Produit le plus expose",
-        message: `${productLookup.get(biggestDeficit.product_id) ?? biggestDeficit.product_id.slice(0, 8)} sous seuil de securite.`,
-        tone: "warning",
-        meta: `Restant ${biggestDeficit.available_stock.toFixed(2)} ${biggestDeficit.unit} pour un seuil critique de ${(biggestDeficit.total_stock * 0.2).toFixed(2)} ${biggestDeficit.unit}.`,
-      });
-    }
-
-    return items.slice(0, 4);
-  }, [filtered, productLookup]);
 
   return (
     <main>
@@ -261,12 +248,6 @@ export default function StocksPage() {
         </div>
       </section>
 
-      <AIInsightsStrip
-        title="Insights IA stock"
-        subtitle="Priorites operationnelles basees sur le niveau et la dynamique de stock."
-        items={stockInsights}
-      />
-
       {viewMode === "cards" ? (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filteredByUrgency.length === 0 ? (
@@ -275,10 +256,12 @@ export default function StocksPage() {
             </article>
           ) : (
             filteredByUrgency.map((item, index) => {
-              const isCritical = isCriticalStock(item);
+              const remainingKg = remainingKgForProduct(item);
+              const remainingDisplay = fromKg(remainingKg, item.unit);
+              const isCritical = isCriticalStock(item.total_stock_kg, remainingKg);
               const total = item.total_stock;
               const inLot = item.reserved_in_lots;
-              const remaining = item.available_stock;
+              const remaining = remainingDisplay;
               const threshold = total * 0.2;
               const progress = total > 0 ? Math.max(6, Math.min((remaining / total) * 100, 100)) : 0;
               const barClass = isCritical
@@ -337,15 +320,17 @@ export default function StocksPage() {
                   </tr>
                 ) : (
                   filteredByUrgency.map((item) => {
-                    const isCritical = isCriticalStock(item);
+                    const remainingKg = remainingKgForProduct(item);
+                    const isCritical = isCriticalStock(item.total_stock_kg, remainingKg);
                     const collected = fromKg(collectedByProductKg.get(item.product_id) ?? 0, item.unit);
+                    const remainingDisplay = fromKg(remainingKg, item.unit);
                     return (
                       <tr key={item.product_id}>
                         <td className="px-5 py-4 font-semibold text-[var(--text)]">{productLookup.get(item.product_id) ?? item.product_id.slice(0, 8)}</td>
                         <td className="px-5 py-4">{item.total_stock.toFixed(2)} {item.unit}</td>
                         <td className="px-5 py-4">{collected.toFixed(2)} {item.unit}</td>
                         <td className="px-5 py-4 text-[var(--danger)]">{item.reserved_in_lots.toFixed(2)} {item.unit}</td>
-                        <td className="px-5 py-4 font-medium">{item.available_stock.toFixed(2)} {item.unit}</td>
+                        <td className="px-5 py-4 font-medium">{remainingDisplay.toFixed(2)} {item.unit}</td>
                         <td className="px-5 py-4">
                           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isCritical ? "bg-[#FFEDEE] text-[#A83C3C]" : "bg-[#EAF8EE] text-[#0F7A3B]"}`}>
                             {isCritical ? "Critique" : "Stable"}
@@ -452,14 +437,14 @@ function MetricPill({
   );
 }
 
-function isCriticalStock(item: Stock) {
-  if (item.total_stock_kg <= 0) return false;
-  return item.available_stock_kg < item.total_stock_kg * 0.2;
+function isCriticalStock(totalStockKg: number, remainingKg: number) {
+  if (totalStockKg <= 0) return false;
+  return remainingKg < totalStockKg * 0.2;
 }
 
-function stockUrgencyScore(item: Stock) {
-  if (item.total_stock_kg <= 0) return 1;
-  return item.available_stock_kg / item.total_stock_kg;
+function stockUrgencyScore(totalStockKg: number, remainingKg: number) {
+  if (totalStockKg <= 0) return 1;
+  return remainingKg / totalStockKg;
 }
 
 function normalizeToken(value: string) {
@@ -484,8 +469,16 @@ function fromKg(valueKg: number, unit?: string | null) {
 
 function movementReasonLabel(reason: MovementReason) {
   if (reason === "collecte") return "Collecte";
-  if (reason === "lot") return "Lot";
+  if (reason === "perte_lot") return "Perte lot";
+  if (reason === "sortie_lot") return "Sortie lot";
   return "Commercialisation";
+}
+
+function isExitReason(stepType: string) {
+  const value = normalizeToken(stepType);
+  return ["vente", "sale", "livraison", "delivery", "transfert", "transfer", "expedition", "sortie"].some((token) =>
+    value.includes(token),
+  );
 }
 
 function formatDateTime(value: string) {

@@ -68,6 +68,14 @@ def disable_user(db: Session, user_id):
     return user
 
 
+def enable_user(db: Session, user_id):
+    user = require_by_id(db, User, user_id, "User")
+    user.status = UserStatus.ACTIVE
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def list_users(db: Session):
     return db.scalars(select(User).order_by(User.created_at.desc())).all()
 

@@ -6,6 +6,19 @@ import { apiFetch, clearStoredToken, getStoredToken, setUnauthorizedHandler, sto
 import { endpoints } from "@/lib/api/endpoints";
 import type { AuthUser, AuthUserUpdate, TokenResponse } from "@/lib/api/types";
 
+function mapLoginError(error: unknown): Error {
+  const generic = new Error("Connexion impossible. Veuillez réessayer.");
+  if (!(error instanceof Error)) return generic;
+  const message = error.message.toLowerCase();
+  if (message.includes("invalid") || message.includes("email") || message.includes("password") || message.includes("auth")) {
+    return new Error("Email ou mot de passe invalide.");
+  }
+  if (message.includes("disabled") || message.includes("désactiv") || message.includes("suspend")) {
+    return new Error("Ce compte est désactivé. Contactez un administrateur.");
+  }
+  return generic;
+}
+
 export type AuthState = {
   user: AuthUser | null;
   token: string | null;
@@ -53,16 +66,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       setError(null);
-      const tokenResponse = await apiFetch<TokenResponse>(endpoints.auth.login, {
-        method: "POST",
-        body: { email, password },
-        auth: false,
-      });
-      storeToken(tokenResponse.access_token);
-      setToken(tokenResponse.access_token);
-      const profile = await apiFetch<AuthUser>(endpoints.auth.me);
-      setUser(profile);
-      return profile;
+      try {
+        const tokenResponse = await apiFetch<TokenResponse>(endpoints.auth.login, {
+          method: "POST",
+          body: { email, password },
+          auth: false,
+        });
+        storeToken(tokenResponse.access_token);
+        setToken(tokenResponse.access_token);
+        const profile = await apiFetch<AuthUser>(endpoints.auth.me);
+        setUser(profile);
+        return profile;
+      } catch (error) {
+        console.error("Login failed", error);
+        throw mapLoginError(error);
+      }
     },
     [],
   );

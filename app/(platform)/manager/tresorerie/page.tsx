@@ -56,6 +56,10 @@ function sourceLabel(sourceType: string) {
   return "Manuel / autre";
 }
 
+function formatExportDate(value: Date) {
+  return value.toLocaleString("fr-FR");
+}
+
 export default function TreasuryPage() {
   const [typeFilter, setTypeFilter] = useState<FilterType>("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | "farmer_advance" | "management" | "manual">("all");
@@ -161,6 +165,75 @@ export default function TreasuryPage() {
     }
   };
 
+  const exportPdf = () => {
+    const now = new Date();
+    const visibleRows = transactions
+      .map((transaction) => {
+        const type = typeBadge[transaction.type]?.label ?? transaction.type;
+        const status = statusBadge[transaction.status]?.label ?? transaction.status;
+        return `
+          <tr>
+            <td>${transaction.reference}</td>
+            <td>${formatDate(transaction.transaction_date)}</td>
+            <td>${type}</td>
+            <td>${transaction.category}</td>
+            <td>${transaction.label}</td>
+            <td>${formatAmount(transaction.amount_fcfa)}</td>
+            <td>${sourceLabel(transaction.source_type)}</td>
+            <td>${status}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const html = `
+      <!doctype html>
+      <html lang="fr">
+        <head>
+          <meta charset="utf-8" />
+          <title>Rapport de trésorerie</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #1d2a24; padding: 24px; }
+            h1 { margin: 0 0 8px; color: #0d5a2b; }
+            .meta { margin-bottom: 16px; font-size: 12px; color: #44554c; }
+            .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+            .kpi { border: 1px solid #d8e6dc; border-radius: 8px; padding: 8px; font-size: 12px; }
+            .kpi b { display: block; margin-top: 4px; font-size: 14px; color: #0f3b25; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th, td { border: 1px solid #dbe8df; padding: 8px; text-align: left; }
+            th { background: #eef7f1; color: #1f4d33; }
+          </style>
+        </head>
+        <body>
+          <h1>Rapport de trésorerie</h1>
+          <div class="meta">Date d'export: ${formatExportDate(now)}</div>
+          <div class="kpis">
+            <div class="kpi">Total donné<b>${formatAmount(stats?.total_given ?? 0)}</b></div>
+            <div class="kpi">Total dépenses<b>${formatAmount(stats?.total_expenses ?? 0)}</b></div>
+            <div class="kpi">Total recettes<b>${formatAmount(stats?.total_income ?? 0)}</b></div>
+            <div class="kpi">Solde actuel<b>${formatAmount(stats?.current_balance ?? 0)}</b></div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Référence</th><th>Date</th><th>Type</th><th>Catégorie</th><th>Libellé</th><th>Montant</th><th>Source</th><th>Statut</th>
+              </tr>
+            </thead>
+            <tbody>${visibleRows || '<tr><td colspan="8">Aucune donnée</td></tr>'}</tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=900");
+    if (!printWindow) return;
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   return (
     <main>
       <PageIntro title="Trésorerie" />
@@ -213,6 +286,9 @@ export default function TreasuryPage() {
 
           <button type="button" onClick={openCreateForm} className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold">
             + Nouvelle transaction
+          </button>
+          <button type="button" onClick={exportPdf} className="soft-focus rounded-xl border border-[var(--line)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface-soft)]">
+            Export PDF
           </button>
         </div>
       </section>

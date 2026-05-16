@@ -7,11 +7,11 @@
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "eslint .",
-    "api:dev": "tsx src/server.ts",
-    "api:start": "NODE_ENV=production tsx src/server.ts",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "prisma db seed"
+    "legacy:api:dev": "tsx _archive/legacy-express-prisma/src/server.ts",
+    "legacy:api:start": "NODE_ENV=production tsx _archive/legacy-express-prisma/src/server.ts",
+    "legacy:prisma:generate": "prisma generate --schema _archive/legacy-express-prisma/prisma/schema.prisma",
+    "legacy:prisma:migrate": "prisma migrate dev --schema _archive/legacy-express-prisma/prisma/schema.prisma",
+    "legacy:prisma:seed": "tsx _archive/legacy-express-prisma/prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -52,8 +52,5 @@
     "tailwindcss": "3.4.10",
     "tsx": "^4.21.0",
     "typescript": "5.8.3"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   }
 }

@@ -1,0 +1,494 @@
+{
+  "timestamp_utc": "2026-05-13T19:16:48.862904+00:00",
+  "audit_mode": "supabase_readonly",
+  "database": {
+    "provider": "Supabase PostgreSQL",
+    "dialect": "postgresql",
+    "url_masked": "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require",
+    "pgvector_extension_installed": true,
+    "db_info": {
+      "dialect": "postgresql",
+      "tables": 33,
+      "key_tables": [
+        "rag_chunks",
+        "rag_documents",
+        "chat_sessions",
+        "stocks",
+        "batches"
+      ],
+      "row_counts": {
+        "rag_documents": 583,
+        "rag_chunks": 589,
+        "chat_sessions": 366,
+        "batches": 387,
+        "stocks": 7
+      },
+      "url_masked": "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require"
+    }
+  },
+  "rag": {
+    "rag_documents_exists": true,
+    "rag_chunks_exists": true,
+    "rag_info": {
+      "provider": "Supabase pgvector",
+      "pgvector_enabled": true,
+      "rag_enabled": true,
+      "chunk_size": 900,
+      "retrieval_top_k": 5,
+      "documents_count": 583,
+      "chunks_count": 589
+    }
+  },
+  "truth_snapshot": {
+    "members_count": 17,
+    "stocks_count": 4,
+    "batches_count": 17,
+    "batches_open_count": 12,
+    "process_steps_count": 1517,
+    "rag_chunks_count": 589,
+    "rag_keyword_count": 200,
+    "recommendations_count": 14,
+    "orders_count": 14,
+    "invoices_count": 8,
+    "top_members": [
+      {
+        "full_name": "Awa Ndiaye",
+        "member_code": "DEMOFP-M-002",
+        "total_kg": 1715.0
+      },
+      {
+        "full_name": "Mamadou Ba",
+        "member_code": "DEMOFP-M-001",
+        "total_kg": 1565.0
+      },
+      {
+        "full_name": "Cheikh Diop",
+        "member_code": "DEMOFP-M-003",
+        "total_kg": 1560.0
+      },
+      {
+        "full_name": "Ousmane Gueye",
+        "member_code": "DEMOFP-M-007",
+        "total_kg": 1530.0
+      },
+      {
+        "full_name": "Fatou Sarr",
+        "member_code": "DEMOFP-M-004",
+        "total_kg": 1460.0
+      }
+    ],
+    "stocks_by_product": [
+      {
+        "product_name": "Mangue",
+        "quantity": 2750.0
+      },
+      {
+        "product_name": "Mil",
+        "quantity": 1620.0
+      },
+      {
+        "product_name": "Arachide",
+        "quantity": 1140.0
+      },
+      {
+        "product_name": "Bissap",
+        "quantity": 0.0
+      }
+    ],
+    "low_efficiency_count": 3,
+    "material_balance": {
+      "total_input_kg": 12140.0,
+      "total_output_kg": 11022.5,
+      "loss_pct": 9.205107084019769
+    },
+    "process_loss_by_stage": [
+      {
+        "stage": "S\u00e9chage",
+        "total_loss_kg": 554.74
+      },
+      {
+        "stage": "Tri",
+        "total_loss_kg": 215.91
+      },
+      {
+        "stage": "Nettoyage",
+        "total_loss_kg": 199.7
+      },
+      {
+        "stage": "Sechage",
+        "total_loss_kg": 107.0
+      },
+      {
+        "stage": "Emballage",
+        "total_loss_kg": 25.01
+      },
+      {
+        "stage": "Conditionnement",
+        "total_loss_kg": 15.14
+      }
+    ],
+    "sql_risk_count": 4,
+    "chat_sessions_count": 364,
+    "chat_messages_count": 1664
+  },
+  "summary": {
+    "total_cases": 12,
+    "pass_count": 12,
+    "partial_count": 0,
+    "fail_count": 0,
+    "overall_verdict": "PASS",
+    "failure_tag_counts": {}
+  },
+  "cases": [
+    {
+      "case_id": "SQL-MEMBERS-COUNT",
+      "domain": "members",
+      "question": "Combien de membres sont inscrits dans ma coop\u00e9rative ?",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "sql_tables_used": [
+        "members"
+      ],
+      "response_block_types": [
+        "sources",
+        "summary",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nLa coop\u00e9rative compte 17 membre(s) inscrit(s).\n\n2. Explication courte\nAucune explication d\u00e9taill\u00e9e disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirm\u00e9e.\n\n4. Sources utilis\u00e9es\n- SQL: members\n\n5. Avertissements si n\u00e9cessaires\nAucun avertissement critique.",
+      "failure_tags": []
+    },
+    {
+      "case_id": "SQL-MEMBERS-TOP-KG",
+      "domain": "members",
+      "question": "Classe les membres par kg collect\u00e9s, du plus \u00e9lev\u00e9 au plus faible.",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "sql_tables_used": [
+        "inputs",
+        "members"
+      ],
+      "response_block_types": [
+        "sources",
+        "summary",
+        "table",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nClassement des membres par quantit\u00e9 collect\u00e9e (10):\n- Awa Ndiaye (DEMOFP-M-002): 1715.0 kg\n- Mamadou Ba (DEMOFP-M-001): 1565.0 kg\n- Cheikh Diop (DEMOFP-M-003): 1560.0 kg\n- Ousmane Gueye (DEMOFP-M-007): 1530.0 kg\n- Fatou Sarr (DEMOFP-M-004): 1460.0 kg\n- Ndeye Fall (DEMOFP-M-012): 1440.0 kg\n- Khady Kane (DEMOFP-M-008): 1430.0 kg\n- Alioune Cisse (DEMOFP-M-013): 1380.0 kg\n- Mariama Sow (DEMOFP-M-006",
+      "failure_tags": []
+    },
+    {
+      "case_id": "SQL-STOCKS",
+      "domain": "stocks",
+      "question": "Quel est le stock actuel par produit en kg ?",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "sql_tables_used": [
+        "stocks"
+      ],
+      "response_block_types": [
+        "sources",
+        "summary",
+        "table",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nLes stocks actuels (4 produits) sont:\n- Arachide: 1140.0 kg disponibles\n- Bissap: 0.0 kg disponibles\n- Mangue: 2750.0 kg disponibles\n- Mil: 1620.0 kg disponibles\n\n2. Explication courte\nAucune explication d\u00e9taill\u00e9e disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirm\u00e9e.\n\n4. Sources utilis\u00e9es\n- SQL: stocks\n\n5. Avertissements si n\u00e9cessaires\nAucun avertissement cr",
+      "failure_tags": []
+    },
+    {
+      "case_id": "SQL-COMMERCIAL",
+      "domain": "commercial",
+      "question": "Combien de commandes commerciales et combien de factures avons-nous ?",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "sql_tables_used": [
+        "commercial_invoices",
+        "commercial_orders"
+      ],
+      "response_block_types": [
+        "sources",
+        "summary",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nFactures disponibles: 8.\n\n2. Explication courte\nAucune explication d\u00e9taill\u00e9e disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirm\u00e9e.\n\n4. Sources utilis\u00e9es\n- SQL: commercial_invoices\n- SQL: commercial_orders\n\n5. Avertissements si n\u00e9cessaires\nAucun avertissement critique.",
+      "failure_tags": []
+    },
+    {
+      "case_id": "SQL-BATCHES",
+      "domain": "batches",
+      "question": "Combien de lots au total et combien sont encore en cours ?",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "sql_tables_used": [
+        "batches"
+      ],
+      "response_block_types": [
+        "sources",
+        "summary",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nLots en cours (8):\n- LOT-MANG-001: perte 6.0 % | efficacit\u00e9 94.0 %\n- LOT-BISS-002: perte 69.3 % | efficacit\u00e9 30.7 %\n- DEMOFP-LOT-MANG-013: perte 23.6 % | efficacit\u00e9 76.4 %\n- DEMOFP-LOT-BISS-010: perte 5.9 % | efficacit\u00e9 94.1 %\n- DEMOFP-LOT-MIL-007: perte 10.8 % | efficacit\u00e9 89.2 %\n- DEMOFP-LOT-ARAC-005: perte 4.9 % | efficacit\u00e9 95.1 %\n- DEMOFP-LOT-MANG-003: perte 18.5 % | efficacit\u00e9 81.5 %\n- DEM",
+      "failure_tags": []
+    },
+    {
+      "case_id": "SQL-PROCESS-STEPS",
+      "domain": "process_steps",
+      "question": "Quelles \u00e9tapes du process g\u00e9n\u00e8rent les plus grandes pertes ?",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "sql_tables_used": [
+        "process_steps"
+      ],
+      "response_block_types": [
+        "sources",
+        "summary",
+        "table",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nPerte observ\u00e9e sur s\u00e9chage du lot LOT-BISS-002: 68.0% (150.0 kg -> 48.0 kg).\n\n2. Explication courte\nAucune explication d\u00e9taill\u00e9e disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirm\u00e9e.\n\n4. Sources utilis\u00e9es\n- SQL: process_steps\n\n5. Avertissements si n\u00e9cessaires\nAucun avertissement critique.",
+      "failure_tags": []
+    },
+    {
+      "case_id": "SQL-EFFICIENCY",
+      "domain": "efficiency",
+      "question": "Quels lots ont une faible efficacit\u00e9 de rendement ?",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "sql_tables_used": [
+        "batches",
+        "process_steps"
+      ],
+      "response_block_types": [
+        "sources",
+        "summary",
+        "table",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nLots \u00e0 efficacit\u00e9 faible (4):\n- LOT-BISS-002: efficacit\u00e9 30.7 % | perte 69.3 %\n- DEMOFP-LOT-MANG-013: efficacit\u00e9 76.4 % | perte 23.6 %\n- DEMOFP-LOT-MIL-009: efficacit\u00e9 76.8 % | perte 23.2 %\n- DEMOFP-LOT-MANG-003: efficacit\u00e9 81.5 % | perte 18.5 %\n\n2. Explication courte\nAucune explication d\u00e9taill\u00e9e disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirm\u00e9e.\n\n4. Sour",
+      "failure_tags": []
+    },
+    {
+      "case_id": "SQL-MATERIAL-BALANCE",
+      "domain": "material_balance",
+      "question": "Donne le bilan mati\u00e8re global (entr\u00e9e/sortie/perte) des lots.",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "SQL_ONLY",
+      "source_types": [
+        "sql"
+      ],
+      "sql_tables_used": [
+        "batches",
+        "process_steps"
+      ],
+      "response_block_types": [
+        "sources",
+        "summary",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nBilan mati\u00e8re global: entr\u00e9e 12140.0 kg, sortie 11022.5 kg, perte 9.2%.\n\n2. Explication courte\nAucune explication d\u00e9taill\u00e9e disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirm\u00e9e.\n\n4. Sources utilis\u00e9es\n- SQL: batches\n- SQL: process_steps\n\n5. Avertissements si n\u00e9cessaires\nAucun avertissement critique.",
+      "failure_tags": []
+    },
+    {
+      "case_id": "HYBRID-ML-RISK",
+      "domain": "ml_risk",
+      "question": "Quels lots pr\u00e9sentent un risque \u00e9lev\u00e9 selon le signal ML ?",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "HYBRID_SQL_ML",
+      "source_types": [
+        "ml",
+        "sql"
+      ],
+      "sql_tables_used": [
+        "batches"
+      ],
+      "response_block_types": [
+        "sources",
+        "summary",
+        "table",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nLots \u00e0 risque \u00e9lev\u00e9 (5):\n- LOT-BISS-002: perte 69.3 % | efficacit\u00e9 30.7 %\n- DEMOFP-LOT-MANG-013: perte 23.6 % | efficacit\u00e9 76.4 %\n- DEMOFP-LOT-MIL-009: perte 23.2 % | efficacit\u00e9 76.8 %\n- DEMOFP-LOT-MANG-003: perte 18.5 % | efficacit\u00e9 81.5 %\n- DEMOFP-LOT-MANG-001: perte 14.4 % | efficacit\u00e9 85.6 %\n\n2. Explication courte\nSignal ML: risque LOW | anomalie non; les mesures SQL restent la v\u00e9rit\u00e9 op\u00e9rat",
+      "failure_tags": []
+    },
+    {
+      "case_id": "RAG-BEST-PRACTICES",
+      "domain": "rag_best_practices",
+      "question": "Quelles sont les meilleures pratiques de s\u00e9chage et de tri avec r\u00e9f\u00e9rences ?",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "sql_tables_used": [
+        "process_steps"
+      ],
+      "response_block_types": [
+        "best_practices",
+        "sources",
+        "summary",
+        "table",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nPerte observ\u00e9e sur s\u00e9chage du lot LOT-BISS-002: 68.0% (150.0 kg -> 48.0 kg).\n\n2. Explication courte\nMesures SQL: \u00e9tape critique Sechage (68.0%). Explication RAG: Le s\u00e9chage est une \u00e9tape critique pour r\u00e9duire les pertes post-r\u00e9colte. L'humidit\u00e9 relative doit \u00eatre maintenue entre 60-70% pour \u00e9viter la pourriture et le sur-s\u00e9chage. Une temp\u00e9rature de 30-40\u00b0C est id\u00e9ale pour la plupart des fruits t",
+      "failure_tags": []
+    },
+    {
+      "case_id": "RECOMMENDATIONS",
+      "domain": "recommendations",
+      "question": "Donne des recommandations prioritaires, concr\u00e8tes et actionnables pour am\u00e9liorer la production.",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "HYBRID_FULL",
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "sql_tables_used": [
+        "batches",
+        "process_steps",
+        "stocks"
+      ],
+      "response_block_types": [
+        "best_practices",
+        "recommendations",
+        "sources",
+        "summary",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nLe s\u00e9chage est une \u00e9tape critique pour r\u00e9duire les pertes post-r\u00e9colte. L'humidit\u00e9 relative doit \u00eatre maintenue entre 60-70% pour \u00e9viter la pourriture et le sur-s\u00e9chage. Une temp\u00e9rature de 30-40\u00b0C est id\u00e9ale pour la plupart des fruits tropicaux. Le temps de s\u00e9...\n\n2. Explication courte\nExplication RAG: Le s\u00e9chage est une \u00e9tape critique pour r\u00e9duire les pertes post-r\u00e9colte. L'humidit\u00e9 relative do",
+      "failure_tags": []
+    },
+    {
+      "case_id": "MULTI-INTENT",
+      "domain": "multi_intent",
+      "question": "Donne le stock actuel en kg et les meilleures pratiques de tri/s\u00e9chage dans la m\u00eame r\u00e9ponse.",
+      "http_status": 200,
+      "score": 1.0,
+      "status": "PASS",
+      "issues": [],
+      "warnings": [],
+      "route": "HYBRID_SQL_RAG",
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "sql_tables_used": [
+        "process_steps",
+        "stocks"
+      ],
+      "response_block_types": [
+        "best_practices",
+        "sources",
+        "summary",
+        "warnings"
+      ],
+      "answer_preview": "1. R\u00e9sultat principal\nStocks disponibles: 4 produit(s), total 5510.0 kg.\nBonnes pratiques: Le s\u00e9chage est une \u00e9tape critique pour r\u00e9duire les pertes post-r\u00e9colte. L'humidit\u00e9 relative doit \u00eatre maintenue entre 60-70% pour \u00e9viter la pourriture et le sur...\n\n2. Explication courte\nMesures SQL: \u00e9tape critique Sechage (68.0%). Explication RAG: Le s\u00e9chage est une \u00e9tape critique pour r\u00e9duire les pertes post-r\u00e9colte. L'humidi",
+      "failure_tags": []
+    }
+  ],
+  "worst_failures": [],
+  "persistence": {
+    "probe_marker": "AUDIT-PERSIST-5a9dc313-840f-4bbc-bb7a-ae3f417ead63",
+    "existing_conversation_call": {
+      "status_code": 200,
+      "returned_conversation_id": "3479fd20-f3e0-4d26-a513-bf6a6d21a143"
+    },
+    "message_count_before": 120,
+    "message_count_after": 122,
+    "marker_hits_after": 1,
+    "refresh_sessions_status": 200,
+    "refresh_messages_status": 200,
+    "missing_conversation_probe_status": 200,
+    "missing_conversation_exception_head": "",
+    "fk_signature_seen": false,
+    "chat_audit_log_table_exists": true,
+    "transaction_static_signals": {
+      "generate_reply_has_commit": true,
+      "generate_reply_has_flush_before_orchestrator": true,
+      "generate_reply_uses_orchestrator": true,
+      "audit_logger_source_loaded": true,
+      "audit_logger_uses_nested_tx": true,
+      "audit_logger_uses_direct_commit": false
+    },
+    "persistence_ok_after_refresh": true,
+    "root_causes": [],
+    "truth_context": {
+      "chat_sessions_count": 364,
+      "chat_messages_count": 1664
+    }
+  },
+  "exact_failing_questions": [],
+  "suspected_root_causes": [],
+  "next_recommended_fixes": [
+    "Add db.commit() at end of generate_agent_chat_reply after assistant message write.",
+    "Isolate AuditLogger failures from chat transaction rollback.",
+    "Apply/create ai_chat_audit_logs table migration in Supabase.",
+    "Add integration test asserting message persistence across refresh APIs."
+  ]
+}

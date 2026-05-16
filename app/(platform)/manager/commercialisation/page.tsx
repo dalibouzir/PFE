@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { useProducts } from "@/hooks/useProducts";
+import { useStocks } from "@/hooks/useStocks";
 import {
   useCatalogProducts,
   useCommercialOrderStats,
@@ -121,6 +122,7 @@ export default function CommercialisationPage() {
   });
 
   const { data: products = [] } = useProducts();
+  const { data: stocks = [] } = useStocks();
   const { data: catalog = [] } = useCatalogProducts();
   const { data: orders = [] } = useCommercialOrders({ status: statusFilter });
   const { data: stats } = useCommercialOrderStats();
@@ -134,14 +136,35 @@ export default function CommercialisationPage() {
     return catalog.slice().sort((a, b) => a.name.localeCompare(b.name, "fr"));
   }, [catalog]);
 
+  const availableSourceProducts = useMemo(() => {
+    const productsById = new Map(products.map((product) => [product.id, product]));
+    return stocks
+      .filter((stock) => stock.total_stock_kg > 0 && stock.available_stock_kg > 0 && stock.available_stock > 0)
+      .map((stock) => {
+        const product = productsById.get(stock.product_id);
+        if (!product) return null;
+        return {
+          product,
+          stock,
+        };
+      })
+      .filter((item): item is { product: (typeof products)[number]; stock: (typeof stocks)[number] } => item !== null)
+      .sort((a, b) => a.product.name.localeCompare(b.product.name, "fr"));
+  }, [products, stocks]);
+
+  const selectedSourceStock = useMemo(() => {
+    if (!formState.source_product_id) return null;
+    return availableSourceProducts.find((item) => item.product.id === formState.source_product_id)?.stock ?? null;
+  }, [availableSourceProducts, formState.source_product_id]);
+
   const lowStockCount = catalog.filter((item) => item.low_stock).length;
   const commandToHandle = (stats?.received ?? 0) + (stats?.confirmed ?? 0);
 
   function openCreateModal() {
     setEditingProduct(null);
-    setFormError(null);
-    setFormState({
-      source_product_id: products[0]?.id ?? "",
+      setFormError(null);
+      setFormState({
+      source_product_id: availableSourceProducts[0]?.product.id ?? "",
       name: "",
       category: "Fruits",
       sale_unit: "kg",
@@ -150,7 +173,7 @@ export default function CommercialisationPage() {
       min_order_qty: "1",
       allocated_quantity: "",
       description: "",
-    });
+      });
     setIsFormOpen(true);
   }
 
@@ -186,6 +209,20 @@ export default function CommercialisationPage() {
         allocated_quantity: Number(formState.allocated_quantity),
         description: formState.description.trim() || null,
       };
+
+      const selectedSource = availableSourceProducts.find((item) => item.product.id === payload.source_product_id);
+      if (!selectedSource) {
+        setFormError("Aucun produit disponible en stock.");
+        return;
+      }
+      if (!Number.isFinite(payload.allocated_quantity) || payload.allocated_quantity <= 0) {
+        setFormError("Quantité allouée invalide.");
+        return;
+      }
+      if (payload.allocated_quantity > selectedSource.stock.available_stock) {
+        setFormError("Quantité supérieure au stock disponible.");
+        return;
+      }
 
       if (editingProduct) {
         await updateCatalogProduct.mutateAsync({
@@ -567,12 +604,15 @@ export default function CommercialisationPage() {
                   required
                 >
                   <option value="">Selectionner</option>
-                  {products.map((product) => (
+                  {availableSourceProducts.map(({ product, stock }) => (
                     <option key={product.id} value={product.id}>
-                      {product.name}
+                      {product.name} — {stock.available_stock.toFixed(2)} {stock.unit} disponible
                     </option>
                   ))}
                 </select>
+                {availableSourceProducts.length === 0 ? (
+                  <p className="mt-1 text-xs text-[var(--muted)]">Aucun produit disponible en stock.</p>
+                ) : null}
               </label>
 
               <label className="text-sm font-medium text-[var(--text)]">
@@ -610,7 +650,22 @@ export default function CommercialisationPage() {
 
               <label className="text-sm font-medium text-[var(--text)]">
                 Quantite allouee depuis stock principal
-                <input type="number" min="0.01" step="0.01" value={formState.allocated_quantity} onChange={(event) => setFormState((prev) => ({ ...prev, allocated_quantity: event.target.value }))} className="wf-input mt-1 h-11 w-full px-3" required disabled={Boolean(editingProduct)} />
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  max={selectedSourceStock?.available_stock ?? undefined}
+                  value={formState.allocated_quantity}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, allocated_quantity: event.target.value }))}
+                  className="wf-input mt-1 h-11 w-full px-3"
+                  required
+                  disabled={Boolean(editingProduct)}
+                />
+                {!editingProduct && selectedSourceStock ? (
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Disponible: {selectedSourceStock.available_stock.toFixed(2)} {selectedSourceStock.unit}
+                  </p>
+                ) : null}
               </label>
 
               <label className="text-sm font-medium text-[var(--text)] md:col-span-2">

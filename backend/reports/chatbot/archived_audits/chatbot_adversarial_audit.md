@@ -1,0 +1,80 @@
+# Chatbot Adversarial Audit
+
+Generated: 2026-05-08T21:59:22.893209+00:00
+- Total: 24
+- Passed: 0
+- Pass rate: 0.0
+
+## Cases
+- `adv-01` SQL_ONLY -> UNKNOWN | pass=False | 5.721 ms
+  - Q: stok mangue dispo mtn?
+  - A: 
+- `adv-02` SQL_ONLY -> UNKNOWN | pass=False | 3.698 ms
+  - Q: lots actf pls
+  - A: 
+- `adv-03` SQL_ONLY -> UNKNOWN | pass=False | 3.15 ms
+  - Q: collect tot membre Mbr-123
+  - A: 
+- `adv-04` SQL_ONLY -> UNKNOWN | pass=False | 87.458 ms
+  - Q: invoices unpaid now??
+  - A: 
+- `adv-05` CLARIFICATION_NEEDED -> UNKNOWN | pass=False | 1.212 ms
+  - Q: parcelle du membre ???
+  - A: 
+- `adv-06` SMALL_TALK -> UNKNOWN | pass=False | 1.137 ms
+  - Q: hello
+  - A: 
+- `adv-07` SMALL_TALK -> UNKNOWN | pass=False | 1.112 ms
+  - Q: thx ok
+  - A: 
+- `adv-08` UNSUPPORTED -> UNKNOWN | pass=False | 1.093 ms
+  - Q: best movie tonight
+  - A: 
+- `adv-09` UNSUPPORTED -> UNKNOWN | pass=False | 1.093 ms
+  - Q: weather in paris
+  - A: 
+- `adv-10` RAG_ONLY -> UNKNOWN | pass=False | 1.069 ms
+  - Q: conseils post recolte conservation with sources
+  - A: 
+- `adv-11` RAG_ONLY -> UNKNOWN | pass=False | 1.316 ms
+  - Q: benchmark pertes mil please sources
+  - A: 
+- `adv-12` HYBRID -> UNKNOWN | pass=False | 1.132 ms
+  - Q: pourquoi pertes lot elevées et que faire
+  - A: 
+- `adv-13` HYBRID -> UNKNOWN | pass=False | 1.082 ms
+  - Q: compare lot mangue vs bissap and risks
+  - A: 
+- `adv-14` SQL_ONLY -> UNKNOWN | pass=False | 1.048 ms
+  - Q: FAKE_PRODUCT_9619 stock actuel
+  - A: 
+- `adv-15` SQL_ONLY -> UNKNOWN | pass=False | 1.07 ms
+  - Q: LOT_FAKE_7456 statut
+  - A: 
+- `adv-16` SQL_ONLY -> UNKNOWN | pass=False | 1.063 ms
+  - Q: MEMBER_FAKE_7102 collecte totale
+  - A: 
+- `adv-17` SQL_ONLY -> UNKNOWN | pass=False | 1.052 ms
+  - Q: PARCELLE_FAKE_8301 surface
+  - A: 
+- `adv-18` CLARIFICATION_NEEDED -> UNKNOWN | pass=False | 1.051 ms
+  - Q: donne moi
+  - A: 
+- `adv-19` HYBRID -> UNKNOWN | pass=False | 1.035 ms
+  - Q: risque stock+commande mangue que faire
+  - A: 
+- `adv-20` HYBRID -> UNKNOWN | pass=False | 1.3 ms
+  - Q: explain drying loss mango coop today
+  - A: 
+- `adv-21` UNSUPPORTED -> UNKNOWN | pass=False | 1.111 ms
+  - Q: i need political analysis
+  - A: 
+- `adv-22` CLARIFICATION_NEEDED -> UNKNOWN | pass=False | 1.069 ms
+  - Q: analyse
+  - A: 
+- `adv-23` SQL_ONLY -> UNKNOWN | pass=False | 1.07 ms
+  - Q: ok mais facture impayee detail
+  - A: 
+- `adv-24` RAG_ONLY -> UNKNOWN | pass=False | 1.031 ms
+  - Q: pre-harvest best practice arachide
+  - A: 
