@@ -1,0 +1,1006 @@
+from __future__ import annotations
+
+import json
+import re
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.ai.utils.audit_environment import EnvironmentParityAudit
+from app.ai.utils.test_auth import get_or_create_test_user, get_test_auth_header
+from app.core.config import settings
+from app.db.session import get_db
+from app.main import app
+
+
+REPORT_DIR = Path(__file__).resolve().parents[2] / "reports"
+JSON_REPORT_PATH = REPORT_DIR / "chatbot_conversation_flow_audit_supabase.json"
+MD_REPORT_PATH = REPORT_DIR / "chatbot_conversation_flow_audit_supabase.md"
+FALLBACK_MARKER = "les données disponibles ne permettent pas de confirmer ce point"
+LOT_CODE_PATTERN = re.compile(r"\b(?:LOT|BATCH|MANG|MANGO|ARA|ARACH|MIL|BISS)[-_][A-Z0-9][A-Z0-9\-_]*\b", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class ConversationCase:
+    case_id: str
+    module: str
+    question: str
+    expected_routes: set[str]
+    required_sources: set[str]
+    fact_check: str | None = None
+    expected_product: str | None = None
+    expect_batch_reuse: bool = False
+    expect_context_reset: bool = False
+
+
+@dataclass
+class ConversationState:
+    last_batch_ref: str | None = None
+
+
+def _normalize_route(value: str) -> str:
+    return str(value or "").strip().upper()
+
+
+def _source_types(payload: dict[str, Any]) -> set[str]:
+    result: set[str] = set()
+    for src in payload.get("sources") or []:
+        token = str((src or {}).get("type") or "").strip().lower()
+        if token:
+            result.add(token)
+    return result
+
+
+def _block_types(payload: dict[str, Any]) -> set[str]:
+    result: set[str] = set()
+    for block in payload.get("response_blocks") or []:
+        token = str((block or {}).get("type") or "").strip().lower()
+        if token:
+            result.add(token)
+    return result
+
+
+def _extract_entities(payload: dict[str, Any]) -> dict[str, Any]:
+    metadata = payload.get("metadata") if isinstance(payload, dict) else None
+    if not isinstance(metadata, dict):
+        return {}
+    entities = metadata.get("detected_entities")
+    return entities if isinstance(entities, dict) else {}
+
+
+def _numbers_from_text(blob: str) -> list[float]:
+    values: list[float] = []
+    for token in re.findall(r"\d+(?:[\.,]\d+)?", blob):
+        try:
+            values.append(float(token.replace(",", ".")))
+        except ValueError:
+            continue
+    return values
+
+
+def _contains_close_number(blob: str, expected: float, *, tolerance_ratio: float = 0.1, tolerance_abs: float = 1.0) -> bool:
+    threshold = max(tolerance_abs, abs(expected) * tolerance_ratio)
+    for value in _numbers_from_text(blob):
+        if abs(value - expected) <= threshold:
+            return True
+    return False
+
+
+def _is_french_like(answer: str) -> bool:
+    text_l = " ".join(str(answer or "").lower().split())
+    if not text_l:
+        return False
+    fr_tokens = {"le", "la", "les", "des", "pour", "avec", "et", "est", "sont", "données", "coopérative", "lot", "perte"}
+    en_tokens = {"the", "and", "with", "for", "data", "batch", "loss", "stock", "please", "should"}
+    fr_hits = sum(1 for tok in fr_tokens if tok in text_l)
+    en_hits = sum(1 for tok in en_tokens if tok in text_l)
+    return fr_hits >= 1 or en_hits <= 2
+
+
+def _table_exists(db: Session, table_name: str) -> bool:
+    try:
+        db.execute(text(f"SELECT 1 FROM {table_name} LIMIT 1"))
+        return True
+    except Exception:
+        return False
+
+
+def _pick_first(values: list[str], fallback: str, index: int = 0) -> str:
+    if not values:
+        return fallback
+    return values[index % len(values)]
+
+
+def _canonical_product(name: str) -> str:
+    lowered = str(name or "").lower().strip()
+    if lowered in {"mangue", "mango"}:
+        return "mango"
+    if lowered in {"arachide", "peanut"}:
+        return "peanut"
+    if lowered in {"mil", "millet"}:
+        return "millet"
+    return lowered
+
+
+def _build_truth_snapshot(db: Session, cooperative_id: Any) -> dict[str, Any]:
+    products = [
+        str(row[0])
+        for row in db.execute(
+            text("SELECT name FROM products WHERE cooperative_id = :coop_id ORDER BY name ASC LIMIT 10"),
+            {"coop_id": cooperative_id},
+        ).fetchall()
+        if str(row[0] or "").strip()
+    ]
+    batches = [
+        str(row[0])
+        for row in db.execute(
+            text("SELECT code FROM batches WHERE cooperative_id = :coop_id ORDER BY creation_date DESC LIMIT 20"),
+            {"coop_id": cooperative_id},
+        ).fetchall()
+        if str(row[0] or "").strip()
+    ]
+
+    members_count = int(
+        db.execute(text("SELECT COUNT(*) FROM members WHERE cooperative_id = :coop_id"), {"coop_id": cooperative_id}).scalar() or 0
+    )
+    parcel_count = int(
+        db.execute(text("SELECT COUNT(*) FROM parcels WHERE cooperative_id = :coop_id"), {"coop_id": cooperative_id}).scalar() or 0
+    )
+    input_total_kg = float(
+        db.execute(text("SELECT COALESCE(SUM(quantity), 0) FROM inputs WHERE cooperative_id = :coop_id"), {"coop_id": cooperative_id}).scalar()
+        or 0.0
+    )
+    stock_total_kg = float(
+        db.execute(
+            text(
+                """
+                SELECT COALESCE(SUM(COALESCE(total_stock_kg, 0) - COALESCE(reserved_in_lots_kg, 0)), 0)
+                FROM stocks
+                WHERE cooperative_id = :coop_id
+                """
+            ),
+            {"coop_id": cooperative_id},
+        ).scalar()
+        or 0.0
+    )
+    lots_open_count = int(
+        db.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM batches
+                WHERE cooperative_id = :coop_id
+                  AND status NOT IN ('completed', 'cancelled', 'COMPLETED', 'CANCELLED')
+                """
+            ),
+            {"coop_id": cooperative_id},
+        ).scalar()
+        or 0
+    )
+    low_eff_count = int(
+        db.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM batches
+                WHERE cooperative_id = :coop_id
+                  AND initial_qty > 0
+                  AND (current_qty / initial_qty) < 0.85
+                """
+            ),
+            {"coop_id": cooperative_id},
+        ).scalar()
+        or 0
+    )
+
+    top_members = [
+        dict(row._mapping)
+        for row in db.execute(
+            text(
+                """
+                SELECT m.full_name, m.code AS member_code, COALESCE(SUM(i.quantity), 0.0) AS total_kg
+                FROM members m
+                JOIN inputs i ON i.member_id = m.id
+                WHERE m.cooperative_id = :coop_id
+                  AND i.cooperative_id = :coop_id
+                GROUP BY m.id, m.full_name, m.code
+                ORDER BY total_kg DESC
+                LIMIT 10
+                """
+            ),
+            {"coop_id": cooperative_id},
+        ).fetchall()
+    ]
+
+    top_loss_lot = db.execute(
+        text(
+            """
+            SELECT code,
+                   CASE WHEN initial_qty > 0 THEN ((initial_qty - current_qty) / initial_qty) * 100 ELSE 0 END AS loss_pct
+            FROM batches
+            WHERE cooperative_id = :coop_id
+            ORDER BY loss_pct DESC, code ASC
+            LIMIT 1
+            """
+        ),
+        {"coop_id": cooperative_id},
+    ).fetchone()
+
+    material = dict(
+        db.execute(
+            text(
+                """
+                SELECT COALESCE(SUM(initial_qty), 0) AS in_kg,
+                       COALESCE(SUM(current_qty), 0) AS out_kg
+                FROM batches
+                WHERE cooperative_id = :coop_id
+                """
+            ),
+            {"coop_id": cooperative_id},
+        ).one()._mapping
+    )
+    in_kg = float(material.get("in_kg") or 0.0)
+    out_kg = float(material.get("out_kg") or 0.0)
+    loss_pct = ((in_kg - out_kg) / in_kg * 100.0) if in_kg > 0 else 0.0
+
+    stage_losses = [
+        dict(row._mapping)
+        for row in db.execute(
+            text(
+                """
+                SELECT ps.type AS stage, COALESCE(SUM(ps.loss_value), 0.0) AS total_loss_kg
+                FROM process_steps ps
+                JOIN batches b ON b.id = ps.batch_id
+                WHERE b.cooperative_id = :coop_id
+                GROUP BY ps.type
+                ORDER BY total_loss_kg DESC
+                LIMIT 6
+                """
+            ),
+            {"coop_id": cooperative_id},
+        ).fetchall()
+    ]
+
+    sql_risk_count = int(
+        db.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM batches
+                WHERE cooperative_id = :coop_id
+                  AND initial_qty > 0
+                  AND ((initial_qty - current_qty) / initial_qty) * 100 >= :threshold
+                """
+            ),
+            {"coop_id": cooperative_id, "threshold": float(settings.anomaly_loss_threshold)},
+        ).scalar()
+        or 0
+    )
+
+    rag_count = 0
+    rag_keywords = 0
+    if _table_exists(db, "rag_chunks"):
+        rag_count = int(
+            db.execute(
+                text("SELECT COUNT(*) FROM rag_chunks WHERE cooperative_id = :coop_id"),
+                {"coop_id": cooperative_id},
+            ).scalar()
+            or 0
+        )
+        rag_keywords = int(
+            db.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM rag_chunks
+                    WHERE cooperative_id = :coop_id
+                      AND lower(content) ~ '(séchage|sechage|tri|stockage|humidit|perte)'
+                    """
+                ),
+                {"coop_id": cooperative_id},
+            ).scalar()
+            or 0
+        )
+
+    reco_count = 0
+    if _table_exists(db, "recommendations"):
+        reco_count = int(
+            db.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM recommendations r
+                    JOIN batches b ON b.id = r.batch_id
+                    WHERE b.cooperative_id = :coop_id
+                    """
+                ),
+                {"coop_id": cooperative_id},
+            ).scalar()
+            or 0
+        )
+
+    business_availability = {
+        "commercial_orders": _table_exists(db, "commercial_orders"),
+        "commercial_invoices": _table_exists(db, "commercial_invoices"),
+        "treasury_transactions": _table_exists(db, "treasury_transactions"),
+        "global_charges": _table_exists(db, "global_charges"),
+    }
+
+    commercial_orders_count = 0
+    invoices_count = 0
+    treasury_count = 0
+    charges_count = 0
+    if business_availability["commercial_orders"]:
+        commercial_orders_count = int(
+            db.execute(
+                text("SELECT COUNT(*) FROM commercial_orders WHERE cooperative_id = :coop_id"),
+                {"coop_id": cooperative_id},
+            ).scalar()
+            or 0
+        )
+    if business_availability["commercial_invoices"]:
+        invoices_count = int(
+            db.execute(
+                text("SELECT COUNT(*) FROM commercial_invoices WHERE cooperative_id = :coop_id"),
+                {"coop_id": cooperative_id},
+            ).scalar()
+            or 0
+        )
+    if business_availability["treasury_transactions"]:
+        treasury_count = int(
+            db.execute(
+                text("SELECT COUNT(*) FROM treasury_transactions WHERE cooperative_id = :coop_id"),
+                {"coop_id": cooperative_id},
+            ).scalar()
+            or 0
+        )
+    if business_availability["global_charges"]:
+        charges_count = int(
+            db.execute(
+                text("SELECT COUNT(*) FROM global_charges WHERE cooperative_id = :coop_id"),
+                {"coop_id": cooperative_id},
+            ).scalar()
+            or 0
+        )
+
+    return {
+        "products": products,
+        "lots": batches,
+        "members_count": members_count,
+        "parcel_count": parcel_count,
+        "input_total_kg": input_total_kg,
+        "stock_total_kg": stock_total_kg,
+        "lots_open_count": lots_open_count,
+        "low_eff_count": low_eff_count,
+        "top_members": top_members,
+        "top_loss_lot": dict(top_loss_lot._mapping) if top_loss_lot else None,
+        "material": {"in_kg": in_kg, "out_kg": out_kg, "loss_pct": loss_pct},
+        "stage_losses": stage_losses,
+        "sql_risk_count": sql_risk_count,
+        "rag_count": rag_count,
+        "rag_keywords": rag_keywords,
+        "recommendations_count": reco_count,
+        "business_availability": business_availability,
+        "commercial_orders_count": commercial_orders_count,
+        "invoices_count": invoices_count,
+        "treasury_count": treasury_count,
+        "charges_count": charges_count,
+    }
+
+
+def _build_cases(truth: dict[str, Any]) -> list[ConversationCase]:
+    products = truth.get("products") or []
+    lots = truth.get("lots") or []
+    p1 = _pick_first(products, "Mangue", 0)
+    p2 = _pick_first(products, "Arachide", 1)
+    p3 = _pick_first(products, "Mil", 2)
+    lot1 = _pick_first(lots, "LOT-MANG-001", 0)
+    lot2 = _pick_first(lots, "LOT-MANG-002", 1)
+
+    sql_routes = {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL", "HYBRID_SQL_ML"}
+    rag_routes = {"RAG_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL", "HYBRID_RAG_RECOMMENDATION"}
+    reco_routes = {"HYBRID_FULL", "RECOMMENDATION_ONLY", "HYBRID_RAG_RECOMMENDATION", "HYBRID_SQL_RAG"}
+    ml_routes = {"HYBRID_SQL_ML", "HYBRID_FULL", "ML_ONLY", "HYBRID_SQL_RAG"}
+
+    cases: list[ConversationCase] = [
+        # lots/batches (4)
+        ConversationCase("lots-01", "lots", f"Quel est le statut du lot {lot1} ?", sql_routes, {"sql"}, "lot_ref", expected_product=None),
+        ConversationCase("lots-02", "lots", "et celui-ci ?", sql_routes, {"sql"}, "lot_followup", expect_batch_reuse=True),
+        ConversationCase("lots-03", "lots", "ce lot ?", sql_routes, {"sql"}, "lot_followup", expect_batch_reuse=True),
+        ConversationCase("lots-04", "lots", f"Compare {lot1} et {lot2}.", {"HYBRID_SQL_RAG", "HYBRID_FULL", "SQL_ONLY"}, {"sql"}, "lots_compare"),
+
+        # members (4) - context reset after lot dialog
+        ConversationCase("members-01", "members", "Combien de membres sont inscrits dans ma coopérative ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "members_count", expect_context_reset=True),
+        ConversationCase("members-02", "members", "Classe les membres par kg collectés, du plus élevé au plus faible.", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "member_ranking"),
+        ConversationCase("members-03", "members", "Qui a le plus livré ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "member_ranking"),
+        ConversationCase("members-04", "members", "Et les 3 premiers ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "member_ranking"),
+
+        # rag best practices (4) - another reset pivot
+        ConversationCase("rag-01", "rag_best_practices", f"Quelles sont les meilleures pratiques de séchage pour {p1} ?", rag_routes, {"rag"}, "rag_presence", expect_context_reset=True),
+        ConversationCase("rag-02", "rag_best_practices", f"Comment améliorer le tri pour {p2} ?", rag_routes, {"rag"}, "rag_presence"),
+        ConversationCase("rag-03", "rag_best_practices", "Donne des références pour réduire les pertes.", rag_routes, {"rag"}, "rag_presence"),
+        ConversationCase("rag-04", "rag_best_practices", f"mieux secher {p1}: quoi faire", rag_routes, {"rag"}, "rag_presence"),
+
+        # stocks (4) - reset check from RAG to operational SQL
+        ConversationCase("stocks-01", "stocks", "Donne le stock actuel global.", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "stock_total", expect_context_reset=True),
+        ConversationCase("stocks-02", "stocks", f"Et pour la {p1} ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "stock_product", expected_product=_canonical_product(p1)),
+        ConversationCase("stocks-03", "stocks", "Quels produits sont sous seuil critique ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "stock_semantic"),
+        ConversationCase("stocks-04", "stocks", f"Stock actuel de {p2} ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "stock_semantic", expected_product=_canonical_product(p2)),
+
+        # parcels/cultures (4)
+        ConversationCase("parcels-01", "parcels", "Combien de parcelles sont enregistrées ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "parcel_count"),
+        ConversationCase("parcels-02", "parcels", "Liste les parcelles enregistrées.", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "parcel_semantic"),
+        ConversationCase("parcels-03", "parcels", "Quelle culture est la plus représentée ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "parcel_semantic"),
+        ConversationCase("parcels-04", "parcels", f"Et pour la culture {p1} ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "parcel_semantic", expected_product=_canonical_product(p1)),
+
+        # inputs/collections (4)
+        ConversationCase("inputs-01", "inputs", "Quelle quantité totale a été collectée ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "inputs_total"),
+        ConversationCase("inputs-02", "inputs", "Répartition des collectes par produit.", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "inputs_semantic"),
+        ConversationCase("inputs-03", "inputs", "Quelle quantité a été collectée aujourd’hui ?", {"SQL_ONLY", "HYBRID_SQL_RAG"}, {"sql"}, "inputs_semantic"),
+        ConversationCase("inputs-04", "inputs", f"et pour la {p1} ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "inputs_semantic", expected_product=_canonical_product(p1)),
+
+        # process steps (4)
+        ConversationCase("process-01", "process_steps", "Quelle étape du process génère les plus grandes pertes ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "top_stage"),
+        ConversationCase("process-02", "process_steps", "Compare les pertes entre séchage et tri.", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "process_compare"),
+        ConversationCase("process-03", "process_steps", f"Pertes au séchage pour {lot1} ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "process_semantic"),
+        ConversationCase("process-04", "process_steps", "Et celle d’après ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "process_semantic"),
+
+        # material balance (4)
+        ConversationCase("mb-01", "material_balance", "Donne le bilan matière global des lots.", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "material_global"),
+        ConversationCase("mb-02", "material_balance", f"Bilan matière du lot {lot1}.", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "material_semantic"),
+        ConversationCase("mb-03", "material_balance", f"Compare le bilan matière de {lot1} et {lot2}.", {"HYBRID_SQL_RAG", "HYBRID_FULL", "SQL_ONLY"}, {"sql"}, "material_semantic"),
+        ConversationCase("mb-04", "material_balance", f"Quelle est la sitation du lot {lot1} ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "lot_ref"),
+
+        # loss/efficiency (4)
+        ConversationCase("loss-01", "loss_efficiency", "Quels lots ont une efficacité faible ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_SQL_ML"}, {"sql"}, "low_eff_count"),
+        ConversationCase("loss-02", "loss_efficiency", "Quel lot a le plus de pertes ?", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_SQL_ML"}, {"sql"}, "top_loss_lot"),
+        ConversationCase("loss-03", "loss_efficiency", f"Pourquoi les pertes sont élevées sur {lot1} ?", {"HYBRID_SQL_RAG", "HYBRID_FULL", "HYBRID_SQL_ML"}, {"sql"}, "loss_semantic"),
+        ConversationCase("loss-04", "loss_efficiency", "Comment reduire les pertes sur mangu au sechage ?", {"HYBRID_SQL_RAG", "HYBRID_FULL", "RAG_ONLY"}, {"rag"}, "loss_semantic"),
+
+        # ml risk (4)
+        ConversationCase("ml-01", "ml_risk", "Quels lots présentent un risque élevé ?", ml_routes, {"ml"}, "ml_risk_semantic"),
+        ConversationCase("ml-02", "ml_risk", f"Y a-t-il une anomalie sur {lot1} ?", ml_routes, {"ml"}, "ml_risk_semantic"),
+        ConversationCase("ml-03", "ml_risk", f"Niveau de risque actuel pour {p1} ?", ml_routes, {"ml"}, "ml_risk_semantic", expected_product=_canonical_product(p1)),
+        ConversationCase("ml-04", "ml_risk", "ce lot ?", ml_routes, {"ml"}, "ml_risk_semantic", expect_batch_reuse=True),
+
+        # recommendations (4)
+        ConversationCase("reco-01", "recommendations", "J’ai un problème de pertes, tu me conseilles quoi ?", reco_routes, {"recommendation"}, "recommendation_semantic"),
+        ConversationCase("reco-02", "recommendations", f"Actions prioritaires pour réduire les pertes de {p1} ?", reco_routes, {"recommendation"}, "recommendation_semantic"),
+        ConversationCase("reco-03", "recommendations", "ce lot, que faire maintenant ?", reco_routes, {"recommendation"}, "recommendation_semantic", expect_batch_reuse=True),
+        ConversationCase("reco-04", "recommendations", f"Plan d'action concret pour {p3}.", reco_routes, {"recommendation"}, "recommendation_semantic"),
+    ]
+
+    business = truth.get("business_availability") or {}
+    if any(bool(v) for v in business.values()):
+        cases.extend(
+            [
+                ConversationCase("biz-01", "business_ops", "Montre les commandes commerciales récentes.", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "business_semantic"),
+                ConversationCase("biz-02", "business_ops", "Montre les factures récentes.", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "business_semantic"),
+                ConversationCase("biz-03", "business_ops", "Résumé des charges et dépenses de la coopérative.", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "business_semantic"),
+                ConversationCase("biz-04", "business_ops", "Vue globale commercialisation + finance.", {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_FULL"}, {"sql"}, "business_semantic"),
+            ]
+        )
+
+    required_modules = [
+        "members",
+        "parcels",
+        "inputs",
+        "stocks",
+        "lots",
+        "process_steps",
+        "material_balance",
+        "loss_efficiency",
+        "ml_risk",
+        "rag_best_practices",
+        "recommendations",
+    ]
+    counts = Counter(case.module for case in cases)
+    for module in required_modules:
+        assert counts[module] >= 4, f"module {module} has only {counts[module]} questions"
+    if any(bool(v) for v in business.values()):
+        assert counts["business_ops"] >= 4
+
+    return cases
+
+
+def _expected_product_in_entities(entities: dict[str, Any], expected_product: str) -> bool:
+    products = entities.get("product") or []
+    tokens = {_canonical_product(str(item)) for item in products if str(item).strip()}
+    return expected_product in tokens
+
+
+def _fact_check(case: ConversationCase, truth: dict[str, Any], payload: dict[str, Any]) -> tuple[bool, str]:
+    answer = str(payload.get("answer") or "")
+    blob = f"{answer}\n{json.dumps(payload.get('response_blocks') or [], ensure_ascii=False)}"
+    lower_blob = blob.lower()
+
+    if case.fact_check is None:
+        return True, "n/a"
+
+    if case.fact_check == "members_count":
+        expected = float(truth.get("members_count") or 0)
+        return _contains_close_number(blob, expected), f"expected members_count={expected:.0f}"
+
+    if case.fact_check == "member_ranking":
+        top = (truth.get("top_members") or [None])[0]
+        if not top:
+            return False, "no top member truth"
+        name_ok = str(top.get("full_name") or "").lower() in lower_blob
+        kg_ok = _contains_close_number(blob, float(top.get("total_kg") or 0.0), tolerance_ratio=0.12, tolerance_abs=2.0)
+        return (name_ok and kg_ok), f"expected top_member={top.get('full_name')} ({float(top.get('total_kg') or 0.0):.1f} kg)"
+
+    if case.fact_check == "parcel_count":
+        expected = float(truth.get("parcel_count") or 0)
+        return _contains_close_number(blob, expected), f"expected parcel_count={expected:.0f}"
+
+    if case.fact_check == "inputs_total":
+        expected = float(truth.get("input_total_kg") or 0.0)
+        return _contains_close_number(blob, expected, tolerance_ratio=0.15, tolerance_abs=5.0), f"expected inputs_total={expected:.1f} kg"
+
+    if case.fact_check == "stock_total":
+        expected = float(truth.get("stock_total_kg") or 0.0)
+        return _contains_close_number(blob, expected, tolerance_ratio=0.2, tolerance_abs=5.0), f"expected stock_total={expected:.1f} kg"
+
+    if case.fact_check == "batch_open_count":
+        expected = float(truth.get("lots_open_count") or 0)
+        return _contains_close_number(blob, expected), f"expected lots_open_count={expected:.0f}"
+
+    if case.fact_check == "top_stage":
+        stage_rows = truth.get("stage_losses") or []
+        if not stage_rows:
+            return False, "no process stage truth"
+        stage = str(stage_rows[0].get("stage") or "").lower()
+        return stage in lower_blob and ("perte" in lower_blob or "loss" in lower_blob), f"expected top_stage={stage}"
+
+    if case.fact_check == "material_global":
+        material = truth.get("material") or {}
+        loss_pct = float(material.get("loss_pct") or 0.0)
+        in_kg = float(material.get("in_kg") or 0.0)
+        out_kg = float(material.get("out_kg") or 0.0)
+        ok = (
+            _contains_close_number(blob, loss_pct, tolerance_ratio=0.2, tolerance_abs=1.5)
+            or _contains_close_number(blob, in_kg, tolerance_ratio=0.2, tolerance_abs=5.0)
+            or _contains_close_number(blob, out_kg, tolerance_ratio=0.2, tolerance_abs=5.0)
+        )
+        return ok, f"expected material in={in_kg:.1f} out={out_kg:.1f} loss={loss_pct:.1f}%"
+
+    if case.fact_check == "low_eff_count":
+        expected = float(truth.get("low_eff_count") or 0)
+        ok = _contains_close_number(blob, expected) and any(token in lower_blob for token in ("effic", "faible", "perte", "rendement"))
+        return ok, f"expected low_eff_count={expected:.0f}"
+
+    if case.fact_check == "top_loss_lot":
+        top = truth.get("top_loss_lot") or {}
+        code = str(top.get("code") or "").lower()
+        if not code:
+            return False, "no top_loss_lot truth"
+        return code in lower_blob and ("perte" in lower_blob or "loss" in lower_blob), f"expected top_loss_lot={code}"
+
+    if case.fact_check == "ml_risk_semantic":
+        semantic_ok = any(token in lower_blob for token in ("risque", "anomal", "ml", "signal"))
+        return semantic_ok, f"expected risk semantics; sql_risk_count={truth.get('sql_risk_count')}"
+
+    if case.fact_check == "rag_presence":
+        semantic_ok = any(token in lower_blob for token in ("séch", "sech", "tri", "pratique", "référence", "humid", "stockage"))
+        return semantic_ok, f"expected rag semantics; rag_keywords={truth.get('rag_keywords')}"
+
+    if case.fact_check == "recommendation_semantic":
+        semantic_ok = any(token in lower_blob for token in ("recommand", "action", "priorit", "amélior", "amelior", "rédu"))
+        return semantic_ok, f"expected recommendation semantics; recommendation_rows={truth.get('recommendations_count')}"
+
+    if case.fact_check == "business_semantic":
+        semantic_ok = any(token in lower_blob for token in ("commande", "facture", "charge", "dépense", "depense", "finance", "trésorerie", "tresorerie"))
+        return semantic_ok, "expected business semantics"
+
+    if case.fact_check in {"lot_ref", "lot_followup", "lots_compare", "parcel_semantic", "stock_product", "stock_semantic", "inputs_semantic", "process_compare", "process_semantic", "material_semantic", "loss_semantic"}:
+        semantic_ok = any(token in lower_blob for token in ("lot", "stock", "perte", "collect", "parcelle", "séch", "sech", "tri", "bilan", "mati"))
+        return semantic_ok, f"expected semantic signal for {case.fact_check}"
+
+    return True, "not_checked"
+
+
+def _evaluate_case(
+    case: ConversationCase,
+    truth: dict[str, Any],
+    payload: dict[str, Any],
+    status_code: int,
+    state: ConversationState,
+) -> dict[str, Any]:
+    issues: list[str] = []
+    checks_total = 0
+    checks_passed = 0
+
+    if status_code != 200:
+        return {
+            "case_id": case.case_id,
+            "module": case.module,
+            "question": case.question,
+            "status": "FAIL",
+            "score": 0.0,
+            "route": "",
+            "source_types": [],
+            "block_types": [],
+            "issues": [f"HTTP_{status_code}"],
+            "detected_entities": {},
+            "answer_preview": str(payload)[:240],
+        }
+
+    route = _normalize_route(payload.get("route"))
+    source_types = _source_types(payload)
+    block_types = _block_types(payload)
+    entities = _extract_entities(payload)
+    answer = str(payload.get("answer") or "")
+
+    checks_total += 1
+    if route in {item.upper() for item in case.expected_routes}:
+        checks_passed += 1
+    else:
+        issues.append(f"route_mismatch:{route} not in {sorted(case.expected_routes)}")
+
+    checks_total += 1
+    if case.required_sources.issubset(source_types):
+        checks_passed += 1
+    else:
+        issues.append(f"missing_sources:{sorted(case.required_sources - source_types)}")
+
+    checks_total += 1
+    if {"summary", "sources"}.issubset(block_types):
+        checks_passed += 1
+    else:
+        issues.append(f"missing_blocks:{sorted({'summary', 'sources'} - block_types)}")
+
+    checks_total += 1
+    fact_ok, fact_hint = _fact_check(case, truth, payload)
+    if fact_ok:
+        checks_passed += 1
+    else:
+        issues.append(f"fact_mismatch:{fact_hint}")
+
+    checks_total += 1
+    if _is_french_like(answer):
+        checks_passed += 1
+    else:
+        issues.append("french_quality_weak")
+
+    checks_total += 1
+    if not (FALLBACK_MARKER in answer.lower() and source_types):
+        checks_passed += 1
+    else:
+        issues.append("false_fallback_with_evidence")
+
+    if case.expect_batch_reuse:
+        checks_total += 1
+        batch_ref = str(entities.get("batch_ref") or "").strip().upper()
+        expected_ref = str(state.last_batch_ref or "").strip().upper()
+        if batch_ref and expected_ref and batch_ref == expected_ref:
+            checks_passed += 1
+        else:
+            issues.append(f"memory_batch_reuse_failed: expected={expected_ref or 'n/a'} got={batch_ref or 'none'}")
+
+    if case.expect_context_reset:
+        checks_total += 1
+        if not str(entities.get("batch_ref") or "").strip():
+            checks_passed += 1
+        else:
+            issues.append("context_reset_failed: batch_ref leaked")
+
+    if case.expected_product:
+        checks_total += 1
+        if _expected_product_in_entities(entities, case.expected_product):
+            checks_passed += 1
+        else:
+            issues.append(f"memory_product_missing:{case.expected_product}")
+
+    if not issues:
+        grade = "PASS"
+    else:
+        score_preview = checks_passed / checks_total if checks_total else 0.0
+        if score_preview >= 0.55:
+            grade = "PARTIAL"
+        else:
+            grade = "FAIL"
+
+    # update conversation state from explicit or extracted batch refs
+    question_batch_match = LOT_CODE_PATTERN.search(case.question or "")
+    if question_batch_match:
+        state.last_batch_ref = str(question_batch_match.group(0)).upper()
+    elif str(entities.get("batch_ref") or "").strip():
+        state.last_batch_ref = str(entities.get("batch_ref") or "").strip().upper()
+
+    score = checks_passed / checks_total if checks_total else 0.0
+    return {
+        "case_id": case.case_id,
+        "module": case.module,
+        "question": case.question,
+        "status": grade,
+        "score": round(score, 4),
+        "route": route,
+        "source_types": sorted(source_types),
+        "block_types": sorted(block_types),
+        "issues": issues,
+        "detected_entities": entities,
+        "answer_preview": answer[:420],
+    }
+
+
+def _member_ranking_diagnosis(truth: dict[str, Any], ranking_case_result: dict[str, Any] | None) -> dict[str, Any]:
+    top = (truth.get("top_members") or [None])[0]
+    expected_name = str((top or {}).get("full_name") or "")
+    expected_kg = float((top or {}).get("total_kg") or 0.0)
+    legacy_name = "Awa Ndiaye"
+    legacy_kg = 1715.0
+
+    if not ranking_case_result:
+        return {
+            "verdict": "insufficient_data",
+            "expected_top_member": expected_name,
+            "expected_top_kg": expected_kg,
+            "legacy_expectation": {"name": legacy_name, "kg": legacy_kg},
+            "details": "ranking case result missing",
+        }
+
+    preview = str(ranking_case_result.get("answer_preview") or "").lower()
+    chatbot_mentions_expected = expected_name.lower() in preview if expected_name else False
+    chatbot_mentions_legacy = legacy_name.lower() in preview
+    chatbot_mentions_expected_kg = _contains_close_number(preview, expected_kg, tolerance_ratio=0.12, tolerance_abs=2.0)
+
+    if chatbot_mentions_expected and chatbot_mentions_expected_kg:
+        if expected_name.lower() != legacy_name.lower() or abs(expected_kg - legacy_kg) > 1.0:
+            verdict = "stale_audit_expectation"
+            details = "chatbot aligns with current SQL truth using coop filters; legacy expectation appears stale"
+        else:
+            verdict = "no_mismatch_detected"
+            details = "chatbot and legacy expectation align"
+    else:
+        if chatbot_mentions_legacy and expected_name and expected_name.lower() != legacy_name.lower():
+            verdict = "chatbot_bug"
+            details = "chatbot appears aligned with legacy output rather than current SQL truth"
+        else:
+            verdict = "chatbot_bug_or_parsing_gap"
+            details = "chatbot response did not clearly match SQL truth for top member ranking"
+
+    return {
+        "verdict": verdict,
+        "expected_top_member": expected_name,
+        "expected_top_kg": expected_kg,
+        "legacy_expectation": {"name": legacy_name, "kg": legacy_kg},
+        "chatbot_mentions_expected": chatbot_mentions_expected,
+        "chatbot_mentions_expected_kg": chatbot_mentions_expected_kg,
+        "chatbot_mentions_legacy": chatbot_mentions_legacy,
+        "details": details,
+    }
+
+
+def _build_summary(results: list[dict[str, Any]], ranking_diag: dict[str, Any]) -> dict[str, Any]:
+    total = len(results)
+    pass_count = sum(1 for row in results if row["status"] == "PASS")
+    partial_count = sum(1 for row in results if row["status"] == "PARTIAL")
+    fail_count = sum(1 for row in results if row["status"] == "FAIL")
+
+    by_module: dict[str, dict[str, int]] = {}
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in results:
+        grouped[row["module"]].append(row)
+    for module, rows in grouped.items():
+        by_module[module] = {
+            "total": len(rows),
+            "PASS": sum(1 for x in rows if x["status"] == "PASS"),
+            "PARTIAL": sum(1 for x in rows if x["status"] == "PARTIAL"),
+            "FAIL": sum(1 for x in rows if x["status"] == "FAIL"),
+        }
+
+    memory_followup_cases = [row for row in results if any(issue.startswith("memory_batch_reuse_failed") for issue in row.get("issues", [])) or row["case_id"] in {"lots-02", "lots-03", "ml-04", "reco-03"}]
+    memory_followup_total = len([row for row in results if row["case_id"] in {"lots-02", "lots-03", "ml-04", "reco-03"}])
+    memory_followup_pass = sum(1 for row in results if row["case_id"] in {"lots-02", "lots-03", "ml-04", "reco-03"} and not any(issue.startswith("memory_batch_reuse_failed") for issue in row.get("issues", [])))
+
+    reset_total = len([row for row in results if row["case_id"] in {"members-01", "rag-01", "stocks-01"}])
+    reset_pass = sum(1 for row in results if row["case_id"] in {"members-01", "rag-01", "stocks-01"} and "context_reset_failed: batch_ref leaked" not in row.get("issues", []))
+
+    false_fallback_count = sum(1 for row in results if "false_fallback_with_evidence" in row.get("issues", []))
+    french_quality_fail_count = sum(1 for row in results if "french_quality_weak" in row.get("issues", []))
+
+    issue_counter = Counter()
+    for row in results:
+        for issue in row.get("issues", []):
+            issue_counter[issue.split(":", 1)[0]] += 1
+
+    worst = sorted(results, key=lambda row: (row["status"] != "FAIL", row["score"]))[:10]
+
+    rating = round(((pass_count * 1.0 + partial_count * 0.6) / total) * 100, 1) if total else 0.0
+
+    top_fix_map = {
+        "route_mismatch": "Renforcer les règles sémantiques de routage multi-intent et follow-up.",
+        "missing_sources": "Garantir la collecte de sources attendues par route (SQL/RAG/ML/reco).",
+        "missing_blocks": "Uniformiser la production de response_blocks summary/sources/table par agent.",
+        "fact_mismatch": "Ajouter des vérifications de vérité SQL avant formulation finale (post-aggregation check).",
+        "memory_batch_reuse_failed": "Améliorer la résolution référentielle batch pour les pronoms et follow-ups courts.",
+        "context_reset_failed": "Renforcer les garde-fous de reset de contexte lors des changements de module.",
+        "false_fallback_with_evidence": "Interdire tout fallback générique dès qu’une preuve exploitable existe.",
+        "french_quality_weak": "Améliorer le style de génération FR sous contraintes multi-agent.",
+    }
+    top_issues = issue_counter.most_common(5)
+    top_fixes = [top_fix_map.get(key, f"Traiter les occurrences de {key}.") for key, _ in top_issues]
+
+    return {
+        "total_cases": total,
+        "pass_count": pass_count,
+        "partial_count": partial_count,
+        "fail_count": fail_count,
+        "pass_rate": (pass_count / total) if total else 0.0,
+        "overall_verdict": "PASS" if fail_count == 0 else "PARTIAL" if fail_count <= max(1, total // 10) else "FAIL",
+        "metrics_by_module": by_module,
+        "memory_metrics": {
+            "followup_pass": memory_followup_pass,
+            "followup_total": memory_followup_total,
+            "context_reset_pass": reset_pass,
+            "context_reset_total": reset_total,
+            "context_leak_count": max(reset_total - reset_pass, 0),
+        },
+        "false_fallback_count": false_fallback_count,
+        "french_quality_fail_count": french_quality_fail_count,
+        "issue_counts": dict(issue_counter),
+        "worst_failures": [
+            {
+                "case_id": row["case_id"],
+                "module": row["module"],
+                "status": row["status"],
+                "score": row["score"],
+                "issues": row["issues"],
+            }
+            for row in worst
+            if row["status"] in {"FAIL", "PARTIAL"}
+        ][:10],
+        "suspected_root_causes": [item[0] for item in top_issues],
+        "chatbot_rating_over_100": rating,
+        "top_5_recommended_fixes": top_fixes[:5],
+        "member_ranking_diagnosis": ranking_diag,
+    }
+
+
+def _build_markdown(payload: dict[str, Any]) -> str:
+    summary = payload["summary"]
+    lines = [
+        "# Chatbot Conversation Flow Audit (Supabase Readonly)",
+        "",
+        f"- Timestamp UTC: {payload['timestamp_utc']}",
+        f"- Conversation ID: {payload['conversation_id']}",
+        f"- Total cases: {summary['total_cases']}",
+        f"- PASS: {summary['pass_count']}",
+        f"- PARTIAL: {summary['partial_count']}",
+        f"- FAIL: {summary['fail_count']}",
+        f"- PASS rate: {summary['pass_rate']:.1%}",
+        f"- Overall verdict: {summary['overall_verdict']}",
+        f"- Chatbot rating: {summary['chatbot_rating_over_100']}/100",
+        "",
+        "## Metrics by module",
+        "| Module | Total | PASS | PARTIAL | FAIL |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for module, stats in summary["metrics_by_module"].items():
+        lines.append(f"| {module} | {stats['total']} | {stats['PASS']} | {stats['PARTIAL']} | {stats['FAIL']} |")
+
+    mm = summary["memory_metrics"]
+    lines.extend(
+        [
+            "",
+            "## Memory/context metrics",
+            f"- Follow-up reuse: {mm['followup_pass']} / {mm['followup_total']}",
+            f"- Context reset: {mm['context_reset_pass']} / {mm['context_reset_total']}",
+            f"- Context leak count: {mm['context_leak_count']}",
+            f"- False fallback count: {summary['false_fallback_count']}",
+            "",
+            "## Member ranking diagnosis",
+            f"- Verdict: {summary['member_ranking_diagnosis']['verdict']}",
+            f"- SQL truth top member: {summary['member_ranking_diagnosis']['expected_top_member']} ({summary['member_ranking_diagnosis']['expected_top_kg']:.1f} kg)",
+            f"- Legacy expectation: {summary['member_ranking_diagnosis']['legacy_expectation']['name']} ({summary['member_ranking_diagnosis']['legacy_expectation']['kg']:.1f} kg)",
+            f"- Detail: {summary['member_ranking_diagnosis']['details']}",
+            "",
+            "## Worst failures",
+        ]
+    )
+    if summary["worst_failures"]:
+        for item in summary["worst_failures"]:
+            lines.append(f"- {item['case_id']} [{item['status']}] {item['module']} -> {', '.join(item['issues'])}")
+    else:
+        lines.append("- None")
+
+    lines.extend(["", "## Suspected root causes"])
+    if summary["suspected_root_causes"]:
+        for item in summary["suspected_root_causes"]:
+            lines.append(f"- {item}")
+    else:
+        lines.append("- None")
+
+    lines.extend(["", "## Top 5 recommended fixes"])
+    for idx, item in enumerate(summary["top_5_recommended_fixes"], start=1):
+        lines.append(f"{idx}. {item}")
+
+    lines.extend(["", "## Case log"])
+    for row in payload["cases"]:
+        lines.append(f"- {row['case_id']} [{row['status']}] module={row['module']} route={row['route']} sources={','.join(row['source_types'])}")
+        if row["issues"]:
+            lines.append(f"  - issues: {', '.join(row['issues'])}")
+
+    return "\n".join(lines)
+
+
+class TestChatbotConversationFlowAudit:
+    @pytest.fixture(autouse=True, scope="function")
+    def _setup(self):
+        REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        if settings.audit_mode != "supabase_readonly":
+            pytest.skip(f"Expected --env=supabase_readonly, got {settings.audit_mode}")
+        EnvironmentParityAudit.log_parity_header("chatbot_conversation_flow_audit", settings)
+
+    def test_conversation_flow_audit(self):
+        db = next(get_db())
+        try:
+            user = get_or_create_test_user(db)
+            if user.cooperative_id is None:
+                pytest.skip("Test user has no cooperative_id")
+            truth = _build_truth_snapshot(db, user.cooperative_id)
+        finally:
+            db.close()
+
+        headers = get_test_auth_header(user.id)
+        client = TestClient(app, raise_server_exceptions=False)
+
+        session_resp = client.post(
+            "/chat/sessions",
+            json={"title": f"ConversationFlowAudit-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"},
+            headers=headers,
+        )
+        assert session_resp.status_code == 200
+        conversation_id = str(session_resp.json()["id"])
+
+        state = ConversationState()
+        cases = _build_cases(truth)
+        results: list[dict[str, Any]] = []
+
+        for case in cases:
+            resp = client.post(
+                "/chat/agent",
+                json={"message": case.question, "conversation_id": conversation_id, "language": "fr"},
+                headers=headers,
+            )
+            payload = resp.json() if resp.status_code == 200 else {}
+            row = _evaluate_case(case, truth, payload, resp.status_code, state)
+            results.append(row)
+
+        ranking_case_result = next((row for row in results if row["case_id"] == "members-02"), None)
+        ranking_diagnosis = _member_ranking_diagnosis(truth, ranking_case_result)
+        summary = _build_summary(results, ranking_diagnosis)
+
+        report = {
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "conversation_id": conversation_id,
+            "truth_snapshot": {
+                "members_count": truth.get("members_count"),
+                "parcel_count": truth.get("parcel_count"),
+                "input_total_kg": truth.get("input_total_kg"),
+                "stock_total_kg": truth.get("stock_total_kg"),
+                "lots_open_count": truth.get("lots_open_count"),
+                "low_eff_count": truth.get("low_eff_count"),
+                "material": truth.get("material"),
+                "sql_risk_count": truth.get("sql_risk_count"),
+                "top_members": truth.get("top_members", [])[:3],
+                "business_availability": truth.get("business_availability"),
+            },
+            "summary": summary,
+            "cases": results,
+        }
+
+        REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        JSON_REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        MD_REPORT_PATH.write_text(_build_markdown(report), encoding="utf-8")
+
+        assert len(results) >= 44
+        assert JSON_REPORT_PATH.exists()
+        assert MD_REPORT_PATH.exists()

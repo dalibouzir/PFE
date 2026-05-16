@@ -32,4 +32,4 @@ class User(TimestampMixin, Base):
     )
 
     cooperative: Mapped[Optional["Cooperative"]] = relationship(back_populates="users")
-    created_batches: Mapped[List["Batch"]] = relationship(back_populates="created_by_user")
+    created_batches: Mapped[List["Batch"]] = relationship(back_populates="created_by_user", foreign_keys="Batch.created_by_user_id")

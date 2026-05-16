@@ -1,0 +1,393 @@
+[
+  {
+    "question": "Comment réduire les pertes pendant le séchage de la mangue ?",
+    "answer": "1. Résultat principal\nLe bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité.\n\n2. Explication courte\nBonnes pratiques: Le bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- RAG: Bilan matière en post-récolte\n- RAG: Bonnes pratiques de séchage de la mangue\n\n5. Avertissements si nécessaires\n- Le contexte documentaire RAG est faible.",
+    "response_blocks": [
+      {
+        "type": "summary",
+        "title": "Résumé",
+        "content": "Le bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité."
+      },
+      {
+        "type": "sources",
+        "title": "Sources",
+        "items": [
+          {
+            "source": "Bilan matière en post-récolte",
+            "role": "RAG"
+          },
+          {
+            "source": "Bonnes pratiques de séchage de la mangue",
+            "role": "RAG"
+          }
+        ]
+      },
+      {
+        "type": "warnings",
+        "title": "Avertissements",
+        "items": [
+          "Le contexte documentaire RAG est faible."
+        ]
+      }
+    ]
+  },
+  {
+    "question": "Quelles sont les bonnes pratiques pour le tri des mangues ?",
+    "answer": "1. Résultat principal\nLe tri des mangues doit éliminer les fruits blessés, séparer par maturité et standardiser les grades pour réduire les pertes post-récolte.\n\n2. Explication courte\nBonnes pratiques: Le tri des mangues doit éliminer les fruits blessés ; séparer par maturité et standardiser les grades pour réduire les pertes post-récolte\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- RAG: Bonnes pratiques de tri des mangues\n\n5. Avertissements si nécessaires\nAucun avertissement critique.",
+    "response_blocks": [
+      {
+        "type": "summary",
+        "title": "Résumé",
+        "content": "Le tri des mangues doit éliminer les fruits blessés, séparer par maturité et standardiser les grades pour réduire les pertes post-récolte."
+      },
+      {
+        "type": "sources",
+        "title": "Sources",
+        "items": [
+          {
+            "source": "Bonnes pratiques de tri des mangues",
+            "role": "RAG"
+          }
+        ]
+      },
+      {
+        "type": "warnings",
+        "title": "Avertissements",
+        "items": []
+      }
+    ]
+  },
+  {
+    "question": "Explique le bilan matière du lot MANG-004.",
+    "answer": "1. Résultat principal\nLe bilan matière du lot MANG-004 montre une perte de 28.0 % et une efficacité de 72.0 %.\n\n2. Explication courte\nMesures SQL: perte 28.0% et efficacité 72.0% Explication RAG: Le bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: batches\n- SQL: process_steps\n- RAG: Bilan matière en post-récolte\n\n5. Avertissements si nécessaires\nAucun avertissement critique.",
+    "response_blocks": [
+      {
+        "type": "summary",
+        "title": "Résumé",
+        "content": "Le bilan matière du lot MANG-004 montre une perte de 28.0 % et une efficacité de 72.0 %."
+      },
+      {
+        "type": "sources",
+        "title": "Sources",
+        "items": [
+          {
+            "source": "batches",
+            "role": "SQL"
+          },
+          {
+            "source": "process_steps",
+            "role": "SQL"
+          },
+          {
+            "source": "Bilan matière en post-récolte",
+            "role": "RAG"
+          }
+        ]
+      },
+      {
+        "type": "warnings",
+        "title": "Avertissements",
+        "items": []
+      }
+    ]
+  },
+  {
+    "question": "Quel membre a livré le plus de kg ?",
+    "answer": "1. Résultat principal\nClassement des membres par quantité collectée (3):\n- Mamadou Ba (MBR-001): 1070.0 kg\n- Awa Ndiaye (MBR-002): 850.0 kg\n- Ibrahima Diallo (MBR-003): 280.0 kg\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: inputs\n- SQL: members\n\n5. Avertissements si nécessaires\nAucun avertissement critique.",
+    "response_blocks": [
+      {
+        "type": "summary",
+        "title": "Résumé",
+        "content": "Classement des membres par quantité collectée (3):\n- Mamadou Ba (MBR-001): 1070.0 kg\n- Awa Ndiaye (MBR-002): 850.0 kg\n- Ibrahima Diallo (MBR-003): 280.0 kg"
+      },
+      {
+        "type": "table",
+        "title": "Classement des membres par quantité collectée",
+        "columns": [
+          "Membre",
+          "Code",
+          "Quantité collectée"
+        ],
+        "rows": [
+          [
+            "Mamadou Ba",
+            "MBR-001",
+            "1070.0 kg"
+          ],
+          [
+            "Awa Ndiaye",
+            "MBR-002",
+            "850.0 kg"
+          ],
+          [
+            "Ibrahima Diallo",
+            "MBR-003",
+            "280.0 kg"
+          ]
+        ]
+      },
+      {
+        "type": "sources",
+        "title": "Sources",
+        "items": [
+          {
+            "source": "inputs",
+            "role": "SQL"
+          },
+          {
+            "source": "members",
+            "role": "SQL"
+          }
+        ]
+      },
+      {
+        "type": "warnings",
+        "title": "Avertissements",
+        "items": []
+      }
+    ]
+  },
+  {
+    "question": "Classe les membres par quantité collectée.",
+    "answer": "1. Résultat principal\nClassement des membres par quantité collectée (3):\n- Mamadou Ba (MBR-001): 1070.0 kg\n- Awa Ndiaye (MBR-002): 850.0 kg\n- Ibrahima Diallo (MBR-003): 280.0 kg\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: inputs\n- SQL: members\n\n5. Avertissements si nécessaires\nAucun avertissement critique.",
+    "response_blocks": [
+      {
+        "type": "summary",
+        "title": "Résumé",
+        "content": "Classement des membres par quantité collectée (3):\n- Mamadou Ba (MBR-001): 1070.0 kg\n- Awa Ndiaye (MBR-002): 850.0 kg\n- Ibrahima Diallo (MBR-003): 280.0 kg"
+      },
+      {
+        "type": "table",
+        "title": "Classement des membres par quantité collectée",
+        "columns": [
+          "Membre",
+          "Code",
+          "Quantité collectée"
+        ],
+        "rows": [
+          [
+            "Mamadou Ba",
+            "MBR-001",
+            "1070.0 kg"
+          ],
+          [
+            "Awa Ndiaye",
+            "MBR-002",
+            "850.0 kg"
+          ],
+          [
+            "Ibrahima Diallo",
+            "MBR-003",
+            "280.0 kg"
+          ]
+        ]
+      },
+      {
+        "type": "sources",
+        "title": "Sources",
+        "items": [
+          {
+            "source": "inputs",
+            "role": "SQL"
+          },
+          {
+            "source": "members",
+            "role": "SQL"
+          }
+        ]
+      },
+      {
+        "type": "warnings",
+        "title": "Avertissements",
+        "items": []
+      }
+    ]
+  },
+  {
+    "question": "Quels lots ont une efficacité faible ?",
+    "answer": "1. Résultat principal\nLots à efficacité faible (4):\n- MANG-004: efficacité 72.0 % | perte 28.0 %\n- BATCH-0003: efficacité 79.7 % | perte 20.3 %\n- BATCH-0002: efficacité 79.7 % | perte 20.3 %\n- BATCH-0001: efficacité 79.7 % | perte 20.3 %\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: batches\n- SQL: process_steps\n\n5. Avertissements si nécessaires\nAucun avertissement critique.",
+    "response_blocks": [
+      {
+        "type": "summary",
+        "title": "Résumé",
+        "content": "Lots à efficacité faible (4):\n- MANG-004: efficacité 72.0 % | perte 28.0 %\n- BATCH-0003: efficacité 79.7 % | perte 20.3 %\n- BATCH-0002: efficacité 79.7 % | perte 20.3 %\n- BATCH-0001: efficacité 79.7 % | perte 20.3 %"
+      },
+      {
+        "type": "table",
+        "title": "Lots à efficacité faible",
+        "columns": [
+          "Lot",
+          "Efficacité",
+          "Perte"
+        ],
+        "rows": [
+          [
+            "MANG-004",
+            "72.0 %",
+            "28.0 %"
+          ],
+          [
+            "BATCH-0003",
+            "79.7 %",
+            "20.3 %"
+          ],
+          [
+            "BATCH-0002",
+            "79.7 %",
+            "20.3 %"
+          ],
+          [
+            "BATCH-0001",
+            "79.7 %",
+            "20.3 %"
+          ]
+        ]
+      },
+      {
+        "type": "sources",
+        "title": "Sources",
+        "items": [
+          {
+            "source": "batches",
+            "role": "SQL"
+          },
+          {
+            "source": "process_steps",
+            "role": "SQL"
+          }
+        ]
+      },
+      {
+        "type": "warnings",
+        "title": "Avertissements",
+        "items": []
+      }
+    ]
+  },
+  {
+    "question": "Liste les factures.",
+    "answer": "1. Résultat principal\nAucune facture n’est disponible dans les données actuelles.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: commercial_invoices\n\n5. Avertissements si nécessaires\n- Aucune donnée SQL exploitable n’a été trouvée.",
+    "response_blocks": [
+      {
+        "type": "summary",
+        "title": "Résumé",
+        "content": "Aucune facture n’est disponible dans les données actuelles."
+      },
+      {
+        "type": "table",
+        "title": "Factures",
+        "columns": [
+          "Numéro",
+          "Statut",
+          "Montant"
+        ],
+        "rows": []
+      },
+      {
+        "type": "sources",
+        "title": "Sources",
+        "items": [
+          {
+            "source": "commercial_invoices",
+            "role": "SQL"
+          }
+        ]
+      },
+      {
+        "type": "warnings",
+        "title": "Avertissements",
+        "items": [
+          "Aucune donnée SQL exploitable n’a été trouvée."
+        ]
+      }
+    ]
+  },
+  {
+    "question": "Quelles commandes commerciales sont en cours ?",
+    "answer": "1. Résultat principal\nAucune commande commerciale n’est disponible dans les données actuelles.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: commercial_orders\n\n5. Avertissements si nécessaires\n- Aucune donnée SQL exploitable n’a été trouvée.",
+    "response_blocks": [
+      {
+        "type": "summary",
+        "title": "Résumé",
+        "content": "Aucune commande commerciale n’est disponible dans les données actuelles."
+      },
+      {
+        "type": "table",
+        "title": "Commandes commerciales",
+        "columns": [
+          "Numéro",
+          "Statut",
+          "Montant"
+        ],
+        "rows": []
+      },
+      {
+        "type": "sources",
+        "title": "Sources",
+        "items": [
+          {
+            "source": "commercial_orders",
+            "role": "SQL"
+          }
+        ]
+      },
+      {
+        "type": "warnings",
+        "title": "Avertissements",
+        "items": [
+          "Aucune donnée SQL exploitable n’a été trouvée."
+        ]
+      }
+    ]
+  },
+  {
+    "question": "Quelles charges ou dépenses avons-nous ?",
+    "answer": "1. Résultat principal\nAucune charge ou dépense n’est disponible dans les données actuelles.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4. Sources utilisées\n- SQL: global_charges\n- SQL: treasury_transactions\n\n5. Avertissements si nécessaires\n- Aucune donnée SQL exploitable n’a été trouvée.",
+    "response_blocks": [
+      {
+        "type": "summary",
+        "title": "Résumé",
+        "content": "Aucune charge ou dépense n’est disponible dans les données actuelles."
+      },
+      {
+        "type": "table",
+        "title": "Charges et dépenses",
+        "columns": [
+          "Transactions trésorerie",
+          "Total trésorerie",
+          "Charges globales",
+          "Total charges globales"
+        ],
+        "rows": [
+          [
+            0,
+            "0 FCFA",
+            0,
+            "0 FCFA"
+          ]
+        ]
+      },
+      {
+        "type": "sources",
+        "title": "Sources",
+        "items": [
+          {
+            "source": "global_charges",
+            "role": "SQL"
+          },
+          {
+            "source": "treasury_transactions",
+            "role": "SQL"
+          }
+        ]
+      },
+      {
+        "type": "warnings",
+        "title": "Avertissements",
+        "items": [
+          "Aucune donnée SQL exploitable n’a été trouvée."
+        ]
+      }
+    ]
+  }
+]

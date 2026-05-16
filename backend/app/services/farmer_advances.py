@@ -3,11 +3,14 @@ from __future__ import annotations
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from app.models.batch import Batch
 from app.models.enums import FarmerAdvanceStatus, InputStatus
 from app.models.farmer_advance import FarmerAdvance
 from app.models.global_charge import GlobalCharge
 from app.models.input import Input
 from app.models.member import Member
+from app.models.product import Product
+from app.models.stock_movement import StockMovement
 from app.models.user import User
 from app.schemas.farmer_advance import (
     FarmerAdvanceFarmerDetailResponse,
@@ -42,6 +45,79 @@ def _compute_cost_per_kg(total_amount: float, total_quantity: float):
     if total_quantity <= 0:
         return None
     return round_metric(total_amount / total_quantity)
+
+
+def _serialize_advance(db: Session, advance: FarmerAdvance) -> FarmerAdvanceRead:
+    batch = None
+    if advance.batch_id is not None:
+        batch = db.scalar(
+            select(Batch).where(Batch.id == advance.batch_id, Batch.cooperative_id == advance.cooperative_id)
+        )
+
+    product_id = batch.product_id if batch is not None else advance.product_id
+    product_name = None
+    if product_id is not None:
+        product = db.scalar(
+            select(Product).where(Product.id == product_id, Product.cooperative_id == advance.cooperative_id)
+        )
+        product_name = product.name if product is not None else None
+
+    collecte_created = False
+    stock_in_created = False
+    if batch is not None:
+        collecte_created = (
+            db.scalar(
+                select(Input.id).where(
+                    Input.cooperative_id == advance.cooperative_id,
+                    Input.batch_id == batch.id,
+                    Input.source_type == "pre_harvest_confirmed_weight",
+                ).limit(1)
+            )
+            is not None
+        )
+        stock_in_created = (
+            db.scalar(
+                select(StockMovement.id).where(
+                    StockMovement.cooperative_id == advance.cooperative_id,
+                    StockMovement.batch_id == batch.id,
+                    StockMovement.movement_type == "in",
+                    StockMovement.source == "pre_harvest_confirmed_weight",
+                ).limit(1)
+            )
+            is not None
+        )
+
+    if batch is None or batch.confirmed_weight_kg is None:
+        return_status = "En attente de produit"
+    elif stock_in_created or collecte_created:
+        return_status = "Stock IN créé"
+    else:
+        return_status = "Produit reçu"
+
+    return FarmerAdvanceRead(
+        id=advance.id,
+        cooperative_id=advance.cooperative_id,
+        farmer_id=advance.farmer_id,
+        batch_id=advance.batch_id,
+        parcel_id=advance.parcel_id,
+        product_id=advance.product_id,
+        amount_fcfa=advance.amount_fcfa,
+        reason=advance.reason,
+        advance_date=advance.advance_date,
+        note=advance.note,
+        status=advance.status.value,
+        source_type=advance.source_type,
+        treasury_transaction_id=advance.treasury_transaction_id,
+        batch_code=batch.code if batch is not None else None,
+        product_name=product_name,
+        confirmed_weight_kg=batch.confirmed_weight_kg if batch is not None else None,
+        preharvest_completed_at=batch.preharvest_completed_at if batch is not None else None,
+        collecte_created=collecte_created,
+        stock_in_created=stock_in_created,
+        return_status=return_status,
+        created_at=advance.created_at,
+        updated_at=advance.updated_at,
+    )
 
 
 def _active_amount_sum():
@@ -88,6 +164,10 @@ def create_farmer_advance(db: Session, manager: User, payload) -> FarmerAdvanceR
     advance = FarmerAdvance(
         cooperative_id=cooperative_id,
         farmer_id=farmer.id,
+        batch_id=payload.batch_id,
+        parcel_id=payload.parcel_id,
+        product_id=payload.product_id,
+        source_type=(payload.source_type or "manual").strip(),
         amount_fcfa=round_metric(payload.amount_fcfa),
         reason=payload.reason.strip(),
         advance_date=payload.advance_date,
@@ -111,7 +191,7 @@ def create_farmer_advance(db: Session, manager: User, payload) -> FarmerAdvanceR
 
     db.commit()
     db.refresh(advance)
-    return FarmerAdvanceRead.model_validate(advance)
+    return _serialize_advance(db, advance)
 
 
 def update_farmer_advance(db: Session, manager: User, advance_id, payload) -> FarmerAdvanceRead:
@@ -160,7 +240,7 @@ def update_farmer_advance(db: Session, manager: User, advance_id, payload) -> Fa
 
     db.commit()
     db.refresh(advance)
-    return FarmerAdvanceRead.model_validate(advance)
+    return _serialize_advance(db, advance)
 
 
 def cancel_farmer_advance(db: Session, manager: User, advance_id) -> FarmerAdvanceRead:
@@ -171,7 +251,7 @@ def cancel_farmer_advance(db: Session, manager: User, advance_id) -> FarmerAdvan
         treasury_service.cancel_linked_farmer_advance_transaction(advance.treasury_transaction)
     db.commit()
     db.refresh(advance)
-    return FarmerAdvanceRead.model_validate(advance)
+    return _serialize_advance(db, advance)
 
 
 def list_farmer_advances_summary(
@@ -321,5 +401,5 @@ def get_farmer_advances_detail(db: Session, manager: User, farmer_id) -> FarmerA
             last_modified=last_modified,
             number_of_advances=len(advances),
         ),
-        advances=[FarmerAdvanceRead.model_validate(item) for item in advances],
+        advances=[_serialize_advance(db, item) for item in advances],
     )

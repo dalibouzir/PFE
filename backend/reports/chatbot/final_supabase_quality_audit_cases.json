@@ -1,0 +1,1056 @@
+[
+  {
+    "id": 1,
+    "type": "regression",
+    "cap": "sql",
+    "q": "Combien de membres sont inscrits dans la coopérative ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 9788.36,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLa coopérative compte 17 membre(s) inscrit(s).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritair"
+  },
+  {
+    "id": 2,
+    "type": "regression",
+    "cap": "sql",
+    "q": "Sur 90 jours, quel grade pèse le plus en volume collecté ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 10051.28,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGrade dominant: B (4750.0 kg).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4."
+  },
+  {
+    "id": 3,
+    "type": "regression",
+    "cap": "sql",
+    "q": "Quels sont les 3 jours les plus forts en collecte sur 6 mois ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 9340.55,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\n2026-04-14: 740.0 kg; 2026-04-27: 710.0 kg; 2026-04-22: 440.0 kg\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recomma"
+  },
+  {
+    "id": 4,
+    "type": "regression",
+    "cap": "sql",
+    "q": "Quel est le stock actuel par produit ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 9079.38,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLes stocks actuels (4 produits) sont:\n- Arachide: 1140.0 kg disponibles\n- Bissap: 0.0 kg disponibles\n- Mangue: 2750.0 kg disponibles\n- Mil: 1620.0 kg disponibles\n\n2. Explication "
+  },
+  {
+    "id": 5,
+    "type": "regression",
+    "cap": "sql",
+    "q": "Montant moyen des factures payées ce trimestre ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8829.95,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nMontant moyen factures payées (trimestre courant): 220188 FCFA.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recomman"
+  },
+  {
+    "id": 6,
+    "type": "regression",
+    "cap": "ml",
+    "q": "Quel lot porte le plus grand anomaly_score dans les logs ML ?",
+    "route": "HYBRID_SQL_ML",
+    "status": "PASS",
+    "latency_ms": 9642.31,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLot anomaly_score max: DEMOFP-LOT-MANG-013 (1.0000).\n\n2. Explication courte\nSignal ML: risque UNKNOWN | anomalie non; les mesures SQL restent la vérité opérationnelle.\n\n3. Recomm"
+  },
+  {
+    "id": 7,
+    "type": "regression",
+    "cap": "ml",
+    "q": "Sur 60 jours, combien de signaux ML sont classés HIGH ?",
+    "route": "HYBRID_SQL_ML",
+    "status": "PASS",
+    "latency_ms": 9016.9,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nSignaux ML HIGH (60 jours): 5.\n\n2. Explication courte\nSignal ML: risque UNKNOWN | anomalie non; les mesures SQL restent la vérité opérationnelle.\n\n3. Recommandations si pertinent"
+  },
+  {
+    "id": 8,
+    "type": "regression",
+    "cap": "reco",
+    "q": "Combien de recommandations sont marquées HIGH ?",
+    "route": "RECOMMENDATION_ONLY",
+    "status": "PASS",
+    "latency_ms": 2156.34,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "recommendations",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\n5 action(s) priorisée(s) générée(s), dont 3 priorité haute. Action principale: Isoler le lot LOT-BISS-002, renforcer le contrôle au séchage, puis reclasser les intrants dégradés."
+  },
+  {
+    "id": 9,
+    "type": "regression",
+    "cap": "reco",
+    "q": "Donne la recommandation la plus récente.",
+    "route": "RECOMMENDATION_ONLY",
+    "status": "PASS",
+    "latency_ms": 1975.73,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "recommendations",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\n5 action(s) priorisée(s) générée(s), dont 3 priorité haute. Action principale: Isoler le lot LOT-BISS-002, renforcer le contrôle au séchage, puis reclasser les intrants dégradés."
+  },
+  {
+    "id": 10,
+    "type": "regression",
+    "cap": "hybrid",
+    "q": "Quel lot est le plus critique selon les pertes SQL et le signal ML, et que faut-il faire ?",
+    "route": "HYBRID_SQL_RAG",
+    "status": "PARTIAL",
+    "latency_ms": 10673.19,
+    "reason": "hybrid layer incomplete",
+    "blocks": [
+      "summary",
+      "best_practices",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nPerte observée sur séchage du lot LOT-BISS-002: 68.0% (150.0 kg -> 48.0 kg).\n\n2. Explication courte\nMesures SQL: étape critique Sechage (68.0%). Explication RAG: Le séchage est u"
+  },
+  {
+    "id": 11,
+    "type": "regression",
+    "cap": "rag",
+    "q": "Donne une mini check-list tri + stockage pour éviter la casse.",
+    "route": "RAG_ONLY",
+    "status": "PASS",
+    "latency_ms": 2610.35,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "best_practices",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nProcédure optimale de tri pour la mangue : 1. Réalisez un pré-tri pour enlever les fruits abîmés (réduction de perte 3-5%). 2. Utilisez une table de tri avec bonne lumière nature"
+  },
+  {
+    "id": 12,
+    "type": "regression",
+    "cap": "chart",
+    "q": "Donne graphiquement notre stock actuel par produit.",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8862.87,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "chart",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique stock prêt: 4 produit(s), total 5510.0 kg. Produit principal: Mangue (2750.0 kg).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si"
+  },
+  {
+    "id": 13,
+    "type": "regression",
+    "cap": "chart",
+    "q": "Fais-moi un graphique des pertes moyennes par étape de transformation.",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8862.15,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "chart",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique des pertes moyennes par étape prêt (6 étape(s)). Étape la plus critique: séchage (36.5%).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommanda"
+  },
+  {
+    "id": 14,
+    "type": "regression",
+    "cap": "chart",
+    "q": "Affiche un graphique des pertes par produit.",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8697.47,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "chart",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique des pertes par produit prêt (4 produit(s)).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation pri"
+  },
+  {
+    "id": 15,
+    "type": "regression",
+    "cap": "unsupported",
+    "q": "Prédis-moi exactement le prix de vente du mois prochain.",
+    "route": "OUT_OF_SCOPE",
+    "status": "PASS",
+    "latency_ms": 1556.83,
+    "reason": "",
+    "blocks": [],
+    "answer": "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, transformation, recommandations et connaissances post-récolte. Je ne dispose pas de contexte fiable pour répondre à ce"
+  },
+  {
+    "id": 16,
+    "type": "regression",
+    "cap": "unsupported",
+    "q": "Donne-moi les données météo réelles de demain pour la coopérative.",
+    "route": "OUT_OF_SCOPE",
+    "status": "PASS",
+    "latency_ms": 1443.44,
+    "reason": "",
+    "blocks": [],
+    "answer": "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, transformation, recommandations et connaissances post-récolte. Je ne dispose pas de contexte fiable pour répondre à ce"
+  },
+  {
+    "id": 17,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Combien de membres actifs avons-nous actuellement ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8689.81,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLa coopérative compte 17 membre(s) inscrit(s).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritair"
+  },
+  {
+    "id": 18,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Quel grade domine les volumes collectés sur les 90 derniers jours ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8275.47,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGrade dominant: B (4750.0 kg).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritaire confirmée.\n\n4."
+  },
+  {
+    "id": 19,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Top 3 des dates de collecte les plus fortes sur six mois ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8634.45,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nClassement des membres par quantité collectée (10):\n- Awa Ndiaye (DEMOFP-M-002): 1715.0 kg\n- Mamadou Ba (DEMOFP-M-001): 1565.0 kg\n- Cheikh Diop (DEMOFP-M-003): 1560.0 kg\n- Ousman"
+  },
+  {
+    "id": 20,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Affiche les stocks courants par produit (total/réservé/net).",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 9732.65,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLes stocks actuels (4 produits) sont:\n- Arachide: 1140.0 kg disponibles\n- Bissap: 0.0 kg disponibles\n- Mangue: 2750.0 kg disponibles\n- Mil: 1620.0 kg disponibles\n\n2. Explication "
+  },
+  {
+    "id": 21,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Quelle est la moyenne des factures réglées ce trimestre ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 11403.66,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nMontant moyen factures payées (trimestre courant): 220188 FCFA.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recomman"
+  },
+  {
+    "id": 22,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Pour Arachide, disponible net et écart au seuil ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 10934.45,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nArachide: disponible net 1140.0 kg, écart seuil 240.0 kg.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation"
+  },
+  {
+    "id": 23,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Charges de ce mois versus mois précédent ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 15448.68,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nSynthèse charges/dépenses: 7 transaction(s) trésorerie pour 5557000 FCFA, 24 charge(s) globales pour 797700 FCFA.\n\n2. Explication courte\nAucune explication détaillée disponible.\n"
+  },
+  {
+    "id": 24,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Quels lots sont les plus perdants actuellement ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8352.41,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLe lot LOT-MANG-001 présente une perte de 6.0% et une efficacité de 94.0%.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucu"
+  },
+  {
+    "id": 25,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Parmi les lots ouverts, lequel est le plus ancien ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8339.3,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLot ouvert le plus ancien: DEMOFP-LOT-MANG-001 (2026-02-05).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandat"
+  },
+  {
+    "id": 26,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Quelle étape perd le plus en kg sur 30 jours ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8553.7,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nPerte observée sur séchage du lot LOT-BISS-002: 68.0% (150.0 kg -> 48.0 kg).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAu"
+  },
+  {
+    "id": 27,
+    "type": "paraphrase",
+    "cap": "sql",
+    "q": "Quelle étape a le plus faible rendement moyen ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8649.69,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nPerte observée sur séchage du lot LOT-BISS-002: 68.0% (150.0 kg -> 48.0 kg).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAu"
+  },
+  {
+    "id": 28,
+    "type": "paraphrase",
+    "cap": "ml",
+    "q": "Dans les logs ML, quel lot a l'anomaly_score maximum ?",
+    "route": "HYBRID_SQL_ML",
+    "status": "PASS",
+    "latency_ms": 8650.25,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLot anomaly_score max: DEMOFP-LOT-MANG-013 (1.0000).\n\n2. Explication courte\nSignal ML: risque UNKNOWN | anomalie non; les mesures SQL restent la vérité opérationnelle.\n\n3. Recomm"
+  },
+  {
+    "id": 29,
+    "type": "paraphrase",
+    "cap": "ml",
+    "q": "Combien de signaux HIGH ML sur les 60 derniers jours ?",
+    "route": "HYBRID_SQL_ML",
+    "status": "PASS",
+    "latency_ms": 8937.25,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nPerte observée sur séchage du lot LOT-BISS-002: 68.0% (150.0 kg -> 48.0 kg).\n\n2. Explication courte\nSignal ML: risque UNKNOWN | anomalie non; les mesures SQL restent la vérité op"
+  },
+  {
+    "id": 30,
+    "type": "paraphrase",
+    "cap": "reco",
+    "q": "Nombre de recommandations HIGH ?",
+    "route": "RECOMMENDATION_ONLY",
+    "status": "PASS",
+    "latency_ms": 2008.57,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "recommendations",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\n5 action(s) priorisée(s) générée(s), dont 3 priorité haute. Action principale: Isoler le lot LOT-BISS-002, renforcer le contrôle au séchage, puis reclasser les intrants dégradés."
+  },
+  {
+    "id": 31,
+    "type": "paraphrase",
+    "cap": "hybrid",
+    "q": "Quel lot combine forte perte SQL et signal ML, avec action prioritaire ?",
+    "route": "HYBRID_FULL",
+    "status": "PASS",
+    "latency_ms": 10309.18,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "best_practices",
+      "recommendations",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nSQL: lot LOT-BISS-002 | perte 69.3% | efficacité 30.7%.\nML: risque LOW | anomaly_score 0.0000.\nRAG: Lot DEMOFP-LOT-MANG-001 processed 1200.0 kg of Mangue through Nettoyage, Sécha"
+  },
+  {
+    "id": 32,
+    "type": "paraphrase",
+    "cap": "rag",
+    "q": "Donne des bonnes pratiques de séchage pour éviter la reprise d'humidité.",
+    "route": "RAG_ONLY",
+    "status": "PASS",
+    "latency_ms": 2380.98,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "best_practices",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLe séchage est une étape critique pour réduire les pertes post-récolte. L'humidité relative doit être maintenue entre 60-70% pour éviter la pourriture et le sur-séchage. Une temp"
+  },
+  {
+    "id": 33,
+    "type": "paraphrase",
+    "cap": "chart",
+    "q": "Visualise le stock actuel par produit.",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8421.63,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "chart",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique stock prêt: 4 produit(s), total 5510.0 kg. Produit principal: Mangue (2750.0 kg).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si"
+  },
+  {
+    "id": 34,
+    "type": "paraphrase",
+    "cap": "chart",
+    "q": "Graphique des 5 lots les moins efficaces.",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 9226.15,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "chart",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique des lots les moins efficaces prêt (5 lot(s)).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation p"
+  },
+  {
+    "id": 35,
+    "type": "paraphrase",
+    "cap": "chart",
+    "q": "Montre graphiquement les 5 lots critiques avec perte/efficacité/signal ML.",
+    "route": "HYBRID_SQL_RAG",
+    "status": "PASS",
+    "latency_ms": 9569.17,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "best_practices",
+      "chart",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique des lots critiques prêt (5 lot(s)).\n\n2. Explication courte\nMesures SQL: étape critique Sechage (68.0%). Explication RAG: Procédure optimale de tri pour la mangue : 1. R"
+  },
+  {
+    "id": 36,
+    "type": "paraphrase",
+    "cap": "chart",
+    "q": "Affiche anomaly_score ML par lot en graphique.",
+    "route": "HYBRID_SQL_ML",
+    "status": "PASS",
+    "latency_ms": 9721.32,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "chart",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique anomaly_score ML par lot prêt (5 lot(s)).\n\n2. Explication courte\nSignal ML: risque UNKNOWN | anomalie non; les mesures SQL restent la vérité opérationnelle.\n\n3. Recomma"
+  },
+  {
+    "id": 37,
+    "type": "paraphrase",
+    "cap": "unsupported",
+    "q": "Peux-tu prédire précisément le prix de vente du prochain mois ?",
+    "route": "OUT_OF_SCOPE",
+    "status": "PASS",
+    "latency_ms": 3823.32,
+    "reason": "",
+    "blocks": [],
+    "answer": "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, transformation, recommandations et connaissances post-récolte. Je ne dispose pas de contexte fiable pour répondre à ce"
+  },
+  {
+    "id": 38,
+    "type": "paraphrase",
+    "cap": "unsupported",
+    "q": "Quel membre est le plus fiable ?",
+    "route": "SQL_ONLY",
+    "status": "FAIL",
+    "latency_ms": 8777.75,
+    "reason": "unsupported not refused",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLa coopérative compte 17 membre(s) inscrit(s).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritair"
+  },
+  {
+    "id": 39,
+    "type": "fresh",
+    "cap": "sql",
+    "q": "Classe les membres par kg collectés, du plus élevé au plus faible.",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8789.27,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nClassement des membres par quantité collectée (10):\n- Awa Ndiaye (DEMOFP-M-002): 1715.0 kg\n- Mamadou Ba (DEMOFP-M-001): 1565.0 kg\n- Cheikh Diop (DEMOFP-M-003): 1560.0 kg\n- Ousman"
+  },
+  {
+    "id": 40,
+    "type": "fresh",
+    "cap": "sql",
+    "q": "En excluant les zéros, qui est le plus petit contributeur en kg cumulés ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8604.17,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nPlus petit contributeur hors zéro: mamadou diallo (420.0 kg).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommanda"
+  },
+  {
+    "id": 41,
+    "type": "fresh",
+    "cap": "sql",
+    "q": "Pour Arachide, quelle parcelle est la plus grande et chez qui ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8345.0,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nPlus grande parcelle: Pat (12.00 ha), membre Fatou Fall.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation "
+  },
+  {
+    "id": 42,
+    "type": "fresh",
+    "cap": "sql",
+    "q": "Quel est le bilan matière global ce mois-ci ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 9783.89,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nBilan matière global: entrée 12140.0 kg, sortie 11022.5 kg, perte 9.2%.\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune "
+  },
+  {
+    "id": 43,
+    "type": "fresh",
+    "cap": "ml",
+    "q": "Quels lots sont HIGH selon le ML avec anomaly_score ?",
+    "route": "HYBRID_SQL_ML",
+    "status": "PASS",
+    "latency_ms": 8553.62,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLe lot LOT-MANG-001 présente une perte de 6.0% et une efficacité de 94.0%.\n\n2. Explication courte\nSignal ML: risque LOW | anomalie non; les mesures SQL restent la vérité opératio"
+  },
+  {
+    "id": 44,
+    "type": "fresh",
+    "cap": "ml",
+    "q": "Compare le risque ML et la perte SQL pour LOT-BISS-002.",
+    "route": "HYBRID_SQL_ML",
+    "status": "PASS",
+    "latency_ms": 9578.8,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLots à risque élevé (5):\n- LOT-BISS-002: perte 69.3 % | efficacité 30.7 %\n- DEMOFP-LOT-MANG-013: perte 23.6 % | efficacité 76.4 %\n- DEMOFP-LOT-MIL-009: perte 23.2 % | efficacité "
+  },
+  {
+    "id": 45,
+    "type": "fresh",
+    "cap": "reco",
+    "q": "Pour le lot au pire taux de perte, quelle recommandation est stockée ?",
+    "route": "HYBRID_FULL",
+    "status": "PASS",
+    "latency_ms": 10252.62,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "best_practices",
+      "recommendations",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nSQL: lot LOT-BISS-002 | perte 69.3% | efficacité 30.7%.\nML: risque LOW | anomaly_score 0.0000.\nRAG: A recommendation was generated for lot DEMOFP-LOT-MANG-001 (Mangue) after loss"
+  },
+  {
+    "id": 46,
+    "type": "fresh",
+    "cap": "reco",
+    "q": "Donne les recommandations prioritaires pour réduire les pertes cette semaine.",
+    "route": "HYBRID_FULL",
+    "status": "PASS",
+    "latency_ms": 11408.08,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "best_practices",
+      "recommendations",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nSQL indisponible.\nML: risque LOW | anomaly_score 0.0000.\nRAG: Agronomic knowledge reference for Mangue in Thies, Senegal. Topic: Séchage. Source: DEMOFP-SRC-KNOW-001. [DEMOFP] Co"
+  },
+  {
+    "id": 47,
+    "type": "fresh",
+    "cap": "hybrid",
+    "q": "Quel lot a la plus forte perte, est-ce confirmé par le ML, et quelles bonnes pratiques de séchage recommandes-tu ?",
+    "route": "HYBRID_SQL_RAG",
+    "status": "PARTIAL",
+    "latency_ms": 11126.7,
+    "reason": "hybrid layer incomplete",
+    "blocks": [
+      "summary",
+      "table",
+      "best_practices",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLe séchage est une étape critique pour réduire les pertes post-récolte. L'humidité relative doit être maintenue entre 60-70% pour éviter la pourriture et le sur-séchage. Une temp"
+  },
+  {
+    "id": 48,
+    "type": "fresh",
+    "cap": "hybrid",
+    "q": "Donne les recommandations prioritaires avec les preuves SQL/ML/RAG utilisées.",
+    "route": "HYBRID_FULL",
+    "status": "PASS",
+    "latency_ms": 10026.69,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "best_practices",
+      "recommendations",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nSQL: lot LOT-BISS-002 | perte 69.3% | efficacité 30.7%.\nML: risque LOW | anomaly_score 0.0000.\nRAG: Agronomic knowledge reference for Mangue in Thies, Senegal. Topic: Séchage. So"
+  },
+  {
+    "id": 49,
+    "type": "fresh",
+    "cap": "rag",
+    "q": "Quelles bonnes pratiques appliquer avant le stockage ?",
+    "route": "RAG_ONLY",
+    "status": "PASS",
+    "latency_ms": 2401.87,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "best_practices",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nAgronomic knowledge reference for Multi-produit in Thies, Senegal. Topic: Humidité. Source: DEMOFP-SRC-KNOW-007. [DEMOFP] Mettre en place check-list humidité avant stockage.\n\n2. "
+  },
+  {
+    "id": 50,
+    "type": "fresh",
+    "cap": "rag",
+    "q": "Donne une procédure simple pour réduire les pertes pendant le tri.",
+    "route": "RAG_ONLY",
+    "status": "PASS",
+    "latency_ms": 2400.75,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "best_practices",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLe tri est essentiel pour garantir la qualité finale et réduire les pertes. Classez les mangues selon trois grades : Grade A (fruits sans défaut, lisses, couleur uniforme) - Prem"
+  },
+  {
+    "id": 51,
+    "type": "fresh",
+    "cap": "chart",
+    "q": "Fais-moi un graphique comparant stock total, stock réservé et disponible net par produit.",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8392.02,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "chart",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique comparatif stock total/réservé/disponible prêt (4 produit(s)).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune"
+  },
+  {
+    "id": 52,
+    "type": "fresh",
+    "cap": "chart",
+    "q": "Montre un graphique des recommandations par niveau de risque.",
+    "route": "HYBRID_FULL",
+    "status": "PASS",
+    "latency_ms": 9748.71,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "best_practices",
+      "chart",
+      "recommendations",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique des recommandations par niveau de risque prêt (5 recommandation(s)).\n\n2. Explication courte\nMesures SQL: étape critique Sechage (68.0%). Explication RAG: Agronomic know"
+  },
+  {
+    "id": 53,
+    "type": "fresh",
+    "cap": "chart",
+    "q": "Affiche graphiquement les lots avec les pertes les plus élevées.",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8581.01,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "chart",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique des lots à plus fortes pertes prêt (5 lot(s)). Lot le plus touché: LOT-BISS-002 (69.3%).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandat"
+  },
+  {
+    "id": 54,
+    "type": "fresh",
+    "cap": "chart",
+    "q": "Montre un graphique des pertes par produit.",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 8570.98,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "chart",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nGraphique des pertes par produit prêt (4 produit(s)).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation pri"
+  },
+  {
+    "id": 55,
+    "type": "fresh",
+    "cap": "memory",
+    "q": "Quels lots ont les pertes les plus élevées ?",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 9606.75,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLots à risque élevé (5):\n- LOT-BISS-002: perte 69.3 % | efficacité 30.7 %\n- DEMOFP-LOT-MANG-013: perte 23.6 % | efficacité 76.4 %\n- DEMOFP-LOT-MIL-009: perte 23.2 % | efficacité "
+  },
+  {
+    "id": 56,
+    "type": "fresh",
+    "cap": "memory",
+    "q": "Et le premier, pourquoi est-il critique ?",
+    "route": "HYBRID_SQL_RAG",
+    "status": "PASS",
+    "latency_ms": 9433.89,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "best_practices",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLe lot LOT-BISS-002 présente une perte de 69.3% et une efficacité de 30.7%.\n\n2. Explication courte\nExplication RAG: Le séchage est une étape critique pour réduire les pertes post"
+  },
+  {
+    "id": 57,
+    "type": "fresh",
+    "cap": "memory",
+    "q": "Quelle recommandation concrète proposes-tu pour ce lot ?",
+    "route": "HYBRID_FULL",
+    "status": "PASS",
+    "latency_ms": 10104.59,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "best_practices",
+      "recommendations",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nSQL: lot LOT-BISS-002 | perte 69.3% | efficacité 30.7%.\nML: risque LOW | anomaly_score 0.0000.\nRAG: A recommendation was generated for lot DEMOFP-LOT-MANG-001 (Mangue) after loss"
+  },
+  {
+    "id": 58,
+    "type": "fresh",
+    "cap": "memory",
+    "q": "Maintenant oublie ce lot: donne-moi le stock actuel par produit.",
+    "route": "SQL_ONLY",
+    "status": "PASS",
+    "latency_ms": 10415.65,
+    "reason": "",
+    "blocks": [
+      "summary",
+      "table",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLes stocks actuels (4 produits) sont:\n- Arachide: 1140.0 kg disponibles\n- Bissap: 0.0 kg disponibles\n- Mangue: 2750.0 kg disponibles\n- Mil: 1620.0 kg disponibles\n\n2. Explication "
+  },
+  {
+    "id": 59,
+    "type": "edge",
+    "cap": "unsupported",
+    "q": "Est-ce que je dois vendre toute la production maintenant ?",
+    "route": "OUT_OF_SCOPE",
+    "status": "PASS",
+    "latency_ms": 1411.54,
+    "reason": "",
+    "blocks": [],
+    "answer": "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, transformation, recommandations et connaissances post-récolte. Je ne dispose pas de contexte fiable pour répondre à ce"
+  },
+  {
+    "id": 60,
+    "type": "edge",
+    "cap": "unsupported",
+    "q": "Donne-moi la météo réelle de demain.",
+    "route": "OUT_OF_SCOPE",
+    "status": "PASS",
+    "latency_ms": 1467.72,
+    "reason": "",
+    "blocks": [],
+    "answer": "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, transformation, recommandations et connaissances post-récolte. Je ne dispose pas de contexte fiable pour répondre à ce"
+  },
+  {
+    "id": 61,
+    "type": "edge",
+    "cap": "unsupported",
+    "q": "Prédiction exacte du prix de vente du mois prochain ?",
+    "route": "OUT_OF_SCOPE",
+    "status": "PASS",
+    "latency_ms": 1463.81,
+    "reason": "",
+    "blocks": [],
+    "answer": "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, transformation, recommandations et connaissances post-récolte. Je ne dispose pas de contexte fiable pour répondre à ce"
+  },
+  {
+    "id": 62,
+    "type": "edge",
+    "cap": "unsupported",
+    "q": "Quel client sera le meilleur l'an prochain ?",
+    "route": "OUT_OF_SCOPE",
+    "status": "PASS",
+    "latency_ms": 1496.68,
+    "reason": "",
+    "blocks": [],
+    "answer": "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, transformation, recommandations et connaissances post-récolte. Je ne dispose pas de contexte fiable pour répondre à ce"
+  },
+  {
+    "id": 63,
+    "type": "edge",
+    "cap": "unsupported",
+    "q": "Dis-moi la vérité cachée du marché mondial.",
+    "route": "OUT_OF_SCOPE",
+    "status": "PASS",
+    "latency_ms": 1426.48,
+    "reason": "",
+    "blocks": [],
+    "answer": "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, transformation, recommandations et connaissances post-récolte. Je ne dispose pas de contexte fiable pour répondre à ce"
+  },
+  {
+    "id": 64,
+    "type": "edge",
+    "cap": "unsupported",
+    "q": "Dois-je licencier des membres pour améliorer la performance ?",
+    "route": "SQL_ONLY",
+    "status": "FAIL",
+    "latency_ms": 8114.89,
+    "reason": "unsupported not refused",
+    "blocks": [
+      "summary",
+      "sources",
+      "warnings"
+    ],
+    "answer": "1. Résultat principal\nLa coopérative compte 17 membre(s) inscrit(s).\n\n2. Explication courte\nAucune explication détaillée disponible.\n\n3. Recommandations si pertinentes\nAucune recommandation prioritair"
+  }
+]

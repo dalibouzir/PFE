@@ -11,10 +11,10 @@ def test_stock_question_routes_sql_only():
     assert "SQLAnalyticsAgent" in decision.required_agents
 
 
-def test_best_practice_question_routes_rag_only():
+def test_loss_best_practice_question_routes_hybrid_sql_rag():
     decision = router.classify("Explique comment réduire les pertes pendant le séchage.")
-    assert decision.route == AgentRoute.RAG_ONLY
-    assert decision.required_agents == ["RAGKnowledgeAgent"]
+    assert decision.route == AgentRoute.HYBRID_SQL_RAG
+    assert decision.required_agents == ["SQLAnalyticsAgent", "RAGKnowledgeAgent"]
 
 
 def test_anomaly_question_routes_hybrid_sql_ml():
@@ -35,9 +35,43 @@ def test_full_analysis_routes_hybrid_full():
     }
 
 
+def test_indirect_action_question_routes_hybrid_full():
+    decision = router.classify("On devrait faire quoi maintenant pour limiter les pertes ?")
+    assert decision.route == AgentRoute.HYBRID_FULL
+    assert "RecommendationAgent" in decision.required_agents
+
+
+def test_stock_plus_best_practice_routes_hybrid_sql_rag():
+    decision = router.classify("Donne le stock actuel et comment améliorer le séchage de la mangue.")
+    assert decision.route == AgentRoute.HYBRID_SQL_RAG
+    assert set(decision.required_agents) == {"SQLAnalyticsAgent", "RAGKnowledgeAgent"}
+
+
 def test_greeting_routes_small_talk():
     decision = router.classify("Bonjour")
     assert decision.route == AgentRoute.SMALL_TALK
+
+
+def test_salut_cava_routes_small_talk():
+    decision = router.classify("salut cava")
+    assert decision.route == AgentRoute.SMALL_TALK
+
+
+def test_capability_question_routes_small_talk():
+    decision = router.classify("tu peux m’aider à faire quoi ?")
+    assert decision.route == AgentRoute.SMALL_TALK
+
+
+def test_indirect_conseil_question_routes_non_sql_only():
+    decision = router.classify("J’ai un problème de pertes, tu me conseilles quoi ?")
+    assert decision.route in {AgentRoute.HYBRID_FULL, AgentRoute.HYBRID_SQL_RAG, AgentRoute.RECOMMENDATION_ONLY}
+    assert decision.route != AgentRoute.SQL_ONLY
+
+
+def test_referential_followup_routes_operational():
+    decision = router.classify("et celui-ci ?")
+    assert decision.route in {AgentRoute.SQL_ONLY, AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_FULL}
+    assert decision.route != AgentRoute.OUT_OF_SCOPE
 
 
 def test_unrelated_question_routes_out_of_scope():

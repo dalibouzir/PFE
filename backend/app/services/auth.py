@@ -13,9 +13,9 @@ from app.utils.exceptions import AuthenticationError, ForbiddenError
 def authenticate_user(db: Session, login_data: LoginRequest):
     user = get_user_by_email(db, login_data.email)
     if user is None or not verify_password(login_data.password, user.password_hash):
-        raise AuthenticationError("Invalid email or password.")
+        raise AuthenticationError("Email ou mot de passe invalide.")
     if user.status == UserStatus.DISABLED:
-        raise ForbiddenError("This account has been disabled.")
+        raise ForbiddenError("Ce compte est désactivé.")
     return user
 
 

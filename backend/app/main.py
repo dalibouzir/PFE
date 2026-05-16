@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.db.schema_compat import ensure_runtime_schema_compat
 from app.utils.exceptions import AppError
 
 
@@ -24,6 +25,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def startup_schema_compat():
+    ensure_runtime_schema_compat()
 
 
 @app.exception_handler(AppError)

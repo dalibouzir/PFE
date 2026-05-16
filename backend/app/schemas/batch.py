@@ -9,10 +9,17 @@ from app.schemas.base import ORMModel
 
 class BatchCreate(BaseModel):
     product_id: UUID
+    member_id: Optional[UUID] = None
+    parcel_id: Optional[UUID] = None
     creation_date: date
     initial_qty: float = Field(gt=0)
     unit: str = Field(default="kg", min_length=1, max_length=16)
     process_steps: List[str] = Field(min_length=1)
+    surface_ha: Optional[float] = Field(default=None, ge=0)
+    expected_yield_kg_per_ha: Optional[float] = Field(default=None, ge=0)
+    expected_losses_kg: Optional[float] = Field(default=None, ge=0)
+    estimated_qty_override_reason: Optional[str] = Field(default=None, max_length=1000)
+    estimated_charge_fcfa: Optional[float] = Field(default=None, ge=0)
     note: Optional[str] = Field(default=None, max_length=500)
 
 
@@ -24,17 +31,45 @@ class BatchUpdate(BaseModel):
     process_steps: Optional[List[str]] = Field(default=None, min_length=1)
     note: Optional[str] = Field(default=None, max_length=500)
 
+class PreHarvestStepStatusItem(BaseModel):
+    index: int = Field(ge=0)
+    name: str = Field(min_length=1, max_length=500)
+    status: str
+    updated_at: Optional[datetime] = None
+
+class BatchPreHarvestStepStatusesUpdate(BaseModel):
+    statuses: List[PreHarvestStepStatusItem]
+
 
 class BatchRead(ORMModel):
     id: UUID
     cooperative_id: UUID
     product_id: UUID
+    member_id: Optional[UUID]
+    parcel_id: Optional[UUID]
     code: str
     creation_date: date
     unit: str
     ordered_process_steps: List[str]
     initial_qty: float
     current_qty: float
+    surface_ha: Optional[float]
+    expected_yield_kg_per_ha: Optional[float]
+    expected_losses_kg: Optional[float]
+    estimated_qty_kg: Optional[float]
+    estimated_qty_override_reason: Optional[str]
+    estimated_charge_fcfa: Optional[float]
+    charge_approved_at: Optional[datetime]
+    charge_approved_by_user_id: Optional[UUID]
+    preharvest_activated_at: Optional[datetime]
+    preharvest_step_statuses: Optional[List[PreHarvestStepStatusItem]]
+    preharvest_completed_at: Optional[datetime]
+    confirmed_weight_kg: Optional[float]
+    collecte_input_id: Optional[UUID] = None
+    collecte_created: bool = False
+    stock_in_created: bool = False
+    postharvest_started_at: Optional[datetime]
+    status_note: Optional[str]
     initial_qty_display: float
     current_qty_display: float
     status: str
@@ -51,3 +86,13 @@ class BatchMetricsSummary(BaseModel):
     total_efficiency_pct: float
     completed_steps: int
     latest_step_id: Optional[UUID] = None
+
+
+class BatchApproveChargeResponse(BaseModel):
+    batch: BatchRead
+
+
+class BatchCompletePreHarvestRequest(BaseModel):
+    confirmed_weight_kg: float = Field(gt=0)
+    notes: Optional[str] = Field(default=None, max_length=1000)
+    collecte_date: Optional[date] = None

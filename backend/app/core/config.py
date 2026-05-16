@@ -6,7 +6,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_SQLITE_PATH = (BACKEND_DIR / "weefarm.db").resolve()
 
 
 class Settings(BaseSettings):
@@ -28,8 +27,8 @@ class Settings(BaseSettings):
         ]
     )
     
-    # Database configuration - loaded from .env or defaults
-    database_url: str = f"sqlite:///{DEFAULT_SQLITE_PATH}"
+    # Database configuration - required Supabase/PostgreSQL URL
+    database_url: str
     
     secret_key: str = "change-me-in-production"
     access_token_expire_minutes: int = 60 * 24
@@ -83,9 +82,8 @@ class Settings(BaseSettings):
     def audit_mode(self) -> Optional[str]:
         """Get audit mode from environment (dynamically checked).
         
-        None/empty = normal runtime (use database_url from .env, typically Supabase)
-        "local_test" = pytest local test mode (use SQLite)
-        "supabase_readonly" = pytest supabase readonly mode (use DATABASE_URL env var)
+        None/empty = normal runtime
+        "supabase_readonly" = pytest readonly mode on Supabase
         """
         return os.getenv("AUDIT_MODE", None)
     
@@ -95,54 +93,29 @@ class Settings(BaseSettings):
         return self.audit_mode == "supabase_readonly"
     
     @property
-    def is_local_test_mode(self) -> bool:
-        """Check if running in local test audit mode."""
-        return self.audit_mode == "local_test"
-    
-    @property
     def is_normal_mode(self) -> bool:
         """Check if running in normal (non-audit) mode."""
         return self.audit_mode is None
 
     @property
     def db_dialect(self) -> str:
-        """Get database dialect (sqlite, postgresql)."""
-        if self.is_supabase_mode:
-            return "postgresql"
-        if self.is_local_test_mode:
-            return "sqlite"
-        # Normal mode: detect from database_url
-        if self.database_url.startswith("postgresql"):
-            return "postgresql"
-        return "sqlite"
+        """Get database dialect."""
+        return "postgresql" if self.effective_database_url.startswith("postgresql") else "unknown"
 
     @property
     def effective_database_url(self) -> str:
-        """Get effective database URL based on audit mode.
-        
-        Audit modes:
-        - None (normal): Use database_url (should be Supabase PostgreSQL in .env)
-        - "local_test": Use SQLite for pytest
-        - "supabase_readonly": Use DATABASE_URL env var for pytest Supabase access
-        """
-        if self.is_local_test_mode:
-            # Pytest local test mode: use SQLite
-            return f"sqlite:///{DEFAULT_SQLITE_PATH}"
-        elif self.is_supabase_mode:
-            # Pytest Supabase readonly mode: use DATABASE_URL env var
-            env_url = os.getenv("DATABASE_URL", self.database_url)
-            if not env_url or env_url.startswith("sqlite"):
-                # If no valid Supabase URL, return the one from .env or raise later
-                return self.database_url
-            return env_url
-        else:
-            # Normal mode: use configured database_url (typically Supabase from .env)
-            return self.database_url
+        """Get effective database URL (PostgreSQL/Supabase only)."""
+        url = os.getenv("DATABASE_URL", self.database_url).strip()
+        if not url:
+            raise ValueError("DATABASE_URL is required.")
+        if not url.startswith("postgresql"):
+            raise ValueError("Only PostgreSQL/Supabase DATABASE_URL is supported.")
+        return url
 
     @property
     def has_pgvector(self) -> bool:
-        """Check if pgvector is available (Supabase mode only)."""
-        return self.is_supabase_mode
+        """Check if pgvector can be used."""
+        return True
 
     @property
     def masked_database_url(self) -> str:
@@ -151,17 +124,16 @@ class Settings(BaseSettings):
         if "@" in url:
             # PostgreSQL format: dialect+driver://user:password@host:port/db
             return url.split("@")[-1]
-        # SQLite format
-        return url.split("/")[-1]
+        return url
 
     def get_environment_metadata(self) -> dict:
         """Get comprehensive environment metadata for audits."""
         return {
             "audit_mode": self.audit_mode,
-            "database_provider": "Supabase PostgreSQL" if self.is_supabase_mode else "SQLite",
+            "database_provider": "Supabase PostgreSQL",
             "database_dialect": self.db_dialect,
             "database_url_masked": self.masked_database_url,
-            "rag_source": "Supabase pgvector" if self.is_supabase_mode else "SQLite (no pgvector)",
+            "rag_source": "Supabase pgvector",
             "pgvector_enabled": self.has_pgvector,
             "read_only_mode": self.is_supabase_mode,
         }

@@ -24,6 +24,9 @@ class FarmerAdvance(TimestampMixin, Base):
         index=True,
     )
     farmer_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("members.id", ondelete="CASCADE"), nullable=False, index=True)
+    batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("batches.id", ondelete="SET NULL"), nullable=True, index=True)
+    parcel_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("parcels.id", ondelete="SET NULL"), nullable=True, index=True)
+    product_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     amount_fcfa: Mapped[float] = mapped_column(Float, nullable=False)
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
     advance_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
@@ -33,6 +36,7 @@ class FarmerAdvance(TimestampMixin, Base):
         nullable=False,
         default=FarmerAdvanceStatus.ACTIVE,
     )
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False, default="manual")
     treasury_transaction_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         Uuid,
         ForeignKey("treasury_transactions.id", ondelete="SET NULL"),

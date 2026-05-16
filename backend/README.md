@@ -13,6 +13,18 @@ python3 -m app.seeds.seed_data
 uvicorn app.main:app --reload --port 8000
 ```
 
+Reliable launcher (works even if your current directory is wrong):
+
+```bash
+./scripts/run-api.sh
+```
+
+If you are inside `backend/backend`, run:
+
+```bash
+../scripts/run-api.sh
+```
+
 Docs:
 
 - Swagger UI: `http://127.0.0.1:8000/docs`

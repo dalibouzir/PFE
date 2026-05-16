@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_manager
 from app.db.session import get_db
-from app.schemas.batch import BatchCreate, BatchRead, BatchStatusUpdate, BatchUpdate
+from app.schemas.batch import BatchApproveChargeResponse, BatchCompletePreHarvestRequest, BatchCreate, BatchPreHarvestStepStatusesUpdate, BatchRead, BatchStatusUpdate, BatchUpdate
 from app.services import batches as batch_service
 
 
@@ -56,3 +56,39 @@ def update_batch_status(batch_id: UUID, payload: BatchStatusUpdate, db: Session 
 @router.delete("/{batch_id}", status_code=204, summary="Delete a batch.")
 def delete_batch(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
     batch_service.delete_batch(db, current_manager, batch_id)
+
+
+@router.post("/{batch_id}/approve-charge", response_model=BatchApproveChargeResponse, summary="Approve estimated pre-harvest charge and create linked advance + treasury out once.")
+def approve_batch_charge(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+    batch = batch_service.approve_estimated_charge(db, current_manager, batch_id)
+    return {"batch": batch_service.serialize_batch(batch)}
+
+
+@router.post("/{batch_id}/activate-preharvest", response_model=BatchRead, summary="Activate pre-harvest lot once (idempotent) without stock side effects.")
+def activate_preharvest(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+    batch = batch_service.activate_preharvest(db, current_manager, batch_id)
+    return batch_service.serialize_batch(batch)
+
+
+@router.post("/{batch_id}/stop-preharvest", response_model=BatchRead, summary="Stop active pre-harvest lot and return to preparation only when execution has not started.")
+def stop_preharvest(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+    batch = batch_service.stop_preharvest(db, current_manager, batch_id)
+    return batch_service.serialize_batch(batch)
+
+@router.patch("/{batch_id}/preharvest-step-statuses", response_model=BatchRead, summary="Persist active pre-harvest execution statuses.")
+def update_preharvest_step_statuses(batch_id: UUID, payload: BatchPreHarvestStepStatusesUpdate, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+    batch = batch_service.update_preharvest_step_statuses(db, current_manager, batch_id, payload.statuses)
+    return batch_service.serialize_batch(batch)
+
+
+@router.post("/{batch_id}/complete-preharvest", response_model=BatchRead, summary="Complete pre-harvest with confirmed weight and create collecte + stock in once.")
+def complete_preharvest(batch_id: UUID, payload: BatchCompletePreHarvestRequest, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+    batch = batch_service.complete_preharvest(
+        db,
+        current_manager,
+        batch_id,
+        confirmed_weight_kg=payload.confirmed_weight_kg,
+        notes=payload.notes,
+        collecte_date=payload.collecte_date,
+    )
+    return batch_service.serialize_batch(batch)

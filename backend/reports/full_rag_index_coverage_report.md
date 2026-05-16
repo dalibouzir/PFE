@@ -1,7 +1,7 @@
 # Full RAG Index Coverage Report
 
-Generated: 2026-05-08T21:48:34.889232+00:00
-Cooperative ID: 356f4e38-f4f8-4559-a005-0a9c10366d37
+Generated: 2026-05-13T10:43:59.350443+00:00
+Cooperative ID: c23f5db5-3d58-43da-9808-eb29d9aa31f9
 
 ## Reindex Summary
 - executed: no (skip)
@@ -14,127 +14,55 @@ Cooperative ID: 356f4e38-f4f8-4559-a005-0a9c10366d37
 - chunks_deleted: 0
 
 ## Totals
-- total_documents: 577
-- total_chunks: 577
+- total_documents: 4
+- total_chunks: 4
 
 ## Chunks By Module
-- process: 111
-- parcels: 109
-- collections: 76
-- ml: 52
-- lots: 51
-- finance: 47
-- recommendations: 45
-- reference: 37
-- commercial: 20
-- members: 17
-- invoices: 8
-- stocks: 4
+- other: 4
 
 ## Documents By Source Table
-- process_steps: 111
-- inputs: 76
-- pre_harvest_steps: 74
-- batches: 51
-- recommendations: 28
-- global_charges: 24
-- knowledge_chunks: 20
-- ml_model_registry: 18
-- parcels: 18
-- fields: 17
-- members: 17
-- recommendation_feedback_logs: 17
-- reference_metrics: 17
-- farmer_advances: 16
-- ml_prediction_logs: 16
-- commercial_orders: 14
-- ml_recommendation_logs: 12
-- commercial_invoices: 8
-- treasury_transactions: 7
-- commercial_catalog_products: 6
-- ml_training_runs: 6
-- stocks: 4
+- knowledge_chunks: 4
 
 ## Chunks By Source Table
-- process_steps: 111
-- inputs: 76
-- pre_harvest_steps: 74
-- batches: 51
-- recommendations: 28
-- global_charges: 24
-- knowledge_chunks: 20
-- ml_model_registry: 18
-- parcels: 18
-- fields: 17
-- members: 17
-- recommendation_feedback_logs: 17
-- reference_metrics: 17
-- farmer_advances: 16
-- ml_prediction_logs: 16
-- commercial_orders: 14
-- ml_recommendation_logs: 12
-- commercial_invoices: 8
-- treasury_transactions: 7
-- commercial_catalog_products: 6
-- ml_training_runs: 6
-- stocks: 4
+- unknown: 4
 
 ## Chunks By Chunk Type
-- input: 76
-- pre_harvest_context: 74
-- process_step_summary: 37
-- product_stage_summary: 37
-- scoped_loss_summary: 37
-- cost_context: 24
-- ml_evaluation_context: 24
-- agronomic_knowledge: 20
-- anomaly_summary: 20
-- parcel_context: 18
-- batch_summary: 17
-- benchmark_reference: 17
-- field: 17
-- lot_status_summary: 17
-- member: 17
-- operational_risk_summary: 17
-- farmer_advance: 16
-- commercial_context: 14
-- lot_recommendation_summary: 14
-- recommendation_context: 14
-- ml_prediction_context: 13
-- ml_recommendation_log: 12
-- commercial_invoice: 8
-- treasury_transaction: 7
-- catalog_product: 6
-- stock: 4
+- unknown: 4
 
 ## Chunks By Product (top 20)
-- unknown: 245
-- Arachide: 97
-- Mangue: 94
-- Mil: 72
-- Bissap: 65
-- Multi-produit: 4
+- mango: 4
 
 ## Freshness Coverage
 - <=1h: 0 (0.0%)
-- <=24h: 577 (100.0%)
+- <=24h: 0 (0.0%)
 - <=7d: 0 (0.0%)
 - >7d: 0 (0.0%)
-- missing: 0 (0.0%)
+- missing: 4 (100.0%)
 
 ## Metadata Coverage
-- source_table: 577/577 (100.0%)
-- source_id: 37/577 (6.41%)
-- chunk_type: 577/577 (100.0%)
-- product_name: 332/577 (57.54%)
-- member_name: 17/577 (2.95%)
-- batch_code: 139/577 (24.09%)
-- stage: 158/577 (27.38%)
-- order_number: 14/577 (2.43%)
-- invoice_number: 8/577 (1.39%)
-- freshness_timestamp: 577/577 (100.0%)
-- risk_level: 112/577 (19.41%)
-- severity: 0/577 (0.0%)
+- source_table: 0/4 (0.0%)
+- source_id: 0/4 (0.0%)
+- chunk_type: 0/4 (0.0%)
+- product_name: 0/4 (0.0%)
+- member_name: 0/4 (0.0%)
+- batch_code: 0/4 (0.0%)
+- stage: 4/4 (100.0%)
+- order_number: 0/4 (0.0%)
+- invoice_number: 0/4 (0.0%)
+- freshness_timestamp: 0/4 (0.0%)
+- risk_level: 0/4 (0.0%)
+- severity: 0/4 (0.0%)
 
 ## Missing Modules Not Indexed
-- None.
+- collections: no chunks found; verify source data availability and collectors.
+- commercial: no chunks found; verify source data availability and collectors.
+- finance: no chunks found; verify source data availability and collectors.
+- invoices: no chunks found; verify source data availability and collectors.
+- lots: no chunks found; verify source data availability and collectors.
+- members: no chunks found; verify source data availability and collectors.
+- ml: no chunks found; verify source data availability and collectors.
+- parcels: no chunks found; verify source data availability and collectors.
+- process: no chunks found; verify source data availability and collectors.
+- recommendations: no chunks found; verify source data availability and collectors.
+- reference: no chunks found; verify source data availability and collectors.
+- stocks: no chunks found; verify source data availability and collectors.

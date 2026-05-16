@@ -11,6 +11,19 @@ type LoginForm = {
   password: string;
 };
 
+const SMART_BANNER_ITEMS = [
+  "🌍 Piloter les coopératives",
+  "📦 Suivre les lots actifs",
+  "🔁 Pré-récolte → Post-récolte",
+  "📊 Stock réel en temps réel",
+  "🧭 Flux matière maîtrisé",
+  "⚠️ Pertes détectées",
+  "🔎 Écarts expliqués",
+  "💡 Insights par lot",
+  "🚜 Recommandations terrain",
+  "✅ Décisions basées données",
+];
+
 export function LoginExperience() {
   const router = useRouter();
   const { login } = useAuth();
@@ -42,10 +55,21 @@ export function LoginExperience() {
       <div className="wf-ambient wf-ambient-a" />
       <div className="wf-ambient wf-ambient-b" />
 
-      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-[1020px] flex-col justify-between gap-4 sm:min-h-[calc(100dvh-2.5rem)]">
-        <div className="flex flex-1 items-center">
-          <section className="unified-enter w-full overflow-hidden rounded-[22px] border border-white/25 bg-transparent shadow-[0_20px_46px_rgba(7,47,33,0.28)]">
-            <div className="grid min-h-[560px] grid-cols-1 md:min-h-[620px] md:grid-cols-[60%_40%]">
+      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-[1140px] flex-col justify-between gap-4 sm:min-h-[calc(100dvh-2.5rem)]">
+        <div className="flex flex-1 flex-col gap-3">
+          <div className="smart-banner mx-auto w-full overflow-hidden bg-transparent py-2">
+            <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#1c4a37]">WeeFarm Intelligence Opérationnelle</p>
+            <div className="marquee-track mt-2">
+              {[...SMART_BANNER_ITEMS, ...SMART_BANNER_ITEMS].map((item, index) => (
+                <span key={`${item}-${index}`} className="marquee-chip">
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-1 items-center">
+          <section className="unified-enter mx-auto w-full overflow-hidden rounded-[22px] border border-white/25 bg-transparent shadow-[0_20px_46px_rgba(7,47,33,0.28)]">
+            <div className="grid min-h-[560px] grid-cols-1 md:min-h-[620px] md:grid-cols-[58%_42%]">
               <aside className="order-2 flex h-full flex-col bg-gradient-to-r from-[#90d0b5] to-[#89c7c8] px-7 py-6 text-[#173126] sm:px-10 md:order-1">
                 <div className="flex items-start justify-between gap-4">
                   <Image
@@ -61,31 +85,28 @@ export function LoginExperience() {
                     <p className="mt-1 text-[15px] font-medium text-[#2f5f4a]">AI-first cooperative operations dashboard</p>
                   </div>
                 </div>
-
-                <div className="mt-5 max-w-[560px] space-y-3">
-                  <h1 className="text-[30px] font-bold leading-[1.14] tracking-[-0.01em] text-[#1a3d2f] sm:text-[36px]">
-                    Pilotage operations cooperative, de la collecte au bilan matiere.
-                  </h1>
-                  <p className="max-w-[520px] text-[14px] leading-relaxed text-[#23483a]/90">
-                    Interface pour administrer les cooperatives, suivre les membres, les lots, les stocks et les
-                    transformations post-recolte.
+                <div className="mt-8 max-w-[520px]">
+                  <p className="text-[30px] font-semibold leading-[1.15] tracking-[-0.01em] text-[#153629] sm:text-[36px]">
+                    WeeFarm centralise la gestion opérationnelle des coopératives agricoles.
                   </p>
+                  <p className="mt-4 text-[15px] leading-relaxed text-[#23483a]/90">
+                    Une plateforme intelligente pour suivre les membres, les lots, la collecte, les stocks, les avances producteurs,
+                    la trésorerie et la commercialisation — avec des insights IA pour mieux décider sur le terrain.
+                  </p>
+                  <Image
+                    src="/hand-plant.png"
+                    alt="Récolte et suivi terrain"
+                    width={560}
+                    height={260}
+                    className="mt-6 h-[170px] w-full rounded-2xl border border-white/40 object-cover shadow-[0_16px_28px_rgba(8,53,38,0.2)] sm:h-[210px]"
+                    priority
+                  />
                 </div>
 
-                <div className="wf-liquid-card mt-7 rounded-2xl p-5 sm:mt-8 sm:p-6">
-                  <ul className="space-y-1.5 text-[14px] font-medium leading-relaxed text-[#163529]">
-                    <li>- Gestion cooperatives et managers (admin)</li>
-                    <li>- Suivi membres, parcelles, stocks et lots (manager)</li>
-                    <li>- Transformations et analytique operationnelle</li>
-                  </ul>
-                  <p className="mt-3 text-[13px] leading-relaxed text-[#1e4335]/90">
-                    Support: <span className="font-semibold text-[#18392c]">support@wefarm.sn</span>
-                  </p>
-                </div>
               </aside>
 
               <aside className="order-1 h-full border-b border-white/35 bg-[#edf1f2]/95 px-8 py-7 md:order-2 md:border-b-0 md:border-l md:px-10">
-                <div className="mx-auto flex h-full max-w-[330px] flex-col justify-start pt-4">
+                <div className="mx-auto flex h-full max-w-[360px] flex-col justify-start pt-4">
                   <div className="flex justify-center">
                     <Image src="/logo.png" alt="Logo WeeFarm" width={180} height={70} className="h-auto w-[160px] object-contain" priority />
                   </div>
@@ -129,11 +150,15 @@ export function LoginExperience() {
                       </p>
                     )}
                   </form>
+                  <p className="mt-4 text-center text-[12px] text-[#254a3a]">
+                    Support: <span className="font-semibold text-[#1a3d2f]">support@wefarm.sn</span>
+                  </p>
 
                 </div>
               </aside>
             </div>
           </section>
+        </div>
         </div>
 
         <footer className="flex items-center justify-between gap-3 rounded-xl border border-white/20 bg-black/20 px-3 py-2 text-[11px] text-white/85 backdrop-blur-md sm:px-4 sm:text-xs">
@@ -144,6 +169,70 @@ export function LoginExperience() {
           <span className="whitespace-nowrap text-white/75">Plateforme WeeFarm</span>
         </footer>
       </div>
+      <style jsx>{`
+        .smart-banner {
+          position: relative;
+          border-radius: 1.1rem;
+          box-shadow: inset 0 1px 0 rgba(230, 255, 244, 0.22), 0 18px 34px rgba(8, 49, 35, 0.2);
+        }
+        .smart-banner::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: radial-gradient(circle at 12% 40%, rgba(191, 255, 229, 0.18), transparent 48%),
+            radial-gradient(circle at 85% 65%, rgba(145, 245, 227, 0.15), transparent 52%);
+          pointer-events: none;
+        }
+        .marquee-track {
+          position: relative;
+          display: flex;
+          width: max-content;
+          gap: 0.75rem;
+          animation: wf-marquee 24s linear infinite;
+          will-change: transform;
+          padding: 0.15rem 0.2rem 0.25rem;
+        }
+        .marquee-chip {
+          display: inline-flex;
+          align-items: center;
+          white-space: nowrap;
+          border-radius: 9999px;
+          position: relative;
+          overflow: hidden;
+          border: 1px solid rgba(168, 241, 214, 0.62);
+          background: linear-gradient(135deg, rgba(173, 244, 218, 0.24), rgba(118, 214, 197, 0.18));
+          backdrop-filter: blur(10px) saturate(145%);
+          -webkit-backdrop-filter: blur(10px) saturate(145%);
+          padding: 0.62rem 1.2rem;
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.01em;
+          color: #ffffff;
+          box-shadow: 0 12px 20px rgba(8, 48, 34, 0.2), 0 3px 7px rgba(10, 60, 41, 0.12), inset 0 1px 0 rgba(214, 255, 241, 0.5);
+          text-shadow: 0 1px 1px rgba(4, 26, 18, 0.25);
+          transform: translateZ(0);
+        }
+        .marquee-chip::before {
+          content: "";
+          position: absolute;
+          left: 10%;
+          right: 10%;
+          top: 1px;
+          height: 45%;
+          border-radius: 9999px;
+          background: linear-gradient(180deg, rgba(209, 255, 239, 0.55), rgba(209, 255, 239, 0));
+          pointer-events: none;
+        }
+        @keyframes wf-marquee {
+          from {
+            transform: translateX(0);
+          }
+          to {
+            transform: translateX(-50%);
+          }
+        }
+      `}</style>
     </main>
   );
 }

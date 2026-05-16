@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -170,6 +171,45 @@ class MLTools:
             data=data,
             sources=[source(table="ml_training_runs,ml_model_registry", label="Évaluation des modèles ML", record_count=count, source_type="ml")],
             warnings=warnings_for_empty(data["training_runs"]) if count == 0 else [],
+        )
+
+    def max_anomaly_score_lot(self) -> dict[str, Any]:
+        row = self.db.execute(
+            select(MLPredictionLog, Batch.code)
+            .join(Batch, Batch.id == MLPredictionLog.batch_id)
+            .where(Batch.cooperative_id == self.current_user.cooperative_id)
+            .order_by(MLPredictionLog.anomaly_score.desc().nullslast(), MLPredictionLog.created_at.desc())
+            .limit(1)
+        ).first()
+        if not row:
+            return tool_response(ok=True, data=[], sources=[source(table="ml_prediction_logs", label="Max anomaly score", record_count=0, source_type="ml")], warnings=["NO_ML_DATA"])
+        prediction, batch_code = row
+        return tool_response(
+            ok=True,
+            data=[{"lot_code": batch_code, "anomaly_score": float(prediction.anomaly_score or 0.0), "model_version": prediction.model_version}],
+            sources=[source(table="ml_prediction_logs", label="Max anomaly score", record_count=1, source_type="ml")],
+            warnings=[],
+        )
+
+    def ml_high_signal_count(self, days: int) -> dict[str, Any]:
+        since = datetime.now(timezone.utc) - timedelta(days=max(1, int(days)))
+        count = int(
+            self.db.scalar(
+                select(func.count(MLPredictionLog.id))
+                .join(Batch, Batch.id == MLPredictionLog.batch_id)
+                .where(
+                    Batch.cooperative_id == self.current_user.cooperative_id,
+                    MLPredictionLog.created_at >= since,
+                    MLPredictionLog.risk_level == RiskLevel.HIGH,
+                )
+            )
+            or 0
+        )
+        return tool_response(
+            ok=True,
+            data=[{"high_signal_count": count, "days": int(days)}],
+            sources=[source(table="ml_prediction_logs", label="HIGH ML signals count", record_count=1, source_type="ml")],
+            warnings=[],
         )
 
 

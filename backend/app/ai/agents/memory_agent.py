@@ -16,9 +16,18 @@ from app.models.user import User
 STAGE_PATTERN = re.compile(r"\b(cleaning|drying|sorting|packaging|nettoyage|séchage|sechage|tri|emballage)\b", re.IGNORECASE)
 PRODUCT_PATTERN = re.compile(r"\b(mango|mangue|peanut|arachide|millet|mil)\b", re.IGNORECASE)
 REFERENCE_PRONOUN_PATTERN = re.compile(
-    r"\b(ce lot|celui-ci|celui ci|ces risques|ce risque|cette étape|cette etape|ceux-ci|cela)\b",
+    r"\b(ce lot|celui-ci|celui ci|ces risques|ce risque|cette étape|cette etape|ceux-ci|cela|et celui-ci|et celui ci)\b",
     re.IGNORECASE,
 )
+FOLLOWUP_PRODUCT_PATTERN = re.compile(
+    r"^(?:et\s+)?pour\s+(?:la|le|les|l')?\s*(mangue|mango|arachide|peanut|mil|millet|bissap)\b",
+    re.IGNORECASE,
+)
+RESET_CONTEXT_PATTERN = re.compile(
+    r"\b(autre sujet|changeons de sujet|sans rapport|indépendamment|independamment|nouvelle question|hors sujet|oublie ce lot|oublier ce lot|maintenant oublie|maintenant|passons|météo|meteo|football|nba|crypto|bitcoin|film)\b",
+    re.IGNORECASE,
+)
+SMALL_TALK_PATTERN = re.compile(r"^(bonjour|salut|hello|hi|bonsoir|ok|merci|coucou|ca va|ça va)\b", re.IGNORECASE)
 
 
 class MemoryAgent(BaseAgent):
@@ -83,24 +92,21 @@ class MemoryAgent(BaseAgent):
                 skipped_current = True
                 continue
 
-            if role != "user":
-                continue
-
             extracted = self.entity_extractor.extract(content, known_batch_refs=known_refs)
             extracted_dict = extracted.as_dict()
-            if extracted_dict.get("scope") and "scope" not in entities:
+            if role == "user" and extracted_dict.get("scope") and "scope" not in entities:
                 entities["scope"] = extracted_dict.get("scope")
-            if extracted_dict.get("module") and "module" not in entities:
+            if role == "user" and extracted_dict.get("module") and "module" not in entities:
                 entities["module"] = extracted_dict.get("module")
             if extracted.batch_ref and "batch_ref" not in entities:
                 entities["batch_ref"] = extracted.batch_ref
 
             stage_match = STAGE_PATTERN.search(content)
-            if stage_match and "stage" not in entities:
+            if role == "user" and stage_match and "stage" not in entities:
                 entities["stage"] = [stage_match.group(1).lower()]
 
             product_match = PRODUCT_PATTERN.search(content)
-            if product_match and "product" not in entities:
+            if role == "user" and product_match and "product" not in entities:
                 token = product_match.group(1).lower()
                 entities["product"] = ["mango" if token in {"mangue", "mango"} else "peanut" if token in {"peanut", "arachide"} else "millet"]
 
@@ -111,8 +117,14 @@ class MemoryAgent(BaseAgent):
     def should_reuse_context(self, *, query: str, current_entities: dict, previous_entities: dict) -> bool:
         if not previous_entities:
             return False
-        lowered = str(query or "").lower()
+        lowered = str(query or "").lower().strip()
+        if SMALL_TALK_PATTERN.search(lowered):
+            return False
+        if RESET_CONTEXT_PATTERN.search(lowered):
+            return False
         if REFERENCE_PRONOUN_PATTERN.search(lowered):
+            return True
+        if FOLLOWUP_PRODUCT_PATTERN.search(lowered):
             return True
 
         current_scope = str((current_entities or {}).get("scope") or "")
@@ -120,22 +132,30 @@ class MemoryAgent(BaseAgent):
         current_module = str((current_entities or {}).get("module") or "")
         previous_module = str((previous_entities or {}).get("module") or "")
 
-        if current_scope and previous_scope and current_scope != previous_scope:
+        if current_scope and previous_scope and current_scope != "global" and previous_scope != "global" and current_scope != previous_scope:
             return False
-        if current_module and previous_module and current_module != previous_module:
+        if current_module and previous_module and current_module != "global" and previous_module != "global" and current_module != previous_module:
             return False
 
         # Reuse only when current turn is underspecified.
         has_explicit_entity = bool(
             (current_entities or {}).get("batch_ref")
             or (current_entities or {}).get("member_name")
-            or (current_entities or {}).get("product")
             or (current_entities or {}).get("stage")
         )
+        has_only_product = bool((current_entities or {}).get("product")) and not has_explicit_entity
+        if has_only_product and lowered.startswith(("pour ", "et pour ")):
+            return True
         return not has_explicit_entity
 
     def merge_entities(self, current_entities: dict, previous_entities: dict) -> dict:
         merged = dict(previous_entities)
+        previous_product = tuple(previous_entities.get("product") or [])
+        current_product = tuple((current_entities or {}).get("product") or [])
+        if current_product and previous_product and current_product != previous_product:
+            merged.pop("batch_ref", None)
+            merged.pop("batch_ref_candidate", None)
+            merged["scope"] = "post_harvest"
         for key, value in (current_entities or {}).items():
             if value in (None, "", [], {}):
                 continue

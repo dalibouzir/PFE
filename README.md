@@ -1,124 +1,73 @@
-# WeeFarm Web App
+# WeeFarm
 
-Interface web de demonstration pour WeeFarm, une plateforme de gestion de cooperatives agricoles au Senegal.
+Plateforme de support à la décision opérationnelle pour coopératives agricoles.
 
-Cette livraison est **frontend-only**: aucune logique backend, base de donnees, authentification reelle ou integration IA serveur.
+## Canonical Runtime Architecture (FastAPI-first)
 
-## Etat actuel du repo
+Ce depot est positionne **FastAPI-first** pour le PFE:
 
-L'application Next.js tourne a la racine du repository.
+- Frontend: `Next.js` (App Router) dans `app/`, `components/`, `hooks/`, `lib/api`.
+- Backend canonique: `FastAPI` dans `backend/app/`.
+- Data layer canonique: `SQLAlchemy + Alembic` dans `backend/app/models` et `backend/alembic`.
+- Base cible: `PostgreSQL`/`pgvector` (Supabase en cible cloud).
+- Deploiement backend: image Docker via `backend/Dockerfile`.
+- IA metier: RAG, ML, chatbot/agent orchestration dans `backend/app/ai` et `backend/app/services`.
 
-- Point d'entree: `app/` (App Router)
-- Root Directory Vercel: vide (ou `.`)
-- Commandes: `npm run dev`, `npm run build`, `npm run start`
+Références:
+- `backend/app/main.py`
+- `backend/app/api/router.py`
+- `backend/app/models/`
+- `backend/alembic/versions/`
+- `backend/alembic/versions/3f4c2a1b9d7e_add_rag_pgvector_tables.py`
+- `backend/Dockerfile`
+- `backend/scripts/container-start.sh`
 
-## Perimetre fonctionnel implemente
+## Archived Legacy Components (Not Canonical Runtime)
 
-### Espace Admin (plateforme)
-- Tableau de bord
-- Cooperatives
-- Managers
-- Parametres
+Les composants Express/Prisma historiques ont ete archives ici:
 
-### Espace Manager (cooperative)
-- Tableau de bord
-- Membres
-- Parcelles
-- Produits
-- Inputs
-- Stocks
-- Lots
-- Transformations
-- Analytique
-- Assistant IA (UI mock uniquement)
-- Parametres
+- `_archive/legacy-express-prisma/src/`
+- `_archive/legacy-express-prisma/prisma/`
 
-## Assistant IA (frontend-only)
+Voir aussi:
+- `_archive/legacy-express-prisma/src/LEGACY_SCOPE.md`
+- `_archive/legacy-express-prisma/prisma/LEGACY_SCOPE.md`
 
-La page `/manager/assistant-ia` est une interface de chat de demonstration:
-- zone conversation
-- suggestions de prompts
-- etat vide
-- historique mock
-- reponses mock coherentes avec les donnees operationnelles
+Note importante: le dossier `database/` est conserve uniquement pour le bootstrap local `docker-compose` (mount de `database/schema.sql` et `database/seed.sql`). Il ne represente pas le schema de production canonique, qui est `Supabase/PostgreSQL + SQLAlchemy/Alembic` via `backend/alembic/`.
 
-Non inclus:
-- appels LLM
-- RAG serveur
-- recommandations/predictions reelles
-- API backend
+## Quick Start
 
-## Donnees mock
-
-Les donnees sont locales et coherentes entre les ecrans:
-- regions/zones: Thies, Louga, Casamance
-- produits: mangue, arachide, mil
-- lots, stocks, pertes, statuts, transformations
-
-Fichier principal:
-- `lib/mock-data.ts`
-
-## Structure du projet
-
-- `app/` routes Next.js (App Router)
-- `components/` composants UI
-- `lib/` helpers + mock data
-- `public/` assets statiques
-- `ai/`, `database/`, `docs/`, `docker/` ressources projet hors runtime frontend
-
-## Routes principales
-
-- `/admin/dashboard`
-- `/admin/cooperatives`
-- `/admin/managers`
-- `/admin/parametres`
-- `/manager/dashboard`
-- `/manager/membres`
-- `/manager/parcelles`
-- `/manager/produits`
-- `/manager/inputs`
-- `/manager/stocks`
-- `/manager/lots`
-- `/manager/transformations`
-- `/manager/analytique`
-- `/manager/assistant-ia`
-- `/manager/parametres`
-
-## Lancer en local
-
-Depuis la racine du repo:
+### Frontend
 
 ```bash
 npm install
 npm run dev
 ```
 
-Application disponible sur:
-- `http://localhost:3001`
+Frontend disponible sur `http://localhost:3001`.
 
-Build production:
+### Backend (FastAPI)
 
 ```bash
-npm run build
-npm run start
+cd backend
+python3 -m pip install -r requirements.txt
+cp .env.example .env
+alembic upgrade head
+python3 -m app.seeds.seed_data
+uvicorn app.main:app --reload --port 8000
 ```
 
-## Deploiement Vercel
+Docs API:
+- Swagger: `http://127.0.0.1:8000/docs`
+- ReDoc: `http://127.0.0.1:8000/redoc`
 
-1. Importer `dalibouzir/PFE`
-2. Detecter automatiquement `Next.js`
-3. Verifier les commandes:
-   - Install: `npm install`
-   - Build: `npm run build`
-4. **Root Directory**: vide (ou `.`)
-5. Deploy
+## Functional Scope Implemented
 
-## Notes techniques
-
-- UI en francais, concise, dashboard-first
-- Responsive desktop + mobile
-- Donnees locales realistes pour demo PFE
+- Gestion coopérative: membres, parcelles, intrants/collectes, stocks.
+- Flux de transformation: lots, étapes process, pertes/efficacité.
+- Finance/commercial: avances, trésorerie, catalogue, commandes, factures.
+- IA opérationnelle: chatbot (SQL/RAG/HYBRID + voie agentique), RAG pgvector, ML et recommandations.
 
 ## License
 
-Usage academique / demo PFE.
+Usage académique / demo PFE.

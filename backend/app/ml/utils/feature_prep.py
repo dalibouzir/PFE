@@ -51,6 +51,21 @@ PREDICTIVE_REGRESSION_FEATURES = [
     "days_since_previous_batch",
     "rolling_loss_last_n_batches",
     "rolling_efficiency_last_n_batches",
+    "weather_available",
+    "weather_avg_humidity_window",
+    "weather_max_humidity_window",
+    "weather_avg_temperature_window",
+    "weather_avg_dew_point_window",
+    "weather_avg_wind_speed_window",
+    "weather_avg_surface_pressure_window",
+    "weather_rain_flag_window",
+    "weather_precip_total_window",
+    "weather_is_forecast",
+    "weather_is_observed",
+    "weather_product_humidity_interaction",
+    "weather_stage_humidity_interaction",
+    "weather_season_humidity_interaction",
+    "weather_feature_timestamp_ordinal",
     "date_ordinal",
 ]
 
@@ -184,6 +199,14 @@ def _derive_predictive_enrichment(working: pd.DataFrame) -> pd.DataFrame:
         working["loss_volatility_product_stage"] = 0.0
     if "days_since_previous_batch" not in working.columns:
         working["days_since_previous_batch"] = 0.0
+    if "weather_available" not in working.columns:
+        working["weather_available"] = 0.0
+    if "weather_rain_flag_window" not in working.columns:
+        working["weather_rain_flag_window"] = 0.0
+    if "weather_is_forecast" not in working.columns:
+        working["weather_is_forecast"] = 0.0
+    if "weather_is_observed" not in working.columns:
+        working["weather_is_observed"] = 0.0
 
     # Ensure all required predictive columns exist with safe defaults.
     for feature in PREDICTIVE_REGRESSION_FEATURES:
@@ -206,7 +229,8 @@ def prepare_feature_frame(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Lis
     working = df.copy()
     working = _derive_predictive_enrichment(working)
     working["date_ordinal"] = pd.to_datetime(working["date"]).dt.date.apply(lambda item: item.toordinal())
-    working = working.drop(columns=["date"])
+    drop_cols = [col for col in ("date", "weather_feature_timestamp") if col in working.columns]
+    working = working.drop(columns=drop_cols)
 
     feature_sets = {
         "predictive_regression_features": list(PREDICTIVE_REGRESSION_FEATURES),
@@ -215,3 +239,10 @@ def prepare_feature_frame(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Lis
     }
 
     return working, feature_sets
+    if "weather_feature_timestamp_ordinal" not in working.columns:
+        if "weather_feature_timestamp" in working.columns:
+            weather_ts = pd.to_datetime(working["weather_feature_timestamp"], errors="coerce", utc=True)
+            weather_ordinal = weather_ts.dt.date.apply(lambda item: item.toordinal() if pd.notna(item) else np.nan)
+            working["weather_feature_timestamp_ordinal"] = pd.to_numeric(weather_ordinal, errors="coerce")
+        else:
+            working["weather_feature_timestamp_ordinal"] = np.nan

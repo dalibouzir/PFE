@@ -18,3 +18,11 @@ tsconfig.tsbuildinfo
 backend/.pytest_cache/
 **/__pycache__/
 *.pyc
+
+# Local virtualenvs
+.venv*/
+
+# Generated backend artifacts
+backend/artifacts/versions/
+backend/artifacts/screenshots/
+backend/artifacts/prediction_logs.jsonl

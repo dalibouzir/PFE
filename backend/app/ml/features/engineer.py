@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.ml.weather_features import build_weather_feature_frame
 from app.ml.utils.stage_normalization import normalize_stage
 from app.models.batch import Batch
 from app.models.process_step import ProcessStep
@@ -28,6 +29,7 @@ SEASON_MAP = {
 class FeatureSet:
     features: pd.DataFrame
     raw: List[Dict]
+    diagnostics: Dict[str, Any] | None = None
 
 
 def _season_for_month(month: int) -> str:
@@ -73,7 +75,7 @@ def fetch_process_records(db: Session) -> List[Dict]:
     return records
 
 
-def build_features(db: Session, batch_id: Optional[str] = None) -> FeatureSet:
+def build_features(db: Session, batch_id: Optional[str] = None, *, include_weather: bool = False) -> FeatureSet:
     records = fetch_process_records(db)
     if not records:
         return FeatureSet(features=pd.DataFrame(), raw=[])
@@ -239,6 +241,22 @@ def build_features(db: Session, batch_id: Optional[str] = None) -> FeatureSet:
 
     df = df.fillna(fill_defaults)
 
+    if include_weather:
+        weather = build_weather_feature_frame(df, event_time_col="date", cooperative_time_col="cooperative_id")
+        weather_frame = weather.frame
+        if len(weather_frame) == len(df):
+            df = pd.concat([df.reset_index(drop=True), weather_frame.reset_index(drop=True)], axis=1)
+        else:
+            # Defensive fallback: preserve core pipeline even if weather alignment fails.
+            df["weather_available"] = 0
+        humidity_base = pd.to_numeric(df.get("weather_avg_humidity_window"), errors="coerce").fillna(0.0)
+        product_factor = df["product"].astype(str).str.lower().map({"mangue": 1.15, "mango": 1.15, "bissap": 1.1, "mil": 0.95, "millet": 0.95, "arachide": 1.0, "peanut": 1.0}).fillna(1.0)
+        stage_factor = df["stage_canonical"].map({"drying": 1.2, "sorting": 1.05, "cleaning": 0.9, "packaging": 0.95}).fillna(1.0)
+        season_factor = df["season"].map({"rainy": 1.2, "hot": 0.95, "dry": 0.9}).fillna(1.0)
+        df["weather_product_humidity_interaction"] = humidity_base * product_factor
+        df["weather_stage_humidity_interaction"] = humidity_base * stage_factor
+        df["weather_season_humidity_interaction"] = humidity_base * season_factor
+
     if batch_id:
         df = df[df["batch_id"].astype(str) == str(batch_id)]
 
@@ -279,11 +297,40 @@ def build_features(db: Session, batch_id: Optional[str] = None) -> FeatureSet:
         "days_since_previous_batch",
         "rolling_loss_last_n_batches",
         "rolling_efficiency_last_n_batches",
+        "weather_available",
+        "weather_feature_timestamp",
+        "weather_avg_humidity_window",
+        "weather_max_humidity_window",
+        "weather_avg_temperature_window",
+        "weather_avg_dew_point_window",
+        "weather_avg_wind_speed_window",
+        "weather_avg_surface_pressure_window",
+        "weather_rain_flag_window",
+        "weather_precip_total_window",
+        "weather_is_forecast",
+        "weather_is_observed",
+        "weather_product_humidity_interaction",
+        "weather_stage_humidity_interaction",
+        "weather_season_humidity_interaction",
         "loss_pct",
         "efficiency_pct",
     ]
 
+    for col in feature_columns:
+        if col not in df.columns:
+            df[col] = 0.0
     feature_df = df[feature_columns].copy()
     raw = feature_df.to_dict(orient="records")
 
-    return FeatureSet(features=feature_df, raw=raw)
+    diagnostics: Dict[str, Any] = {"weather": {"enabled": bool(include_weather), "row_count": int(len(feature_df))}}
+    if include_weather:
+        weather_available = pd.to_numeric(feature_df["weather_available"], errors="coerce").fillna(0).astype(int)
+        diagnostics["weather"].update(
+            {
+                "rows_with_weather": int(weather_available.sum()),
+                "rows_without_weather": int(len(weather_available) - int(weather_available.sum())),
+                "coverage_rate": float(weather_available.mean()) if len(weather_available) else 0.0,
+                "leakage_violations": int(weather.leakage_violations),
+            }
+        )
+    return FeatureSet(features=feature_df, raw=raw, diagnostics=diagnostics)

@@ -11,6 +11,10 @@ from app.schemas.base import ORMModel
 
 class FarmerAdvanceCreate(BaseModel):
     farmer_id: UUID
+    batch_id: Optional[UUID] = None
+    parcel_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
+    source_type: Optional[str] = Field(default="manual", max_length=64)
     amount_fcfa: float = Field(gt=0)
     reason: str = Field(min_length=1, max_length=255)
     advance_date: date
@@ -29,12 +33,23 @@ class FarmerAdvanceRead(ORMModel):
     id: UUID
     cooperative_id: UUID
     farmer_id: UUID
+    batch_id: Optional[UUID]
+    parcel_id: Optional[UUID]
+    product_id: Optional[UUID]
     amount_fcfa: float
     reason: str
     advance_date: date
     note: Optional[str]
     status: str
+    source_type: str
     treasury_transaction_id: Optional[UUID]
+    batch_code: Optional[str] = None
+    product_name: Optional[str] = None
+    confirmed_weight_kg: Optional[float] = None
+    preharvest_completed_at: Optional[datetime] = None
+    collecte_created: bool = False
+    stock_in_created: bool = False
+    return_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

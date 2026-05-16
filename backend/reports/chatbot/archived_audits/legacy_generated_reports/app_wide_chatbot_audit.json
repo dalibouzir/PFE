@@ -1,0 +1,2120 @@
+{
+  "generated_at": "2026-05-13T10:43:09.794379+00:00",
+  "audit_name": "app_wide_chatbot_audit",
+  "baseline_reference": "chatbot_system_audit_baseline_v1",
+  "total_test_count": 46,
+  "coverage_matrix": {
+    "AI recommendations": {
+      "list": "N/A",
+      "detail": "PASS",
+      "count_summary": "N/A",
+      "filter": "N/A",
+      "ambiguous": "PARTIAL",
+      "empty_missing": "PARTIAL",
+      "high_risk": "PASS",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "ML risk/anomaly insights": {
+      "list": "PARTIAL",
+      "detail": "N/A",
+      "count_summary": "N/A",
+      "filter": "N/A",
+      "ambiguous": "N/A",
+      "empty_missing": "PASS",
+      "high_risk": "PARTIAL",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "RAG explanations/best practices": {
+      "list": "PASS",
+      "detail": "PASS",
+      "count_summary": "N/A",
+      "filter": "N/A",
+      "ambiguous": "N/A",
+      "empty_missing": "N/A",
+      "high_risk": "PASS",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "collections/inputs": {
+      "list": "PASS",
+      "detail": "N/A",
+      "count_summary": "PASS",
+      "filter": "PASS",
+      "ambiguous": "PASS",
+      "empty_missing": "PASS",
+      "high_risk": "N/A",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "efficiency analysis": {
+      "list": "N/A",
+      "detail": "N/A",
+      "count_summary": "N/A",
+      "filter": "N/A",
+      "ambiguous": "N/A",
+      "empty_missing": "N/A",
+      "high_risk": "PASS",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "loss analysis": {
+      "list": "N/A",
+      "detail": "PASS",
+      "count_summary": "N/A",
+      "filter": "N/A",
+      "ambiguous": "N/A",
+      "empty_missing": "N/A",
+      "high_risk": "N/A",
+      "low_risk": "PASS",
+      "multi_turn": "N/A"
+    },
+    "lots/batches": {
+      "list": "PASS",
+      "detail": "PASS",
+      "count_summary": "N/A",
+      "filter": "N/A",
+      "ambiguous": "N/A",
+      "empty_missing": "N/A",
+      "high_risk": "PASS",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "material balance": {
+      "list": "N/A",
+      "detail": "PASS",
+      "count_summary": "N/A",
+      "filter": "N/A",
+      "ambiguous": "N/A",
+      "empty_missing": "N/A",
+      "high_risk": "N/A",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "members/farmers": {
+      "list": "PARTIAL",
+      "detail": "PARTIAL",
+      "count_summary": "PARTIAL",
+      "filter": "PARTIAL",
+      "ambiguous": "PASS",
+      "empty_missing": "PARTIAL",
+      "high_risk": "N/A",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "memory/context": {
+      "list": "PASS",
+      "detail": "N/A",
+      "count_summary": "N/A",
+      "filter": "N/A",
+      "ambiguous": "N/A",
+      "empty_missing": "N/A",
+      "high_risk": "PARTIAL",
+      "low_risk": "N/A",
+      "multi_turn": "PARTIAL"
+    },
+    "parcels/cultures": {
+      "list": "PASS",
+      "detail": "PASS",
+      "count_summary": "PASS",
+      "filter": "PASS",
+      "ambiguous": "N/A",
+      "empty_missing": "N/A",
+      "high_risk": "N/A",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "post-harvest process steps": {
+      "list": "N/A",
+      "detail": "N/A",
+      "count_summary": "N/A",
+      "filter": "PASS",
+      "ambiguous": "N/A",
+      "empty_missing": "N/A",
+      "high_risk": "PASS",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "pre-harvest steps": {
+      "list": "PASS",
+      "detail": "N/A",
+      "count_summary": "PASS",
+      "filter": "N/A",
+      "ambiguous": "N/A",
+      "empty_missing": "N/A",
+      "high_risk": "N/A",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "route-type": {
+      "list": "N/A",
+      "detail": "N/A",
+      "count_summary": "N/A",
+      "filter": "N/A",
+      "ambiguous": "N/A",
+      "empty_missing": "N/A",
+      "high_risk": "N/A",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    },
+    "stocks": {
+      "list": "PASS",
+      "detail": "PASS",
+      "count_summary": "N/A",
+      "filter": "PASS",
+      "ambiguous": "N/A",
+      "empty_missing": "PASS",
+      "high_risk": "PASS",
+      "low_risk": "N/A",
+      "multi_turn": "N/A"
+    }
+  },
+  "summary": {
+    "totals": {
+      "PASS": 35,
+      "PARTIAL": 11,
+      "FAIL": 0,
+      "TOTAL": 46
+    },
+    "route_status": {
+      "exact_match": 45,
+      "compatible_route": 1
+    },
+    "results_by_module": {
+      "AI recommendations": {
+        "PASS": 2,
+        "PARTIAL": 1,
+        "FAIL": 0
+      },
+      "ML risk/anomaly insights": {
+        "PASS": 1,
+        "PARTIAL": 3,
+        "FAIL": 0
+      },
+      "RAG explanations/best practices": {
+        "PASS": 4,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "collections/inputs": {
+        "PASS": 5,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "efficiency analysis": {
+        "PASS": 1,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "loss analysis": {
+        "PASS": 1,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "lots/batches": {
+        "PASS": 3,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "material balance": {
+        "PASS": 1,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "members/farmers": {
+        "PASS": 1,
+        "PARTIAL": 5,
+        "FAIL": 0
+      },
+      "memory/context": {
+        "PASS": 2,
+        "PARTIAL": 2,
+        "FAIL": 0
+      },
+      "parcels/cultures": {
+        "PASS": 4,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "post-harvest process steps": {
+        "PASS": 2,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "pre-harvest steps": {
+        "PASS": 2,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "route-type": {
+        "PASS": 2,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "stocks": {
+        "PASS": 4,
+        "PARTIAL": 0,
+        "FAIL": 0
+      }
+    },
+    "results_by_route_type": {
+      "HYBRID_FULL": {
+        "PASS": 1,
+        "PARTIAL": 1,
+        "FAIL": 0
+      },
+      "HYBRID_RAG_RECOMMENDATION": {
+        "PASS": 1,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "HYBRID_SQL_ML": {
+        "PASS": 1,
+        "PARTIAL": 5,
+        "FAIL": 0
+      },
+      "HYBRID_SQL_RAG": {
+        "PASS": 3,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "RAG_ONLY": {
+        "PASS": 3,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "SQL_ONLY": {
+        "PASS": 26,
+        "PARTIAL": 5,
+        "FAIL": 0
+      }
+    },
+    "results_by_data_state": {
+      "ambiguous": {
+        "PASS": 2,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "high_risk": {
+        "PASS": 8,
+        "PARTIAL": 5,
+        "FAIL": 0
+      },
+      "low_risk": {
+        "PASS": 1,
+        "PARTIAL": 0,
+        "FAIL": 0
+      },
+      "missing": {
+        "PASS": 3,
+        "PARTIAL": 2,
+        "FAIL": 0
+      },
+      "normal": {
+        "PASS": 21,
+        "PARTIAL": 4,
+        "FAIL": 0
+      }
+    },
+    "failure_categories": [
+      {
+        "category": "CONTENT_SEMANTIC_ERROR",
+        "count": 5
+      },
+      {
+        "category": "CONTRADICTION_NOT_EXPLAINED",
+        "count": 5
+      },
+      {
+        "category": "UNSUPPORTED_RECOMMENDATION",
+        "count": 1
+      }
+    ],
+    "explained_contradiction_warnings": [
+      {
+        "case_id": "rec-01",
+        "module": "AI recommendations"
+      },
+      {
+        "case_id": "rec-02",
+        "module": "AI recommendations"
+      }
+    ],
+    "unresolved_contradiction_warnings": [
+      {
+        "case_id": "ml-01",
+        "module": "ML risk/anomaly insights"
+      },
+      {
+        "case_id": "ml-02",
+        "module": "ML risk/anomaly insights"
+      },
+      {
+        "case_id": "ml-03",
+        "module": "ML risk/anomaly insights"
+      },
+      {
+        "case_id": "mem-02",
+        "module": "memory/context"
+      },
+      {
+        "case_id": "mem-03",
+        "module": "memory/context"
+      }
+    ],
+    "uncovered_areas": [
+      {
+        "module": "AI recommendations",
+        "uncovered_or_weak": [
+          "list",
+          "count_summary",
+          "filter",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "ML risk/anomaly insights",
+        "uncovered_or_weak": [
+          "detail",
+          "count_summary",
+          "filter",
+          "ambiguous",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "RAG explanations/best practices",
+        "uncovered_or_weak": [
+          "count_summary",
+          "filter",
+          "ambiguous",
+          "empty_missing",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "collections/inputs",
+        "uncovered_or_weak": [
+          "detail",
+          "high_risk",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "efficiency analysis",
+        "uncovered_or_weak": [
+          "list",
+          "detail",
+          "count_summary",
+          "filter",
+          "ambiguous",
+          "empty_missing",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "loss analysis",
+        "uncovered_or_weak": [
+          "list",
+          "count_summary",
+          "filter",
+          "ambiguous",
+          "empty_missing",
+          "high_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "lots/batches",
+        "uncovered_or_weak": [
+          "count_summary",
+          "filter",
+          "ambiguous",
+          "empty_missing",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "material balance",
+        "uncovered_or_weak": [
+          "list",
+          "count_summary",
+          "filter",
+          "ambiguous",
+          "empty_missing",
+          "high_risk",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "members/farmers",
+        "uncovered_or_weak": [
+          "high_risk",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "memory/context",
+        "uncovered_or_weak": [
+          "detail",
+          "count_summary",
+          "filter",
+          "ambiguous",
+          "empty_missing",
+          "low_risk"
+        ]
+      },
+      {
+        "module": "parcels/cultures",
+        "uncovered_or_weak": [
+          "ambiguous",
+          "empty_missing",
+          "high_risk",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "post-harvest process steps",
+        "uncovered_or_weak": [
+          "list",
+          "detail",
+          "count_summary",
+          "ambiguous",
+          "empty_missing",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "pre-harvest steps",
+        "uncovered_or_weak": [
+          "detail",
+          "filter",
+          "ambiguous",
+          "empty_missing",
+          "high_risk",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "route-type",
+        "uncovered_or_weak": [
+          "list",
+          "detail",
+          "count_summary",
+          "filter",
+          "ambiguous",
+          "empty_missing",
+          "high_risk",
+          "low_risk",
+          "multi_turn"
+        ]
+      },
+      {
+        "module": "stocks",
+        "uncovered_or_weak": [
+          "count_summary",
+          "ambiguous",
+          "low_risk",
+          "multi_turn"
+        ]
+      }
+    ],
+    "suspected_root_causes": [
+      {
+        "failure_category": "CONTENT_SEMANTIC_ERROR",
+        "count": 5,
+        "suspected_root_cause": "CONTENT_SEMANTIC_ERROR"
+      },
+      {
+        "failure_category": "CONTRADICTION_NOT_EXPLAINED",
+        "count": 5,
+        "suspected_root_cause": "Contradiction SQL/ML non explicitée."
+      },
+      {
+        "failure_category": "UNSUPPORTED_RECOMMENDATION",
+        "count": 1,
+        "suspected_root_cause": "Recommandation prioritaire sans base de preuve suffisante."
+      }
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "mbr-01",
+      "module": "members/farmers",
+      "question": "Liste les membres de la coopérative.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "list"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "CONTENT_SEMANTIC_ERROR"
+      ],
+      "answer_preview": "1. Résultat principal La coopérative compte 3 membre(s) inscrit(s). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members 5. Avertisseme"
+    },
+    {
+      "case_id": "mbr-02",
+      "module": "members/farmers",
+      "question": "Combien de membres sont enregistrés ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "count_summary"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "CONTENT_SEMANTIC_ERROR"
+      ],
+      "answer_preview": "1. Résultat principal La coopérative compte 3 membre(s) inscrit(s). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members 5. Avertisseme"
+    },
+    {
+      "case_id": "mbr-03",
+      "module": "members/farmers",
+      "question": "Donne les détails du membre Mamadou Ba.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "detail"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "CONTENT_SEMANTIC_ERROR"
+      ],
+      "answer_preview": "1. Résultat principal La coopérative compte 1 membre(s) inscrit(s). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members 5. Avertisseme"
+    },
+    {
+      "case_id": "mbr-04",
+      "module": "members/farmers",
+      "question": "Membres de la filière mangue.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "filter"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "CONTENT_SEMANTIC_ERROR"
+      ],
+      "answer_preview": "1. Résultat principal La coopérative compte 3 membre(s) inscrit(s). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members 5. Avertisseme"
+    },
+    {
+      "case_id": "mbr-05",
+      "module": "members/farmers",
+      "question": "Qui sont les meilleurs ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "ambiguous",
+      "scenarios": [
+        "ambiguous"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "Les données opérationnelles sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucune source opérationnelle SQL n’a été trouvée pour cette réponse.",
+        "Les données opérationnelles sont incomplètes."
+      ],
+      "warning_codes": [
+        "INCOMPLETE_SQL_DATA",
+        "MISSING_DATA_SIGNALLED",
+        "MISSING_SQL_SOURCE",
+        "SQL_DATA_INCOMPLETE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les données disponibles ne permettent pas de confirmer ce point. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées 5. Avertis"
+    },
+    {
+      "case_id": "mbr-06",
+      "module": "members/farmers",
+      "question": "Donne les infos du membre XYZ-ABSENT.",
+      "route_type": "SQL_ONLY",
+      "data_state": "missing",
+      "scenarios": [
+        "empty_missing"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "Les données opérationnelles sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucune donnée opérationnelle exploitable n’a été trouvée pour cette recherche.",
+        "Une source attendue est présente mais sans données exploitables.",
+        "Les données opérationnelles sont incomplètes."
+      ],
+      "warning_codes": [
+        "INCOMPLETE_SQL_DATA",
+        "MISSING_DATA_SIGNALLED",
+        "NO_SQL_DATA",
+        "SOURCE_DATA_EMPTY",
+        "SQL_DATA_INCOMPLETE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "CONTENT_SEMANTIC_ERROR"
+      ],
+      "answer_preview": "1. Résultat principal La coopérative compte 0 membre(s) inscrit(s). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members 5. Avertisseme"
+    },
+    {
+      "case_id": "par-01",
+      "module": "parcels/cultures",
+      "question": "Liste les parcelles enregistrées.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "list"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Parcelles enregistrées (3): - PARCELLE-AN-01: 1.10 ha - PARCELLE-ID-01: 0.90 ha - PARCELLE-MB-01: 1.40 ha 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire c"
+    },
+    {
+      "case_id": "par-02",
+      "module": "parcels/cultures",
+      "question": "Détaille la parcelle PARCELLE-MB-01.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "detail"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les données disponibles ne permettent pas de confirmer ce point. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: par"
+    },
+    {
+      "case_id": "par-03",
+      "module": "parcels/cultures",
+      "question": "Combien de parcelles suivies ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "count_summary"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal La coopérative compte 3 parcelle(s) enregistrée(s). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members - SQL: p"
+    },
+    {
+      "case_id": "par-04",
+      "module": "parcels/cultures",
+      "question": "Parcelles de la culture arachide.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "filter"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les données disponibles ne permettent pas de confirmer ce point. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: par"
+    },
+    {
+      "case_id": "par-05",
+      "module": "pre-harvest steps",
+      "question": "Quelles étapes pré-récolte sont en attente ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "list"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les données disponibles ne permettent pas de confirmer ce point. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: par"
+    },
+    {
+      "case_id": "par-06",
+      "module": "pre-harvest steps",
+      "question": "Quel est le résumé pré-récolte des parcelles ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "count_summary"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les données disponibles ne permettent pas de confirmer ce point. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: par"
+    },
+    {
+      "case_id": "col-01",
+      "module": "collections/inputs",
+      "question": "Quelle quantité a été collectée aujourd’hui ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "count_summary"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Quantité collectée observée: 650.0 kg. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: inputs 5. Avertissements si n"
+    },
+    {
+      "case_id": "col-02",
+      "module": "collections/inputs",
+      "question": "Quels producteurs ont livré le plus cette semaine ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "filter",
+        "list"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal La coopérative compte 3 membre(s) inscrit(s). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members 5. Avertisseme"
+    },
+    {
+      "case_id": "col-03",
+      "module": "collections/inputs",
+      "question": "Répartition des collectes par grade.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "summary"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Quantité collectée observée: 2200.0 kg. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: inputs 5. Avertissements si "
+    },
+    {
+      "case_id": "col-04",
+      "module": "collections/inputs",
+      "question": "Collectes du produit mangue sur 2020-01-01 à 2020-01-02.",
+      "route_type": "SQL_ONLY",
+      "data_state": "missing",
+      "scenarios": [
+        "empty_missing",
+        "filter"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "Les données opérationnelles sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucune donnée opérationnelle exploitable n’a été trouvée pour cette recherche.",
+        "Une source attendue est présente mais sans données exploitables.",
+        "Les données opérationnelles sont incomplètes."
+      ],
+      "warning_codes": [
+        "INCOMPLETE_SQL_DATA",
+        "MISSING_DATA_SIGNALLED",
+        "NO_SQL_DATA",
+        "SOURCE_DATA_EMPTY",
+        "SQL_DATA_INCOMPLETE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Aucune collecte n’est disponible dans les données actuelles. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: inputs "
+    },
+    {
+      "case_id": "col-05",
+      "module": "collections/inputs",
+      "question": "Montre-moi les collectes importantes.",
+      "route_type": "SQL_ONLY",
+      "data_state": "ambiguous",
+      "scenarios": [
+        "ambiguous"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Quantité collectée observée: 2200.0 kg. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: inputs 5. Avertissements si "
+    },
+    {
+      "case_id": "stk-01",
+      "module": "stocks",
+      "question": "Quel est le stock actuel ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "list"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les stocks actuels (2 produits) sont: - Mangue: 500.0 kg disponibles - Arachide: 80.0 kg disponibles 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confir"
+    },
+    {
+      "case_id": "stk-02",
+      "module": "stocks",
+      "question": "Stock de mangue actuellement.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "detail",
+        "filter"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les stocks actuels (1 produits) sont: - Mangue: 500.0 kg disponibles 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL:"
+    },
+    {
+      "case_id": "stk-03",
+      "module": "stocks",
+      "question": "Quels produits sont sous le seuil critique ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "high_risk",
+      "scenarios": [
+        "high_risk"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les données disponibles ne permettent pas de confirmer ce point. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: sto"
+    },
+    {
+      "case_id": "stk-04",
+      "module": "stocks",
+      "question": "Stock du produit cacao.",
+      "route_type": "SQL_ONLY",
+      "data_state": "missing",
+      "scenarios": [
+        "empty_missing"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les stocks actuels (2 produits) sont: - Mangue: 500.0 kg disponibles - Arachide: 80.0 kg disponibles 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confir"
+    },
+    {
+      "case_id": "lot-01",
+      "module": "lots/batches",
+      "question": "Quels lots sont en cours ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "list"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Lots en cours (2): - MANG-005: perte 13.3 % | efficacité 86.7 % - MANG-004: perte 28.0 % | efficacité 72.0 % 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritair"
+    },
+    {
+      "case_id": "lot-02",
+      "module": "lots/batches",
+      "question": "Analyse le lot MANG-004.",
+      "route_type": "SQL_ONLY",
+      "data_state": "high_risk",
+      "scenarios": [
+        "detail",
+        "high_risk"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Le lot MANG-004 présente une perte de 28.0% et une efficacité de 72.0%. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - S"
+    },
+    {
+      "case_id": "lot-03",
+      "module": "lots/batches",
+      "question": "Quel lot a le plus de pertes ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "high_risk",
+      "scenarios": [
+        "high_risk",
+        "summary"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Lots à risque élevé (5): - MANG-004: perte 28.0 % | efficacité 72.0 % - BATCH-0003: perte 20.3 % | efficacité 79.7 % - BATCH-0002: perte 20.3 % | efficacité 79.7 % - BATCH-0001: perte 20.3 % | efficacité 79.7 % - MANG-005: perte 13.3 % | "
+    },
+    {
+      "case_id": "proc-01",
+      "module": "post-harvest process steps",
+      "question": "Quelle étape post-récolte pose le plus de problème ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "high_risk",
+      "scenarios": [
+        "high_risk",
+        "summary"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "Les données opérationnelles sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucune source opérationnelle SQL n’a été trouvée pour cette réponse.",
+        "Les données opérationnelles sont incomplètes."
+      ],
+      "warning_codes": [
+        "INCOMPLETE_SQL_DATA",
+        "MISSING_DATA_SIGNALLED",
+        "MISSING_SQL_SOURCE",
+        "SQL_DATA_INCOMPLETE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les données disponibles ne permettent pas de confirmer ce point. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées 5. Avertis"
+    },
+    {
+      "case_id": "proc-02",
+      "module": "post-harvest process steps",
+      "question": "Compare les pertes entre séchage et tri.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "filter",
+        "summary"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Comparaison des pertes: Séchage 7.6% vs Tri 6.4%. 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: process_steps 5. A"
+    },
+    {
+      "case_id": "mat-01",
+      "module": "material balance",
+      "question": "Explique le bilan matière du lot MANG-004.",
+      "route_type": "HYBRID_SQL_RAG",
+      "data_state": "normal",
+      "scenarios": [
+        "detail"
+      ],
+      "expected_route": "HYBRID_SQL_RAG",
+      "actual_route": "HYBRID_SQL_RAG",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "expected_source_types": [
+        "rag",
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Le bilan matière du lot MANG-004 montre une perte de 28.0 % et une efficacité de 72.0 %. 2. Explication courte Mesures SQL: perte 28.0% et efficacité 72.0% Explication RAG: Le bilan matière compare les quantités entrantes et sortantes par"
+    },
+    {
+      "case_id": "eff-01",
+      "module": "efficiency analysis",
+      "question": "Quels lots ont une efficacité faible ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "high_risk",
+      "scenarios": [
+        "high_risk",
+        "summary"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Lots à efficacité faible (4): - MANG-004: efficacité 72.0 % | perte 28.0 % - BATCH-0003: efficacité 79.7 % | perte 20.3 % - BATCH-0002: efficacité 79.7 % | perte 20.3 % - BATCH-0001: efficacité 79.7 % | perte 20.3 % 2. Explication courte "
+    },
+    {
+      "case_id": "ml-01",
+      "module": "ML risk/anomaly insights",
+      "question": "Avons-nous des lots à risque aujourd’hui ?",
+      "route_type": "HYBRID_SQL_ML",
+      "data_state": "high_risk",
+      "scenarios": [
+        "high_risk"
+      ],
+      "expected_route": "HYBRID_SQL_ML",
+      "actual_route": "HYBRID_SQL_ML",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "ml",
+        "sql"
+      ],
+      "expected_source_types": [
+        "ml"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Les signaux SQL et ML ne sont pas parfaitement alignés."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED",
+        "SQL_ML_CONTRADICTION"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "CONTRADICTION_NOT_EXPLAINED"
+      ],
+      "answer_preview": "1. Résultat principal Lots à risque élevé (5): - MANG-004: perte 28.0 % | efficacité 72.0 % - BATCH-0003: perte 20.3 % | efficacité 79.7 % - BATCH-0002: perte 20.3 % | efficacité 79.7 % - BATCH-0001: perte 20.3 % | efficacité 79.7 % - MANG-005: perte 13.3 % | "
+    },
+    {
+      "case_id": "ml-02",
+      "module": "ML risk/anomaly insights",
+      "question": "Y a-t-il des anomalies dans les pertes ?",
+      "route_type": "HYBRID_SQL_ML",
+      "data_state": "high_risk",
+      "scenarios": [
+        "high_risk"
+      ],
+      "expected_route": "HYBRID_SQL_ML",
+      "actual_route": "HYBRID_SQL_ML",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "ml",
+        "sql"
+      ],
+      "expected_source_types": [
+        "ml"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Les signaux SQL et ML ne sont pas parfaitement alignés."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED",
+        "SQL_ML_CONTRADICTION"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "CONTRADICTION_NOT_EXPLAINED"
+      ],
+      "answer_preview": "1. Résultat principal Perte observée sur séchage du lot MANG-004: 14.0% (950.0 kg -> 817.0 kg). 2. Explication courte Signal ML: risque MEDIUM | anomalie non; les mesures SQL restent la vérité opérationnelle. 3. Recommandations si pertinentes Aucune recommanda"
+    },
+    {
+      "case_id": "ml-03",
+      "module": "ML risk/anomaly insights",
+      "question": "Quels sont les lots avec risque élevé ?",
+      "route_type": "HYBRID_SQL_ML",
+      "data_state": "high_risk",
+      "scenarios": [
+        "high_risk",
+        "list"
+      ],
+      "expected_route": "HYBRID_SQL_ML",
+      "actual_route": "HYBRID_SQL_ML",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "ml",
+        "sql"
+      ],
+      "expected_source_types": [
+        "ml"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Les signaux SQL et ML ne sont pas parfaitement alignés."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED",
+        "SQL_ML_CONTRADICTION"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "CONTRADICTION_NOT_EXPLAINED"
+      ],
+      "answer_preview": "1. Résultat principal Lots à risque élevé (5): - MANG-004: perte 28.0 % | efficacité 72.0 % - BATCH-0003: perte 20.3 % | efficacité 79.7 % - BATCH-0002: perte 20.3 % | efficacité 79.7 % - BATCH-0001: perte 20.3 % | efficacité 79.7 % - MANG-005: perte 13.3 % | "
+    },
+    {
+      "case_id": "ml-04",
+      "module": "ML risk/anomaly insights",
+      "question": "Donne un signal de risque sur lot inconnu MANG-999.",
+      "route_type": "HYBRID_SQL_ML",
+      "data_state": "missing",
+      "scenarios": [
+        "empty_missing"
+      ],
+      "expected_route": "HYBRID_SQL_ML",
+      "actual_route": "HYBRID_SQL_ML",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "ml",
+        "sql"
+      ],
+      "expected_source_types": [
+        "ml"
+      ],
+      "warnings": [
+        "Les données opérationnelles sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucun signal ML exploitable n’a été trouvé pour cette réponse.",
+        "Le modèle ML n’a pas trouvé le lot demandé.",
+        "Aucune donnée opérationnelle exploitable n’a été trouvée pour cette recherche.",
+        "Une source attendue est présente mais sans données exploitables.",
+        "La confiance du modèle ML est limitée."
+      ],
+      "warning_codes": [
+        "INCOMPLETE_SQL_DATA",
+        "MISSING_DATA_SIGNALLED",
+        "MISSING_ML_SOURCE",
+        "NO_MATCHING_BATCH_FOR_ML",
+        "NO_SQL_DATA",
+        "SOURCE_DATA_EMPTY",
+        "WEAK_ML_CONFIDENCE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Lots à risque élevé (5): - MANG-004: perte 28.0 % | efficacité 72.0 % - BATCH-0003: perte 20.3 % | efficacité 79.7 % - BATCH-0002: perte 20.3 % | efficacité 79.7 % - BATCH-0001: perte 20.3 % | efficacité 79.7 % - MANG-005: perte 13.3 % | "
+    },
+    {
+      "case_id": "ml-05",
+      "module": "loss analysis",
+      "question": "Quel est le niveau de pertes observé sur MANG-005 ?",
+      "route_type": "SQL_ONLY",
+      "data_state": "low_risk",
+      "scenarios": [
+        "detail",
+        "low_risk"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Perte observée sur séchage du lot MANG-005: 9.0% (864.0 kg -> 786.2 kg). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - "
+    },
+    {
+      "case_id": "rag-01",
+      "module": "RAG explanations/best practices",
+      "question": "Comment réduire les pertes pendant le séchage de la mangue ?",
+      "route_type": "RAG_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "list"
+      ],
+      "expected_route": "RAG_ONLY",
+      "actual_route": "RAG_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "rag"
+      ],
+      "expected_source_types": [
+        "rag"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Les sources de connaissance récupérées sont limitées ou peu pertinentes.",
+        "Certaines sources utilisées sont faibles ou peu fiables."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED",
+        "WEAK_RETRIEVAL",
+        "WEAK_SOURCE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Le bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité. 2. Explication courte Bonnes pratiques: Le bilan matière compare les quantités entrantes et sortantes par lot e"
+    },
+    {
+      "case_id": "rag-02",
+      "module": "RAG explanations/best practices",
+      "question": "Quelles sont les bonnes pratiques pour le tri des mangues ?",
+      "route_type": "RAG_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "detail"
+      ],
+      "expected_route": "RAG_ONLY",
+      "actual_route": "RAG_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "rag"
+      ],
+      "expected_source_types": [
+        "rag"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Le tri des mangues doit éliminer les fruits blessés, séparer par maturité et standardiser les grades pour réduire les pertes post-récolte. 2. Explication courte Bonnes pratiques: Le tri des mangues doit éliminer les fruits blessés ; sépar"
+    },
+    {
+      "case_id": "rag-03",
+      "module": "RAG explanations/best practices",
+      "question": "Comment améliorer l’emballage ?",
+      "route_type": "RAG_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "summary"
+      ],
+      "expected_route": "RAG_ONLY",
+      "actual_route": "RAG_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "rag"
+      ],
+      "expected_source_types": [
+        "rag"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Les sources de connaissance récupérées sont limitées ou peu pertinentes.",
+        "Certaines sources utilisées sont faibles ou peu fiables."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED",
+        "WEAK_RETRIEVAL",
+        "WEAK_SOURCE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Améliorer l'emballage avec ventilation, protection mécanique et contrôle de l'humidité limite les dégradations pendant le transport. 2. Explication courte Bonnes pratiques: Améliorer l'emballage avec ventilation ; protection mécanique et "
+    },
+    {
+      "case_id": "rag-04",
+      "module": "RAG explanations/best practices",
+      "question": "Explique pourquoi la perte est haute sur MANG-004.",
+      "route_type": "HYBRID_SQL_RAG",
+      "data_state": "high_risk",
+      "scenarios": [
+        "high_risk"
+      ],
+      "expected_route": "HYBRID_SQL_RAG",
+      "actual_route": "HYBRID_SQL_RAG",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "expected_source_types": [
+        "rag"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Les sources de connaissance récupérées sont limitées ou peu pertinentes.",
+        "Certaines sources utilisées sont faibles ou peu fiables."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED",
+        "WEAK_RETRIEVAL",
+        "WEAK_SOURCE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Perte observée sur séchage du lot MANG-004: 14.0% (950.0 kg -> 817.0 kg). 2. Explication courte Mesures SQL: étape critique drying (14.0%). Explication RAG: Le bilan matière compare les quantités entrantes et sortantes par lot et par étap"
+    },
+    {
+      "case_id": "rec-01",
+      "module": "AI recommendations",
+      "question": "Donne-moi les recommandations IA pour le lot MANG-004.",
+      "route_type": "HYBRID_FULL",
+      "data_state": "high_risk",
+      "scenarios": [
+        "detail",
+        "high_risk"
+      ],
+      "expected_route": "HYBRID_FULL",
+      "actual_route": "HYBRID_FULL",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "expected_source_types": [
+        "recommendation"
+      ],
+      "warnings": [
+        "Les sources récupérées peuvent contenir des informations contradictoires.",
+        "Une source attendue est présente mais sans données exploitables.",
+        "Les signaux SQL et ML ne sont pas parfaitement alignés.",
+        "Certaines sources utilisées sont faibles ou peu fiables."
+      ],
+      "warning_codes": [
+        "CONTRADICTORY_CONTEXT_POSSIBLE",
+        "SOURCE_DATA_EMPTY",
+        "SQL_ML_CONTRADICTION",
+        "WEAK_SOURCE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Le lot MANG-004 présente une perte de 28.0% et une efficacité de 72.0%. 2. Explication courte Explication RAG: Le bilan matière compare les quantités entrantes et sortantes par lot et par étape pour identifier les pertes et l'efficacité. "
+    },
+    {
+      "case_id": "rec-02",
+      "module": "AI recommendations",
+      "question": "Que faire pour réduire les pertes au séchage ?",
+      "route_type": "HYBRID_RAG_RECOMMENDATION",
+      "data_state": "normal",
+      "scenarios": [
+        "summary"
+      ],
+      "expected_route": "HYBRID_RAG_RECOMMENDATION",
+      "actual_route": "HYBRID_FULL",
+      "route_match_status": "compatible_route",
+      "route_compatible": true,
+      "source_types": [
+        "ml",
+        "rag",
+        "recommendation",
+        "sql"
+      ],
+      "expected_source_types": [
+        "recommendation"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Une source attendue est présente mais sans données exploitables.",
+        "Les signaux SQL et ML ne sont pas parfaitement alignés.",
+        "Certaines sources utilisées sont faibles ou peu fiables."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED",
+        "SOURCE_DATA_EMPTY",
+        "SQL_ML_CONTRADICTION",
+        "WEAK_SOURCE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Perte observée sur séchage du lot MANG-004: 14.0% (950.0 kg -> 817.0 kg). 2. Explication courte Mesures SQL: étape critique drying (14.0%). Explication RAG: Le bilan matière compare les quantités entrantes et sortantes par lot et par étap"
+    },
+    {
+      "case_id": "rec-03",
+      "module": "AI recommendations",
+      "question": "Quelles actions prioritaires devons-nous faire aujourd’hui ?",
+      "route_type": "HYBRID_FULL",
+      "data_state": "missing",
+      "scenarios": [
+        "ambiguous",
+        "empty_missing"
+      ],
+      "expected_route": "RECOMMENDATION_ONLY",
+      "actual_route": "RECOMMENDATION_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "ml",
+        "recommendation",
+        "sql"
+      ],
+      "expected_source_types": [
+        "recommendation"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Une source attendue est présente mais sans données exploitables.",
+        "Certaines sources utilisées sont faibles ou peu fiables."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED",
+        "SOURCE_DATA_EMPTY",
+        "WEAK_SOURCE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "UNSUPPORTED_RECOMMENDATION"
+      ],
+      "answer_preview": "1. Résultat principal 5 action(s) priorisée(s) générée(s), dont 2 priorité haute. Action principale: Isoler le lot MANG-004, renforcer le contrôle au séchage, puis reclasser les intrants dégradés. (cible: MANG-004 / mango / séchage). 2. Explication courte Prio"
+    },
+    {
+      "case_id": "mem-01",
+      "module": "memory/context",
+      "question": "Liste les membres de notre coopérative.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "list",
+        "multi_turn"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal La coopérative compte 3 membre(s) inscrit(s). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members 5. Avertisseme"
+    },
+    {
+      "case_id": "mem-02",
+      "module": "memory/context",
+      "question": "Quels lots sont à risque ?",
+      "route_type": "HYBRID_SQL_ML",
+      "data_state": "high_risk",
+      "scenarios": [
+        "high_risk",
+        "multi_turn"
+      ],
+      "expected_route": "HYBRID_SQL_ML",
+      "actual_route": "HYBRID_SQL_ML",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "ml",
+        "sql"
+      ],
+      "expected_source_types": [
+        "ml"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Les signaux SQL et ML ne sont pas parfaitement alignés."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED",
+        "SQL_ML_CONTRADICTION"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "CONTRADICTION_NOT_EXPLAINED"
+      ],
+      "answer_preview": "1. Résultat principal Lots à risque élevé (5): - MANG-004: perte 28.0 % | efficacité 72.0 % - BATCH-0003: perte 20.3 % | efficacité 79.7 % - BATCH-0002: perte 20.3 % | efficacité 79.7 % - BATCH-0001: perte 20.3 % | efficacité 79.7 % - MANG-005: perte 13.3 % | "
+    },
+    {
+      "case_id": "mem-03",
+      "module": "memory/context",
+      "question": "Quels lots sont à risque ?",
+      "route_type": "HYBRID_SQL_ML",
+      "data_state": "high_risk",
+      "scenarios": [
+        "high_risk",
+        "multi_turn"
+      ],
+      "expected_route": "HYBRID_SQL_ML",
+      "actual_route": "HYBRID_SQL_ML",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "ml",
+        "sql"
+      ],
+      "expected_source_types": [
+        "ml"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Les signaux SQL et ML ne sont pas parfaitement alignés."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED",
+        "SQL_ML_CONTRADICTION"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PARTIAL",
+      "failure_categories": [
+        "CONTRADICTION_NOT_EXPLAINED"
+      ],
+      "answer_preview": "1. Résultat principal Lots à risque élevé (5): - MANG-004: perte 28.0 % | efficacité 72.0 % - BATCH-0003: perte 20.3 % | efficacité 79.7 % - BATCH-0002: perte 20.3 % | efficacité 79.7 % - BATCH-0001: perte 20.3 % | efficacité 79.7 % - MANG-005: perte 13.3 % | "
+    },
+    {
+      "case_id": "mem-04",
+      "module": "memory/context",
+      "question": "Liste les membres.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "list",
+        "multi_turn"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal La coopérative compte 3 membre(s) inscrit(s). 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confirmée. 4. Sources utilisées - SQL: members 5. Avertisseme"
+    },
+    {
+      "case_id": "rt-01",
+      "module": "route-type",
+      "question": "Explique les pertes du lot MANG-004 et donne les causes.",
+      "route_type": "HYBRID_SQL_RAG",
+      "data_state": "high_risk",
+      "scenarios": [
+        "summary"
+      ],
+      "expected_route": "HYBRID_SQL_RAG",
+      "actual_route": "HYBRID_SQL_RAG",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "rag",
+        "sql"
+      ],
+      "expected_source_types": [
+        "rag",
+        "sql"
+      ],
+      "warnings": [
+        "Les sources récupérées peuvent contenir des informations contradictoires.",
+        "La réponse signale une donnée manquante.",
+        "Certaines sources utilisées sont faibles ou peu fiables."
+      ],
+      "warning_codes": [
+        "CONTRADICTORY_CONTEXT_POSSIBLE",
+        "MISSING_DATA_SIGNALLED",
+        "WEAK_SOURCE"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Perte observée sur séchage du lot MANG-004: 14.0% (950.0 kg -> 817.0 kg). 2. Explication courte Mesures SQL: étape critique drying (14.0%). Explication RAG: Le bilan matière compare les quantités entrantes et sortantes par lot et par étap"
+    },
+    {
+      "case_id": "rt-02",
+      "module": "route-type",
+      "question": "Donne uniquement le stock actuel, sans explication.",
+      "route_type": "SQL_ONLY",
+      "data_state": "normal",
+      "scenarios": [
+        "summary"
+      ],
+      "expected_route": "SQL_ONLY",
+      "actual_route": "SQL_ONLY",
+      "route_match_status": "exact_match",
+      "route_compatible": false,
+      "source_types": [
+        "sql"
+      ],
+      "expected_source_types": [
+        "sql"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "warning_codes": [
+        "MISSING_DATA_SIGNALLED"
+      ],
+      "french_compliance": "yes",
+      "context_leakage": "no",
+      "status": "PASS",
+      "failure_categories": [],
+      "answer_preview": "1. Résultat principal Les stocks actuels (2 produits) sont: - Mangue: 500.0 kg disponibles - Arachide: 80.0 kg disponibles 2. Explication courte Aucune explication détaillée disponible. 3. Recommandations si pertinentes Aucune recommandation prioritaire confir"
+    }
+  ],
+  "markdown_report": "# App-wide Chatbot Audit\n\n## Executive Summary\n- Total: 46 | PASS=35 | PARTIAL=11 | FAIL=0\n- Route status: exact=45 | compatible=1 | failure=0\n- SQL/ML contradiction warnings: explained=2 | unresolved=5\n\n## Coverage Matrix\n| Module | list | detail | count_summary | filter | ambiguous | empty_missing | high_risk | low_risk | multi_turn |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| AI recommendations | N/A | PASS | N/A | N/A | PARTIAL | PARTIAL | PASS | N/A | N/A |\n| ML risk/anomaly insights | PARTIAL | N/A | N/A | N/A | N/A | PASS | PARTIAL | N/A | N/A |\n| RAG explanations/best practices | PASS | PASS | N/A | N/A | N/A | N/A | PASS | N/A | N/A |\n| collections/inputs | PASS | N/A | PASS | PASS | PASS | PASS | N/A | N/A | N/A |\n| efficiency analysis | N/A | N/A | N/A | N/A | N/A | N/A | PASS | N/A | N/A |\n| loss analysis | N/A | PASS | N/A | N/A | N/A | N/A | N/A | PASS | N/A |\n| lots/batches | PASS | PASS | N/A | N/A | N/A | N/A | PASS | N/A | N/A |\n| material balance | N/A | PASS | N/A | N/A | N/A | N/A | N/A | N/A | N/A |\n| members/farmers | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PASS | PARTIAL | N/A | N/A | N/A |\n| memory/context | PASS | N/A | N/A | N/A | N/A | N/A | PARTIAL | N/A | PARTIAL |\n| parcels/cultures | PASS | PASS | PASS | PASS | N/A | N/A | N/A | N/A | N/A |\n| post-harvest process steps | N/A | N/A | N/A | PASS | N/A | N/A | PASS | N/A | N/A |\n| pre-harvest steps | PASS | N/A | PASS | N/A | N/A | N/A | N/A | N/A | N/A |\n| route-type | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |\n| stocks | PASS | PASS | N/A | PASS | N/A | PASS | PASS | N/A | N/A |\n\n## Results By Module\n| Module | PASS | PARTIAL | FAIL |\n| --- | ---: | ---: | ---: |\n| AI recommendations | 2 | 1 | 0 |\n| ML risk/anomaly insights | 1 | 3 | 0 |\n| RAG explanations/best practices | 4 | 0 | 0 |\n| collections/inputs | 5 | 0 | 0 |\n| efficiency analysis | 1 | 0 | 0 |\n| loss analysis | 1 | 0 | 0 |\n| lots/batches | 3 | 0 | 0 |\n| material balance | 1 | 0 | 0 |\n| members/farmers | 1 | 5 | 0 |\n| memory/context | 2 | 2 | 0 |\n| parcels/cultures | 4 | 0 | 0 |\n| post-harvest process steps | 2 | 0 | 0 |\n| pre-harvest steps | 2 | 0 | 0 |\n| route-type | 2 | 0 | 0 |\n| stocks | 4 | 0 | 0 |\n\n## Results By Route Type\n| Route type | PASS | PARTIAL | FAIL |\n| --- | ---: | ---: | ---: |\n| HYBRID_FULL | 1 | 1 | 0 |\n| HYBRID_RAG_RECOMMENDATION | 1 | 0 | 0 |\n| HYBRID_SQL_ML | 1 | 5 | 0 |\n| HYBRID_SQL_RAG | 3 | 0 | 0 |\n| RAG_ONLY | 3 | 0 | 0 |\n| SQL_ONLY | 26 | 5 | 0 |\n\n## Results By Data State\n| Data state | PASS | PARTIAL | FAIL |\n| --- | ---: | ---: | ---: |\n| ambiguous | 2 | 0 | 0 |\n| high_risk | 8 | 5 | 0 |\n| low_risk | 1 | 0 | 0 |\n| missing | 3 | 2 | 0 |\n| normal | 21 | 4 | 0 |\n\n## Failure Categories\n- CONTENT_SEMANTIC_ERROR: 5\n- CONTRADICTION_NOT_EXPLAINED: 5\n- UNSUPPORTED_RECOMMENDATION: 1\n\n## Uncovered Areas\n- AI recommendations: list, count_summary, filter, low_risk, multi_turn\n- ML risk/anomaly insights: detail, count_summary, filter, ambiguous, low_risk, multi_turn\n- RAG explanations/best practices: count_summary, filter, ambiguous, empty_missing, low_risk, multi_turn\n- collections/inputs: detail, high_risk, low_risk, multi_turn\n- efficiency analysis: list, detail, count_summary, filter, ambiguous, empty_missing, low_risk, multi_turn\n- loss analysis: list, count_summary, filter, ambiguous, empty_missing, high_risk, multi_turn\n- lots/batches: count_summary, filter, ambiguous, empty_missing, low_risk, multi_turn\n- material balance: list, count_summary, filter, ambiguous, empty_missing, high_risk, low_risk, multi_turn\n- members/farmers: high_risk, low_risk, multi_turn\n- memory/context: detail, count_summary, filter, ambiguous, empty_missing, low_risk\n- parcels/cultures: ambiguous, empty_missing, high_risk, low_risk, multi_turn\n- post-harvest process steps: list, detail, count_summary, ambiguous, empty_missing, low_risk, multi_turn\n- pre-harvest steps: detail, filter, ambiguous, empty_missing, high_risk, low_risk, multi_turn\n- route-type: list, detail, count_summary, filter, ambiguous, empty_missing, high_risk, low_risk, multi_turn\n- stocks: count_summary, ambiguous, low_risk, multi_turn\n\n## Suspected Root Causes\n- CONTENT_SEMANTIC_ERROR (5): CONTENT_SEMANTIC_ERROR\n- CONTRADICTION_NOT_EXPLAINED (5): Contradiction SQL/ML non explicitée.\n- UNSUPPORTED_RECOMMENDATION (1): Recommandation prioritaire sans base de preuve suffisante.\n\n## Exact Next Recommended Fix\n- Corriger en priorité la conformité linguistique des réponses stock SQL (cas partiels NOT_FRENCH), puis affiner l’extraction d’entités dans les cas ML ambigus restants.\n\n## Detailed Cases\n| Case | Module | Route exp/act | Route status | Data state | Status | Failures |\n| --- | --- | --- | --- | --- | --- | --- |\n| mbr-01 | members/farmers | SQL_ONLY / SQL_ONLY | exact_match | normal | PARTIAL | CONTENT_SEMANTIC_ERROR |\n| mbr-02 | members/farmers | SQL_ONLY / SQL_ONLY | exact_match | normal | PARTIAL | CONTENT_SEMANTIC_ERROR |\n| mbr-03 | members/farmers | SQL_ONLY / SQL_ONLY | exact_match | normal | PARTIAL | CONTENT_SEMANTIC_ERROR |\n| mbr-04 | members/farmers | SQL_ONLY / SQL_ONLY | exact_match | normal | PARTIAL | CONTENT_SEMANTIC_ERROR |\n| mbr-05 | members/farmers | SQL_ONLY / SQL_ONLY | exact_match | ambiguous | PASS | - |\n| mbr-06 | members/farmers | SQL_ONLY / SQL_ONLY | exact_match | missing | PARTIAL | CONTENT_SEMANTIC_ERROR |\n| par-01 | parcels/cultures | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| par-02 | parcels/cultures | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| par-03 | parcels/cultures | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| par-04 | parcels/cultures | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| par-05 | pre-harvest steps | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| par-06 | pre-harvest steps | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| col-01 | collections/inputs | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| col-02 | collections/inputs | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| col-03 | collections/inputs | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| col-04 | collections/inputs | SQL_ONLY / SQL_ONLY | exact_match | missing | PASS | - |\n| col-05 | collections/inputs | SQL_ONLY / SQL_ONLY | exact_match | ambiguous | PASS | - |\n| stk-01 | stocks | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| stk-02 | stocks | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| stk-03 | stocks | SQL_ONLY / SQL_ONLY | exact_match | high_risk | PASS | - |\n| stk-04 | stocks | SQL_ONLY / SQL_ONLY | exact_match | missing | PASS | - |\n| lot-01 | lots/batches | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| lot-02 | lots/batches | SQL_ONLY / SQL_ONLY | exact_match | high_risk | PASS | - |\n| lot-03 | lots/batches | SQL_ONLY / SQL_ONLY | exact_match | high_risk | PASS | - |\n| proc-01 | post-harvest process steps | SQL_ONLY / SQL_ONLY | exact_match | high_risk | PASS | - |\n| proc-02 | post-harvest process steps | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| mat-01 | material balance | HYBRID_SQL_RAG / HYBRID_SQL_RAG | exact_match | normal | PASS | - |\n| eff-01 | efficiency analysis | SQL_ONLY / SQL_ONLY | exact_match | high_risk | PASS | - |\n| ml-01 | ML risk/anomaly insights | HYBRID_SQL_ML / HYBRID_SQL_ML | exact_match | high_risk | PARTIAL | CONTRADICTION_NOT_EXPLAINED |\n| ml-02 | ML risk/anomaly insights | HYBRID_SQL_ML / HYBRID_SQL_ML | exact_match | high_risk | PARTIAL | CONTRADICTION_NOT_EXPLAINED |\n| ml-03 | ML risk/anomaly insights | HYBRID_SQL_ML / HYBRID_SQL_ML | exact_match | high_risk | PARTIAL | CONTRADICTION_NOT_EXPLAINED |\n| ml-04 | ML risk/anomaly insights | HYBRID_SQL_ML / HYBRID_SQL_ML | exact_match | missing | PASS | - |\n| ml-05 | loss analysis | SQL_ONLY / SQL_ONLY | exact_match | low_risk | PASS | - |\n| rag-01 | RAG explanations/best practices | RAG_ONLY / RAG_ONLY | exact_match | normal | PASS | - |\n| rag-02 | RAG explanations/best practices | RAG_ONLY / RAG_ONLY | exact_match | normal | PASS | - |\n| rag-03 | RAG explanations/best practices | RAG_ONLY / RAG_ONLY | exact_match | normal | PASS | - |\n| rag-04 | RAG explanations/best practices | HYBRID_SQL_RAG / HYBRID_SQL_RAG | exact_match | high_risk | PASS | - |\n| rec-01 | AI recommendations | HYBRID_FULL / HYBRID_FULL | exact_match | high_risk | PASS | - |\n| rec-02 | AI recommendations | HYBRID_RAG_RECOMMENDATION / HYBRID_FULL | compatible_route | normal | PASS | - |\n| rec-03 | AI recommendations | RECOMMENDATION_ONLY / RECOMMENDATION_ONLY | exact_match | missing | PARTIAL | UNSUPPORTED_RECOMMENDATION |\n| mem-01 | memory/context | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| mem-02 | memory/context | HYBRID_SQL_ML / HYBRID_SQL_ML | exact_match | high_risk | PARTIAL | CONTRADICTION_NOT_EXPLAINED |\n| mem-03 | memory/context | HYBRID_SQL_ML / HYBRID_SQL_ML | exact_match | high_risk | PARTIAL | CONTRADICTION_NOT_EXPLAINED |\n| mem-04 | memory/context | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |\n| rt-01 | route-type | HYBRID_SQL_RAG / HYBRID_SQL_RAG | exact_match | high_risk | PASS | - |\n| rt-02 | route-type | SQL_ONLY / SQL_ONLY | exact_match | normal | PASS | - |"
+}

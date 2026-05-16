@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
-import type { Batch, BatchCreate, BatchReferencePreview, BatchStatusUpdate, BatchUpdate } from "@/lib/api/types";
+import type { Batch, BatchCreate, BatchPreHarvestStepStatusesUpdate, BatchReferencePreview, BatchStatusUpdate, BatchUpdate } from "@/lib/api/types";
 
 export function useBatches() {
   return useQuery({
@@ -58,6 +58,65 @@ export function useDeleteBatch() {
       queryClient.invalidateQueries({ queryKey: ["stocks"] });
       queryClient.invalidateQueries({ queryKey: ["process-steps"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
+export function useApproveBatchCharge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<{ batch: Batch }>(endpoints.batches.approveCharge(id), { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+      queryClient.invalidateQueries({ queryKey: ["farmer-advances"] });
+      queryClient.invalidateQueries({ queryKey: ["treasury"] });
+    },
+  });
+}
+
+export function useActivatePreHarvest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<Batch>(endpoints.batches.activatePreHarvest(id), { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+    },
+  });
+}
+
+export function useStopPreHarvest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<Batch>(endpoints.batches.stopPreHarvest(id), { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+    },
+  });
+}
+
+export function useCompletePreHarvest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, confirmed_weight_kg, notes }: { id: string; confirmed_weight_kg: number; notes?: string | null }) =>
+      apiFetch<Batch>(endpoints.batches.completePreHarvest(id), {
+        method: "POST",
+        body: { confirmed_weight_kg, notes },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+      queryClient.invalidateQueries({ queryKey: ["inputs"] });
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+    },
+  });
+}
+
+export function useUpdatePreHarvestStepStatuses() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: BatchPreHarvestStepStatusesUpdate }) =>
+      apiFetch<Batch>(endpoints.batches.updatePreHarvestStepStatuses(id), { method: "PATCH", body: payload }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
     },
   });
 }

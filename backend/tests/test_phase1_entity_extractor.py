@@ -49,6 +49,27 @@ def test_known_database_reference_can_be_resolved_even_with_custom_code():
     assert entities["specific_batch_requested"] is True
 
 
+def test_light_fuzzy_batch_reference_matching_with_known_refs():
+    entities = EntityExtractor().extract("Analyse le lot MANG-05", known_batch_refs={"MANG-005"}).as_dict()
+
+    assert entities["batch_ref"] == "MANG-005"
+    assert entities["specific_batch_requested"] is True
+
+
+def test_light_fuzzy_product_matching():
+    entities = EntityExtractor().extract("Comment réduire les pertes sur mangu au sechage ?").as_dict()
+
+    assert "mango" in entities["product"]
+    assert "drying" in entities["stage"]
+
+
+def test_sitation_typo_is_normalized_for_intent_detection():
+    entities = EntityExtractor().extract("Analyse la sitation du lot MANG-004").as_dict()
+
+    assert entities["batch_ref"] == "MANG-004"
+    assert entities["scope"] == "batch"
+
+
 def test_general_risk_question_routes_to_sql_ml_without_fake_reference():
     decision = IntentRouter().classify("Avons-nous des lots à risque ?", known_batch_refs={"MANG-004"})
 

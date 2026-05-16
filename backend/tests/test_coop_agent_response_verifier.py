@@ -59,3 +59,25 @@ def test_rag_route_without_rag_source_adds_warning():
         results=[],
     )
     assert "MISSING_RAG_SOURCE" in result.warnings
+
+
+def test_evidence_present_does_not_trigger_missing_expected_source_fallback_flag():
+    verifier = ResponseVerifier()
+    result = verifier.verify(
+        context=_context(AgentRoute.HYBRID_FULL),
+        answer="Analyse: perte observée 12.0% sur le lot MANG-004.",
+        route=AgentRoute.HYBRID_FULL,
+        results=[
+            AgentResult(
+                agent_name="SQLAnalyticsAgent",
+                route=AgentRoute.SQL_ONLY,
+                answer_part="",
+                data={"batch_summary": [{"batch_ref": "MANG-004", "loss_pct": 12.0}]},
+                sources=[{"type": "sql", "table": "batches"}],
+                confidence=0.52,
+                warnings=[],
+                execution_time_ms=1,
+            )
+        ],
+    )
+    assert result.missing_expected_source is False

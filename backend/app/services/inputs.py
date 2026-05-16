@@ -62,12 +62,14 @@ def record_input(db: Session, manager: User, payload) -> Input:
         cooperative_id=cooperative_id,
         member_id=member.id,
         product_id=product.id,
+        batch_id=payload.batch_id,
         field_id=field_id,
         date=payload.date,
         quantity=to_kg(payload.quantity, normalize_mass_unit(payload.unit or product.unit)),
         grade=payload.grade.strip(),
         estimated_value=payload.estimated_value,
         status=parse_enum_value(InputStatus, payload.status, "input status"),
+        source_type=(payload.source_type or "manual").strip(),
     )
     db.add(input_record)
     apply_total_stock_delta(db, cooperative_id, product, input_record.quantity, create_if_missing=True)
@@ -162,6 +164,8 @@ def update_input(db: Session, manager: User, input_id, payload) -> Input:
 
     input_record.member_id = member.id
     input_record.product_id = product.id
+    if "batch_id" in data:
+        input_record.batch_id = data["batch_id"]
     input_record.field_id = next_field_id
 
     if "date" in data:
@@ -173,6 +177,8 @@ def update_input(db: Session, manager: User, input_id, payload) -> Input:
         input_record.estimated_value = data["estimated_value"]
     if "status" in data and data["status"] is not None:
         input_record.status = parse_enum_value(InputStatus, data["status"], "input status")
+    if "source_type" in data and data["source_type"] is not None:
+        input_record.source_type = data["source_type"].strip()
 
     db.commit()
     db.refresh(input_record)
@@ -202,11 +208,13 @@ def delete_input(db: Session, manager: User, input_id):
         "member_id": input_record.member_id,
         "product_id": input_record.product_id,
         "field_id": input_record.field_id,
+        "batch_id": input_record.batch_id,
         "date": input_record.date,
         "quantity": input_record.quantity,
         "grade": input_record.grade,
         "estimated_value": input_record.estimated_value,
         "status": input_record.status,
+        "source_type": input_record.source_type,
         "created_at": input_record.created_at,
         "updated_at": input_record.updated_at,
     }
