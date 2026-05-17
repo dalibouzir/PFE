@@ -1,3 +1,6 @@
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+
 export type ExportColumn<T> = {
   key: keyof T | string;
   header: string;
@@ -90,68 +93,26 @@ export function exportRowsToExcel<T>(options: ExportOptions<T>) {
 }
 
 export function exportRowsToPdf<T>(options: ExportOptions<T>) {
-  const headers = options.columns
-    .map((column) => `<th>${escapeHtml(column.header)}</th>`)
-    .join("");
-  const bodyRows = options.rows
-    .map(
-      (row) =>
-        `<tr>${options.columns
-          .map((column) => `<td>${escapeHtml(resolveCellValue(column, row))}</td>`)
-          .join("")}</tr>`,
-    )
-    .join("");
-
   const generatedAt = (options.generatedAt ?? new Date()).toLocaleString("fr-FR");
-  const html = `<!doctype html>
-<html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>${escapeHtml(options.title)}</title>
-    <style>
-      body { font-family: Arial, sans-serif; color: #1d2a24; padding: 24px; }
-      h1 { margin: 0 0 6px; color: #0d5a2b; font-size: 22px; }
-      .meta { margin-bottom: 16px; font-size: 12px; color: #44554c; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      th, td { border: 1px solid #dbe8df; padding: 8px; text-align: left; vertical-align: top; }
-      th { background: #eef7f1; color: #1f4d33; }
-      @media print { body { padding: 10px; } }
-    </style>
-  </head>
-  <body>
-    <h1>${escapeHtml(options.title)}</h1>
-    <div class="meta">Date d'export: ${escapeHtml(generatedAt)}</div>
-    <table>
-      <thead><tr>${headers}</tr></thead>
-      <tbody>${bodyRows || `<tr><td colspan="${options.columns.length}">Aucune donnée</td></tr>`}</tbody>
-    </table>
-  </body>
-</html>`;
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  doc.setFontSize(16);
+  doc.text(options.title, 40, 36);
+  doc.setFontSize(10);
+  doc.text(`Date d'export: ${generatedAt}`, 40, 54);
 
-  const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
-  const url = window.URL.createObjectURL(blob);
-  const printWindow = window.open(url, "_blank", "width=1100,height=900");
-  if (!printWindow) {
-    window.URL.revokeObjectURL(url);
-    return;
-  }
-  const cleanup = () => {
-    window.URL.revokeObjectURL(url);
-  };
-  printWindow.addEventListener(
-    "load",
-    () => {
-      // Give the browser a short paint delay before opening print dialog.
-      window.setTimeout(() => {
-        try {
-          printWindow.focus();
-          printWindow.print();
-        } finally {
-          cleanup();
-        }
-      }, 120);
-    },
-    { once: true },
-  );
+  const head = [options.columns.map((column) => column.header)];
+  const body = (options.rows.length > 0
+    ? options.rows.map((row) => options.columns.map((column) => resolveCellValue(column, row)))
+    : [["Aucune donnée", ...new Array(Math.max(options.columns.length - 1, 0)).fill("")]]) as string[][];
+
+  autoTable(doc, {
+    startY: 70,
+    head,
+    body,
+    styles: { fontSize: 8, cellPadding: 4 },
+    headStyles: { fillColor: [13, 90, 43] },
+    theme: "grid",
+  });
+
+  doc.save(`${options.filename}.pdf`);
 }

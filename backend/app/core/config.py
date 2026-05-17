@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     seed_manager_password: str = "Manager123!"
 
     uploads_dir: str = str(BACKEND_DIR / "uploads")
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_uploads_bucket: str = "weefarm-uploads"
 
     # Environment parity properties
     @property

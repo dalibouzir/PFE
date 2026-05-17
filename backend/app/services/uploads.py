@@ -4,6 +4,7 @@ import os
 import uuid
 from pathlib import Path
 
+import httpx
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
@@ -31,6 +32,34 @@ def _uploads_root() -> Path:
 def _sanitize_name(filename: str) -> str:
     base = os.path.basename(filename or "file")
     return "".join(ch for ch in base if ch.isalnum() or ch in {".", "-", "_"}) or "file"
+
+
+def _supabase_storage_enabled() -> bool:
+    url = (settings.supabase_url or "").strip()
+    key = (settings.supabase_service_role_key or "").strip()
+    if not url or not key:
+        return False
+    if "your-project-id" in url or "your-supabase-service-role-key" in key:
+        return False
+    return True
+
+
+def _upload_to_supabase(relative_path: str, payload: bytes, content_type: str) -> str:
+    base = settings.supabase_url.rstrip("/")
+    bucket = (settings.supabase_uploads_bucket or "weefarm-uploads").strip()
+    object_path = f"{bucket}/{relative_path}"
+    upload_url = f"{base}/storage/v1/object/{object_path}"
+    headers = {
+        "apikey": settings.supabase_service_role_key,
+        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+        "Content-Type": content_type,
+        "x-upsert": "true",
+    }
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(upload_url, headers=headers, content=payload)
+    if response.status_code >= 400:
+        raise ValidationError("Upload Supabase échoué. Vérifiez la configuration storage.")
+    return f"{base}/storage/v1/object/public/{object_path}"
 
 
 def _save_entity_file(
@@ -63,15 +92,16 @@ def _save_entity_file(
     filename = _sanitize_name(file.filename or f"{fallback_name}{suffix}")
     generated = f"{uuid.uuid4().hex}{suffix}"
     relative_dir = Path(folder) / str(cooperative_id) / str(entity_id)
-    root = _uploads_root()
-    abs_dir = root / relative_dir
-    abs_dir.mkdir(parents=True, exist_ok=True)
-
-    abs_path = abs_dir / generated
-    abs_path.write_bytes(payload)
-
     relative_path = str((relative_dir / generated).as_posix())
-    file_url = f"/uploads/{relative_path}"
+    if _supabase_storage_enabled():
+        file_url = _upload_to_supabase(relative_path, payload, content_type)
+    else:
+        root = _uploads_root()
+        abs_dir = root / relative_dir
+        abs_dir.mkdir(parents=True, exist_ok=True)
+        abs_path = abs_dir / generated
+        abs_path.write_bytes(payload)
+        file_url = f"/uploads/{relative_path}"
 
     uploaded = UploadedFile(
         cooperative_id=cooperative_id,
