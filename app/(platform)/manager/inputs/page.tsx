@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
@@ -114,6 +114,8 @@ export default function InputsPage() {
   const [collecteMode, setCollecteMode] = useState<"linked" | "independent">("linked");
   const [selectedLotId, setSelectedLotId] = useState<string>("");
   const [selectedJustificatif, setSelectedJustificatif] = useState<File | null>(null);
+  const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const justificatifPickerRef = useRef<HTMLInputElement | null>(null);
   const [pendingValidationItem, setPendingValidationItem] = useState<Input | null>(null);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<Input | null>(null);
   const tableControls = useTableControls(
@@ -362,6 +364,24 @@ export default function InputsPage() {
     }
   };
 
+  const openJustificatifPicker = (itemId: string) => {
+    setUploadingItemId(itemId);
+    justificatifPickerRef.current?.click();
+  };
+
+  const handleJustificatifPicked = async (file: File | null) => {
+    if (!file || !uploadingItemId) return;
+    try {
+      await uploadJustificatif.mutateAsync({ id: uploadingItemId, file });
+      setFormError(null);
+    } catch (error) {
+      setFormError(formatApiError(error, "Upload justificatif échoué."));
+    } finally {
+      setUploadingItemId(null);
+      if (justificatifPickerRef.current) justificatifPickerRef.current.value = "";
+    }
+  };
+
   const exportColumns: ExportColumn<Input>[] = [
     { key: "date", header: "Date" },
     { key: "member_id", header: "Producteur", format: (_, row) => memberLookup.get(row.member_id) ?? row.member_id },
@@ -455,6 +475,15 @@ export default function InputsPage() {
         </section>
       ) : viewMode === "table" ? (
         <section className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "100ms" }}>
+          <input
+            ref={justificatifPickerRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(event) => {
+              void handleJustificatifPicked(event.target.files?.[0] ?? null);
+            }}
+          />
           <div className="overflow-x-auto">
             <table className="wf-table min-w-full text-left text-sm">
               <thead>
@@ -514,6 +543,15 @@ export default function InputsPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
+                        <button
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--primary)] hover:bg-[var(--surface-soft)] disabled:opacity-60"
+                          onClick={() => openJustificatifPicker(item.id)}
+                          disabled={uploadJustificatif.isPending && uploadingItemId === item.id}
+                          title={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
+                          aria-label={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
+                        >
+                          ⬆
+                        </button>
                         <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => setPendingDeleteItem(item)}>Supprimer</button>
                       </div>
                     </td>
@@ -525,6 +563,15 @@ export default function InputsPage() {
         </section>
       ) : (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <input
+            ref={justificatifPickerRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(event) => {
+              void handleJustificatifPicked(event.target.files?.[0] ?? null);
+            }}
+          />
           {sortedFiltered.map((item, index) => (
             <article key={item.id} className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: `${100 + index * 30}ms` }}>
               <div className="flex items-start justify-between gap-2">
@@ -572,6 +619,15 @@ export default function InputsPage() {
               <p className="mt-1 text-xs text-[var(--muted)]">Justificatif: {item.justificatif_file ? item.justificatif_file.filename : "Absent"}</p>
 
               <div className="mt-3 flex items-center gap-2">
+                <button
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--primary)] hover:bg-[var(--surface-soft)] disabled:opacity-60"
+                  onClick={() => openJustificatifPicker(item.id)}
+                  disabled={uploadJustificatif.isPending && uploadingItemId === item.id}
+                  title={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
+                  aria-label={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
+                >
+                  ⬆
+                </button>
                 <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => setPendingDeleteItem(item)}>Supprimer</button>
               </div>
             </article>
