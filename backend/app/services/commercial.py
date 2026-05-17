@@ -42,7 +42,7 @@ from app.services.helpers import (
     to_kg,
 )
 from app.services.rag_reindex_hooks import reindex_commercial_if_needed
-from app.services.stocks import apply_total_stock_delta, available_stock_kg
+from app.services.stocks import apply_reserved_stock_delta, available_stock_kg
 from app.utils.exceptions import NotFoundError, ValidationError
 
 ORDER_TRANSITIONS: dict[CommercialOrderStatus, set[CommercialOrderStatus]] = {
@@ -162,12 +162,25 @@ def _treasury_reference() -> str:
     return f"TRS-{uuid.uuid4().hex[:10].upper()}"
 
 
+def _catalog_actor_label(manager: User) -> str:
+    full_name = (manager.full_name or "").strip()
+    email = (manager.email or "").strip().lower()
+    if full_name and email:
+        return f"{full_name} ({email})"
+    if full_name:
+        return full_name
+    if email:
+        return email
+    return "manager_inconnu"
+
+
 def _record_catalog_stock_movement(
     db: Session,
     *,
     cooperative_id,
     product_id,
     catalog_product_id,
+    actor_name: str,
     movement_type: str,
     action_type: str,
     source: str,
@@ -192,7 +205,7 @@ def _record_catalog_stock_movement(
         quantity_kg=round_metric(abs(quantity_kg)),
         movement_date=date.today(),
         idempotency_key=key,
-        notes=notes,
+        notes=f"{notes} | manager:{actor_name}",
     )
     db.add(movement)
     return movement
@@ -234,7 +247,7 @@ def create_catalog_product(db: Session, manager: User, payload) -> CatalogProduc
     if allocated_kg > available_stock_kg(source_stock):
         raise ValidationError("Quantite allouee superieure au stock principal disponible.")
 
-    apply_total_stock_delta(db, cooperative_id, source_product, -allocated_kg, create_if_missing=False)
+    apply_reserved_stock_delta(db, cooperative_id, source_product, allocated_kg, create_if_missing=False)
 
     item = CommercialCatalogProduct(
         cooperative_id=cooperative_id,
@@ -258,6 +271,7 @@ def create_catalog_product(db: Session, manager: User, payload) -> CatalogProduc
         cooperative_id=cooperative_id,
         product_id=source_product.id,
         catalog_product_id=item.id,
+        actor_name=_catalog_actor_label(manager),
         movement_type="out",
         action_type="commercial_catalog_allocation",
         source="commercial_catalog",
@@ -334,11 +348,11 @@ def delete_catalog_product(db: Session, manager: User, catalog_product_id) -> Ca
     source_product = item.source_product
     restock_kg = round_metric(max(item.total_stock_kg, 0.0))
     if source_product is not None and restock_kg > 0:
-        apply_total_stock_delta(
+        apply_reserved_stock_delta(
             db,
             cooperative_id,
             source_product,
-            restock_kg,
+            -restock_kg,
             create_if_missing=True,
         )
         _record_catalog_stock_movement(
@@ -346,6 +360,7 @@ def delete_catalog_product(db: Session, manager: User, catalog_product_id) -> Ca
             cooperative_id=cooperative_id,
             product_id=source_product.id,
             catalog_product_id=item.id,
+            actor_name=_catalog_actor_label(manager),
             movement_type="in",
             action_type="commercial_catalog_release",
             source="commercial_catalog",

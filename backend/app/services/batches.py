@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session, selectinload
 
 from app.models.batch import Batch
-from app.models.enums import BatchStatus
+from app.models.enums import BatchStatus, ProcessStepStatus
 from app.models.input import Input
 from app.models.member import Member
 from app.models.parcel import Parcel
@@ -14,8 +14,9 @@ from app.models.farmer_advance import FarmerAdvance
 from app.models.stock_movement import StockMovement
 from app.models.user import User
 from app.models.mixins import current_utc
-from app.schemas.batch import BatchRead
+from app.schemas.batch import BatchMaterialBalanceRead, BatchMaterialBalanceStageRead, BatchRead
 from app.schemas.farmer_advance import FarmerAdvanceCreate
+from app.services import analytics as analytics_service
 from app.services import farmer_advances as farmer_advance_service
 from app.services.helpers import from_kg, get_manager_cooperative_id, normalize_mass_unit, normalize_product_code, round_metric, to_kg
 from app.services.rag_reindex_hooks import reindex_batch_if_needed
@@ -24,6 +25,16 @@ from app.utils.exceptions import ConflictError, NotFoundError, ValidationError
 
 ALLOWED_PREHARVEST_STEP_STATUSES = {"todo", "in_progress", "done"}
 LINKED_COLLECTE_SOURCES = {"lot_linked_collecte", "pre_harvest_confirmed_weight"}
+
+
+def _postharvest_status(batch: Batch) -> str:
+    if batch.status in (BatchStatus.COMPLETED, BatchStatus.ARCHIVED):
+        return "post_recolte_completed"
+    if batch.postharvest_started_at is not None or len(batch.process_steps or []) > 0:
+        return "in_post_recolte"
+    if batch.preharvest_completed_at is not None and batch.confirmed_weight_kg is not None:
+        return "ready_post_recolte"
+    return "not_ready_post_recolte"
 
 
 def require_batch(db: Session, manager: User, batch_id, with_steps: bool = False) -> Batch:
@@ -136,6 +147,7 @@ def serialize_batch(batch: Batch) -> BatchRead:
         collecte_created=collecte is not None,
         stock_in_created=stock_in_exists,
         postharvest_started_at=batch.postharvest_started_at,
+        postharvest_status=_postharvest_status(batch),
         status_note=batch.status_note,
         initial_qty_display=initial_display,
         current_qty_display=current_display,
@@ -172,6 +184,11 @@ def create_batch(db: Session, manager: User, payload) -> Batch:
     unit = normalize_mass_unit(payload.unit)
     ordered_steps = _normalize_steps(payload.process_steps)
     estimated_qty_kg, override_kg, override_reason = _compute_estimated_qty_kg(payload, unit)
+    # Auto-charge policy: when not explicitly provided (or invalid), align estimated charge
+    # with computed estimated quantity so pre-harvest lots are never created with 0 FCFA by default.
+    estimated_charge_fcfa = payload.estimated_charge_fcfa
+    if estimated_charge_fcfa is None or float(estimated_charge_fcfa) <= 0:
+        estimated_charge_fcfa = round_metric(max(float(estimated_qty_kg), 0.0))
     legacy_mode = payload.member_id is None and payload.parcel_id is None
     if legacy_mode:
         reserve_stock_for_lot(db, cooperative_id, product, estimated_qty_kg)
@@ -196,7 +213,7 @@ def create_batch(db: Session, manager: User, payload) -> Batch:
             expected_losses_kg=payload.expected_losses_kg,
             estimated_qty_kg=estimated_qty_kg,
             estimated_qty_override_reason=override_reason,
-            estimated_charge_fcfa=payload.estimated_charge_fcfa,
+            estimated_charge_fcfa=estimated_charge_fcfa,
             preharvest_step_statuses=_build_default_preharvest_step_statuses(ordered_steps),
             status=BatchStatus.CREATED,
             created_by_user_id=manager.id,
@@ -224,6 +241,14 @@ def refresh_batch_current_qty(batch: Batch):
     else:
         batch.current_qty = 0.0
     return batch.current_qty
+
+
+def _completed_steps(batch: Batch):
+    return [
+        step
+        for step in (batch.process_steps or [])
+        if step.status == ProcessStepStatus.COMPLETED
+    ]
 
 
 def update_batch(db: Session, manager: User, batch_id, payload) -> Batch:
@@ -447,16 +472,107 @@ def transition_batch_status(db: Session, batch: Batch, next_status: BatchStatus)
 
 
 def sync_batch_status_from_steps(db: Session, batch: Batch):
-    executed_steps = len(batch.process_steps or [])
+    executed_steps = len(_completed_steps(batch))
     ordered_steps = [str(item).strip() for item in (batch.ordered_process_steps or []) if str(item).strip()]
+    if len(batch.process_steps or []) > 0 and batch.postharvest_started_at is None:
+        batch.postharvest_started_at = current_utc()
     if executed_steps == 0:
-        batch.status = BatchStatus.CREATED
+        batch.status = BatchStatus.IN_PROGRESS if (batch.postharvest_started_at is not None or len(batch.process_steps or []) > 0) else BatchStatus.CREATED
         return batch
     if ordered_steps and executed_steps >= len(ordered_steps):
         transition_batch_status(db, batch, BatchStatus.COMPLETED)
         return batch
     batch.status = BatchStatus.IN_PROGRESS
     return batch
+
+
+def start_postharvest(db: Session, manager: User, batch_id):
+    batch = require_batch(db, manager, batch_id, with_steps=True)
+    if batch.status in (BatchStatus.COMPLETED, BatchStatus.ARCHIVED):
+        raise ValidationError("Cannot start post-harvest on a completed/archived lot.")
+    if batch.member_id is not None or batch.parcel_id is not None:
+        if batch.preharvest_completed_at is None or batch.confirmed_weight_kg is None:
+            raise ValidationError("Lot is not ready for post-harvest. Complete pre-harvest and linked collecte first.")
+    if batch.postharvest_started_at is None:
+        batch.postharvest_started_at = current_utc()
+    if batch.status == BatchStatus.CREATED:
+        batch.status = BatchStatus.IN_PROGRESS
+    db.commit()
+    db.refresh(batch)
+    return batch
+
+
+def _required_steps_for_batch(batch: Batch) -> list[str]:
+    return [str(item).strip() for item in (batch.ordered_process_steps or []) if str(item).strip()]
+
+
+def complete_postharvest(db: Session, manager: User, batch_id):
+    batch = require_batch(db, manager, batch_id, with_steps=True)
+    required = _required_steps_for_batch(batch)
+    completed = _completed_steps(batch)
+    if len(completed) < len(required):
+        raise ValidationError("Cannot complete post-harvest before all required steps are completed.")
+    transition_batch_status(db, batch, BatchStatus.COMPLETED)
+    db.commit()
+    db.refresh(batch)
+    return batch
+
+
+def get_material_balance(db: Session, manager: User, batch_id) -> BatchMaterialBalanceRead:
+    batch = require_batch(db, manager, batch_id, with_steps=True)
+    steps = sorted(batch.process_steps or [], key=lambda item: (item.sequence_order, item.date, item.created_at, item.id))
+    completed = [step for step in steps if step.status == ProcessStepStatus.COMPLETED]
+
+    initial_confirmed = float(batch.confirmed_weight_kg if batch.confirmed_weight_kg is not None else batch.initial_qty)
+    current_qty = float(batch.current_qty or 0.0)
+    total_loss_qty = max(initial_confirmed - current_qty, 0.0)
+    total_loss_pct = (total_loss_qty / initial_confirmed) * 100.0 if initial_confirmed > 0 else 0.0
+    total_efficiency_pct = (current_qty / initial_confirmed) * 100.0 if initial_confirmed > 0 else 0.0
+
+    stage_rows: dict[str, dict] = {}
+    for step in completed:
+        key = str(step.type).strip().lower()
+        bucket = stage_rows.setdefault(
+            key,
+            {"stage": key, "step_count": 0, "qty_in": 0.0, "qty_out": 0.0, "loss_qty": 0.0, "loss_pct_sum": 0.0, "efficiency_pct_sum": 0.0},
+        )
+        metrics = analytics_service.compute_process_metrics(step)
+        bucket["step_count"] += 1
+        bucket["qty_in"] += float(step.qty_in or 0.0)
+        bucket["qty_out"] += float(step.qty_out or 0.0)
+        bucket["loss_qty"] += float(metrics["waste_qty"])
+        bucket["loss_pct_sum"] += float(metrics["loss_pct"])
+        bucket["efficiency_pct_sum"] += float(metrics["efficiency_pct"])
+
+    per_stage = [
+        BatchMaterialBalanceStageRead(
+            stage=item["stage"],
+            step_count=int(item["step_count"]),
+            qty_in=round_metric(item["qty_in"]),
+            qty_out=round_metric(item["qty_out"]),
+            loss_qty=round_metric(item["loss_qty"]),
+            loss_pct=round_metric(item["loss_pct_sum"] / item["step_count"]) if item["step_count"] else 0.0,
+            efficiency_pct=round_metric(item["efficiency_pct_sum"] / item["step_count"]) if item["step_count"] else 0.0,
+        )
+        for item in stage_rows.values()
+    ]
+    per_stage.sort(key=lambda item: item.stage)
+
+    return BatchMaterialBalanceRead(
+        batch_id=batch.id,
+        cooperative_id=batch.cooperative_id,
+        postharvest_status=_postharvest_status(batch),
+        initial_confirmed_qty=round_metric(initial_confirmed),
+        current_qty=round_metric(current_qty),
+        final_output_qty=round_metric(current_qty) if batch.status in (BatchStatus.COMPLETED, BatchStatus.ARCHIVED) else None,
+        total_loss_qty=round_metric(total_loss_qty),
+        total_loss_pct=round_metric(total_loss_pct),
+        total_efficiency_pct=round_metric(total_efficiency_pct),
+        steps_completed=len(completed),
+        steps_required=len(_required_steps_for_batch(batch)),
+        per_stage=per_stage,
+        process_steps=[analytics_service.serialize_process_step(step) for step in steps],
+    )
 
 
 def delete_batch(db: Session, manager: User, batch_id):

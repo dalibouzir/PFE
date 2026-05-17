@@ -4,8 +4,8 @@ export type LotWorkspaceTab = "overview" | "process" | "analytics" | "recommenda
 
 const tabs: Array<{ id: LotWorkspaceTab; label: string }> = [
   { id: "overview", label: "Vue d'ensemble" },
-  { id: "process", label: "Etapes / Transformations" },
-  { id: "analytics", label: "Analytique" },
+  { id: "process", label: "Étapes / Transformations" },
+  { id: "analytics", label: "Bilan matière" },
   { id: "recommendations", label: "Recommandations IA" },
   { id: "history", label: "Historique" },
 ];

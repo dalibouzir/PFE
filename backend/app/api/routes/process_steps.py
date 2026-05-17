@@ -40,7 +40,7 @@ def update_process_step(step_id: UUID, payload: ProcessStepUpdate, db: Session =
 
 @router.post("/{step_id}/complete", response_model=ProcessStepRead, summary="Complete a process step.")
 def complete_process_step(step_id: UUID, payload: ProcessStepCompleteRequest, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
-    step = process_step_service.complete_process_step(db, current_manager, step_id, payload.mark_batch_completed)
+    step = process_step_service.complete_process_step(db, current_manager, step_id, payload)
     return analytics_service.serialize_process_step(step)
 
 

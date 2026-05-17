@@ -23,7 +23,7 @@
   "split_details": {
     "time_based": {
       "strategy": "time_based",
-      "split_cutoff_date_ordinal": 739736,
+      "split_cutoff_date_ordinal": 739738,
       "train_rows": 10,
       "test_rows": 2
     },
@@ -39,66 +39,66 @@
       "test_rows": 2,
       "regression": {
         "model": {
-          "mae": 0.20005924916722861,
-          "rmse": 0.21552011539906013,
-          "r2": 0.8146355751323975
+          "mae": 0.1700496840681751,
+          "rmse": 0.1871611728178637,
+          "r2": 0.8602080116642054
         },
         "baselines": {
           "global_mean_loss": {
             "mae": 1.200129478353528,
             "rmse": 1.3003431843356208,
             "r2": -5.747870472255575,
-            "mae_improvement_vs_model": 1.0000702291862993,
-            "rmse_improvement_vs_model": 1.0848230689365606
+            "mae_improvement_vs_model": 1.0300797942853528,
+            "rmse_improvement_vs_model": 1.113182011517757
           },
           "product_mean_loss": {
             "mae": 1.200129478353527,
             "rmse": 1.30034318433562,
             "r2": -5.747870472255567,
-            "mae_improvement_vs_model": 1.0000702291862984,
-            "rmse_improvement_vs_model": 1.0848230689365597
+            "mae_improvement_vs_model": 1.030079794285352,
+            "rmse_improvement_vs_model": 1.1131820115177562
           },
           "stage_mean_loss": {
             "mae": 0.0,
             "rmse": 0.0,
             "r2": 1.0,
-            "mae_improvement_vs_model": -0.20005924916722861,
-            "rmse_improvement_vs_model": -0.21552011539906013
+            "mae_improvement_vs_model": -0.1700496840681751,
+            "rmse_improvement_vs_model": -0.1871611728178637
           },
           "product_stage_mean_loss": {
             "mae": 0.0,
             "rmse": 0.0,
             "r2": 1.0,
-            "mae_improvement_vs_model": -0.20005924916722861,
-            "rmse_improvement_vs_model": -0.21552011539906013
+            "mae_improvement_vs_model": -0.1700496840681751,
+            "rmse_improvement_vs_model": -0.1871611728178637
           },
           "stage_season_mean_loss": {
             "mae": 0.0,
             "rmse": 0.0,
             "r2": 1.0,
-            "mae_improvement_vs_model": -0.20005924916722861,
-            "rmse_improvement_vs_model": -0.21552011539906013
+            "mae_improvement_vs_model": -0.1700496840681751,
+            "rmse_improvement_vs_model": -0.1871611728178637
           },
           "product_stage_season_mean_loss": {
             "mae": 0.0,
             "rmse": 0.0,
             "r2": 1.0,
-            "mae_improvement_vs_model": -0.20005924916722861,
-            "rmse_improvement_vs_model": -0.21552011539906013
+            "mae_improvement_vs_model": -0.1700496840681751,
+            "rmse_improvement_vs_model": -0.1871611728178637
           },
           "product_stage_rolling_mean_loss": {
             "mae": 0.0,
             "rmse": 0.0,
             "r2": 1.0,
-            "mae_improvement_vs_model": -0.20005924916722861,
-            "rmse_improvement_vs_model": -0.21552011539906013
+            "mae_improvement_vs_model": -0.1700496840681751,
+            "rmse_improvement_vs_model": -0.1871611728178637
           },
           "previous_batch_loss_baseline": {
             "mae": 1.000107898627939,
             "rmse": 1.1183905584065805,
             "r2": -3.9915767168441425,
-            "mae_improvement_vs_model": 0.8000486494607104,
-            "rmse_improvement_vs_model": 0.9028704430075204
+            "mae_improvement_vs_model": 0.8300582145597639,
+            "rmse_improvement_vs_model": 0.9312293855887168
           }
         }
       },
@@ -313,28 +313,28 @@
           {
             "product": "mango",
             "row_count": 2,
-            "mae": 0.20005924916722861,
+            "mae": 0.1700496840681751,
             "mean_actual_loss_pct": 6.5002157972558745,
-            "mean_predicted_loss_pct": 6.300156548088646,
-            "error_bias": -0.20005924916722861
+            "mean_predicted_loss_pct": 6.330166113187699,
+            "error_bias": -0.1700496840681751
           }
         ],
         "by_canonical_stage": [
           {
             "stage_canonical": "packaging",
             "row_count": 1,
-            "mae": 0.28021670025113554,
+            "mae": 0.24823158452392047,
             "mean_actual_loss_pct": 7.000797091587765,
-            "mean_predicted_loss_pct": 6.72058039133663,
-            "error_bias": -0.28021670025113554
+            "mean_predicted_loss_pct": 6.752565507063845,
+            "error_bias": -0.24823158452392047
           },
           {
             "stage_canonical": "sorting",
             "row_count": 1,
-            "mae": 0.11990179808332169,
+            "mae": 0.09186778361242975,
             "mean_actual_loss_pct": 5.999634502923984,
-            "mean_predicted_loss_pct": 5.879732704840662,
-            "error_bias": -0.11990179808332169
+            "mean_predicted_loss_pct": 5.907766719311554,
+            "error_bias": -0.09186778361242975
           }
         ],
         "by_product_stage": [
@@ -342,29 +342,29 @@
             "product": "mango",
             "stage_canonical": "packaging",
             "row_count": 1,
-            "mae": 0.28021670025113554,
+            "mae": 0.24823158452392047,
             "mean_actual_loss_pct": 7.000797091587765,
-            "mean_predicted_loss_pct": 6.72058039133663,
-            "error_bias": -0.28021670025113554
+            "mean_predicted_loss_pct": 6.752565507063845,
+            "error_bias": -0.24823158452392047
           },
           {
             "product": "mango",
             "stage_canonical": "sorting",
             "row_count": 1,
-            "mae": 0.11990179808332169,
+            "mae": 0.09186778361242975,
             "mean_actual_loss_pct": 5.999634502923984,
-            "mean_predicted_loss_pct": 5.879732704840662,
-            "error_bias": -0.11990179808332169
+            "mean_predicted_loss_pct": 5.907766719311554,
+            "error_bias": -0.09186778361242975
           }
         ],
         "by_risk_class": [
           {
             "actual_risk_level": "low",
             "row_count": 2,
-            "mae": 0.20005924916722861,
+            "mae": 0.1700496840681751,
             "mean_actual_loss_pct": 6.5002157972558745,
-            "mean_predicted_loss_pct": 6.300156548088646,
-            "error_bias": -0.20005924916722861
+            "mean_predicted_loss_pct": 6.330166113187699,
+            "error_bias": -0.1700496840681751
           }
         ]
       },
@@ -376,8 +376,8 @@
           "qty_in": 514.37,
           "qty_out": 478.36,
           "actual_loss_pct": 7.000797091587765,
-          "predicted_loss_pct": 6.72058039133663,
-          "abs_error": 0.28021670025113554,
+          "predicted_loss_pct": 6.752565507063845,
+          "abs_error": 0.24823158452392047,
           "actual_risk_level": "low",
           "predicted_risk_level": "low"
         },
@@ -388,8 +388,8 @@
           "qty_in": 547.2,
           "qty_out": 514.37,
           "actual_loss_pct": 5.999634502923984,
-          "predicted_loss_pct": 5.879732704840662,
-          "abs_error": 0.11990179808332169,
+          "predicted_loss_pct": 5.907766719311554,
+          "abs_error": 0.09186778361242975,
           "actual_risk_level": "low",
           "predicted_risk_level": "low"
         }
@@ -407,8 +407,8 @@
             "process_type": "packaging",
             "stage_canonical": "packaging",
             "actual_loss_pct": 7.000797091587765,
-            "predicted_loss_pct": 6.72058039133663,
-            "anomaly_score_raw": 0.025986797880581558,
+            "predicted_loss_pct": 6.752565507063845,
+            "anomaly_score_raw": 0.016079299928023927,
             "is_anomalous": false
           },
           {
@@ -416,8 +416,8 @@
             "process_type": "sorting",
             "stage_canonical": "sorting",
             "actual_loss_pct": 5.999634502923984,
-            "predicted_loss_pct": 5.879732704840662,
-            "anomaly_score_raw": 0.04971838012446994,
+            "predicted_loss_pct": 5.907766719311554,
+            "anomaly_score_raw": 0.044769189366003825,
             "is_anomalous": false
           }
         ]
@@ -429,66 +429,66 @@
       "test_rows": 3,
       "regression": {
         "model": {
-          "mae": 0.5239679034679785,
-          "rmse": 0.6825267969631945,
-          "r2": 0.3009802986107152
+          "mae": 0.5053025225297872,
+          "rmse": 0.6626119611715798,
+          "r2": 0.34117731494048653
         },
         "baselines": {
           "global_mean_loss": {
             "mae": 0.8888285484047099,
             "rmse": 1.054170754928942,
             "r2": -0.6675233714838831,
-            "mae_improvement_vs_model": 0.3648606449367314,
-            "rmse_improvement_vs_model": 0.37164395796574756
+            "mae_improvement_vs_model": 0.3835260258749227,
+            "rmse_improvement_vs_model": 0.39155879375736224
           },
           "product_mean_loss": {
             "mae": 0.8888285484047099,
             "rmse": 1.054170754928942,
             "r2": -0.6675233714838831,
-            "mae_improvement_vs_model": 0.3648606449367314,
-            "rmse_improvement_vs_model": 0.37164395796574756
+            "mae_improvement_vs_model": 0.3835260258749227,
+            "rmse_improvement_vs_model": 0.39155879375736224
           },
           "stage_mean_loss": {
             "mae": 0.0,
             "rmse": 0.0,
             "r2": 1.0,
-            "mae_improvement_vs_model": -0.5239679034679785,
-            "rmse_improvement_vs_model": -0.6825267969631945
+            "mae_improvement_vs_model": -0.5053025225297872,
+            "rmse_improvement_vs_model": -0.6626119611715798
           },
           "product_stage_mean_loss": {
             "mae": 0.0,
             "rmse": 0.0,
             "r2": 1.0,
-            "mae_improvement_vs_model": -0.5239679034679785,
-            "rmse_improvement_vs_model": -0.6825267969631945
+            "mae_improvement_vs_model": -0.5053025225297872,
+            "rmse_improvement_vs_model": -0.6626119611715798
           },
           "stage_season_mean_loss": {
             "mae": 0.0,
             "rmse": 0.0,
             "r2": 1.0,
-            "mae_improvement_vs_model": -0.5239679034679785,
-            "rmse_improvement_vs_model": -0.6825267969631945
+            "mae_improvement_vs_model": -0.5053025225297872,
+            "rmse_improvement_vs_model": -0.6626119611715798
           },
           "product_stage_season_mean_loss": {
             "mae": 0.0,
             "rmse": 0.0,
             "r2": 1.0,
-            "mae_improvement_vs_model": -0.5239679034679785,
-            "rmse_improvement_vs_model": -0.6825267969631945
+            "mae_improvement_vs_model": -0.5053025225297872,
+            "rmse_improvement_vs_model": -0.6626119611715798
           },
           "product_stage_rolling_mean_loss": {
             "mae": 0.0,
             "rmse": 0.0,
             "r2": 1.0,
-            "mae_improvement_vs_model": -0.5239679034679785,
-            "rmse_improvement_vs_model": -0.6825267969631945
+            "mae_improvement_vs_model": -0.5053025225297872,
+            "rmse_improvement_vs_model": -0.6626119611715798
           },
           "previous_batch_loss_baseline": {
             "mae": 2.999878167641331,
             "rmse": 4.636796118681864,
             "r2": -31.261607455938446,
-            "mae_improvement_vs_model": 2.4759102641733524,
-            "rmse_improvement_vs_model": 3.9542693217186695
+            "mae_improvement_vs_model": 2.4945756451115435,
+            "rmse_improvement_vs_model": 3.974184157510284
           }
         }
       },
@@ -703,36 +703,36 @@
           {
             "product": "mango",
             "row_count": 3,
-            "mae": 0.5239679034679785,
+            "mae": 0.5053025225297872,
             "mean_actual_loss_pct": 4.999878167641325,
-            "mean_predicted_loss_pct": 5.4119286370340225,
-            "error_bias": 0.41205046939269724
+            "mean_predicted_loss_pct": 5.422613241530047,
+            "error_bias": 0.4227350738887212
           }
         ],
         "by_canonical_stage": [
           {
             "stage_canonical": "cleaning",
             "row_count": 1,
-            "mae": 1.1400202807283586,
+            "mae": 1.104019751948873,
             "mean_actual_loss_pct": 4.0,
-            "mean_predicted_loss_pct": 5.140020280728359,
-            "error_bias": 1.1400202807283586
+            "mean_predicted_loss_pct": 5.104019751948873,
+            "error_bias": 1.104019751948873
           },
           {
             "stage_canonical": "drying",
             "row_count": 1,
-            "mae": 0.26400727856265505,
+            "mae": 0.2880366426788896,
             "mean_actual_loss_pct": 4.999999999999992,
-            "mean_predicted_loss_pct": 5.264007278562647,
-            "error_bias": 0.26400727856265505
+            "mean_predicted_loss_pct": 5.288036642678882,
+            "error_bias": 0.2880366426788896
           },
           {
             "stage_canonical": "sorting",
             "row_count": 1,
-            "mae": 0.16787615111292187,
+            "mae": 0.12385117296159898,
             "mean_actual_loss_pct": 5.999634502923984,
-            "mean_predicted_loss_pct": 5.831758351811062,
-            "error_bias": -0.16787615111292187
+            "mean_predicted_loss_pct": 5.875783329962385,
+            "error_bias": -0.12385117296159898
           }
         ],
         "by_product_stage": [
@@ -740,38 +740,38 @@
             "product": "mango",
             "stage_canonical": "cleaning",
             "row_count": 1,
-            "mae": 1.1400202807283586,
+            "mae": 1.104019751948873,
             "mean_actual_loss_pct": 4.0,
-            "mean_predicted_loss_pct": 5.140020280728359,
-            "error_bias": 1.1400202807283586
+            "mean_predicted_loss_pct": 5.104019751948873,
+            "error_bias": 1.104019751948873
           },
           {
             "product": "mango",
             "stage_canonical": "drying",
             "row_count": 1,
-            "mae": 0.26400727856265505,
+            "mae": 0.2880366426788896,
             "mean_actual_loss_pct": 4.999999999999992,
-            "mean_predicted_loss_pct": 5.264007278562647,
-            "error_bias": 0.26400727856265505
+            "mean_predicted_loss_pct": 5.288036642678882,
+            "error_bias": 0.2880366426788896
           },
           {
             "product": "mango",
             "stage_canonical": "sorting",
             "row_count": 1,
-            "mae": 0.16787615111292187,
+            "mae": 0.12385117296159898,
             "mean_actual_loss_pct": 5.999634502923984,
-            "mean_predicted_loss_pct": 5.831758351811062,
-            "error_bias": -0.16787615111292187
+            "mean_predicted_loss_pct": 5.875783329962385,
+            "error_bias": -0.12385117296159898
           }
         ],
         "by_risk_class": [
           {
             "actual_risk_level": "low",
             "row_count": 3,
-            "mae": 0.5239679034679785,
+            "mae": 0.5053025225297872,
             "mean_actual_loss_pct": 4.999878167641325,
-            "mean_predicted_loss_pct": 5.4119286370340225,
-            "error_bias": 0.41205046939269724
+            "mean_predicted_loss_pct": 5.422613241530047,
+            "error_bias": 0.4227350738887212
           }
         ]
       },
@@ -783,8 +783,8 @@
           "qty_in": 600.0,
           "qty_out": 576.0,
           "actual_loss_pct": 4.0,
-          "predicted_loss_pct": 5.140020280728359,
-          "abs_error": 1.1400202807283586,
+          "predicted_loss_pct": 5.104019751948873,
+          "abs_error": 1.104019751948873,
           "actual_risk_level": "low",
           "predicted_risk_level": "low"
         },
@@ -795,8 +795,8 @@
           "qty_in": 576.0,
           "qty_out": 547.2,
           "actual_loss_pct": 4.999999999999992,
-          "predicted_loss_pct": 5.264007278562647,
-          "abs_error": 0.26400727856265505,
+          "predicted_loss_pct": 5.288036642678882,
+          "abs_error": 0.2880366426788896,
           "actual_risk_level": "low",
           "predicted_risk_level": "low"
         },
@@ -807,8 +807,8 @@
           "qty_in": 547.2,
           "qty_out": 514.37,
           "actual_loss_pct": 5.999634502923984,
-          "predicted_loss_pct": 5.831758351811062,
-          "abs_error": 0.16787615111292187,
+          "predicted_loss_pct": 5.875783329962385,
+          "abs_error": 0.12385117296159898,
           "actual_risk_level": "low",
           "predicted_risk_level": "low"
         }
@@ -826,8 +826,8 @@
             "process_type": "cleaning",
             "stage_canonical": "cleaning",
             "actual_loss_pct": 4.0,
-            "predicted_loss_pct": 5.140020280728359,
-            "anomaly_score_raw": -0.021207577787001552,
+            "predicted_loss_pct": 5.104019751948873,
+            "anomaly_score_raw": -0.016233254428837718,
             "is_anomalous": true
           },
           {
@@ -835,8 +835,8 @@
             "process_type": "sorting",
             "stage_canonical": "sorting",
             "actual_loss_pct": 5.999634502923984,
-            "predicted_loss_pct": 5.831758351811062,
-            "anomaly_score_raw": 0.0329294892200912,
+            "predicted_loss_pct": 5.875783329962385,
+            "anomaly_score_raw": 0.02631164366458183,
             "is_anomalous": false
           },
           {
@@ -844,8 +844,8 @@
             "process_type": "drying",
             "stage_canonical": "drying",
             "actual_loss_pct": 4.999999999999992,
-            "predicted_loss_pct": 5.264007278562647,
-            "anomaly_score_raw": 0.049373112827987176,
+            "predicted_loss_pct": 5.288036642678882,
+            "anomaly_score_raw": 0.03279127797441217,
             "is_anomalous": false
           }
         ]

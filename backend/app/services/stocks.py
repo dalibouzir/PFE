@@ -211,6 +211,32 @@ def apply_total_stock_delta(
     return stock
 
 
+def apply_reserved_stock_delta(
+    db: Session,
+    cooperative_id,
+    product: Product,
+    delta_reserved_kg: float,
+    create_if_missing: bool = False,
+) -> Stock:
+    stock = get_stock_by_product(db, cooperative_id, product.id)
+    if stock is None:
+        if not create_if_missing:
+            raise ValidationError("Stock row not found for the requested product.")
+        stock = _create_stock_row(db, cooperative_id, product, unit=product.unit)
+    else:
+        _repair_legacy_stock_row(stock)
+
+    next_reserved = round_metric(stock.reserved_in_lots_kg + float(delta_reserved_kg))
+    if next_reserved < 0:
+        raise ValidationError("Reserved stock cannot become negative.")
+    if next_reserved > stock.total_stock_kg:
+        raise ValidationError("Reserved stock cannot exceed total stock.")
+
+    stock.reserved_in_lots_kg = next_reserved
+    _sync_available_snapshot(stock)
+    return stock
+
+
 def reserve_stock_for_lot(db: Session, cooperative_id, product: Product, quantity_kg: float) -> Stock:
     stock = get_stock_by_product(db, cooperative_id, product.id)
     if stock is None:

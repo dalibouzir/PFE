@@ -3,22 +3,32 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict
 
+from sqlalchemy import func, select
+from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sklearn.model_selection import train_test_split
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from app.db.base import Base
+from app.core.config import settings
 from app.db.session import SessionLocal
 from app.ml.features.engineer import build_features
+from app.models.process_step import ProcessStep
 from app.ml.training.trainer import _split_train_test_indices
 from app.ml.utils.feature_prep import assign_risk_level, prepare_feature_frame
 from scripts.evaluate_ml_models import _distribution, _evaluate_split
+from scripts.seed_ml_training_data import seed_ml_training_data
 
 REGRESSION_GATE = 0.10
 CLASSIFICATION_GATE = 0.10
@@ -50,7 +60,13 @@ def _schema_columns(features_df) -> list[str]:
     return sorted(prepared.columns.tolist())
 
 
-def run_weather_evaluation(db: Session, output_json: Path, output_md: Path) -> Dict:
+def run_weather_evaluation(
+    db: Session,
+    output_json: Path,
+    output_md: Path,
+    *,
+    source_info: Dict | None = None,
+) -> Dict:
     internal_set = build_features(db, include_weather=False)
     weather_set = build_features(db, include_weather=True)
 
@@ -73,8 +89,12 @@ def run_weather_evaluation(db: Session, output_json: Path, output_md: Path) -> D
     internal_time_eval = _evaluate_split(internal_prepared, internal_feature_groups, int_train_time, int_test_time, "internal_time")
     internal_rand_eval = _evaluate_split(internal_prepared, internal_feature_groups, int_train_rand, int_test_rand, "internal_random")
 
-    best_baseline_name = "stage_season_mean_loss"
-    best_baseline_mae = float(internal_time_eval["regression"]["baselines"][best_baseline_name]["mae"])
+    regression_baselines = internal_time_eval["regression"]["baselines"]
+    best_baseline_name, best_baseline_payload = min(
+        regression_baselines.items(),
+        key=lambda item: float(item[1]["mae"]),
+    )
+    best_baseline_mae = float(best_baseline_payload["mae"])
     internal_mae = float(internal_time_eval["regression"]["model"]["mae"])
     weather_mae = float(weather_time_eval["regression"]["model"]["mae"])
 
@@ -83,12 +103,23 @@ def run_weather_evaluation(db: Session, output_json: Path, output_md: Path) -> D
     weather_reg_pass = weather_reg_improvement >= REGRESSION_GATE
     internal_reg_pass = internal_reg_improvement >= REGRESSION_GATE
 
+    best_numeric_model = "internal_model" if internal_mae <= weather_mae else "weather_model"
+    best_numeric_across_all = (
+        "baseline"
+        if best_baseline_mae < min(internal_mae, weather_mae)
+        else best_numeric_model
+    )
+
+    gate_pass_candidates = []
+    if internal_reg_pass:
+        gate_pass_candidates.append(("internal_model", internal_mae))
     if weather_reg_pass:
-        selected_regression = "weather_model"
-    elif internal_reg_pass:
-        selected_regression = "internal_model"
+        gate_pass_candidates.append(("weather_model", weather_mae))
+    if gate_pass_candidates:
+        gate_promoted_candidate = min(gate_pass_candidates, key=lambda item: item[1])[0]
     else:
-        selected_regression = f"baseline:{best_baseline_name}"
+        gate_promoted_candidate = f"baseline:{best_baseline_name}"
+    selected_regression = gate_promoted_candidate
 
     _, weather_best_threshold = _best_threshold_baseline(weather_time_eval["classification"])
     _, internal_best_threshold = _best_threshold_baseline(internal_time_eval["classification"])
@@ -101,6 +132,7 @@ def run_weather_evaluation(db: Session, output_json: Path, output_md: Path) -> D
     leakage_violations = int(weather_diag.get("leakage_violations", 0))
 
     report = {
+        "source": source_info or {},
         "dataset": {
             "row_count": int(len(internal_df)),
             "product_distribution": _distribution(internal_df["product"]),
@@ -134,6 +166,10 @@ def run_weather_evaluation(db: Session, output_json: Path, output_md: Path) -> D
                 "weather_model_mae": weather_mae,
                 "internal_relative_improvement_vs_baseline": internal_reg_improvement,
                 "weather_relative_improvement_vs_baseline": weather_reg_improvement,
+                "best_numeric_candidate_model_only": best_numeric_model,
+                "best_numeric_candidate_across_all": best_numeric_across_all,
+                "gate_promoted_candidate": gate_promoted_candidate,
+                "production_decision": selected_regression,
                 "selected_decision": selected_regression,
             },
             "classification": {
@@ -159,8 +195,25 @@ def run_weather_evaluation(db: Session, output_json: Path, output_md: Path) -> D
     output_json.parent.mkdir(parents=True, exist_ok=True)
     output_json.write_text(json.dumps(report, indent=2))
 
+    source = report.get("source", {})
+    source_label = str(source.get("data_source_label") or "unknown")
+    fallback_used = bool(source.get("fallback_used", False))
     lines = [
         "# WeeFarm ML Weather Evaluation",
+        "",
+    ]
+    if fallback_used:
+        lines.extend([
+            "## LOCAL/FALLBACK DATASET — NOT COMPARABLE TO FULL SUPABASE AUDIT.",
+            "",
+        ])
+    lines.extend([
+        "## Data Source",
+        f"- Label: {source_label}",
+        f"- Identifier: {source.get('database_identifier')}",
+        f"- Fallback used: {fallback_used}",
+        f"- Generated at: {source.get('generated_at')}",
+        f"- Python runtime: {source.get('python_runtime')}",
         "",
         "## Dataset",
         f"- Rows: {report['dataset']['row_count']}",
@@ -178,6 +231,12 @@ def run_weather_evaluation(db: Session, output_json: Path, output_md: Path) -> D
         f"- Baseline ({best_baseline_name}) MAE: {best_baseline_mae:.4f}",
         f"- Internal model MAE: {internal_mae:.4f}",
         f"- Weather model MAE: {weather_mae:.4f}",
+        f"- Internal relative improvement vs best baseline: {internal_reg_improvement * 100:.2f}%",
+        f"- Weather relative improvement vs best baseline: {weather_reg_improvement * 100:.2f}%",
+        f"- Best numeric candidate (model-only): {best_numeric_model}",
+        f"- Best numeric candidate (across all): {best_numeric_across_all}",
+        f"- Gate-promoted candidate: {gate_promoted_candidate}",
+        f"- Production decision: {selected_regression}",
         f"- Selected decision: {selected_regression}",
         "",
         "## Regression (Random Split Secondary)",
@@ -186,17 +245,60 @@ def run_weather_evaluation(db: Session, output_json: Path, output_md: Path) -> D
         "",
         "## Classification (Time Split)",
         f"- Internal model macro-F1: {internal_cls_f1:.4f}",
+        f"- Internal best threshold baseline macro-F1: {internal_best_threshold:.4f}",
         f"- Weather model macro-F1: {weather_cls_f1:.4f}",
+        f"- Weather best threshold baseline macro-F1: {weather_best_threshold:.4f}",
         "",
         "## Gate Results",
         f"- Internal regression gate: {report['gates']['regression_internal']}",
         f"- Weather regression gate: {report['gates']['regression_weather']}",
         f"- Internal classification gate: {report['gates']['classification_internal']}",
         f"- Weather classification gate: {report['gates']['classification_weather']}",
-    ]
+    ])
     output_md.parent.mkdir(parents=True, exist_ok=True)
     output_md.write_text("\n".join(lines))
     return report
+
+
+def _local_sqlite_session() -> tuple[Session, bool]:
+    sqlite_path = BACKEND_DIR / "weefarm.db"
+    engine = create_engine(
+        f"sqlite:///{sqlite_path}",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+    SessionLocalSQLite = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, class_=Session)
+    session = SessionLocalSQLite()
+    step_count = int(session.scalar(select(func.count(ProcessStep.id))) or 0)
+    seeded = False
+    if step_count == 0:
+        seed_ml_training_data(session, target_rows=500, random_seed=42, demo_only=True)
+        seeded = True
+    return session, seeded
+
+
+def _source_info(*, fallback_used: bool, seeded_local: bool) -> Dict:
+    generated_at = datetime.now(timezone.utc).isoformat()
+    python_runtime = platform.python_version()
+    if fallback_used:
+        label = "test_seed" if seeded_local else "fallback_sqlite"
+        return {
+            "data_source_label": label,
+            "database_identifier": str((BACKEND_DIR / "weefarm.db").resolve()),
+            "fallback_used": True,
+            "generated_at": generated_at,
+            "python_runtime": python_runtime,
+        }
+
+    masked = settings.masked_database_url
+    label = "supabase" if "supabase.com" in masked or "pooler.supabase.com" in masked else "unknown"
+    return {
+        "data_source_label": label,
+        "database_identifier": masked,
+        "fallback_used": False,
+        "generated_at": generated_at,
+        "python_runtime": python_runtime,
+    }
 
 
 def main() -> None:
@@ -206,12 +308,30 @@ def main() -> None:
     args = parser.parse_args()
 
     db = SessionLocal()
+    used_local_fallback = False
+    local_seeded = False
     try:
-        report = run_weather_evaluation(db, output_json=Path(args.output_json), output_md=Path(args.output_md))
+        report = run_weather_evaluation(
+            db,
+            output_json=Path(args.output_json),
+            output_md=Path(args.output_md),
+            source_info=_source_info(fallback_used=False, seeded_local=False),
+        )
+    except OperationalError:
+        db.close()
+        db, local_seeded = _local_sqlite_session()
+        used_local_fallback = True
+        report = run_weather_evaluation(
+            db,
+            output_json=Path(args.output_json),
+            output_md=Path(args.output_md),
+            source_info=_source_info(fallback_used=True, seeded_local=local_seeded),
+        )
     finally:
         db.close()
     print(f"Saved JSON report: {args.output_json}")
     print(f"Saved Markdown report: {args.output_md}")
+    print(f"Data source: {report.get('source', {}).get('data_source_label')}")
     print(f"Weather coverage: {report['weather_coverage']['coverage_rate']:.4f}")
     print(f"Regression decision: {report['comparison']['regression']['selected_decision']}")
 

@@ -129,6 +129,9 @@ export const endpoints = {
     stopPreHarvest: (id: string) => `/batches/${id}/stop-preharvest`,
     updatePreHarvestStepStatuses: (id: string) => `/batches/${id}/preharvest-step-statuses`,
     completePreHarvest: (id: string) => `/batches/${id}/complete-preharvest`,
+    startPostHarvest: (id: string) => `/batches/${id}/start-postharvest`,
+    completePostHarvest: (id: string) => `/batches/${id}/complete-postharvest`,
+    materialBalance: (id: string) => `/batches/${id}/material-balance`,
     delete: (id: string) => `/batches/${id}`,
   },
   processSteps: {

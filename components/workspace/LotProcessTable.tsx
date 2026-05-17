@@ -45,6 +45,7 @@ export function LotProcessTable({
               <th className="px-5 py-3.5">Pertes</th>
               <th className="px-5 py-3.5">Quantite sortante</th>
               <th className="px-5 py-3.5">Date</th>
+              <th className="px-5 py-3.5">Durée</th>
               <th className="px-5 py-3.5">Notes</th>
               <th className="px-5 py-3.5">Action</th>
             </tr>
@@ -53,9 +54,17 @@ export function LotProcessTable({
             {rows.map((row) => {
               const step = row.step;
               const lossKg = step ? step.normalized_loss_value : null;
-              const actionLabel = step ? "Modifier" : row.isExecutable ? "Executer" : "En attente";
+              const actionLabel = step
+                ? step.stage_status === "pending"
+                  ? "Completer"
+                  : "Modifier"
+                : row.isExecutable
+                  ? "Demarrer"
+                  : "En attente";
               const actionClass = step
-                ? "rounded-xl border border-[var(--info)] bg-[#EEF5FF] px-3 py-1.5 text-xs font-semibold text-[var(--info)] hover:brightness-95"
+                ? step.stage_status === "pending"
+                  ? "rounded-xl border border-[var(--warning)] bg-[#FFF7E6] px-3 py-1.5 text-xs font-semibold text-[#A36A00] hover:brightness-95"
+                  : "rounded-xl border border-[var(--info)] bg-[#EEF5FF] px-3 py-1.5 text-xs font-semibold text-[var(--info)] hover:brightness-95"
                 : row.isExecutable
                   ? "rounded-xl border border-[var(--primary)] bg-[var(--primary)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-95"
                   : "cursor-not-allowed rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]";
@@ -87,6 +96,7 @@ export function LotProcessTable({
                   </td>
                   <td className="px-5 py-3.5 font-semibold text-[var(--text)]">{step ? `${step.qty_out.toFixed(2)} kg` : "-"}</td>
                   <td className="px-5 py-3.5">{step ? step.date : "-"}</td>
+                  <td className="px-5 py-3.5">{step?.duration_minutes ? `${step.duration_minutes} min` : "-"}</td>
                   <td className="px-5 py-3.5 text-xs text-[var(--muted)]">{step?.notes?.trim() || "-"}</td>
                   <td className="px-5 py-3.5">
                     <button

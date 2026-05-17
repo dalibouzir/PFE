@@ -16,6 +16,7 @@ from app.schemas.commercial import (
     OrderLineCreate,
 )
 from app.services import commercial as commercial_service
+from app.services import stock_movements as stock_movement_service
 
 
 def test_catalog_order_invoice_payment_flow(db_session):
@@ -45,7 +46,9 @@ def test_catalog_order_invoice_payment_flow(db_session):
     )
 
     stock = db_session.scalar(select(Stock).where(Stock.product_id == product.id))
-    assert stock.total_stock_kg == 400.0
+    assert stock.total_stock_kg == 500.0
+    assert stock.reserved_in_lots_kg == 100.0
+    assert stock.quantity == 400.0
     allocation_movement = db_session.scalar(
         select(StockMovement).where(
             StockMovement.product_id == product.id,
@@ -56,6 +59,16 @@ def test_catalog_order_invoice_payment_flow(db_session):
     )
     assert allocation_movement is not None
     assert allocation_movement.quantity_kg == 100.0
+    assert allocation_movement.notes is not None
+    assert "manager:" in allocation_movement.notes
+    assert manager.full_name in allocation_movement.notes
+
+    journal_rows = stock_movement_service.list_stock_movements(db_session, manager, source="commercial_catalog")
+    allocation_row = next((row for row in journal_rows if row.action_type == "commercial_catalog_allocation"), None)
+    assert allocation_row is not None
+    assert allocation_row.member_name is not None
+    assert manager.full_name in allocation_row.member_name
+    assert manager.email in allocation_row.member_name
 
     order = commercial_service.intake_order(
         db_session,
@@ -191,3 +204,5 @@ def test_catalog_order_invoice_payment_flow(db_session):
         )
     )
     assert release_movement is not None
+    assert release_movement.notes is not None
+    assert manager.full_name in release_movement.notes

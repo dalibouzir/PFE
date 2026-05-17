@@ -3,20 +3,31 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict
 
+from sqlalchemy import func
+from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from app.db.base import Base
+from app.core.config import settings
 from app.db.session import SessionLocal
+from app.models.batch import Batch
+from app.models.process_step import ProcessStep
 from app.models.ml import RecommendationFeedbackLog
 from scripts.evaluate_ml_models import run_evaluation
+from scripts.seed_ml_training_data import seed_ml_training_data
 
 REGRESSION_IMPROVEMENT_GATE = 0.10
 CLASSIFICATION_IMPROVEMENT_GATE = 0.10
@@ -136,15 +147,39 @@ def _write_markdown(report: Dict, output_md: Path) -> None:
     time_eval = report["evaluation"]["time_based"]
     random_eval = report["evaluation"]["random_split"]
     gates = report["gates"]
+    source = report.get("source", {})
+    source_label = str(source.get("data_source_label") or "unknown")
+    fallback_used = bool(source.get("fallback_used", False))
     lines: list[str] = []
     lines.append("# WeeFarm ML Reliability Audit")
+    lines.append("")
+    if fallback_used:
+        lines.append("## LOCAL/FALLBACK DATASET — NOT COMPARABLE TO FULL SUPABASE AUDIT.")
+        lines.append("")
+    lines.append("## Data Source")
+    lines.append(f"- Label: {source_label}")
+    lines.append(f"- Identifier: {source.get('database_identifier')}")
+    lines.append(f"- Fallback used: {fallback_used}")
+    lines.append(f"- Generated at: {source.get('generated_at')}")
+    lines.append(f"- Python runtime: {source.get('python_runtime')}")
     lines.append("")
     lines.append("## Dataset")
     lines.append(f"- Rows: {report['dataset']['row_count']}")
     lines.append("")
     lines.append("## Time Split (Primary)")
     lines.append(f"- Regression model MAE: {time_eval['regression']['model']['mae']:.4f}")
+    lines.append(f"- Best baseline MAE ({gates['regression']['best_baseline_name']}): {gates['regression']['best_baseline_mae']:.4f}")
+    lines.append(f"- Regression relative improvement vs best baseline: {gates['regression']['relative_improvement_vs_best_baseline'] * 100:.2f}%")
+    lines.append(f"- Regression numeric winner: {'model' if time_eval['regression']['model']['mae'] < gates['regression']['best_baseline_mae'] else 'baseline'}")
+    lines.append(f"- Regression gate status (>=10% required): {gates['regression']['status']}")
+    lines.append(f"- Regression promoted decision: {report['selected_model_or_fallback']['regression']}")
     lines.append(f"- Classification model macro-F1: {time_eval['classification']['model']['macro_f1']:.4f}")
+    lines.append(f"- Best threshold baseline macro-F1 ({gates['classification']['best_threshold_baseline_name']}): {gates['classification']['best_threshold_baseline_macro_f1']:.4f}")
+    lines.append(
+        f"- Classification relative improvement vs best threshold baseline: {gates['classification']['relative_improvement_vs_best_threshold_baseline'] * 100:.2f}%"
+    )
+    lines.append(f"- Classification gate status (>=10% required): {gates['classification']['status']}")
+    lines.append(f"- Classification promoted decision: {report['selected_model_or_fallback']['classification']}")
     lines.append("")
     lines.append("## Random Split (Secondary)")
     lines.append(f"- Regression model MAE: {random_eval['regression']['model']['mae']:.4f}")
@@ -183,7 +218,13 @@ def _write_markdown(report: Dict, output_md: Path) -> None:
     lines.append("")
     lines.append("## PFE Report Claims")
     lines.append("Can claim:")
-    lines.append(f"- Classification ML outperforms threshold baselines by {gates['classification']['relative_improvement_vs_best_threshold_baseline'] * 100:.2f}% on macro-F1 (time split).")
+    cls_rel = gates["classification"]["relative_improvement_vs_best_threshold_baseline"] * 100
+    if gates["classification"]["status"] == "PASS":
+        lines.append(f"- Classification ML outperforms threshold baselines by {cls_rel:.2f}% on macro-F1 (time split).")
+    else:
+        lines.append(
+            f"- Classification ML does not beat threshold baselines yet (delta {cls_rel:.2f}% on macro-F1, time split)."
+        )
     lines.append("- Anomaly outputs are operational signals only (not supervised-validated accuracy).")
     lines.append("- Recommendation generation is currently rule-based template logic.")
     lines.append("Cannot claim:")
@@ -193,13 +234,19 @@ def _write_markdown(report: Dict, output_md: Path) -> None:
     lines.append("")
     lines.append("## Honest Verdict")
     lines.append(
-        "Current stack is mixed-readiness: classification signal is promising, regression reliability gate fails, anomaly is exploratory, and recommendation remains rule-based."
+        "Current Supabase snapshot is not promotion-ready: regression does not pass the 10% gate against the strongest baseline, classification fails its threshold-baseline gate, anomaly is exploratory, and recommendation remains rule-based."
     )
     output_md.parent.mkdir(parents=True, exist_ok=True)
     output_md.write_text("\n".join(lines))
 
 
-def run_reliability_audit(db: Session, output_json: Path, output_md: Path) -> Dict:
+def run_reliability_audit(
+    db: Session,
+    output_json: Path,
+    output_md: Path,
+    *,
+    source_info: Dict | None = None,
+) -> Dict:
     eval_report = run_evaluation(
         db,
         output_json=Path("artifacts/ml_evaluation_report.json"),
@@ -208,6 +255,7 @@ def run_reliability_audit(db: Session, output_json: Path, output_md: Path) -> Di
     time_eval = eval_report["evaluation"]["time_based"]
     has_reco_feedback = _has_recommendation_outcome_feedback(db)
     gates = _build_gate_results(time_eval, has_reco_feedback=has_reco_feedback)
+    cls_pass = gates["classification"]["status"] == "PASS"
 
     report = {
         "dataset": eval_report["dataset"],
@@ -218,7 +266,11 @@ def run_reliability_audit(db: Session, output_json: Path, output_md: Path) -> Di
         "selected_model_or_fallback": _build_selection(gates),
         "pfe_claims": {
             "can_claim": [
-                "Classification model improvement over threshold baselines is measurable on macro-F1.",
+                (
+                    "Classification model improvement over threshold baselines is measurable on macro-F1."
+                    if cls_pass
+                    else "Classification model does not yet beat threshold baselines on macro-F1 in this audit."
+                ),
                 "Anomaly output is exploratory and must not be reported as validated accuracy.",
                 "Recommendation engine behavior is currently rule-based.",
             ],
@@ -228,12 +280,54 @@ def run_reliability_audit(db: Session, output_json: Path, output_md: Path) -> Di
                 "Recommendation policy is ML-ranked and outcome-proven.",
             ],
         },
+        "source": source_info or {},
     }
 
     output_json.parent.mkdir(parents=True, exist_ok=True)
     output_json.write_text(json.dumps(report, indent=2))
     _write_markdown(report, output_md)
     return report
+
+
+def _local_sqlite_session() -> tuple[Session, bool]:
+    sqlite_path = BACKEND_DIR / "weefarm.db"
+    engine = create_engine(
+        f"sqlite:///{sqlite_path}",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+    SessionLocalSQLite = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, class_=Session)
+    session = SessionLocalSQLite()
+    step_count = int(session.scalar(select(func.count(ProcessStep.id))) or 0)
+    seeded = False
+    if step_count == 0:
+        seed_ml_training_data(session, target_rows=500, random_seed=42, demo_only=True)
+        seeded = True
+    return session, seeded
+
+
+def _source_info(*, fallback_used: bool, seeded_local: bool) -> Dict:
+    generated_at = datetime.now(timezone.utc).isoformat()
+    python_runtime = platform.python_version()
+    if fallback_used:
+        label = "test_seed" if seeded_local else "fallback_sqlite"
+        return {
+            "data_source_label": label,
+            "database_identifier": str((BACKEND_DIR / "weefarm.db").resolve()),
+            "fallback_used": True,
+            "generated_at": generated_at,
+            "python_runtime": python_runtime,
+        }
+
+    masked = settings.masked_database_url
+    label = "supabase" if "supabase.com" in masked or "pooler.supabase.com" in masked else "unknown"
+    return {
+        "data_source_label": label,
+        "database_identifier": masked,
+        "fallback_used": False,
+        "generated_at": generated_at,
+        "python_runtime": python_runtime,
+    }
 
 
 def main() -> None:
@@ -251,13 +345,31 @@ def main() -> None:
     args = parser.parse_args()
 
     db = SessionLocal()
+    used_local_fallback = False
+    local_seeded = False
     try:
-        report = run_reliability_audit(db, output_json=Path(args.output_json), output_md=Path(args.output_md))
+        report = run_reliability_audit(
+            db,
+            output_json=Path(args.output_json),
+            output_md=Path(args.output_md),
+            source_info=_source_info(fallback_used=False, seeded_local=False),
+        )
+    except OperationalError:
+        db.close()
+        db, local_seeded = _local_sqlite_session()
+        used_local_fallback = True
+        report = run_reliability_audit(
+            db,
+            output_json=Path(args.output_json),
+            output_md=Path(args.output_md),
+            source_info=_source_info(fallback_used=True, seeded_local=local_seeded),
+        )
     finally:
         db.close()
 
     print(f"Saved JSON report: {args.output_json}")
     print(f"Saved Markdown report: {args.output_md}")
+    print(f"Data source: {report.get('source', {}).get('data_source_label')}")
     print(f"Rows: {report['dataset']['row_count']}")
     print(f"Regression gate: {report['gates']['regression']['status']}")
     print(f"Classification gate: {report['gates']['classification']['status']}")

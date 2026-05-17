@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.base import ORMModel
+from app.schemas.process_step import ProcessStepRead
 
 
 class BatchCreate(BaseModel):
@@ -72,6 +73,7 @@ class BatchRead(ORMModel):
     collecte_created: bool = False
     stock_in_created: bool = False
     postharvest_started_at: Optional[datetime]
+    postharvest_status: Optional[str] = None
     status_note: Optional[str]
     initial_qty_display: float
     current_qty_display: float
@@ -98,3 +100,29 @@ class BatchApproveChargeResponse(BaseModel):
 class BatchCompletePreHarvestRequest(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=1000)
     collecte_date: Optional[date] = None
+
+
+class BatchMaterialBalanceStageRead(BaseModel):
+    stage: str
+    step_count: int
+    qty_in: float
+    qty_out: float
+    loss_qty: float
+    loss_pct: float
+    efficiency_pct: float
+
+
+class BatchMaterialBalanceRead(BaseModel):
+    batch_id: UUID
+    cooperative_id: UUID
+    postharvest_status: str
+    initial_confirmed_qty: float
+    current_qty: float
+    final_output_qty: Optional[float]
+    total_loss_qty: float
+    total_loss_pct: float
+    total_efficiency_pct: float
+    steps_completed: int
+    steps_required: int
+    per_stage: List[BatchMaterialBalanceStageRead]
+    process_steps: List["ProcessStepRead"]

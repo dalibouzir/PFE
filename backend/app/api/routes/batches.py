@@ -6,7 +6,16 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_manager
 from app.db.session import get_db
-from app.schemas.batch import BatchApproveChargeResponse, BatchCompletePreHarvestRequest, BatchCreate, BatchPreHarvestStepStatusesUpdate, BatchRead, BatchStatusUpdate, BatchUpdate
+from app.schemas.batch import (
+    BatchApproveChargeResponse,
+    BatchCompletePreHarvestRequest,
+    BatchCreate,
+    BatchMaterialBalanceRead,
+    BatchPreHarvestStepStatusesUpdate,
+    BatchRead,
+    BatchStatusUpdate,
+    BatchUpdate,
+)
 from app.services import batches as batch_service
 
 
@@ -91,3 +100,20 @@ def complete_preharvest(batch_id: UUID, payload: BatchCompletePreHarvestRequest,
         collecte_date=payload.collecte_date,
     )
     return batch_service.serialize_batch(batch)
+
+
+@router.post("/{batch_id}/start-postharvest", response_model=BatchRead, summary="Start post-harvest lifecycle for a ready lot.")
+def start_postharvest(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+    batch = batch_service.start_postharvest(db, current_manager, batch_id)
+    return batch_service.serialize_batch(batch)
+
+
+@router.post("/{batch_id}/complete-postharvest", response_model=BatchRead, summary="Complete post-harvest lifecycle once required steps are done.")
+def complete_postharvest(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+    batch = batch_service.complete_postharvest(db, current_manager, batch_id)
+    return batch_service.serialize_batch(batch)
+
+
+@router.get("/{batch_id}/material-balance", response_model=BatchMaterialBalanceRead, summary="Return material balance and per-stage performance for a lot.")
+def get_material_balance(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
+    return batch_service.get_material_balance(db, current_manager, batch_id)

@@ -81,6 +81,10 @@ export default function StocksPage() {
     search: tableControls.search || undefined,
     sort: tableControls.sortOrder,
   });
+  const commercialOutQuery = useStockMovements({
+    source: "commercial_catalog",
+    sort: "desc",
+  });
 
   const detailQuery = useStockMovementDetail(selectedMovementId);
 
@@ -106,6 +110,25 @@ export default function StocksPage() {
     }
     return map;
   }, [inputs]);
+
+  const commercialOutByProductKg = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const movement of commercialOutQuery.data ?? []) {
+      const current = map.get(movement.product_id) ?? 0;
+      const signed = movement.movement_type === "in" ? -movement.quantity_kg : movement.quantity_kg;
+      map.set(movement.product_id, current + signed);
+    }
+    return map;
+  }, [commercialOutQuery.data]);
+  const lossesByProductKg = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const movement of movementsQuery.data ?? []) {
+      if (movement.movement_type !== "out") continue;
+      if ((movement.source || "").toLowerCase() !== "post_harvest_step") continue;
+      map.set(movement.product_id, (map.get(movement.product_id) ?? 0) + movement.quantity_kg);
+    }
+    return map;
+  }, [movementsQuery.data]);
 
   const movementRows = movementsQuery.data ?? [];
   const journalExportColumns: ExportColumn<StockMovement>[] = [
@@ -216,7 +239,8 @@ export default function StocksPage() {
               const remainingDisplay = fromKg(remainingKg, item.unit);
               const isCritical = isCriticalStock(item.total_stock_kg, remainingKg);
               const total = item.total_stock;
-              const inLot = item.reserved_in_lots;
+              const commercialOut = fromKg(Math.max(commercialOutByProductKg.get(item.product_id) ?? 0, 0), item.unit);
+              const losses = fromKg(Math.max(lossesByProductKg.get(item.product_id) ?? 0, 0), item.unit);
               const threshold = total * 0.2;
               const progress = total > 0 ? Math.max(6, Math.min((remainingDisplay / total) * 100, 100)) : 0;
               const barClass = isCritical
@@ -229,7 +253,6 @@ export default function StocksPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-semibold text-[var(--text)]">{productLookup.get(item.product_id) ?? item.product_id.slice(0, 8)}</p>
-                      <p className="text-xs text-[var(--muted)]">Critique si restant &lt; 20% du total</p>
                     </div>
                     <StatusBadge label={isCritical ? "Critique" : "Stable"} tone={isCritical ? "danger" : "success"} />
                   </div>
@@ -239,8 +262,9 @@ export default function StocksPage() {
                     {total.toFixed(2)} {item.unit}
                   </p>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                    <MetricPill label="En lot" value={inLot} unit={item.unit} tone="danger" />
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs xl:grid-cols-3">
+                    <MetricPill label="Sortie vente" value={commercialOut} unit={item.unit} tone="neutral" />
+                    <MetricPill label="Pertes" value={losses} unit={item.unit} tone="danger" hideZero />
                     <MetricPill label="Restant" value={remainingDisplay} unit={item.unit} tone={isCritical ? "danger" : "success"} />
                   </div>
 
@@ -261,7 +285,8 @@ export default function StocksPage() {
                   <th className="px-5 py-3.5">Produit</th>
                   <th className="px-5 py-3.5">Stock total</th>
                   <th className="px-5 py-3.5">Collecté</th>
-                  <th className="px-5 py-3.5">En lot</th>
+                  <th className="px-5 py-3.5">Sortie vente</th>
+                  <th className="px-5 py-3.5">Pertes</th>
                   <th className="px-5 py-3.5">Restant</th>
                   <th className="px-5 py-3.5">Statut</th>
                 </tr>
@@ -269,7 +294,7 @@ export default function StocksPage() {
               <tbody>
                 {filteredByUrgency.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-4 text-center text-sm text-[var(--muted)]">
+                    <td colSpan={7} className="px-5 py-4 text-center text-sm text-[var(--muted)]">
                       Aucun stock enregistré à afficher pour ce filtre.
                     </td>
                   </tr>
@@ -278,13 +303,16 @@ export default function StocksPage() {
                     const remainingKg = item.available_stock_kg;
                     const isCritical = isCriticalStock(item.total_stock_kg, remainingKg);
                     const collected = fromKg(collectedByProductKg.get(item.product_id) ?? 0, item.unit);
+                    const commercialOut = fromKg(Math.max(commercialOutByProductKg.get(item.product_id) ?? 0, 0), item.unit);
+                    const losses = fromKg(Math.max(lossesByProductKg.get(item.product_id) ?? 0, 0), item.unit);
                     const remainingDisplay = fromKg(remainingKg, item.unit);
                     return (
                       <tr key={item.product_id}>
                         <td className="px-5 py-4 font-semibold text-[var(--text)]">{productLookup.get(item.product_id) ?? item.product_id.slice(0, 8)}</td>
                         <td className="px-5 py-4">{item.total_stock.toFixed(2)} {item.unit}</td>
                         <td className="px-5 py-4">{collected.toFixed(2)} {item.unit}</td>
-                        <td className="px-5 py-4 text-[var(--danger)]">{item.reserved_in_lots.toFixed(2)} {item.unit}</td>
+                        <td className="px-5 py-4 text-[var(--danger)]">{commercialOut.toFixed(2)} {item.unit}</td>
+                        <td className="px-5 py-4 text-[var(--danger)]">{losses.toFixed(2)} {item.unit}</td>
                         <td className="px-5 py-4 font-medium">{remainingDisplay.toFixed(2)} {item.unit}</td>
                         <td className="px-5 py-4">
                           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isCritical ? "bg-[#FFEDEE] text-[#A83C3C]" : "bg-[#EAF8EE] text-[#0F7A3B]"}`}>
@@ -330,47 +358,41 @@ export default function StocksPage() {
           }
         />
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="wf-table min-w-full text-left text-sm">
+        <div className="mt-4">
+          <table className="wf-table w-full table-fixed text-left text-sm">
             <thead>
               <tr>
-                <th className="px-5 py-3.5">Référence</th>
-                <th className="px-5 py-3.5">Type</th>
-                <th className="px-5 py-3.5">Lot</th>
-                <th className="px-5 py-3.5">Collecte</th>
-                <th className="px-5 py-3.5">BL</th>
-                <th className="px-5 py-3.5">Producteur</th>
-                <th className="px-5 py-3.5">Produit</th>
-                <th className="px-5 py-3.5">Quantité</th>
-                <th className="px-5 py-3.5">Date</th>
-                <th className="px-5 py-3.5">Source</th>
-                <th className="px-5 py-3.5">Notes</th>
-                <th className="px-5 py-3.5">Actions</th>
+                <th className="px-3 py-3.5">Type</th>
+                <th className="px-3 py-3.5">Lot</th>
+                <th className="px-3 py-3.5">Produit</th>
+                <th className="px-3 py-3.5">Quantité</th>
+                <th className="px-3 py-3.5">Producteur</th>
+                <th className="px-3 py-3.5">Date</th>
+                <th className="px-3 py-3.5">Actions</th>
               </tr>
             </thead>
             <tbody>
               {movementsQuery.isLoading ? (
                 <tr>
-                  <td colSpan={12} className="px-5 py-4 text-center text-sm text-[var(--muted)]">Chargement des mouvements...</td>
+                  <td colSpan={7} className="px-5 py-4 text-center text-sm text-[var(--muted)]">Chargement des mouvements...</td>
                 </tr>
               ) : movementsQuery.error ? (
                 <tr>
-                  <td colSpan={12} className="px-5 py-4 text-center text-sm text-[var(--danger)]">
+                  <td colSpan={7} className="px-5 py-4 text-center text-sm text-[var(--danger)]">
                     {movementsQuery.error instanceof Error ? movementsQuery.error.message : "Erreur de chargement du journal."}
                   </td>
                 </tr>
               ) : movementRows.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-5 py-4 text-center text-sm text-[var(--muted)]">Aucun mouvement disponible pour ces filtres.</td>
+                  <td colSpan={7} className="px-5 py-4 text-center text-sm text-[var(--muted)]">Aucun mouvement disponible pour ces filtres.</td>
                 </tr>
               ) : (
                 movementRows.map((movement) => (
                   <tr key={movement.id}>
-                    <td className="px-5 py-4 font-semibold text-[var(--text)]">{movement.movement_reference}</td>
-                    <td className="px-5 py-4">{movement.movement_type} · {movement.action_type}</td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4 truncate" title={`${movement.movement_type} · ${movement.action_type}`}>{movement.movement_type} · {movement.action_type}</td>
+                    <td className="px-3 py-4">
                       <div className="flex items-center gap-2">
-                        <span>{displayLotReference(movement)}</span>
+                        <span className="truncate" title={displayLotReference(movement)}>{displayLotReference(movement)}</span>
                         {movement.traceability_status === "legacy_unlinked" ? (
                           <span className="inline-flex rounded-full bg-[#FFF5E8] px-2 py-0.5 text-[11px] font-semibold text-[#A8651A]">
                             Historique / non lié
@@ -378,22 +400,16 @@ export default function StocksPage() {
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-5 py-4">{movement.input_reference || "—"}</td>
-                    <td className="px-5 py-4">{movement.input_reference_bl || "—"}</td>
-                    <td className="px-5 py-4">{movement.member_name || "—"}</td>
-                    <td className="px-5 py-4">{movement.product_name || movement.product_id.slice(0, 8)}</td>
-                    <td className={`px-5 py-4 font-semibold ${movement.movement_type === "in" ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
+                    <td className="px-3 py-4 truncate" title={movement.product_name || movement.product_id.slice(0, 8)}>{movement.product_name || movement.product_id.slice(0, 8)}</td>
+                    <td className={`px-3 py-4 font-semibold whitespace-nowrap ${movement.movement_type === "in" ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
                       {movement.movement_type === "in" ? "+" : "-"}{movement.quantity_kg.toLocaleString("fr-FR")} kg
                     </td>
-                    <td className="px-5 py-4 text-xs text-[var(--muted)]">{formatDateTime(movement.movement_date)}</td>
-                    <td className="px-5 py-4">
-                      <span className="inline-flex rounded-full bg-[var(--surface-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--text)]">
-                        {movement.source_label || movement.source}
-                      </span>
+                    <td className="px-3 py-4 truncate" title={displayProducerNameShort(movement.member_name)}>
+                      {displayProducerNameShort(movement.member_name)}
                     </td>
-                    <td className="px-5 py-4 text-xs text-[var(--muted)]">{movement.notes || "—"}</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
+                    <td className="px-3 py-4 text-xs text-[var(--muted)] whitespace-nowrap">{formatDateTime(movement.movement_date)}</td>
+                    <td className="px-3 py-4">
+                      <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
                         <button type="button" className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => setSelectedMovementId(movement.id)}>
                           Détail
                         </button>
@@ -465,11 +481,13 @@ function MetricPill({
   value,
   unit,
   tone,
+  hideZero = false,
 }: {
   label: string;
   value: number;
   unit: string;
   tone: "neutral" | "info" | "success" | "danger";
+  hideZero?: boolean;
 }) {
   const toneClass =
     tone === "danger"
@@ -482,7 +500,7 @@ function MetricPill({
   return (
     <div className={`rounded-lg px-2 py-1.5 ${toneClass}`}>
       <p className="font-semibold">
-        {value.toFixed(2)} {unit}
+        {hideZero && Math.abs(value) < 1e-9 ? "—" : `${value.toFixed(2)} ${unit}`}
       </p>
       <p>{label}</p>
     </div>
@@ -523,4 +541,12 @@ function displayLotReference(movement: Pick<StockMovement, "batch_reference" | "
   }
   if (movement.traceability_status === "unresolved_lot") return "Lot introuvable";
   return "Lot non renseigné";
+}
+
+function displayProducerNameShort(value?: string | null) {
+  const text = (value || "").trim();
+  if (!text) return "—";
+  const match = text.match(/^(.*?)\s*\([^()]*@[^()]*\)\s*$/);
+  if (!match) return text;
+  return match[1].trim() || text;
 }

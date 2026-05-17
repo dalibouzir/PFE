@@ -3,7 +3,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
-import type { Batch, BatchCreate, BatchPreHarvestStepStatusesUpdate, BatchReferencePreview, BatchStatusUpdate, BatchUpdate } from "@/lib/api/types";
+import type {
+  Batch,
+  BatchCreate,
+  BatchMaterialBalance,
+  BatchPreHarvestStepStatusesUpdate,
+  BatchReferencePreview,
+  BatchStatusUpdate,
+  BatchUpdate,
+} from "@/lib/api/types";
 
 export function useBatches() {
   return useQuery({
@@ -126,5 +134,38 @@ export function useBatchReferencePreview(productId?: string | null) {
     queryKey: ["batch-reference-preview", productId],
     queryFn: () => apiFetch<BatchReferencePreview>(endpoints.batches.previewReference(String(productId))),
     enabled: Boolean(productId),
+  });
+}
+
+export function useStartPostHarvest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<Batch>(endpoints.batches.startPostHarvest(id), { method: "POST" }),
+    onSuccess: (_batch, id) => {
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+      queryClient.invalidateQueries({ queryKey: ["batch-material-balance", id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
+export function useCompletePostHarvest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<Batch>(endpoints.batches.completePostHarvest(id), { method: "POST" }),
+    onSuccess: (_batch, id) => {
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+      queryClient.invalidateQueries({ queryKey: ["batch-material-balance", id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+    },
+  });
+}
+
+export function useBatchMaterialBalance(batchId?: string | null) {
+  return useQuery({
+    queryKey: ["batch-material-balance", batchId],
+    queryFn: () => apiFetch<BatchMaterialBalance>(endpoints.batches.materialBalance(String(batchId))),
+    enabled: Boolean(batchId),
   });
 }

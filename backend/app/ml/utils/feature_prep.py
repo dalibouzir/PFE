@@ -229,6 +229,12 @@ def prepare_feature_frame(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Lis
     working = df.copy()
     working = _derive_predictive_enrichment(working)
     working["date_ordinal"] = pd.to_datetime(working["date"]).dt.date.apply(lambda item: item.toordinal())
+    if "weather_feature_timestamp" in working.columns:
+        weather_ts = pd.to_datetime(working["weather_feature_timestamp"], errors="coerce", utc=True)
+        weather_ordinal = weather_ts.dt.date.apply(lambda item: item.toordinal() if pd.notna(item) else np.nan)
+        working["weather_feature_timestamp_ordinal"] = pd.to_numeric(weather_ordinal, errors="coerce").fillna(0.0)
+    elif "weather_feature_timestamp_ordinal" not in working.columns:
+        working["weather_feature_timestamp_ordinal"] = 0.0
     drop_cols = [col for col in ("date", "weather_feature_timestamp") if col in working.columns]
     working = working.drop(columns=drop_cols)
 
@@ -239,10 +245,3 @@ def prepare_feature_frame(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Lis
     }
 
     return working, feature_sets
-    if "weather_feature_timestamp_ordinal" not in working.columns:
-        if "weather_feature_timestamp" in working.columns:
-            weather_ts = pd.to_datetime(working["weather_feature_timestamp"], errors="coerce", utc=True)
-            weather_ordinal = weather_ts.dt.date.apply(lambda item: item.toordinal() if pd.notna(item) else np.nan)
-            working["weather_feature_timestamp_ordinal"] = pd.to_numeric(weather_ordinal, errors="coerce")
-        else:
-            working["weather_feature_timestamp_ordinal"] = np.nan

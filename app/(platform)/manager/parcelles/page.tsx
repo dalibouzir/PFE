@@ -14,6 +14,7 @@ import {
   useBatches,
   useCompletePreHarvest,
   useCreateBatch,
+  useDeleteBatch,
   useStopPreHarvest,
   useUpdatePreHarvestStepStatuses,
   useUpdateBatch,
@@ -35,7 +36,6 @@ type LotForm = {
   surface_ha: number;
   expected_yield_kg_per_ha: number;
   expected_losses_kg: number;
-  estimated_charge_fcfa?: number;
 };
 
 type WorkflowDraftStep = {
@@ -163,6 +163,7 @@ export default function ParcellesCulturePage() {
   >(null);
   const [pendingApproveCharge, setPendingApproveCharge] = useState(false);
   const [pendingStopLot, setPendingStopLot] = useState(false);
+  const [pendingDeleteLot, setPendingDeleteLot] = useState(false);
   const tableControls = useTableControls(
     [
       {
@@ -190,6 +191,7 @@ export default function ParcellesCulturePage() {
   const approveBatchCharge = useApproveBatchCharge();
   const activatePreHarvest = useActivatePreHarvest();
   const stopPreHarvest = useStopPreHarvest();
+  const deleteBatch = useDeleteBatch();
   const updatePreHarvestStepStatuses = useUpdatePreHarvestStepStatuses();
   const completePreHarvest = useCompletePreHarvest();
   const createParcel = useCreateParcel();
@@ -323,7 +325,6 @@ export default function ParcellesCulturePage() {
       surface_ha: 1,
       expected_yield_kg_per_ha: 0,
       expected_losses_kg: 0,
-      estimated_charge_fcfa: 0,
     },
   });
 
@@ -371,6 +372,7 @@ export default function ParcellesCulturePage() {
     const losses = Number(lotForm.watch("expected_losses_kg") || 0);
     return Math.max(surface * yieldKgHa - losses, 0);
   }, [lotForm]);
+  const lotEstimatedChargeFcfa = useMemo(() => Math.round(Math.max(lotEstimatedQty, 0)), [lotEstimatedQty]);
 
   const preHarvestTemplateSteps = useMemo(() => {
     if (!selectedBatch) return [];
@@ -434,7 +436,7 @@ export default function ParcellesCulturePage() {
         surface_ha: Number(values.surface_ha),
         expected_yield_kg_per_ha: Number(values.expected_yield_kg_per_ha),
         expected_losses_kg: Number(values.expected_losses_kg),
-        estimated_charge_fcfa: Number(values.estimated_charge_fcfa || 0),
+        estimated_charge_fcfa: lotEstimatedChargeFcfa,
       };
       const created = await createBatch.mutateAsync(payload);
       setSelectedBatchId(created.id);
@@ -446,7 +448,6 @@ export default function ParcellesCulturePage() {
         surface_ha: 1,
         expected_yield_kg_per_ha: 0,
         expected_losses_kg: 0,
-        estimated_charge_fcfa: 0,
       });
     } catch (error) {
       setFormError(getFrenchErrorMessage(error, "Impossible de créer le lot."));
@@ -492,6 +493,18 @@ export default function ParcellesCulturePage() {
       setFormError(getFrenchErrorMessage(error, "Impossible de stopper le lot."));
     } finally {
       setPendingAction(null);
+    }
+  };
+
+  const handleDeleteLot = async () => {
+    if (!selectedBatch) return;
+    try {
+      await deleteBatch.mutateAsync(selectedBatch.id);
+      setPendingDeleteLot(false);
+      setSelectedBatchId(null);
+      setFormError(null);
+    } catch (error) {
+      setFormError(getFrenchErrorMessage(error, "Impossible de supprimer le lot."));
     }
   };
 
@@ -852,7 +865,17 @@ export default function ParcellesCulturePage() {
                       disabled={pendingAction !== null}
                       className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Modifier workflow
+                      Modifier lot
+                    </button>
+                  ) : null}
+                  {selectedLotState === "preparation" ? (
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeleteLot(true)}
+                      disabled={pendingAction !== null || deleteBatch.isPending}
+                      className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Supprimer lot
                     </button>
                   ) : null}
                   <button
@@ -1339,18 +1362,10 @@ export default function ParcellesCulturePage() {
               className="wf-input mt-2 h-11 w-full px-3 text-sm"
             />
           </label>
-          <label className="block text-sm font-medium text-[var(--text)]">
-            Charge estimée (FCFA)
-            <input
-              type="number"
-              min="0"
-              step="1"
-              {...lotForm.register("estimated_charge_fcfa", { valueAsNumber: true })}
-              className="wf-input mt-2 h-11 w-full px-3 text-sm"
-            />
-          </label>
           <div className="rounded-xl border border-[#BDD6FB] bg-[#EEF5FF] px-3 py-2 text-xs text-[#2F80ED]">
             Quantité estimée = surface × rendement - pertes = {lotEstimatedQty.toLocaleString("fr-FR")} kg.
+            <br />
+            Charge estimée automatique = {lotEstimatedChargeFcfa.toLocaleString("fr-FR")} FCFA.
             <br />
             Quantité prévisionnelle — n&apos;affecte pas le stock.
           </div>
@@ -1535,6 +1550,17 @@ export default function ParcellesCulturePage() {
         onConfirm={() => {
           void handleStopLot();
           setPendingStopLot(false);
+        }}
+      />
+      <ConfirmActionModal
+        open={pendingDeleteLot}
+        title="Supprimer le lot"
+        message="Cette action supprimera définitivement ce lot pré-récolte."
+        confirmLabel="Supprimer"
+        loading={deleteBatch.isPending}
+        onCancel={() => setPendingDeleteLot(false)}
+        onConfirm={() => {
+          void handleDeleteLot();
         }}
       />
     </main>

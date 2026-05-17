@@ -1,4 +1,5 @@
 from datetime import date
+import unicodedata
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -46,6 +47,45 @@ def _ordered_plan(batch: Batch) -> list[str]:
     return plan
 
 
+def _normalize_token(value: str) -> str:
+    return (
+        unicodedata.normalize("NFKD", str(value or ""))
+        .encode("ascii", "ignore")
+        .decode("ascii")
+        .strip()
+        .lower()
+    )
+
+
+def _canonical_step_name(value: str) -> str:
+    token = _normalize_token(value)
+    aliases = {
+        "nettoyage": "nettoyage",
+        "cleaning": "nettoyage",
+        "sechage": "sechage",
+        "drying": "sechage",
+        "tri": "tri",
+        "sorting": "tri",
+        "emballage": "emballage",
+        "conditionnement": "emballage",
+        "packaging": "emballage",
+    }
+    return aliases.get(token, token)
+
+
+def _status_from_payload(raw_status: str | None, *, default_completed: bool = True) -> ProcessStepStatus:
+    if raw_status is None:
+        return ProcessStepStatus.COMPLETED if default_completed else ProcessStepStatus.PENDING
+    token = _normalize_token(raw_status)
+    if token in {"pending", "in_progress", "inprogress", "started"}:
+        return ProcessStepStatus.PENDING
+    if token in {"done", "completed", "complete"}:
+        return ProcessStepStatus.COMPLETED
+    if token in {"cancelled", "canceled", "flagged"}:
+        return ProcessStepStatus.FLAGGED
+    raise ValidationError("Invalid process step status.")
+
+
 def _validate_loss(loss_value: float, loss_unit: str, input_qty_kg: float) -> tuple[float, str, float]:
     unit = normalize_mass_unit(loss_unit)
     loss_value_normalized = round_metric(float(loss_value))
@@ -55,6 +95,37 @@ def _validate_loss(loss_value: float, loss_unit: str, input_qty_kg: float) -> tu
     if normalized_loss_kg > input_qty_kg:
         raise ValidationError("Perte invalide : elle depasse la quantite d'entree de cette etape.")
     return loss_value_normalized, unit, normalized_loss_kg
+
+
+def _resolve_step_outcomes(
+    *,
+    input_qty_kg: float,
+    qty_out: float | None,
+    loss_value: float | None,
+    loss_unit: str,
+    require_output: bool,
+) -> tuple[float, float, str, float]:
+    if input_qty_kg <= 0:
+        raise ValidationError("qty_in must be greater than zero.")
+    if qty_out is None and loss_value is None and require_output:
+        raise ValidationError("qty_out is required to complete a step.")
+    if qty_out is not None:
+        output_qty_kg = round_metric(float(qty_out))
+        if output_qty_kg < 0:
+            raise ValidationError("qty_out must be greater than or equal to zero.")
+        if require_output and output_qty_kg <= 0:
+            raise ValidationError("qty_out must be greater than zero to complete a step.")
+        if output_qty_kg > input_qty_kg:
+            raise ValidationError("qty_out cannot exceed qty_in for this step.")
+        normalized_loss_kg = round_metric(max(input_qty_kg - output_qty_kg, 0.0))
+        return output_qty_kg, normalized_loss_kg, "kg", normalized_loss_kg
+
+    if loss_value is None:
+        # start/in-progress placeholder without output yet
+        return round_metric(input_qty_kg), 0.0, "kg", 0.0
+    parsed_loss, parsed_unit, normalized_loss_kg = _validate_loss(float(loss_value), loss_unit, input_qty_kg)
+    output_qty_kg = round_metric(input_qty_kg - normalized_loss_kg)
+    return output_qty_kg, parsed_loss, parsed_unit, normalized_loss_kg
 
 
 def _apply_step_stock_effect(db: Session, batch: Batch, step: ProcessStep, delta_loss_kg: float):
@@ -116,18 +187,29 @@ def create_process_step(db: Session, manager: User, payload) -> ProcessStep:
 
     plan = _ordered_plan(batch)
     executed = _sorted_steps(batch)
+    if executed and executed[-1].status != ProcessStepStatus.COMPLETED:
+        raise ValidationError("Complete the current in-progress step before starting the next one.")
     next_order = len(executed) + 1
     if next_order > len(plan):
         raise ValidationError("All configured steps have already been executed for this lot.")
 
     expected_step_type = plan[next_order - 1]
     requested_type = (payload.type or "").strip()
-    if requested_type and requested_type.lower() != expected_step_type.lower():
+    if requested_type and _canonical_step_name(requested_type) != _canonical_step_name(expected_step_type):
         raise ValidationError("Cette etape ne peut pas etre executee avant la precedente.")
 
     input_qty_kg = (batch.confirmed_weight_kg if batch.confirmed_weight_kg is not None else batch.initial_qty) if not executed else executed[-1].qty_out
-    loss_value, loss_unit, normalized_loss_kg = _validate_loss(payload.loss_value, payload.loss_unit, input_qty_kg)
-    output_qty_kg = round_metric(input_qty_kg - normalized_loss_kg)
+    if payload.qty_in is not None and abs(float(payload.qty_in) - float(input_qty_kg)) > 1e-6:
+        raise ValidationError("qty_in for this step must match the previous stage output.")
+
+    status_value = _status_from_payload(payload.status, default_completed=True)
+    output_qty_kg, loss_value, loss_unit, normalized_loss_kg = _resolve_step_outcomes(
+        input_qty_kg=float(input_qty_kg),
+        qty_out=payload.qty_out,
+        loss_value=payload.loss_value,
+        loss_unit=payload.loss_unit,
+        require_output=status_value == ProcessStepStatus.COMPLETED,
+    )
     execution_date = payload.date or date.today()
 
     step = ProcessStep(
@@ -142,15 +224,17 @@ def create_process_step(db: Session, manager: User, payload) -> ProcessStep:
         loss_unit=loss_unit,
         normalized_loss_value=normalized_loss_kg,
         notes=payload.notes.strip() if payload.notes else None,
-        status=ProcessStepStatus.COMPLETED,
-        executed_at=current_utc(),
+        status=status_value,
+        executed_at=current_utc() if status_value == ProcessStepStatus.COMPLETED else None,
         duration_minutes=payload.duration_minutes,
     )
     db.add(step)
     db.flush()
-    _apply_step_stock_effect(db, batch, step, normalized_loss_kg)
+    if status_value == ProcessStepStatus.COMPLETED:
+        _apply_step_stock_effect(db, batch, step, normalized_loss_kg)
 
     batch.process_steps.append(step)
+    batch.postharvest_started_at = batch.postharvest_started_at or current_utc()
     refresh_batch_current_qty(batch)
     sync_batch_status_from_steps(db, batch)
 
@@ -187,27 +271,36 @@ def update_process_step(db: Session, manager: User, step_id, payload) -> Process
 
     data = payload.model_dump(exclude_unset=True)
     old_normalized_loss_kg = step.normalized_loss_value
-    next_loss_value = data.get("loss_value", step.loss_value)
-    next_loss_unit = data.get("loss_unit", step.loss_unit)
-    loss_value, loss_unit, normalized_loss_kg = _validate_loss(next_loss_value, next_loss_unit, step.qty_in)
-
+    next_qty_in = float(data.get("qty_in", step.qty_in))
+    if next_qty_in <= 0:
+        raise ValidationError("qty_in must be greater than zero.")
+    step.qty_in = round_metric(next_qty_in)
+    next_status = _status_from_payload(data.get("status"), default_completed=(step.status == ProcessStepStatus.COMPLETED))
+    output_qty_kg, loss_value, loss_unit, normalized_loss_kg = _resolve_step_outcomes(
+        input_qty_kg=float(step.qty_in),
+        qty_out=data.get("qty_out", step.qty_out),
+        loss_value=data.get("loss_value", step.loss_value),
+        loss_unit=data.get("loss_unit", step.loss_unit),
+        require_output=next_status == ProcessStepStatus.COMPLETED,
+    )
     step.loss_value = loss_value
     step.loss_unit = loss_unit
     step.normalized_loss_value = normalized_loss_kg
     step.waste_qty = normalized_loss_kg
-    step.qty_out = round_metric(step.qty_in - normalized_loss_kg)
+    step.qty_out = output_qty_kg
     if "notes" in data:
         step.notes = data["notes"].strip() if data["notes"] else None
     if "duration_minutes" in data:
         step.duration_minutes = data["duration_minutes"]
     if "date" in data and data["date"] is not None:
         step.date = data["date"]
-
-    step.status = ProcessStepStatus.COMPLETED
-    step.executed_at = current_utc()
-    _apply_step_stock_effect(db, batch, step, normalized_loss_kg - old_normalized_loss_kg)
+    step.status = next_status
+    step.executed_at = current_utc() if next_status == ProcessStepStatus.COMPLETED else None
+    if next_status == ProcessStepStatus.COMPLETED:
+        _apply_step_stock_effect(db, batch, step, normalized_loss_kg - old_normalized_loss_kg)
 
     refresh_batch_current_qty(batch)
+    batch.postharvest_started_at = batch.postharvest_started_at or current_utc()
     analytics.generate_recommendation(db, batch.id)
 
     db.commit()
@@ -228,23 +321,40 @@ def update_process_step(db: Session, manager: User, step_id, payload) -> Process
     return step
 
 
-def complete_process_step(db: Session, manager: User, step_id, _mark_batch_completed: bool) -> ProcessStep:
+def complete_process_step(db: Session, manager: User, step_id, payload) -> ProcessStep:
     step = _require_step(db, manager, step_id)
     batch = step.batch
     if batch.status == BatchStatus.ARCHIVED:
         raise ValidationError("Cannot complete a step on an archived batch.")
 
-    if step.status == ProcessStepStatus.PENDING:
-        loss_value, loss_unit, normalized_loss_kg = _validate_loss(step.loss_value, step.loss_unit, step.qty_in)
-        step.loss_value = loss_value
-        step.loss_unit = loss_unit
-        step.normalized_loss_value = normalized_loss_kg
-        step.waste_qty = normalized_loss_kg
-        step.qty_out = round_metric(step.qty_in - normalized_loss_kg)
+    old_normalized_loss_kg = step.normalized_loss_value
+    patch = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else {}
+    output_qty_kg, loss_value, loss_unit, normalized_loss_kg = _resolve_step_outcomes(
+        input_qty_kg=float(step.qty_in),
+        qty_out=patch.get("qty_out"),
+        loss_value=patch.get("loss_value"),
+        loss_unit=patch.get("loss_unit", step.loss_unit),
+        require_output=True,
+    )
+    if step.status == ProcessStepStatus.PENDING and patch.get("qty_out") is None and patch.get("loss_value") is None:
+        raise ValidationError("Cannot complete a step without qty_out.")
+    step.loss_value = loss_value
+    step.loss_unit = loss_unit
+    step.normalized_loss_value = normalized_loss_kg
+    step.waste_qty = normalized_loss_kg
+    step.qty_out = output_qty_kg
+    if "date" in patch and patch["date"] is not None:
+        step.date = patch["date"]
+    if "notes" in patch:
+        step.notes = patch["notes"].strip() if patch["notes"] else None
+    if "duration_minutes" in patch:
+        step.duration_minutes = patch["duration_minutes"]
     step.status = ProcessStepStatus.COMPLETED
-    step.executed_at = step.executed_at or current_utc()
+    step.executed_at = current_utc()
+    _apply_step_stock_effect(db, batch, step, normalized_loss_kg - old_normalized_loss_kg)
 
     refresh_batch_current_qty(batch)
+    batch.postharvest_started_at = batch.postharvest_started_at or current_utc()
     sync_batch_status_from_steps(db, batch)
 
     analytics.generate_recommendation(db, batch.id)
@@ -277,6 +387,9 @@ def delete_process_step(db: Session, manager: User, step_id):
     if latest is None or latest.id != step.id:
         raise ValidationError("Only the latest executed step can be deleted.")
 
+    movement = db.scalar(select(StockMovement).where(StockMovement.idempotency_key == f"step:{step.id}:loss"))
+    if movement is not None:
+        db.delete(movement)
     db.delete(step)
     db.flush()
 

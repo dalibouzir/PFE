@@ -1330,5 +1330,110 @@
         ]
       }
     }
+  },
+  "baseline_comparison_table_time_split": [
+    {
+      "baseline": "product_stage_mean_loss",
+      "mae": 3.8362454907928663,
+      "delta_vs_model_mae": 0.12263943386880882,
+      "model_beats_baseline": true
+    },
+    {
+      "baseline": "product_stage_season_mean_loss",
+      "mae": 3.9791587918384628,
+      "delta_vs_model_mae": 0.26555273491440534,
+      "model_beats_baseline": true
+    },
+    {
+      "baseline": "product_stage_rolling_mean_loss",
+      "mae": 4.03798359748758,
+      "delta_vs_model_mae": 0.3243775405635225,
+      "model_beats_baseline": true
+    },
+    {
+      "baseline": "stage_mean_loss",
+      "mae": 4.150741176543122,
+      "delta_vs_model_mae": 0.4371351196190649,
+      "model_beats_baseline": true
+    },
+    {
+      "baseline": "stage_season_mean_loss",
+      "mae": 4.247801226860819,
+      "delta_vs_model_mae": 0.5341951699367615,
+      "model_beats_baseline": true
+    },
+    {
+      "baseline": "product_mean_loss",
+      "mae": 4.336221010977442,
+      "delta_vs_model_mae": 0.6226149540533847,
+      "model_beats_baseline": true
+    },
+    {
+      "baseline": "global_mean_loss",
+      "mae": 4.9791728000107645,
+      "delta_vs_model_mae": 1.265566743086707,
+      "model_beats_baseline": true
+    },
+    {
+      "baseline": "previous_batch_loss_baseline",
+      "mae": 5.528414673044184,
+      "delta_vs_model_mae": 1.8148086161201262,
+      "model_beats_baseline": true
+    }
+  ],
+  "gates": {
+    "regression": {
+      "status": "FAIL",
+      "rule": "Model MAE must beat best baseline MAE by at least 10%",
+      "model_mae": 3.7136060569240574,
+      "best_baseline_name": "product_stage_mean_loss",
+      "best_baseline_mae": 3.8362454907928663,
+      "relative_improvement_vs_best_baseline": 0.03196860945503829,
+      "required_min_improvement": 0.1
+    },
+    "classification": {
+      "status": "FAIL",
+      "rule": "Model macro-F1 must beat best threshold baseline macro-F1 by at least 10%",
+      "model_macro_f1": 0.3125,
+      "best_threshold_baseline_name": "thresholded_predicted_loss_baseline",
+      "best_threshold_baseline_macro_f1": 0.5555555555555555,
+      "relative_improvement_vs_best_threshold_baseline": -0.7777777777777775,
+      "required_min_improvement": 0.1
+    },
+    "anomaly_detection": {
+      "status": "EXPLORATORY",
+      "rule": "Remains exploratory unless labeled anomaly ground truth exists",
+      "ground_truth_labels_available": false
+    },
+    "recommendation_policy": {
+      "status": "RULE_BASED",
+      "rule": "Remains rule-based unless action/outcome feedback exists",
+      "action_outcome_feedback_exists": true
+    }
+  },
+  "selected_model_or_fallback": {
+    "regression": "baseline:product_stage_mean_loss",
+    "classification": "threshold_baseline:thresholded_predicted_loss_baseline",
+    "anomaly_detection": "exploratory_only",
+    "recommendation_policy": "rule_engine_templates"
+  },
+  "pfe_claims": {
+    "can_claim": [
+      "Classification model does not yet beat threshold baselines on macro-F1 in this audit.",
+      "Anomaly output is exploratory and must not be reported as validated accuracy.",
+      "Recommendation engine behavior is currently rule-based."
+    ],
+    "cannot_claim": [
+      "Regression model is superior to strong baselines.",
+      "Anomaly detection is validated without labels.",
+      "Recommendation policy is ML-ranked and outcome-proven."
+    ]
+  },
+  "source": {
+    "data_source_label": "supabase",
+    "database_identifier": "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require",
+    "fallback_used": false,
+    "generated_at": "2026-05-17T01:28:20.671879+00:00",
+    "python_runtime": "3.11.12"
   }
 }

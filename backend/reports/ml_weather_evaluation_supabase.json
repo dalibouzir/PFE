@@ -1,4 +1,11 @@
 {
+  "source": {
+    "data_source_label": "supabase",
+    "database_identifier": "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require",
+    "fallback_used": false,
+    "generated_at": "2026-05-17T01:28:25.651981+00:00",
+    "python_runtime": "3.11.12"
+  },
   "dataset": {
     "row_count": 45,
     "product_distribution": {
@@ -2621,13 +2628,17 @@
   },
   "comparison": {
     "regression": {
-      "best_baseline_name": "stage_season_mean_loss",
-      "best_baseline_mae": 4.247801226860819,
+      "best_baseline_name": "product_stage_mean_loss",
+      "best_baseline_mae": 3.8362454907928663,
       "internal_model_mae": 3.7136060569240574,
       "weather_model_mae": 3.880656168991981,
-      "internal_relative_improvement_vs_baseline": 0.12575804313977723,
-      "weather_relative_improvement_vs_baseline": 0.08643178865037501,
-      "selected_decision": "internal_model"
+      "internal_relative_improvement_vs_baseline": 0.03196860945503829,
+      "weather_relative_improvement_vs_baseline": -0.01157659964819822,
+      "best_numeric_candidate_model_only": "internal_model",
+      "best_numeric_candidate_across_all": "internal_model",
+      "gate_promoted_candidate": "baseline:product_stage_mean_loss",
+      "production_decision": "baseline:product_stage_mean_loss",
+      "selected_decision": "baseline:product_stage_mean_loss"
     },
     "classification": {
       "internal_model_macro_f1": 0.3125,
@@ -2637,7 +2648,7 @@
     }
   },
   "gates": {
-    "regression_internal": "PASS",
+    "regression_internal": "FAIL",
     "regression_weather": "FAIL",
     "classification_internal": "FAIL",
     "classification_weather": "FAIL"

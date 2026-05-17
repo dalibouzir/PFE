@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
-import { AIInsightsStrip, type AIInsightItem } from "@/components/ui/AIInsightsStrip";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ExportActions } from "@/components/ui/table/ExportActions";
@@ -18,19 +17,22 @@ import { LotProcessTimeline, type TimelineStage } from "@/components/workspace/L
 import { LotRecommendationPanel, type LotRecommendationItem } from "@/components/workspace/LotRecommendationPanel";
 import { LotWorkspaceTabs, type LotWorkspaceTab } from "@/components/workspace/LotWorkspaceTabs";
 import {
+  useBatchMaterialBalance,
   useBatchReferencePreview,
   useBatches,
+  useCompletePostHarvest,
   useCreateBatch,
-  useDeleteBatch,
+  useStartPostHarvest,
   useUpdateBatch,
 } from "@/hooks/useBatches";
 import { useDashboard } from "@/hooks/useDashboard";
-import { useCreateProcessStep, useDeleteProcessStep, useProcessSteps, useUpdateProcessStep } from "@/hooks/useProcessSteps";
+import { useCompleteProcessStep, useCreateProcessStep, useDeleteProcessStep, useProcessSteps, useUpdateProcessStep } from "@/hooks/useProcessSteps";
 import { useProducts } from "@/hooks/useProducts";
 import { useStocks } from "@/hooks/useStocks";
 import type {
   Batch,
   BatchCreate,
+  ProcessStepCompletePayload,
   ProcessStep,
   ProcessStepCreate,
   ProcessStepUpdate,
@@ -63,10 +65,10 @@ const batchStatusTone: Record<string, "success" | "warning" | "info" | "danger">
 };
 
 const batchStatusLabel: Record<string, string> = {
-  created: "Cree",
+  created: "Créé",
   in_progress: "En cours",
-  completed: "Termine",
-  archived: "Archive",
+  completed: "Terminé",
+  archived: "Archivé",
 };
 
 function normalizeTab(raw: string | null): LotWorkspaceTab {
@@ -89,35 +91,15 @@ function fromKg(valueKg: number, unit: MassUnit) {
 
 function recommendationPriority(item: Recommendation): LotRecommendationItem["priority"] {
   if (item.risk_level.toLowerCase() === "high" || item.anomaly_score >= 70 || item.loss_pct >= 16) return "critical";
-  if (item.risk_level.toLowerCase() === "medium" || item.anomaly_score >= 35 || item.loss_pct >= 10) return "warning";
-  return "optimization";
+  if (item.risk_level.toLowerCase() === "medium" || item.anomaly_score >= 35 || item.loss_pct >= 10) return "high";
+  if (item.loss_pct >= 6) return "medium";
+  return "low";
 }
 
 function parseImpactedStep(item: Recommendation): string {
   const text = `${item.rationale} ${item.suggested_action}`.toLowerCase();
   const workflowStage = LOT_WORKFLOW_STAGES.find((stage) => stage.aliases.some((alias) => text.includes(alias)));
-  return workflowStage?.label ?? "Process global";
-}
-
-function normalizeText(value: string | null | undefined): string {
-  return (value ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function isExitStep(stepType: string): boolean {
-  const text = normalizeText(stepType);
-  return ["vente", "sale", "livraison", "delivery", "transfert", "transfer", "expedition", "sortie"].some((token) =>
-    text.includes(token),
-  );
-}
-
-function isLossStep(stepType: string): boolean {
-  const text = normalizeText(stepType);
-  return ["perte", "loss", "dommage", "damage", "rejet", "rejection", "casse", "avarie"].some((token) =>
-    text.includes(token),
-  );
+  return workflowStage?.label ?? "Processus global";
 }
 
 export default function LotsPage() {
@@ -134,8 +116,10 @@ export default function LotsPage() {
 
   const createBatch = useCreateBatch();
   const updateBatch = useUpdateBatch();
-  const deleteBatch = useDeleteBatch();
+  const startPostHarvest = useStartPostHarvest();
+  const completePostHarvest = useCompletePostHarvest();
   const createStep = useCreateProcessStep();
+  const completeStep = useCompleteProcessStep();
   const updateStep = useUpdateProcessStep();
   const deleteStep = useDeleteProcessStep();
 
@@ -147,8 +131,8 @@ export default function LotsPage() {
   const [stepFormOpen, setStepFormOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
   const [editingStep, setEditingStep] = useState<ProcessStep | null>(null);
+  const [completingPendingStep, setCompletingPendingStep] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [pendingDeleteLot, setPendingDeleteLot] = useState<Batch | null>(null);
   const [pendingDeleteStep, setPendingDeleteStep] = useState<ProcessStep | null>(null);
   const tableControls = useTableControls([], "desc");
 
@@ -157,6 +141,7 @@ export default function LotsPage() {
   const [customStepInput, setCustomStepInput] = useState("");
 
   const [stepPreset, setStepPreset] = useState<StagePreset | null>(null);
+  const [stepTargetOrder, setStepTargetOrder] = useState<number | null>(null);
 
   const lotForm = useForm<BatchCreate>({
     defaultValues: {
@@ -172,7 +157,7 @@ export default function LotsPage() {
       batch_id: "",
       type: "",
       date: todayIso,
-      loss_value: 0,
+      qty_out: 0,
       loss_unit: "kg",
       notes: "",
       duration_minutes: undefined,
@@ -201,7 +186,8 @@ export default function LotsPage() {
             item.parcel_id &&
             item.preharvest_completed_at &&
             (item.collecte_created || item.stock_in_created) &&
-            item.confirmed_weight_kg,
+            item.confirmed_weight_kg &&
+            item.postharvest_status !== "not_ready_post_recolte",
         ),
       )
       .sort((a, b) => b.creation_date.localeCompare(a.creation_date));
@@ -224,6 +210,7 @@ export default function LotsPage() {
     }
     return visibleBatches[0] ?? null;
   }, [selectedBatchId, visibleBatches]);
+  const { data: materialBalanceData } = useBatchMaterialBalance(selectedBatch?.id ?? null);
 
   useEffect(() => {
     setActiveTab(normalizeTab(queryTab));
@@ -266,79 +253,135 @@ export default function LotsPage() {
   }, [dashboard?.recent_recommendations, selectedBatch]);
 
   const recommendationCards = useMemo<LotRecommendationItem[]>(() => {
-    return selectedRecommendations.map((item) => {
+    const fromSignals = selectedRecommendations.map((item) => {
       const priority = recommendationPriority(item);
+      const impactedStep = parseImpactedStep(item);
+      const evidence = `Perte observée: ${Math.max(item.loss_pct, 0).toFixed(1)}% · Efficacité observée: ${Math.max(item.efficiency_pct, 0).toFixed(1)}% · Score anomalie: ${Math.max(item.anomaly_score, 0).toFixed(1)}`;
       return {
         id: `${item.batch_id}-${item.anomaly_score}-${item.loss_pct}`,
-        title:
-          priority === "critical"
-            ? `Priorite critique lot ${item.batch_id.slice(0, 8)}`
-            : priority === "warning"
-              ? `Correction recommandee lot ${item.batch_id.slice(0, 8)}`
-              : `Optimisation lot ${item.batch_id.slice(0, 8)}`,
+        title: priority === "critical" ? "Réduire immédiatement les pertes du lot" : `Action prioritaire sur ${impactedStep.toLowerCase()}`,
         priority,
-        rationale: item.reasons[0] ?? item.rationale,
-        impactedStep: parseImpactedStep(item),
-        expectedEffect: `Perte cible < ${Math.max(item.loss_pct - 2, 0).toFixed(1)}%`,
-        action: item.suggested_action || "Poursuivre le monitoring avec un point de controle terrain.",
+        impactedStep,
+        problem: item.reasons[0] ?? item.rationale,
+        evidence,
+        action: item.suggested_action || "Mettre en place un contrôle terrain au prochain lot pour confirmer la cause et corriger le protocole d'exécution.",
+        expectedImpact: `Objectif opérationnel: réduire la perte de ${Math.max(Math.min(item.loss_pct / 3, 3), 1).toFixed(1)} à ${Math.max(Math.min(item.loss_pct / 2, 4), 2).toFixed(1)} points sur les prochains lots comparables.`,
+        confidence:
+          priority === "critical"
+            ? "Confiance élevée pour la priorisation, à confirmer par vérification terrain."
+            : priority === "high"
+              ? "Confiance modérée, signal utile pour plan d'action court terme."
+              : "Confiance indicative, à valider avec plus d'observations.",
+        caveat:
+          "Recommandation issue des règles métier et des signaux de risque disponibles. Elle ne remplace pas la validation terrain.",
       };
     });
-  }, [selectedRecommendations]);
+    if (fromSignals.length > 0) return fromSignals;
+    if (selectedSteps.length === 0) return [];
 
-  const lotTotals = useMemo(() => {
-    const qtyIn = selectedSteps.reduce((sum, step) => sum + step.qty_in, 0);
-    const qtyOut = selectedSteps.reduce((sum, step) => sum + step.qty_out, 0);
-    const lossKg = selectedSteps.reduce((sum, step) => sum + step.normalized_loss_value, 0);
-    const efficiencyPct = qtyIn > 0 ? (qtyOut / qtyIn) * 100 : 0;
-    return { qtyIn, qtyOut, lossKg, efficiencyPct };
-  }, [selectedSteps]);
+    const grouped = new Map<string, { stage: string; qtyIn: number; qtyOut: number; lossKg: number; lossPct: number; efficiencyPct: number; count: number }>();
+    for (const step of selectedSteps) {
+      const key = step.type;
+      const current = grouped.get(key) ?? { stage: stageLabelFromType(step.type), qtyIn: 0, qtyOut: 0, lossKg: 0, lossPct: 0, efficiencyPct: 0, count: 0 };
+      current.qtyIn += step.qty_in;
+      current.qtyOut += step.qty_out;
+      current.lossKg += step.normalized_loss_value;
+      current.lossPct += step.loss_pct;
+      current.efficiencyPct += step.efficiency_pct;
+      current.count += 1;
+      grouped.set(key, current);
+    }
+    const stageView = Array.from(grouped.entries()).map(([key, value]) => ({
+      key,
+      stage: value.stage,
+      qtyIn: value.qtyIn,
+      qtyOut: value.qtyOut,
+      lossKg: value.lossKg,
+      lossPct: value.count > 0 ? value.lossPct / value.count : 0,
+      efficiencyPct: value.count > 0 ? value.efficiencyPct / value.count : 0,
+    }));
+    const weakest = stageView.slice().sort((a, b) => b.lossPct - a.lossPct)[0];
+    const priority: LotRecommendationItem["priority"] = weakest.lossPct >= 12 ? "critical" : weakest.lossPct >= 8 ? "high" : "medium";
+    return [
+      {
+        id: `stage-${weakest.key}`,
+        title: `Réduire la perte à l'étape ${weakest.stage.toLowerCase()}`,
+        priority,
+        impactedStep: weakest.stage,
+        problem: `Cette étape présente une perte moyenne de ${weakest.lossPct.toFixed(1)}% avec une efficacité de ${weakest.efficiencyPct.toFixed(1)}%.`,
+        evidence: `Entrée: ${weakest.qtyIn.toFixed(1)} kg · Sortie: ${weakest.qtyOut.toFixed(1)} kg · Perte: ${weakest.lossKg.toFixed(1)} kg`,
+        action: "Vérifier les consignes opératoires, isoler les produits non conformes en amont de l'étape, puis contrôler les écarts de poids en fin de passage.",
+        expectedImpact: "Objectif: réduire la perte de 1 à 3 points sur les prochains lots comparables.",
+        confidence: "Confiance modérée: recommandation fondée sur les mesures du lot courant.",
+        caveat: "Recommandation issue des règles métier et des signaux du lot; à confirmer sur le terrain.",
+      },
+    ];
+  }, [selectedRecommendations, selectedSteps]);
 
   const materialBalance = useMemo(() => {
+    if (materialBalanceData) {
+      return {
+        initialKg: materialBalanceData.initial_confirmed_qty,
+        currentKg: materialBalanceData.current_qty,
+        exitsKg: 0,
+        lossesKg: materialBalanceData.total_loss_qty,
+        lossPct: materialBalanceData.total_loss_pct,
+      };
+    }
     const initialKg = selectedBatch?.confirmed_weight_kg ?? 0;
     const currentKg = selectedBatch?.current_qty ?? selectedBatch?.confirmed_weight_kg ?? 0;
-
-    const exitsKg = selectedSteps.reduce((sum, step) => {
-      if (!isExitStep(step.type)) return sum;
-      return sum + Math.max(step.normalized_loss_value || 0, 0);
-    }, 0);
-
-    const explicitLossesKg = selectedSteps.reduce((sum, step) => {
-      if (!isLossStep(step.type)) return sum;
-      return sum + Math.max(step.normalized_loss_value || 0, 0);
-    }, 0);
-
-    const computedGapKg = Math.max(initialKg - currentKg - exitsKg, 0);
-    const lossesKg = Math.max(explicitLossesKg, computedGapKg);
-    const lossPct = initialKg > 0 ? (lossesKg / initialKg) * 100 : 0;
-
-    return { initialKg, currentKg, exitsKg, lossesKg, lossPct };
-  }, [selectedBatch?.confirmed_weight_kg, selectedBatch?.current_qty, selectedSteps]);
+    const computedGapKg = Math.max(initialKg - currentKg, 0);
+    const lossPct = initialKg > 0 ? (computedGapKg / initialKg) * 100 : 0;
+    return { initialKg, currentKg, exitsKg: 0, lossesKg: computedGapKg, lossPct };
+  }, [materialBalanceData, selectedBatch?.confirmed_weight_kg, selectedBatch?.current_qty]);
 
   const stageMetrics = useMemo(() => {
+    const stageOrder = new Map<string, number>();
+    selectedSteps
+      .slice()
+      .sort((a, b) => a.sequence_order - b.sequence_order)
+      .forEach((step, index) => {
+        const key = (step.type || "").toLowerCase();
+        if (!stageOrder.has(key)) {
+          stageOrder.set(key, index);
+        }
+      });
     const grouped = new Map<
       string,
-      { qtyIn: number; qtyOut: number; loss: number; efficiency: number; count: number; anomalies: number }
+      { qtyIn: number; qtyOut: number; loss: number; efficiency: number; count: number; anomalies: number; lossKg: number; status: "pending" | "done" | "cancelled" }
     >();
     selectedSteps.forEach((step) => {
-      const key = stageLabelFromType(step.type);
-      const current = grouped.get(key) ?? { qtyIn: 0, qtyOut: 0, loss: 0, efficiency: 0, count: 0, anomalies: 0 };
+      const key = step.type;
+      const current = grouped.get(key) ?? { qtyIn: 0, qtyOut: 0, loss: 0, efficiency: 0, count: 0, anomalies: 0, lossKg: 0, status: "done" as const };
       current.qtyIn += step.qty_in;
       current.qtyOut += step.qty_out;
       current.loss += step.loss_pct;
+      current.lossKg += step.normalized_loss_value;
       current.efficiency += step.efficiency_pct;
       current.count += 1;
       if (step.warning || step.loss_pct >= 12) current.anomalies += 1;
+      if (step.stage_status === "pending") current.status = "pending";
+      if (step.stage_status === "cancelled") current.status = "cancelled";
       grouped.set(key, current);
     });
 
-    return Array.from(grouped.entries()).map(([stage, values]) => ({
-      stage,
-      qtyIn: values.qtyIn,
-      qtyOut: values.qtyOut,
-      lossPct: values.count > 0 ? values.loss / values.count : 0,
-      efficiencyPct: values.count > 0 ? values.efficiency / values.count : 0,
-      anomalies: values.anomalies,
-    }));
+    return Array.from(grouped.entries())
+      .map(([key, values]) => ({
+        key,
+        stage: stageLabelFromType(key),
+        status: values.status,
+        qtyIn: values.qtyIn,
+        qtyOut: values.qtyOut,
+        lossKg: values.lossKg,
+        lossPct: values.count > 0 ? values.loss / values.count : 0,
+        efficiencyPct: values.count > 0 ? values.efficiency / values.count : 0,
+        anomalies: values.anomalies,
+      }))
+      .sort((a, b) => {
+        const orderA = stageOrder.get((a.key || "").toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+        const orderB = stageOrder.get((b.key || "").toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
   }, [selectedSteps]);
 
   const workflowRows = useMemo<ProcessTableRow[]>(() => {
@@ -356,9 +399,11 @@ export default function LotsPage() {
       const step = executedByOrder.get(order);
       const mapped = stageFromType(stepName) ?? stageFromType(step?.type ?? stepName);
       const status: ProcessTableRow["status"] = step
-        ? step.warning
-          ? "warning"
-          : "done"
+        ? step.stage_status === "pending"
+          ? "current"
+          : step.warning
+            ? "warning"
+            : "done"
         : nextExecutableOrder === order
           ? "current"
           : "pending";
@@ -470,7 +515,7 @@ export default function LotsPage() {
       .map((step) => ({
         id: step.id,
         title: `${step.sequence_order}. ${stageLabelFromType(step.type)}`,
-        detail: `In ${step.qty_in.toFixed(2)} kg · Perte ${step.normalized_loss_value.toFixed(2)} kg · Out ${step.qty_out.toFixed(2)} kg`,
+        detail: `Entrée ${step.qty_in.toFixed(2)} kg · Perte ${step.normalized_loss_value.toFixed(2)} kg · Sortie ${step.qty_out.toFixed(2)} kg`,
         date: step.date,
       }))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -478,63 +523,47 @@ export default function LotsPage() {
     return [
       {
         id: `batch-${selectedBatch.id}`,
-        title: `Lot ${selectedBatch.code} cree`,
-        detail: `Stock initial Post-recolte ${materialBalance.initialKg.toFixed(2)} kg · Stock actuel ${materialBalance.currentKg.toFixed(2)} kg`,
+        title: `Lot ${selectedBatch.code} créé`,
+        detail: `Stock initial post-récolte ${materialBalance.initialKg.toFixed(2)} kg · Stock actuel ${materialBalance.currentKg.toFixed(2)} kg`,
         date: selectedBatch.creation_date,
       },
       ...stepItems,
     ];
   }, [selectedBatch, selectedSteps, materialBalance.initialKg, materialBalance.currentKg]);
 
-  const postHarvestInsights = useMemo<AIInsightItem[]>(() => {
-    if (!selectedBatch) return [];
+  const missingConditions = useMemo(() => {
+    const conditions: string[] = [];
+    if (!selectedBatch?.confirmed_weight_kg) conditions.push("poids confirmé indisponible");
+    if (selectedSteps.length === 0) conditions.push("aucune étape complétée");
+    if (selectedSteps.some((step) => !step.qty_out || step.qty_out <= 0)) conditions.push("quantité sortante manquante sur au moins une étape");
+    return conditions;
+  }, [selectedBatch?.confirmed_weight_kg, selectedSteps]);
 
-    const highRiskCount = selectedRecommendations.filter((item) => item.risk_level.toLowerCase() === "high").length;
-    const worstStage = stageMetrics
-      .slice()
-      .sort((a, b) => b.lossPct - a.lossPct)[0];
-    const anomalyTone: AIInsightItem["tone"] = anomalyCount > 0 ? "warning" : "success";
-    const items: AIInsightItem[] = [
-      {
-        id: "served-risk-method",
-        title: "Methode risque active",
-        message: "Risque servi par seuil sur perte predite (thresholded_predicted_loss).",
-        tone: "info",
-        meta: "Utiliser ce signal pour prioriser les actions, pas pour conclure seul la cause.",
-      },
-      {
-        id: "anomaly-signal",
-        title: anomalyCount > 0 ? "Anomalies a verifier" : "Pas d'anomalie critique detectee",
-        message:
-          anomalyCount > 0
-            ? `${anomalyCount} etape(s) avec signal d'ecart sur ce lot.`
-            : "Les etapes executees restent dans une plage operationnelle attendue.",
-        tone: anomalyTone,
-      },
-    ];
+  const analyticsFallbackReason = useMemo(() => {
+    if (stageMetrics.length > 0 && (materialBalanceData || selectedBatch?.confirmed_weight_kg)) return null;
+    if (missingConditions.length === 0) return "Aucune donnée exploitable disponible.";
+    return `Condition(s) manquante(s): ${missingConditions.join(" · ")}.`;
+  }, [materialBalanceData, missingConditions, selectedBatch?.confirmed_weight_kg, stageMetrics.length]);
 
-    if (worstStage) {
-      items.push({
-        id: "worst-stage",
-        title: `Etape sous pression: ${worstStage.stage}`,
-        message: `Perte moyenne ${worstStage.lossPct.toFixed(1)}% · efficacite ${worstStage.efficiencyPct.toFixed(1)}%.`,
-        tone: worstStage.lossPct >= 12 ? "critical" : worstStage.lossPct >= 8 ? "warning" : "info",
-      });
-    }
+  const recommendationsFallbackReason = analyticsFallbackReason;
 
-    items.push({
-      id: "high-risk-rows",
-      title: highRiskCount > 0 ? "Lots a risque eleve detectes" : "Aucun risque eleve dans les recents",
-      message:
-        highRiskCount > 0
-          ? `${highRiskCount} recommandation(s) marquee(s) HIGH pour ce lot.`
-          : "Continuer le suivi des prochaines etapes pour confirmer la stabilite.",
-      tone: highRiskCount > 0 ? "critical" : "success",
-      actionLabel: "Voir les recommandations",
-      href: "/manager/lots?tab=recommendations",
-    });
-    return items;
-  }, [selectedBatch, selectedRecommendations, stageMetrics, anomalyCount]);
+  const interpretation = useMemo(() => {
+    const ranked = stageMetrics.slice().sort((a, b) => a.lossPct - b.lossPct);
+    const best = ranked[0] ?? null;
+    const weakest = ranked[ranked.length - 1] ?? null;
+    const verdict =
+      materialBalance.lossPct >= 12
+        ? "Perte cumulée au-dessus du seuil de surveillance. Un plan correctif immédiat est recommandé."
+        : materialBalance.lossPct >= 8
+          ? "Perte cumulée à surveiller. Ajuster les contrôles sur l'étape la plus contributrice."
+          : "Perte cumulée dans une plage acceptable. Maintenir la discipline d'exécution.";
+    return {
+      bestStage: best?.stage ?? null,
+      weakestStage: weakest?.stage ?? null,
+      mainLossSource: weakest ? `${weakest.stage} (${weakest.lossPct.toFixed(1)}%)` : null,
+      verdict,
+    };
+  }, [materialBalance.lossPct, stageMetrics]);
 
   const updateQuery = (nextTab: LotWorkspaceTab, nextLotId?: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -573,6 +602,13 @@ export default function LotsPage() {
     setLotFormOpen(true);
   };
 
+  const expectedInputForOrder = (order: number): number => {
+    if (!selectedBatch) return 0;
+    if (order <= 1) return Number(selectedBatch.confirmed_weight_kg ?? selectedBatch.current_qty ?? 0);
+    const previous = selectedSteps.find((item) => item.sequence_order === order - 1);
+    return Number(previous?.qty_out ?? selectedBatch.current_qty ?? 0);
+  };
+
   const openCreateStep = (row?: ProcessTableRow) => {
     if (!selectedBatch) return;
     const target = row ?? workflowRows.find((item) => item.isExecutable);
@@ -581,12 +617,15 @@ export default function LotsPage() {
       return;
     }
     setEditingStep(null);
+    setStepTargetOrder(target.order);
+    setCompletingPendingStep(false);
     setStepPreset({ key: target.key, label: target.label, icon: target.icon, typeTag: target.typeTag });
     stepForm.reset({
       batch_id: selectedBatch.id,
       type: target.label,
       date: todayIso,
-      loss_value: 0,
+      qty_in: expectedInputForOrder(target.order),
+      qty_out: 0,
       loss_unit: selectedBatch.unit,
       notes: "",
       duration_minutes: undefined,
@@ -598,6 +637,8 @@ export default function LotsPage() {
   const openEditStep = (step: ProcessStep) => {
     const mapped = stageFromType(step.type);
     setEditingStep(step);
+    setStepTargetOrder(step.sequence_order);
+    setCompletingPendingStep(step.stage_status === "pending");
     setStepPreset(
       mapped
         ? {
@@ -612,7 +653,8 @@ export default function LotsPage() {
       batch_id: step.batch_id,
       type: step.type,
       date: step.date,
-      loss_value: step.loss_value,
+      qty_in: step.qty_in,
+      qty_out: step.qty_out,
       loss_unit: step.loss_unit,
       notes: step.notes ?? "",
       duration_minutes: step.duration_minutes ?? undefined,
@@ -625,8 +667,11 @@ export default function LotsPage() {
     setLotFormOpen(false);
     setStepFormOpen(false);
     setEditingBatch(null);
+    setEditingStep(null);
+    setCompletingPendingStep(false);
     setFormError(null);
     setStepPreset(null);
+    setStepTargetOrder(null);
   };
 
   const addPlannedStep = (label: string) => {
@@ -698,24 +743,37 @@ export default function LotsPage() {
       }
 
       if (editingStep) {
-        const payload: ProcessStepUpdate = {
-          date: values.date,
-          loss_value: Number(values.loss_value),
-          loss_unit: values.loss_unit,
-          notes: values.notes?.trim() || null,
-          duration_minutes: values.duration_minutes ? Number(values.duration_minutes) : undefined,
-        };
-        await updateStep.mutateAsync({ id: editingStep.id, payload });
+        if (completingPendingStep) {
+          const payload: ProcessStepCompletePayload = {
+            date: values.date,
+            qty_out: Number(values.qty_out),
+            loss_unit: values.loss_unit,
+            notes: values.notes?.trim() || null,
+            duration_minutes: Number(values.duration_minutes),
+          };
+          await completeStep.mutateAsync({ id: editingStep.id, payload });
+        } else {
+          const payload: ProcessStepUpdate = {
+            date: values.date,
+            qty_out: values.qty_out !== undefined ? Number(values.qty_out) : undefined,
+            loss_unit: values.loss_unit,
+            notes: values.notes?.trim() || null,
+            duration_minutes: Number(values.duration_minutes),
+          };
+          await updateStep.mutateAsync({ id: editingStep.id, payload });
+        }
       } else {
-        const payload: ProcessStepCreate = {
-          batch_id: selectedBatch.id,
-          type: stepPreset?.label,
-          date: values.date,
-          loss_value: Number(values.loss_value),
-          loss_unit: values.loss_unit,
-          notes: values.notes?.trim() || null,
-          duration_minutes: values.duration_minutes ? Number(values.duration_minutes) : undefined,
-        };
+        const computedQtyIn = expectedInputForOrder(stepTargetOrder ?? workflowRows.length + 1);
+          const payload: ProcessStepCreate = {
+            batch_id: selectedBatch.id,
+            type: stepPreset?.label,
+            date: values.date,
+            qty_in: computedQtyIn,
+            qty_out: Number(values.qty_out),
+            loss_unit: values.loss_unit,
+            notes: values.notes?.trim() || null,
+            duration_minutes: Number(values.duration_minutes),
+          };
         await createStep.mutateAsync(payload);
       }
       closeForms();
@@ -723,17 +781,6 @@ export default function LotsPage() {
       setFormError(error instanceof Error ? error.message : "Impossible d'enregistrer l'etape.");
     }
   });
-
-  const handleDeleteLot = async (batch: Batch) => {
-    try {
-      await deleteBatch.mutateAsync(batch.id);
-      if (selectedBatch?.id === batch.id) {
-        setSelectedBatchId(null);
-      }
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Impossible de supprimer le lot.");
-    }
-  };
 
   const handleDeleteStep = async (step: ProcessStep) => {
     try {
@@ -744,18 +791,49 @@ export default function LotsPage() {
     }
   };
 
+  const handleStartPostHarvest = async () => {
+    if (!selectedBatch) return;
+    setFormError(null);
+    try {
+      await startPostHarvest.mutateAsync(selectedBatch.id);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible de démarrer la Post-récolte.");
+    }
+  };
+
+  const handleCompletePostHarvest = async () => {
+    if (!selectedBatch) return;
+    setFormError(null);
+    try {
+      await completePostHarvest.mutateAsync(selectedBatch.id);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible de finaliser la Post-récolte.");
+    }
+  };
+
   const handleEnterStage = (row: ProcessTableRow) => {
     if (!row.isExecutable) return;
-    openCreateStep(row);
+    if (!selectedBatch) return;
+    void (async () => {
+      setFormError(null);
+      try {
+        if (selectedBatch.postharvest_status === "ready_post_recolte") {
+          await startPostHarvest.mutateAsync(selectedBatch.id);
+        }
+        openCreateStep(row);
+      } catch (error) {
+        setFormError(error instanceof Error ? error.message : "Impossible de démarrer l'étape.");
+      }
+    })();
   };
 
   const stepModalTitle = editingStep
-    ? `Modifier - ${stepPreset?.label ?? stageLabelFromType(editingStep.type)}`
+    ? `${completingPendingStep ? "Completer" : "Modifier"} - ${stepPreset?.label ?? stageLabelFromType(editingStep.type)}`
     : `Executer - ${stepPreset?.label ?? "Etape"}`;
 
   return (
     <main className="min-w-0 overflow-x-hidden">
-      <PageIntro title="Flux matiere" />
+      <PageIntro title="Flux matière" />
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "20ms" }}>
         <p className="text-sm font-semibold text-[var(--text)]">Continuation Post-récolte du même lot</p>
         <p className="text-xs text-[var(--muted)]">Les lots prêts depuis Pré-récolte sont prioritaires. Cette page ne crée pas un nouveau lot.</p>
@@ -764,8 +842,24 @@ export default function LotsPage() {
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "30ms" }}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleStartPostHarvest}
+              className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold"
+              disabled={!selectedBatch || selectedBatch.postharvest_status !== "ready_post_recolte"}
+            >
+              Demarrer Post-récolte
+            </button>
             <button type="button" onClick={() => openCreateStep()} className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold" disabled={!selectedBatch}>
-              + Executer etape
+              + Compléter étape
+            </button>
+            <button
+              type="button"
+              onClick={handleCompletePostHarvest}
+              className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold"
+              disabled={!selectedBatch || selectedBatch.postharvest_status === "post_recolte_completed"}
+            >
+              Clôturer post-récolte
             </button>
             <button
               type="button"
@@ -880,6 +974,11 @@ export default function LotsPage() {
                       <p className="text-xs text-[var(--muted)]">Pertes Post-récolte: <span className="font-semibold text-[var(--text)]">{materialBalance.lossesKg.toFixed(2)} kg</span></p>
                       <p className="text-xs text-[var(--muted)]">Sorties stock: <span className="font-semibold text-[var(--text)]">{materialBalance.exitsKg.toFixed(2)} kg</span></p>
                       <p className="text-xs text-[var(--muted)]">Stock actuel: <span className="font-semibold text-[var(--text)]">{materialBalance.currentKg.toFixed(2)} kg</span></p>
+                      {materialBalanceData?.final_output_qty !== undefined && materialBalanceData?.final_output_qty !== null ? (
+                        <p className="text-xs text-[var(--muted)] sm:col-span-2">
+                          Sortie finale Post-récolte: <span className="font-semibold text-[var(--text)]">{materialBalanceData.final_output_qty.toFixed(2)} kg</span>
+                        </p>
+                      ) : null}
                     </div>
                     <p className="mt-2 text-xs text-[var(--muted)]">Perte %: <span className="font-semibold text-[var(--text)]">{materialBalance.lossPct.toFixed(2)}%</span></p>
                   </div>
@@ -892,12 +991,20 @@ export default function LotsPage() {
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-[var(--text)]">{latestRecommendation.title}</p>
                         <StatusBadge
-                          label={latestRecommendation.priority === "critical" ? "Prioritaire" : latestRecommendation.priority === "warning" ? "Important" : "Optimisation"}
-                          tone={latestRecommendation.priority === "critical" ? "danger" : latestRecommendation.priority === "warning" ? "warning" : "ai"}
+                          label={
+                            latestRecommendation.priority === "critical"
+                              ? "Critique"
+                              : latestRecommendation.priority === "high"
+                                ? "Haute"
+                                : latestRecommendation.priority === "medium"
+                                  ? "Moyenne"
+                                  : "Faible"
+                          }
+                          tone={latestRecommendation.priority === "critical" ? "danger" : latestRecommendation.priority === "high" ? "warning" : "ai"}
                         />
                       </div>
-                      <p className="mt-2 text-xs text-[var(--muted)]">{latestRecommendation.rationale}</p>
-                      <p className="mt-2 text-xs font-semibold text-[var(--ai-accent)]">{latestRecommendation.expectedEffect}</p>
+                      <p className="mt-2 text-xs text-[var(--muted)]">{latestRecommendation.problem}</p>
+                      <p className="mt-2 text-xs font-semibold text-[var(--ai-accent)]">{latestRecommendation.expectedImpact}</p>
                       <button
                         type="button"
                         onClick={() => handleSwitchTab("recommendations")}
@@ -907,7 +1014,7 @@ export default function LotsPage() {
                       </button>
                     </div>
                   ) : (
-                    <p className="mt-3 text-sm text-[var(--muted)]">Aucune recommandation specifique pour ce lot.</p>
+                    <p className="mt-3 text-sm text-[var(--muted)]">Aucune recommandation spécifique pour ce lot.</p>
                   )}
                 </article>
               </section>
@@ -915,32 +1022,29 @@ export default function LotsPage() {
 
             {activeTab === "analytics" && (
               <section className="space-y-4">
-                <AIInsightsStrip
-                  title="Insights IA post-recolte"
-                  subtitle="Signaux de priorisation pour le lot actif."
-                  items={postHarvestInsights}
-                />
                 <LotAnalyticsPanel
                   stageMetrics={stageMetrics}
-                  totals={{
-                    qtyIn: lotTotals.qtyIn,
-                    qtyOut: lotTotals.qtyOut,
-                    lossKg: lotTotals.lossKg,
-                    efficiencyPct: lotTotals.efficiencyPct,
-                  }}
-                  anomalyCount={anomalyCount}
+                  initialQty={materialBalance.initialKg}
+                  currentQty={materialBalance.currentKg}
+                  finalQty={materialBalanceData?.final_output_qty ?? null}
+                  totalLossKg={materialBalance.lossesKg}
+                  totalLossPct={materialBalance.lossPct}
+                  totalEfficiencyPct={materialBalanceData?.total_efficiency_pct ?? (materialBalance.initialKg > 0 ? (materialBalance.currentKg / materialBalance.initialKg) * 100 : 0)}
+                  interpretation={interpretation}
+                  fallbackReason={analyticsFallbackReason}
                 />
               </section>
             )}
 
             {activeTab === "recommendations" && (
               <section className="space-y-4">
-                <AIInsightsStrip
-                  title="Synthese IA du lot"
-                  subtitle="Les recommandations restent une aide, a confirmer sur le terrain."
-                  items={postHarvestInsights}
-                />
-                <LotRecommendationPanel items={recommendationCards} />
+                <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "85ms" }}>
+                  <h3 className="text-base font-semibold text-[var(--text)]">Aides à la décision du lot</h3>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Ces recommandations sont des aides à la décision basées sur les données du lot, les règles métier et les signaux de risque disponibles. Elles ne remplacent pas la validation terrain.
+                  </p>
+                </article>
+                <LotRecommendationPanel items={recommendationCards} fallbackReason={recommendationsFallbackReason} />
               </section>
             )}
 
@@ -965,21 +1069,6 @@ export default function LotsPage() {
               </article>
             )}
 
-            <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "140ms" }}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Gestion lot</p>
-                  <p className="text-sm font-medium text-[var(--text)]">
-                    Lot {selectedBatch.code} · {productLookup.get(selectedBatch.product_id) ?? selectedBatch.product_id.slice(0, 8)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button type="button" className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => setPendingDeleteLot(selectedBatch)}>
-                    Supprimer lot
-                  </button>
-                </div>
-              </div>
-            </article>
           </div>
         </section>
       )}
@@ -1167,7 +1256,7 @@ export default function LotsPage() {
         footer={
           <div className="flex items-center justify-between gap-3">
             <button type="submit" form="step-form" className="soft-focus wf-btn-primary flex-1 px-4 py-2 text-sm font-semibold" disabled={stepForm.formState.isSubmitting}>
-              {stepForm.formState.isSubmitting ? "Enregistrement..." : "Enregistrer"}
+              {stepForm.formState.isSubmitting ? "Enregistrement..." : completingPendingStep ? "Completer etape" : "Enregistrer"}
             </button>
             <button type="button" className="soft-focus wf-btn-secondary flex-1 px-4 py-2 text-sm font-semibold" onClick={closeForms}>
               Annuler
@@ -1190,33 +1279,55 @@ export default function LotsPage() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm font-medium text-[var(--text)]">
-              Perte
+              Quantite entrante (kg)
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                {...stepForm.register("loss_value", { required: "Perte requise.", valueAsNumber: true })}
+                {...stepForm.register("qty_in", { valueAsNumber: true })}
                 className="wf-input mt-2 h-11 w-full px-3 text-sm"
+                readOnly
               />
             </label>
 
             <label className="block text-sm font-medium text-[var(--text)]">
-              Unite perte
-              <select {...stepForm.register("loss_unit")} className="wf-input mt-2 h-11 w-full px-3 text-sm">
-                <option value="kg">kg</option>
-                <option value="ton">ton</option>
-              </select>
+              Quantite sortante (kg)
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                {...stepForm.register("qty_out", {
+                  required: "Quantité sortante requise.",
+                  valueAsNumber: true,
+                  validate: (value) => Number(value) > 0 || "La quantité sortante doit être supérieure à 0.",
+                })}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+              />
             </label>
           </div>
 
-          <label className="block text-sm font-medium text-[var(--text)]">
-            Date d&apos;execution
-            <input
-              type="date"
-              {...stepForm.register("date")}
-              className="wf-input mt-2 h-11 w-full px-3 text-sm"
-            />
-          </label>
+          <input type="hidden" {...stepForm.register("loss_unit")} />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Date d&apos;execution
+              <input
+                type="date"
+                {...stepForm.register("date")}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+              />
+            </label>
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Durée (minutes)
+              <input
+                type="number"
+                min="1"
+                step="1"
+                {...stepForm.register("duration_minutes", { required: "Durée requise.", valueAsNumber: true })}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+              />
+            </label>
+          </div>
 
           <label className="block text-sm font-medium text-[var(--text)]">
             Notes / Observations
@@ -1236,18 +1347,6 @@ export default function LotsPage() {
           {formError && <p className="rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">{formError}</p>}
         </form>
       </LiquidGlassModal>
-      <ConfirmActionModal
-        open={Boolean(pendingDeleteLot)}
-        title="Supprimer le lot"
-        message="Cette action supprimera définitivement ce lot."
-        confirmLabel="Supprimer"
-        onCancel={() => setPendingDeleteLot(null)}
-        onConfirm={() => {
-          if (!pendingDeleteLot) return;
-          void handleDeleteLot(pendingDeleteLot);
-          setPendingDeleteLot(null);
-        }}
-      />
       <ConfirmActionModal
         open={Boolean(pendingDeleteStep)}
         title="Supprimer l'étape"

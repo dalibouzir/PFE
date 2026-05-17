@@ -13,21 +13,33 @@ class ProcessStepCreate(BaseModel):
     batch_id: UUID
     type: Optional[str] = Field(default=None, min_length=2, max_length=80)
     date: Optional[date_type] = None
-    loss_value: float = Field(ge=0)
+    qty_in: Optional[float] = Field(default=None, gt=0)
+    qty_out: Optional[float] = Field(default=None, ge=0)
+    loss_value: Optional[float] = Field(default=None, ge=0)
     loss_unit: str = Field(default="kg", min_length=1, max_length=16)
+    status: Optional[str] = Field(default=None, min_length=3, max_length=24)
     notes: Optional[str] = Field(default=None, max_length=1000)
     duration_minutes: Optional[int] = Field(default=None, ge=0)
 
 
 class ProcessStepUpdate(BaseModel):
     date: Optional[date_type] = None
+    qty_in: Optional[float] = Field(default=None, gt=0)
+    qty_out: Optional[float] = Field(default=None, ge=0)
     loss_value: Optional[float] = Field(default=None, ge=0)
     loss_unit: Optional[str] = Field(default=None, min_length=1, max_length=16)
+    status: Optional[str] = Field(default=None, min_length=3, max_length=24)
     notes: Optional[str] = Field(default=None, max_length=1000)
     duration_minutes: Optional[int] = Field(default=None, ge=0)
 
 
 class ProcessStepCompleteRequest(BaseModel):
+    qty_out: Optional[float] = Field(default=None, ge=0)
+    loss_value: Optional[float] = Field(default=None, ge=0)
+    loss_unit: Optional[str] = Field(default=None, min_length=1, max_length=16)
+    date: Optional[date_type] = None
+    notes: Optional[str] = Field(default=None, max_length=1000)
+    duration_minutes: Optional[int] = Field(default=None, ge=0)
     mark_batch_completed: bool = False
 
 
@@ -42,9 +54,13 @@ class ProcessStepRead(ORMModel):
     normalized_loss_value: float
     qty_in: float
     qty_out: float
+    loss_qty: float
     waste_qty: float
     notes: Optional[str]
     status: str
+    stage_status: str
+    started_at: datetime
+    completed_at: Optional[datetime]
     executed_at: Optional[datetime]
     duration_minutes: Optional[int]
     created_at: datetime

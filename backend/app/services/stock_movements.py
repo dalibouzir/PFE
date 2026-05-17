@@ -63,6 +63,26 @@ def _input_reference(input_row: Input | None) -> Optional[str]:
     return f"COL-{str(input_row.id)[:8].upper()}"
 
 
+def _extract_manager_name(notes: Optional[str]) -> Optional[str]:
+    text = (notes or "").strip()
+    if not text:
+        return None
+    marker = "| manager:"
+    idx = text.lower().rfind(marker)
+    if idx < 0:
+        return None
+    extracted = text[idx + len(marker) :].strip()
+    return extracted or None
+
+
+def _display_user_name(user: User | None) -> Optional[str]:
+    if user is None:
+        return None
+    full_name = (user.full_name or "").strip()
+    email = (user.email or "").strip()
+    return full_name or email or None
+
+
 def _serialize(
     row: StockMovement,
     cooperative: Cooperative | None,
@@ -70,7 +90,15 @@ def _serialize(
     batch: Batch | None,
     input_row: Input | None,
     member: Member | None,
+    batch_owner: User | None = None,
 ) -> StockMovementRead:
+    member_name = member.full_name if member is not None else None
+    source = (row.source or "").strip().lower()
+    if member_name is None and source == "commercial_catalog":
+        member_name = _extract_manager_name(row.notes)
+    if member_name is None and source == "post_harvest_step":
+        member_name = _display_user_name(batch_owner)
+
     return StockMovementRead(
         id=row.id,
         cooperative_id=row.cooperative_id,
@@ -89,7 +117,7 @@ def _serialize(
         input_reference=_input_reference(input_row),
         input_reference_bl=(input_row.bl_number if input_row is not None else None),
         member_id=member.id if member is not None else None,
-        member_name=member.full_name if member is not None else None,
+        member_name=member_name,
         process_step_id=row.process_step_id,
         workflow_step_id=row.workflow_step_id,
         quantity_kg=round_metric(row.quantity_kg),
@@ -182,6 +210,13 @@ def list_stock_movements(
             select(Member).where(Member.cooperative_id == cooperative_id, Member.id.in_(member_ids))
         ).all()
     } if member_ids else {}
+    batch_owner_ids = {batch.created_by_user_id for batch in batches.values() if batch is not None}
+    batch_owners = {
+        item.id: item
+        for item in db.scalars(
+            select(User).where(User.id.in_(batch_owner_ids))
+        ).all()
+    } if batch_owner_ids else {}
 
     cooperative = db.scalar(select(Cooperative).where(Cooperative.id == cooperative_id))
 
@@ -194,9 +229,10 @@ def list_stock_movements(
         input_row = inputs.get(row.input_id) if row.input_id is not None else None
         member = members.get(input_row.member_id) if input_row is not None else None
         batch = batches.get(row.batch_id) if row.batch_id is not None else None
+        batch_owner = batch_owners.get(batch.created_by_user_id) if batch is not None else None
         product = products.get(row.product_id)
 
-        serialized = _serialize(row, cooperative, product, batch, input_row, member)
+        serialized = _serialize(row, cooperative, product, batch, input_row, member, batch_owner)
 
         if batch_ref_needle and not ((serialized.batch_reference or "").lower().find(batch_ref_needle) >= 0):
             continue
@@ -255,6 +291,9 @@ def get_stock_movement_detail(db: Session, manager: User, movement_id: UUID) -> 
         member = db.scalar(
             select(Member).where(Member.cooperative_id == cooperative_id, Member.id == input_row.member_id)
         )
+    batch_owner = None
+    if batch is not None:
+        batch_owner = db.scalar(select(User).where(User.id == batch.created_by_user_id))
 
-    serialized = _serialize(row, cooperative, product, batch, input_row, member)
+    serialized = _serialize(row, cooperative, product, batch, input_row, member, batch_owner)
     return StockMovementDetailRead(**serialized.model_dump())

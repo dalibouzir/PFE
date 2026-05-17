@@ -664,6 +664,7 @@ export type Batch = {
   collecte_created?: boolean;
   stock_in_created?: boolean;
   postharvest_started_at?: string | null;
+  postharvest_status?: "ready_post_recolte" | "in_post_recolte" | "post_recolte_completed" | "not_ready_post_recolte" | null;
   status_note?: string | null;
   initial_qty_display: number;
   current_qty_display: number;
@@ -729,9 +730,13 @@ export type ProcessStep = {
   normalized_loss_value: number;
   qty_in: number;
   qty_out: number;
+  loss_qty: number;
   waste_qty: number;
   notes?: string | null;
   status: string;
+  stage_status: "pending" | "done" | "cancelled" | string;
+  started_at: string;
+  completed_at?: string | null;
   executed_at?: string | null;
   duration_minutes?: number | null;
   created_at: string;
@@ -745,13 +750,52 @@ export type ProcessStepCreate = {
   batch_id: string;
   type?: string;
   date?: string;
-  loss_value: number;
+  qty_in?: number;
+  qty_out?: number;
+  loss_value?: number;
   loss_unit: "kg" | "ton";
+  status?: "pending" | "in_progress" | "done" | "cancelled";
   notes?: string | null;
   duration_minutes?: number | null;
 };
 
 export type ProcessStepUpdate = Partial<ProcessStepCreate>;
+
+export type ProcessStepCompletePayload = {
+  qty_out?: number;
+  loss_value?: number;
+  loss_unit?: "kg" | "ton";
+  date?: string;
+  notes?: string | null;
+  duration_minutes?: number | null;
+  mark_batch_completed?: boolean;
+};
+
+export type BatchMaterialBalanceStage = {
+  stage: string;
+  step_count: number;
+  qty_in: number;
+  qty_out: number;
+  loss_qty: number;
+  loss_pct: number;
+  efficiency_pct: number;
+};
+
+export type BatchMaterialBalance = {
+  batch_id: string;
+  cooperative_id: string;
+  postharvest_status: string;
+  initial_confirmed_qty: number;
+  current_qty: number;
+  final_output_qty?: number | null;
+  total_loss_qty: number;
+  total_loss_pct: number;
+  total_efficiency_pct: number;
+  steps_completed: number;
+  steps_required: number;
+  per_stage: BatchMaterialBalanceStage[];
+  process_steps: ProcessStep[];
+};
 
 export type BatchReferencePreview = {
   code: string;

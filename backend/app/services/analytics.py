@@ -58,6 +58,9 @@ def compute_process_metrics(process_step: ProcessStep):
 
 def serialize_process_step(process_step: ProcessStep) -> ProcessStepRead:
     metrics = compute_process_metrics(process_step)
+    stage_status = "done" if process_step.status == ProcessStepStatus.COMPLETED else "pending"
+    if process_step.status == ProcessStepStatus.FLAGGED:
+        stage_status = "cancelled"
     return ProcessStepRead(
         id=process_step.id,
         batch_id=process_step.batch_id,
@@ -69,9 +72,13 @@ def serialize_process_step(process_step: ProcessStep) -> ProcessStepRead:
         normalized_loss_value=round_metric(process_step.normalized_loss_value),
         qty_in=round_metric(process_step.qty_in),
         qty_out=round_metric(process_step.qty_out),
+        loss_qty=metrics["waste_qty"],
         waste_qty=metrics["waste_qty"],
         notes=process_step.notes,
         status=process_step.status.value,
+        stage_status=stage_status,
+        started_at=process_step.created_at,
+        completed_at=process_step.executed_at,
         executed_at=process_step.executed_at,
         duration_minutes=process_step.duration_minutes,
         created_at=process_step.created_at,
