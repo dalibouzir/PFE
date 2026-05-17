@@ -10,6 +10,7 @@ import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
 import { useTableControls } from "@/lib/table/useTableControls";
+import { useBatches } from "@/hooks/useBatches";
 import {
   useCancelTreasuryTransaction,
   useCreateTreasuryTransaction,
@@ -151,6 +152,7 @@ export default function TreasuryPage() {
     sort: tableControls.sortOrder,
   });
   const statsQuery = useTreasuryStats();
+  const batchesQuery = useBatches();
 
   const createTransaction = useCreateTreasuryTransaction();
   const updateTransaction = useUpdateTreasuryTransaction();
@@ -173,6 +175,14 @@ export default function TreasuryPage() {
 
   const transactions = useMemo(() => transactionsQuery.data ?? [], [transactionsQuery.data]);
   const stats = statsQuery.data;
+  const totalEstimatedCharges = useMemo(
+    () =>
+      (batchesQuery.data ?? []).reduce(
+        (sum, batch) => sum + Number(batch.estimated_charge_fcfa ?? 0),
+        0,
+      ),
+    [batchesQuery.data],
+  );
 
   const exportRows = useMemo(() => mapTransactionsForExport(transactions), [transactions]);
   const exportColumns = useMemo(() => treasuryExportColumns(), []);
@@ -305,7 +315,7 @@ export default function TreasuryPage() {
     <main>
       <PageIntro title="Trésorerie" />
 
-      <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "20ms" }}>
           <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Total donné</p>
           <p className="mt-2 text-2xl font-semibold text-[var(--text)]">{formatAmount(stats?.total_given ?? 0)}</p>
@@ -321,6 +331,10 @@ export default function TreasuryPage() {
         <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "80ms" }}>
           <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Solde actuel</p>
           <p className="mt-2 text-2xl font-semibold text-[var(--text)]">{formatAmount(stats?.current_balance ?? 0)}</p>
+        </article>
+        <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "100ms" }}>
+          <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Charges estimées lots</p>
+          <p className="mt-2 text-2xl font-semibold text-[var(--text)]">{formatAmount(totalEstimatedCharges)}</p>
         </article>
       </section>
 

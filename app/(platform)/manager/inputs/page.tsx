@@ -12,6 +12,7 @@ import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import { useBatches } from "@/hooks/useBatches";
 import { useCreateInput, useDeleteInput, useInputs, useUpdateInput, useUploadInputJustificatif } from "@/hooks/useInputs";
 import { ApiError } from "@/lib/api/client";
+import { getApiBaseUrl } from "@/lib/api/client";
 import { useMembers } from "@/hooks/useMembers";
 import { useProducts } from "@/hooks/useProducts";
 import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
@@ -72,6 +73,12 @@ function formatApiError(error: unknown, fallback: string): string {
   }
   if (error instanceof Error && error.message.trim()) return error.message;
   return fallback;
+}
+
+function resolveUploadUrl(fileUrl?: string | null): string {
+  if (!fileUrl) return "#";
+  if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) return fileUrl;
+  return `${getApiBaseUrl()}${fileUrl.startsWith("/") ? fileUrl : `/${fileUrl}`}`;
 }
 
 function parseSpecialtyTokens(value?: string | null) {
@@ -534,7 +541,7 @@ export default function InputsPage() {
                     </td>
                     <td className="px-5 py-4 text-xs">
                       {item.justificatif_file ? (
-                        <a className="font-semibold text-[var(--primary)] hover:underline" href={item.justificatif_file.file_url} target="_blank" rel="noreferrer">
+                        <a className="font-semibold text-[var(--primary)] hover:underline" href={resolveUploadUrl(item.justificatif_file.file_url)} target="_blank" rel="noreferrer">
                           {item.justificatif_file.filename}
                         </a>
                       ) : (
@@ -544,13 +551,13 @@ export default function InputsPage() {
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
                         <button
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--primary)] hover:bg-[var(--surface-soft)] disabled:opacity-60"
+                          className="text-xs font-semibold text-[var(--primary)] hover:underline disabled:opacity-60"
                           onClick={() => openJustificatifPicker(item.id)}
                           disabled={uploadJustificatif.isPending && uploadingItemId === item.id}
                           title={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
                           aria-label={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
                         >
-                          ⬆
+                          Uploader
                         </button>
                         <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => setPendingDeleteItem(item)}>Supprimer</button>
                       </div>
@@ -620,13 +627,13 @@ export default function InputsPage() {
 
               <div className="mt-3 flex items-center gap-2">
                 <button
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--primary)] hover:bg-[var(--surface-soft)] disabled:opacity-60"
+                  className="text-xs font-semibold text-[var(--primary)] hover:underline disabled:opacity-60"
                   onClick={() => openJustificatifPicker(item.id)}
                   disabled={uploadJustificatif.isPending && uploadingItemId === item.id}
                   title={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
                   aria-label={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
                 >
-                  ⬆
+                  Uploader
                 </button>
                 <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => setPendingDeleteItem(item)}>Supprimer</button>
               </div>

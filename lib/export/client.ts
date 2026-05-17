@@ -129,11 +129,29 @@ export function exportRowsToPdf<T>(options: ExportOptions<T>) {
   </body>
 </html>`;
 
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=900");
-  if (!printWindow) return;
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
+  const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+  const url = window.URL.createObjectURL(blob);
+  const printWindow = window.open(url, "_blank", "width=1100,height=900");
+  if (!printWindow) {
+    window.URL.revokeObjectURL(url);
+    return;
+  }
+  const cleanup = () => {
+    window.URL.revokeObjectURL(url);
+  };
+  printWindow.addEventListener(
+    "load",
+    () => {
+      // Give the browser a short paint delay before opening print dialog.
+      window.setTimeout(() => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } finally {
+          cleanup();
+        }
+      }, 120);
+    },
+    { once: true },
+  );
 }

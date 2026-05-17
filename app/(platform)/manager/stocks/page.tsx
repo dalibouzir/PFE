@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { ExportActions } from "@/components/ui/table/ExportActions";
 import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
+import { getApiBaseUrl, getStoredToken } from "@/lib/api/client";
 import { useTableControls } from "@/lib/table/useTableControls";
 import { useInputs } from "@/hooks/useInputs";
 import { useProducts } from "@/hooks/useProducts";
@@ -44,6 +45,7 @@ export default function StocksPage() {
   const [batchReference, setBatchReference] = useState("");
   const [inputReference, setInputReference] = useState("");
   const [selectedMovementId, setSelectedMovementId] = useState<string | null>(null);
+  const [estimatedStockKg, setEstimatedStockKg] = useState(0);
 
   const tableControls = useTableControls([
     {
@@ -102,6 +104,32 @@ export default function StocksPage() {
     () => filtered.filter((item) => isCriticalStock(item.total_stock_kg, item.available_stock_kg)).length,
     [filtered],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadBatchEstimates() {
+      try {
+        const token = getStoredToken();
+        if (!token) return;
+        const response = await fetch(`${getApiBaseUrl()}/batches`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const rows = (await response.json()) as Array<{ estimated_qty_kg?: number | null; estimated_charge_fcfa?: number | null }>;
+        if (cancelled) return;
+        const totalQty = rows.reduce((sum, item) => sum + Number(item.estimated_qty_kg ?? 0), 0);
+        setEstimatedStockKg(totalQty);
+      } catch {
+        if (!cancelled) {
+          setEstimatedStockKg(0);
+        }
+      }
+    }
+    void loadBatchEstimates();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const collectedByProductKg = useMemo(() => {
     const map = new Map<string, number>();
@@ -192,7 +220,7 @@ export default function StocksPage() {
       <PageIntro title="Stocks" />
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
           <select
             value={productId}
             onChange={(event) => setProductId(event.target.value)}
@@ -208,6 +236,9 @@ export default function StocksPage() {
 
           <div className="rounded-xl border border-[#E8B9B9] bg-[#FFEDEE] px-3 py-2 text-sm text-[var(--danger)]">
             Alertes critiques: <span className="font-semibold">{criticalCount}</span>
+          </div>
+          <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 text-sm text-[var(--text)]">
+            Stock estimé lots: <span className="font-semibold">{estimatedStockKg.toLocaleString("fr-FR")} kg</span>
           </div>
 
           <div className="flex gap-1 rounded-lg border border-[var(--line)] bg-[var(--surface-soft)] p-1">

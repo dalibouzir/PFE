@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.models.enums import TreasuryTransactionStatus, TreasuryTransactionType
@@ -36,6 +36,36 @@ def _require_member_in_scope(db: Session, cooperative_id, farmer_id):
 
 def _build_reference() -> str:
     return f"TRS-{uuid.uuid4().hex[:10].upper()}"
+
+
+def _normalize_legacy_treasury_status_rows(db: Session, cooperative_id) -> None:
+    # Older rows may persist lowercase status values while the ORM enum for this
+    # column is name-backed. Normalize in-place to avoid read-time enum crashes.
+    db.execute(
+        text(
+            """
+            UPDATE treasury_transactions
+            SET status = CASE
+                WHEN status = 'non_enregistre' THEN 'NON_ENREGISTRE'
+                WHEN status = 'enregistre_sans_justificatif' THEN 'ENREGISTRE_SANS_JUSTIFICATIF'
+                WHEN status = 'enregistre_complet' THEN 'ENREGISTRE_COMPLET'
+                WHEN status = 'cancelled' THEN 'CANCELLED'
+                WHEN status = 'recorded' THEN 'RECORDED'
+                ELSE status
+            END
+            WHERE cooperative_id = :cooperative_id
+              AND status IN (
+                'non_enregistre',
+                'enregistre_sans_justificatif',
+                'enregistre_complet',
+                'cancelled',
+                'recorded'
+              )
+            """
+        ),
+        {"cooperative_id": cooperative_id},
+    )
+    db.commit()
 
 
 def build_farmer_advance_label(farmer_name: str, reason: str) -> str:
@@ -187,6 +217,7 @@ def list_treasury_transactions(
     sort_order: str = "desc",
 ):
     cooperative_id = get_manager_cooperative_id(manager)
+    _normalize_legacy_treasury_status_rows(db, cooperative_id)
     stmt = (
         select(TreasuryTransaction, Member.full_name)
         .outerjoin(Member, Member.id == TreasuryTransaction.farmer_id)
@@ -306,6 +337,7 @@ def cancel_treasury_transaction(db: Session, manager: User, transaction_id) -> T
 
 def get_treasury_stats(db: Session, manager: User) -> TreasuryStatsRead:
     cooperative_id = get_manager_cooperative_id(manager)
+    _normalize_legacy_treasury_status_rows(db, cooperative_id)
     active_statuses = [
         TreasuryTransactionStatus.NON_ENREGISTRE,
         TreasuryTransactionStatus.ENREGISTRE_SANS_JUSTIFICATIF,
