@@ -544,14 +544,16 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
     const previousBodyOverflow = document.body.style.overflow;
     const previousHtmlOverflow = document.documentElement.style.overflow;
 
-    document.body.style.overflow = mobileOpen ? "hidden" : previousBodyOverflow;
-    document.documentElement.style.overflow = mobileOpen ? "hidden" : previousHtmlOverflow;
+    // Keep browser-level scrolling locked while app shell is mounted.
+    // Internal content areas own scrolling to avoid double-scroll on Chrome.
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
 
     return () => {
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
     };
-  }, [mobileOpen]);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
