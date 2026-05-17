@@ -6,13 +6,13 @@ export type LotRecommendationItem = {
   id: string;
   title: string;
   priority: "critical" | "high" | "medium" | "low";
-  problem: string;
-  evidence: string;
-  action: string;
-  expectedImpact: string;
+  decisionStatus: "Stable" | "À surveiller" | "Prioritaire" | "Critique";
+  mainReason: string;
+  recommendedAction: string;
+  focusStage: string;
+  evidence: string[];
   confidence: string;
   caveat: string;
-  impactedStep: string;
 };
 
 export function LotRecommendationPanel({ items, fallbackReason }: { items: LotRecommendationItem[]; fallbackReason?: string | null }) {
@@ -32,17 +32,17 @@ export function LotRecommendationPanel({ items, fallbackReason }: { items: LotRe
           <div className="flex items-start justify-between gap-2">
             <div>
               <h3 className="text-base font-semibold text-[var(--text)]">{item.title}</h3>
-              <p className="mt-1 text-xs text-[var(--muted)]">Étape impactée: {item.impactedStep}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Étape à vérifier: {item.focusStage}</p>
             </div>
             <StatusBadge
               label={
                 item.priority === "critical"
-                  ? "Critique"
+                  ? "Priorité critique"
                   : item.priority === "high"
-                    ? "Haute"
+                    ? "Priorité élevée"
                     : item.priority === "medium"
-                      ? "Moyenne"
-                      : "Faible"
+                      ? "Priorité moyenne"
+                      : "Priorité faible"
               }
               tone={item.priority === "critical" ? "danger" : item.priority === "high" ? "warning" : "ai"}
             />
@@ -50,27 +50,31 @@ export function LotRecommendationPanel({ items, fallbackReason }: { items: LotRe
 
           <div className="mt-3 grid gap-2 text-xs text-[var(--muted)] sm:grid-cols-2">
             <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 sm:col-span-2">
-              <p className="font-semibold text-[var(--text)]">Problème détecté</p>
-              <p className="mt-1">{item.problem}</p>
+              <p className="font-semibold text-[var(--text)]">Situation du lot</p>
+              <p className="mt-1">{item.mainReason}</p>
             </div>
             <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 sm:col-span-2">
-              <p className="font-semibold text-[var(--text)]">Éléments de preuve</p>
-              <p className="mt-1">{item.evidence}</p>
+              <p className="font-semibold text-[var(--text)]">Priorité</p>
+              <p className="mt-1">{item.decisionStatus}</p>
             </div>
             <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 sm:col-span-2">
               <p className="font-semibold text-[var(--text)]">Action recommandée</p>
-              <p className="mt-1">{item.action}</p>
+              <p className="mt-1">{item.recommendedAction}</p>
             </div>
-            <div className="rounded-xl border border-[#CFE6D5] bg-[#F1FAF4] px-3 py-2">
-              <p className="font-semibold text-[#1E6C34]">Impact attendu</p>
-              <p className="mt-1 text-[var(--text)]">{item.expectedImpact}</p>
+            <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 sm:col-span-2">
+              <p className="font-semibold text-[var(--text)]">Éléments de preuve</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4">
+                {item.evidence.map((entry) => (
+                  <li key={entry}>{entry}</li>
+                ))}
+              </ul>
             </div>
             <div className="rounded-xl border border-[#CFE0F4] bg-[#F2F7FF] px-3 py-2">
-              <p className="font-semibold text-[#2F5C90]">Confiance et réserve</p>
+              <p className="font-semibold text-[#2F5C90]">Réserve / confiance</p>
               <p className="mt-1 text-[var(--text)]">{item.confidence}</p>
             </div>
             <div className="rounded-xl border border-[#E6E0F7] bg-[#F8F5FF] px-3 py-2 sm:col-span-2">
-              <p className="font-semibold text-[var(--text)]">Caveat</p>
+              <p className="font-semibold text-[var(--text)]">Réserve</p>
               <p className="mt-1">{item.caveat}</p>
             </div>
           </div>

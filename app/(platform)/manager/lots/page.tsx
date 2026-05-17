@@ -102,6 +102,22 @@ function parseImpactedStep(item: Recommendation): string {
   return workflowStage?.label ?? "Processus global";
 }
 
+function decisionStatusFromRecommendation(item: Recommendation): LotRecommendationItem["decisionStatus"] {
+  const risk = item.risk_level.toLowerCase();
+  if (risk === "high" || item.anomaly_detected || item.loss_pct >= 16) return "Critique";
+  if (risk === "medium" || item.loss_pct >= 10) return "Prioritaire";
+  if (item.loss_pct >= 6 || item.efficiency_pct < 90) return "À surveiller";
+  return "Stable";
+}
+
+function formatPct(value: number): string {
+  return `${Math.max(value, 0).toFixed(1).replace(".", ",")} %`;
+}
+
+function formatKg(value: number): string {
+  return `${Math.max(value, 0).toFixed(1).replace(".", ",")} kg`;
+}
+
 export default function LotsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -255,25 +271,61 @@ export default function LotsPage() {
   const recommendationCards = useMemo<LotRecommendationItem[]>(() => {
     const fromSignals = selectedRecommendations.map((item) => {
       const priority = recommendationPriority(item);
+      const decisionStatus = decisionStatusFromRecommendation(item);
       const impactedStep = parseImpactedStep(item);
-      const evidence = `Perte observée: ${Math.max(item.loss_pct, 0).toFixed(1)}% · Efficacité observée: ${Math.max(item.efficiency_pct, 0).toFixed(1)}% · Score anomalie: ${Math.max(item.anomaly_score, 0).toFixed(1)}`;
+      const anomalyText = item.anomaly_detected ? "détectée" : "non détectée";
+      const evidence = [
+        `Perte cumulée: ${formatPct(item.loss_pct)}`,
+        `Efficacité globale: ${formatPct(item.efficiency_pct)}`,
+        `Étape la plus contributive: ${impactedStep}`,
+        `Anomalie critique: ${anomalyText}`,
+      ];
+
+      let mainReason = `Le lot reste stable: perte cumulée ${formatPct(item.loss_pct)} et efficacité ${formatPct(item.efficiency_pct)}.`;
+      let recommendedAction =
+        "Continuer le suivi normal. Vérifier uniquement l’étape la plus contributive à la perte lors du prochain contrôle.";
+      let confidence =
+        "Niveau de confiance indicatif. Continuer la collecte terrain pour confirmer la stabilité.";
+
+      if (decisionStatus === "À surveiller") {
+        mainReason = `Le lot est à surveiller: perte cumulée ${formatPct(item.loss_pct)} et efficacité ${formatPct(item.efficiency_pct)}.`;
+        recommendedAction =
+          "Renforcer le contrôle de l’étape la plus contributive, vérifier les écarts de pesée et ajuster la méthode opératoire dès la prochaine exécution.";
+        confidence = "Signal utile pour action préventive. Confirmer avec les observations terrain de l’équipe.";
+      } else if (decisionStatus === "Prioritaire") {
+        mainReason = `Le lot présente un risque prioritaire: perte cumulée ${formatPct(item.loss_pct)} et efficacité ${formatPct(item.efficiency_pct)}.`;
+        recommendedAction =
+          "Traiter en priorité l’étape la plus contributive, contrôler le bilan matière (quantité entrée/sortie) et corriger immédiatement le protocole opératoire.";
+        confidence = "Signal fort d’aide à la décision. Vérification terrain immédiate recommandée.";
+      } else if (decisionStatus === "Critique") {
+        mainReason = `Situation critique: perte cumulée ${formatPct(item.loss_pct)} et efficacité ${formatPct(item.efficiency_pct)} avec signal d’anomalie élevé.`;
+        recommendedAction =
+          "Lancer une inspection immédiate: vérifier quantités entrée/sortie, pertes par étape et conditions sensibles (séchage, stockage, humidité), puis appliquer un plan correctif sans délai.";
+        confidence = "Alerte élevée. Action immédiate conseillée avant poursuite normale du flux.";
+      }
+
       return {
         id: `${item.batch_id}-${item.anomaly_score}-${item.loss_pct}`,
-        title: priority === "critical" ? "Réduire immédiatement les pertes du lot" : `Action prioritaire sur ${impactedStep.toLowerCase()}`,
+        title:
+          decisionStatus === "Stable"
+            ? "Lot stable — priorité faible"
+            : decisionStatus === "À surveiller"
+              ? "Lot à surveiller — priorité moyenne"
+              : decisionStatus === "Prioritaire"
+                ? "Lot prioritaire — action rapide recommandée"
+                : "Lot critique — intervention immédiate",
         priority,
-        impactedStep,
-        problem: item.reasons[0] ?? item.rationale,
+        decisionStatus,
+        focusStage: impactedStep,
+        mainReason,
         evidence,
-        action: item.suggested_action || "Mettre en place un contrôle terrain au prochain lot pour confirmer la cause et corriger le protocole d'exécution.",
-        expectedImpact: `Objectif opérationnel: réduire la perte de ${Math.max(Math.min(item.loss_pct / 3, 3), 1).toFixed(1)} à ${Math.max(Math.min(item.loss_pct / 2, 4), 2).toFixed(1)} points sur les prochains lots comparables.`,
-        confidence:
-          priority === "critical"
-            ? "Confiance élevée pour la priorisation, à confirmer par vérification terrain."
-            : priority === "high"
-              ? "Confiance modérée, signal utile pour plan d'action court terme."
-              : "Confiance indicative, à valider avec plus d'observations.",
+        recommendedAction:
+          item.suggested_action && item.suggested_action.trim().length > 0
+            ? `${recommendedAction} Point d’attention additionnel: ${item.suggested_action}`
+            : recommendedAction,
+        confidence,
         caveat:
-          "Recommandation issue des règles métier et des signaux de risque disponibles. Elle ne remplace pas la validation terrain.",
+          "Signal d’aide à la décision. À confirmer avec les observations terrain et le suivi opérationnel.",
       };
     });
     if (fromSignals.length > 0) return fromSignals;
@@ -305,18 +357,29 @@ export default function LotsPage() {
     return [
       {
         id: `stage-${weakest.key}`,
-        title: `Réduire la perte à l'étape ${weakest.stage.toLowerCase()}`,
+        title:
+          weakest.lossPct >= 12
+            ? "Lot critique — intervention immédiate"
+            : weakest.lossPct >= 8
+              ? "Lot prioritaire — action rapide recommandée"
+              : "Lot à surveiller — priorité moyenne",
         priority,
-        impactedStep: weakest.stage,
-        problem: `Cette étape présente une perte moyenne de ${weakest.lossPct.toFixed(1)}% avec une efficacité de ${weakest.efficiencyPct.toFixed(1)}%.`,
-        evidence: `Entrée: ${weakest.qtyIn.toFixed(1)} kg · Sortie: ${weakest.qtyOut.toFixed(1)} kg · Perte: ${weakest.lossKg.toFixed(1)} kg`,
-        action: "Vérifier les consignes opératoires, isoler les produits non conformes en amont de l'étape, puis contrôler les écarts de poids en fin de passage.",
-        expectedImpact: "Objectif: réduire la perte de 1 à 3 points sur les prochains lots comparables.",
-        confidence: "Confiance modérée: recommandation fondée sur les mesures du lot courant.",
-        caveat: "Recommandation issue des règles métier et des signaux du lot; à confirmer sur le terrain.",
+        decisionStatus: weakest.lossPct >= 12 ? "Critique" : weakest.lossPct >= 8 ? "Prioritaire" : "À surveiller",
+        focusStage: weakest.stage,
+        mainReason: `Le lot présente une perte notable sur l’étape ${weakest.stage.toLowerCase()}: ${formatPct(weakest.lossPct)} de perte moyenne et ${formatPct(weakest.efficiencyPct)} d’efficacité.`,
+        evidence: [
+          `Perte cumulée lot: ${formatPct(selectedBatch?.confirmed_weight_kg ? ((Math.max((selectedBatch.confirmed_weight_kg - (selectedBatch.current_qty ?? 0)), 0) / selectedBatch.confirmed_weight_kg) * 100) : 0)}`,
+          `Efficacité globale lot: ${formatPct(selectedBatch?.confirmed_weight_kg ? (((selectedBatch.current_qty ?? 0) / selectedBatch.confirmed_weight_kg) * 100) : 0)}`,
+          `Étape la plus contributive: ${weakest.stage}`,
+          `Perte sur l’étape: ${formatKg(weakest.lossKg)}`,
+        ],
+        recommendedAction:
+          "Vérifier immédiatement cette étape: bilan matière entrée/sortie, réglages opératoires et points de contrôle qualité. Renforcer le suivi lors du prochain passage.",
+        confidence: "Confiance modérée. Données disponibles sur le lot courant uniquement.",
+        caveat: "Données insuffisantes pour une conclusion forte sur tendance longue. Continuer la collecte et valider sur le terrain.",
       },
     ];
-  }, [selectedRecommendations, selectedSteps]);
+  }, [selectedRecommendations, selectedSteps, selectedBatch?.confirmed_weight_kg, selectedBatch?.current_qty]);
 
   const materialBalance = useMemo(() => {
     if (materialBalanceData) {
@@ -1003,8 +1066,8 @@ export default function LotsPage() {
                           tone={latestRecommendation.priority === "critical" ? "danger" : latestRecommendation.priority === "high" ? "warning" : "ai"}
                         />
                       </div>
-                      <p className="mt-2 text-xs text-[var(--muted)]">{latestRecommendation.problem}</p>
-                      <p className="mt-2 text-xs font-semibold text-[var(--ai-accent)]">{latestRecommendation.expectedImpact}</p>
+                      <p className="mt-2 text-xs text-[var(--muted)]">{latestRecommendation.mainReason}</p>
+                      <p className="mt-2 text-xs font-semibold text-[var(--ai-accent)]">{latestRecommendation.recommendedAction}</p>
                       <button
                         type="button"
                         onClick={() => handleSwitchTab("recommendations")}

@@ -305,6 +305,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate weather-aware vs internal ML models.")
     parser.add_argument("--output-json", default="backend/reports/ml_weather_evaluation.json")
     parser.add_argument("--output-md", default="backend/reports/ml_weather_evaluation.md")
+    parser.add_argument(
+        "--allow-sqlite-fallback",
+        action="store_true",
+        help="LEGACY ONLY: allow local SQLite fallback if Supabase is unavailable.",
+    )
     args = parser.parse_args()
 
     db = SessionLocal()
@@ -318,6 +323,11 @@ def main() -> None:
             source_info=_source_info(fallback_used=False, seeded_local=False),
         )
     except OperationalError:
+        if not args.allow_sqlite_fallback:
+            raise RuntimeError(
+                "Supabase connection failed. SQLite fallback is disabled for final validation. "
+                "Use --allow-sqlite-fallback only for legacy/local diagnostics."
+            )
         db.close()
         db, local_seeded = _local_sqlite_session()
         used_local_fallback = True

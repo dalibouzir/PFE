@@ -99,7 +99,7 @@ def features(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depe
 
 @router.get("/recommendation/{batch_id}", response_model=MLRecommendationResponse, summary="Return recommendation from assessed batch outcomes.")
 def recommendation(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
-    payload = ml_service.get_recommendation(db, batch_id, include_explanation=True)
+    payload = ml_service.get_recommendation(db, batch_id, include_explanation=False)
     return MLRecommendationResponse(
         batch_id=batch_id,
         assessment=payload["assessment"],

@@ -43,6 +43,87 @@ def _to_date(value: date) -> pd.Timestamp:
     return pd.to_datetime(value)
 
 
+def _derive_duration_features(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    out["step_started_at"] = pd.to_datetime(out["step_started_at"], utc=True, errors="coerce")
+    out["step_completed_at"] = pd.to_datetime(out["step_completed_at"], utc=True, errors="coerce")
+    out["batch_postharvest_started_at"] = pd.to_datetime(
+        out["batch_postharvest_started_at"], utc=True, errors="coerce"
+    )
+
+    explicit_duration = pd.to_numeric(out.get("duration_minutes"), errors="coerce")
+    explicit_duration = explicit_duration.where(explicit_duration >= 0)
+
+    derived_duration = (
+        (out["step_completed_at"] - out["step_started_at"]).dt.total_seconds() / 60.0
+    )
+    derived_duration = derived_duration.where(derived_duration >= 0)
+
+    out["step_duration_minutes"] = explicit_duration.fillna(derived_duration)
+    out["missing_duration_flag"] = out["step_duration_minutes"].isna().astype(int)
+    out["step_duration_minutes"] = pd.to_numeric(
+        out["step_duration_minutes"], errors="coerce"
+    ).fillna(0.0)
+
+    out = out.sort_values(
+        ["batch_id", "sequence_order", "date", "step_started_at", "step_completed_at"],
+        ascending=True,
+    ).copy()
+
+    out["delay_since_previous_step_minutes"] = 0.0
+    out["cumulative_duration_before_stage"] = 0.0
+    out["total_postharvest_duration_minutes"] = 0.0
+
+    for _, group in out.groupby("batch_id", sort=False):
+        idx = group.index
+        prev_completed = group["step_completed_at"].shift(1)
+        current_started = group["step_started_at"]
+        delay = ((current_started - prev_completed).dt.total_seconds() / 60.0).clip(lower=0)
+        out.loc[idx, "delay_since_previous_step_minutes"] = pd.to_numeric(
+            delay, errors="coerce"
+        ).fillna(0.0)
+
+        cumulative_before = (
+            pd.to_numeric(group["step_duration_minutes"], errors="coerce")
+            .fillna(0.0)
+            .shift(1)
+            .fillna(0.0)
+            .cumsum()
+        )
+        out.loc[idx, "cumulative_duration_before_stage"] = cumulative_before
+
+        first_started = group["step_started_at"].dropna().min()
+        for row_idx, row in group.iterrows():
+            anchor = row.get("batch_postharvest_started_at")
+            if pd.isna(anchor):
+                anchor = first_started
+            completed_at = row.get("step_completed_at")
+            if pd.notna(anchor) and pd.notna(completed_at):
+                total_minutes = (completed_at - anchor).total_seconds() / 60.0
+                out.at[row_idx, "total_postharvest_duration_minutes"] = max(float(total_minutes), 0.0)
+            else:
+                fallback_total = float(
+                    out.at[row_idx, "cumulative_duration_before_stage"]
+                    + out.at[row_idx, "step_duration_minutes"]
+                )
+                out.at[row_idx, "total_postharvest_duration_minutes"] = max(fallback_total, 0.0)
+
+    out["step_duration_minutes"] = pd.to_numeric(
+        out["step_duration_minutes"], errors="coerce"
+    ).fillna(0.0)
+    out["delay_since_previous_step_minutes"] = pd.to_numeric(
+        out["delay_since_previous_step_minutes"], errors="coerce"
+    ).fillna(0.0)
+    out["cumulative_duration_before_stage"] = pd.to_numeric(
+        out["cumulative_duration_before_stage"], errors="coerce"
+    ).fillna(0.0)
+    out["total_postharvest_duration_minutes"] = pd.to_numeric(
+        out["total_postharvest_duration_minutes"], errors="coerce"
+    ).fillna(0.0)
+
+    return out
+
+
 def fetch_process_records(db: Session) -> List[Dict]:
     stocks = db.scalars(select(Stock)).all()
     stock_lookup = {(stock.cooperative_id, stock.product_id): stock.quantity for stock in stocks}
@@ -70,6 +151,12 @@ def fetch_process_records(db: Session) -> List[Dict]:
                 "batch_current_qty": batch.current_qty,
                 "date": step.date,
                 "stock_level": stock_lookup.get((batch.cooperative_id, batch.product_id), 0.0),
+                "sequence_order": step.sequence_order,
+                "duration_minutes": step.duration_minutes,
+                "step_started_at": step.created_at,
+                "step_completed_at": step.executed_at,
+                "step_updated_at": step.updated_at,
+                "batch_postharvest_started_at": batch.postharvest_started_at,
             }
         )
     return records
@@ -83,6 +170,18 @@ def build_features(db: Session, batch_id: Optional[str] = None, *, include_weath
     df = pd.DataFrame(records)
     df["date"] = df["date"].apply(_to_date)
     df = df.sort_values(["date", "batch_id"], ascending=True)
+    for extra_col in (
+        "sequence_order",
+        "duration_minutes",
+        "step_started_at",
+        "step_completed_at",
+        "step_updated_at",
+        "batch_postharvest_started_at",
+    ):
+        if extra_col not in df.columns:
+            df[extra_col] = None
+
+    df = _derive_duration_features(df)
 
     qty_in = pd.to_numeric(df["qty_in"], errors="coerce").fillna(0.0)
     qty_out = pd.to_numeric(df["qty_out"], errors="coerce").fillna(0.0)
@@ -237,6 +336,11 @@ def build_features(db: Session, batch_id: Optional[str] = None, *, include_weath
         "days_since_previous_batch": 0.0,
         "rolling_loss_last_n_batches": default_loss_pct,
         "rolling_efficiency_last_n_batches": default_efficiency,
+        "step_duration_minutes": 0.0,
+        "delay_since_previous_step_minutes": 0.0,
+        "total_postharvest_duration_minutes": 0.0,
+        "cumulative_duration_before_stage": 0.0,
+        "missing_duration_flag": 1,
     }
 
     df = df.fillna(fill_defaults)
@@ -297,6 +401,11 @@ def build_features(db: Session, batch_id: Optional[str] = None, *, include_weath
         "days_since_previous_batch",
         "rolling_loss_last_n_batches",
         "rolling_efficiency_last_n_batches",
+        "step_duration_minutes",
+        "delay_since_previous_step_minutes",
+        "total_postharvest_duration_minutes",
+        "cumulative_duration_before_stage",
+        "missing_duration_flag",
         "weather_available",
         "weather_feature_timestamp",
         "weather_avg_humidity_window",

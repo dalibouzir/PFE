@@ -145,12 +145,12 @@ def detect_anomaly(db: Session, batch_id) -> AnomalyResponse:
         max_step_loss = max(max_step_loss, step_metrics["loss_pct"])
         if step_metrics["loss_pct"] > settings.step_loss_threshold:
             reasons.append(
-                f"Step '{step.type}' loss {step_metrics['loss_pct']}% exceeds threshold {settings.step_loss_threshold}%."
+                f"L'étape '{step.type}' présente une perte de {step_metrics['loss_pct']}% au-dessus du seuil {settings.step_loss_threshold}%."
             )
             score += min(35.0, step_metrics["loss_pct"] - settings.step_loss_threshold + 10.0)
         if step.duration_minutes and step.duration_minutes > LONG_DURATION_THRESHOLD_MINUTES:
             reasons.append(
-                f"Step '{step.type}' duration {step.duration_minutes} minutes exceeds {LONG_DURATION_THRESHOLD_MINUTES} minutes."
+                f"La durée de l'étape '{step.type}' ({step.duration_minutes} min) dépasse {LONG_DURATION_THRESHOLD_MINUTES} min."
             )
             score += min(20.0, (step.duration_minutes - LONG_DURATION_THRESHOLD_MINUTES) / 20.0)
 
@@ -174,30 +174,30 @@ def _recommendation_payload_for_batch(db: Session, batch: Batch):
         step_metrics = compute_process_metrics(step)
         step_type = step.type.lower()
         if "dry" in step_type and step_metrics["loss_pct"] > settings.step_loss_threshold:
-            actions.append("Review drying duration, tray exposure, and humidity control.")
-            rationale_bits.append("Drying losses are above the configured step threshold.")
+            actions.append("Vérifier la durée de séchage, l'exposition des plateaux et le contrôle de l'humidité.")
+            rationale_bits.append("Les pertes au séchage dépassent le seuil attendu pour cette étape.")
         if "clean" in step_type and step_metrics["loss_pct"] > settings.step_loss_threshold:
-            actions.append("Inspect cleaning calibration and reduce aggressive sorting.")
-            rationale_bits.append("Cleaning waste indicates potential calibration drift.")
+            actions.append("Contrôler le calibrage du nettoyage et limiter le tri agressif.")
+            rationale_bits.append("Le niveau de perte au nettoyage suggère un dérive de calibrage.")
         if "sort" in step_type and step_metrics["efficiency_pct"] < 85:
-            actions.append("Revisit sorting criteria and raw material grading before processing.")
-            rationale_bits.append("Sorting efficiency is lower than expected.")
+            actions.append("Réviser les critères de tri et la qualité matière avant traitement.")
+            rationale_bits.append("L'efficacité du tri est inférieure au niveau attendu.")
         if "pack" in step_type and step.duration_minutes and step.duration_minutes > LONG_DURATION_THRESHOLD_MINUTES:
-            actions.append("Check packaging workflow pacing and operator handoff times.")
-            rationale_bits.append("Packaging duration is slower than baseline.")
+            actions.append("Vérifier la cadence d'emballage et les temps de relais opérateur.")
+            rationale_bits.append("La durée d'emballage est plus lente que la référence.")
 
     if metrics.total_efficiency_pct < 85:
-        actions.append("Audit the full stage sequence and review raw material quality grade.")
-        rationale_bits.append("Overall batch efficiency is below 85%.")
+        actions.append("Auditer l'enchaînement complet des étapes et revalider la qualité matière.")
+        rationale_bits.append("L'efficacité globale du lot est inférieure à 85%.")
 
     low_stock_alerts = list_low_stock_alerts(db, batch.cooperative_id)
     if low_stock_alerts:
-        actions.append("Reorder or collect more inputs for products below stock threshold.")
-        rationale_bits.append("Current stock alerts indicate replenishment risk.")
+        actions.append("Planifier un réapprovisionnement pour les produits sous seuil de stock.")
+        rationale_bits.append("Les alertes de stock indiquent un risque de rupture d'intrants.")
 
     if not actions:
-        actions.append("Process indicators are stable. Keep weekly monitoring active.")
-        rationale_bits.append("Loss and efficiency remain within configured thresholds.")
+        actions.append("Continuer le suivi normal et maintenir une vérification hebdomadaire.")
+        rationale_bits.append("Les pertes et l'efficacité restent dans une plage acceptable.")
 
     risk_level = RiskLevel.LOW
     if anomaly.anomaly_score >= 70:

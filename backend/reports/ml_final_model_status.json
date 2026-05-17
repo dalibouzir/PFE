@@ -1,0 +1,146 @@
+{
+  "report": "ml_final_model_status",
+  "date": "2026-05-17",
+  "boundary_warning": "SYNTHETIC OFFLINE BENCHMARK — NOT REAL APP PERFORMANCE. Synthetic results are controlled development evidence only and are not production accuracy claims.",
+  "executive_verdict": {
+    "pipeline_status": "implemented_and_reproducible",
+    "runtime_status": "non_promoted_rule_based",
+    "real_data_constraint": "low_sample_size_blocks_promotion"
+  },
+  "real_app_readiness": {
+    "dataset_n_range": "45-49",
+    "ml_readiness_state": "INSUFFICIENT_DATA",
+    "dataset_readiness_level": "VERY_LOW_DATA",
+    "model_gate_status": "FAIL",
+    "promoted": false,
+    "recommendation_mode": "RULE_BASED",
+    "source_of_truth": "real_supabase_snapshot"
+  },
+  "synthetic_boundary": {
+    "source": "backend/artifacts/synthetic_postharvest_benchmark.csv",
+    "rows": 2000,
+    "data_origin": "SYNTHETIC_BENCHMARK",
+    "mixed_with_supabase": false,
+    "used_for_runtime_promotion": false,
+    "interpretation_rule": "Synthetic/offline benchmark metrics are controlled development evidence and must not be interpreted as real cooperative deployment accuracy."
+  },
+  "final_status_table": {
+    "regression": {
+      "status": "baseline_fallback_not_ml_promoted",
+      "best_reference": "stage_season_mean_loss",
+      "best_baseline_mae": 2.5622,
+      "best_ml_beats_baseline": false,
+      "runtime_promoted": false
+    },
+    "classification": {
+      "status": "PARTIAL_improved_but_non_promoted",
+      "best_prediction_mode_candidate": "Phase1C_LogRegBalanced_plus_HighOverride_balanced",
+      "macro_f1": 0.4679,
+      "high_risk_recall": 0.4783,
+      "high_risk_precision": 0.0688,
+      "false_low_high_risk_rate": 0.4348,
+      "false_alarms": 149,
+      "runtime_promoted": false
+    },
+    "anomaly": {
+      "status": "PASS_assessment_mode_offline_only",
+      "isolation_forest_baseline": {
+        "precision": 0.0222,
+        "recall": 0.0345,
+        "f1": 0.027,
+        "precision_at_10pct": 0.0
+      },
+      "best_assessment_mode_candidate": "AssessmentRulesPlusStatistical",
+      "assessment_mode_metrics": {
+        "precision": 0.8788,
+        "recall": 1.0,
+        "f1": 0.9355,
+        "precision_at_10pct": 0.725
+      },
+      "best_prediction_mode_candidate": "PredictionRulesPlusStatistical",
+      "prediction_mode_metrics": {
+        "precision": 0.0442,
+        "recall": 0.2759,
+        "f1": 0.0762,
+        "precision_at_10pct": 0.05
+      },
+      "runtime_promoted": false
+    },
+    "recommendation_ranking": {
+      "status": "PARTIAL_proxy_ranking_is_useful_but_gate_not_fully_met",
+      "best_prediction_mode_strategy": "FinalConservativeEvidenceRanking",
+      "prediction_mode_metrics": {
+        "precision_at_3": 0.7096,
+        "precision_at_5": 0.4758,
+        "ndcg_at_5": 0.938,
+        "anomaly_high_loss_top_coverage": 1.0
+      },
+      "best_assessment_mode_strategy": "ConservativeRanking",
+      "assessment_mode_metrics": {
+        "precision_at_3": 0.6734,
+        "precision_at_5": 0.4621,
+        "ndcg_at_5": 0.9172,
+        "anomaly_high_loss_top_coverage": 1.0
+      },
+      "gate": "FAIL",
+      "runtime_promoted": false,
+      "learned_recommender_claim_allowed": false
+    }
+  },
+  "integration_readiness": [
+    {
+      "component": "Regression",
+      "can_integrate_into_app_code": true,
+      "runtime_promoted": false,
+      "conditions": "baseline_fallback_only",
+      "notes": "ML regression did not beat baseline"
+    },
+    {
+      "component": "Classification",
+      "can_integrate_into_app_code": "advisory_only",
+      "runtime_promoted": false,
+      "conditions": "keep_gated_and_non_promoted",
+      "notes": "recall improved but macro_f1 and precision remain weak"
+    },
+    {
+      "component": "Anomaly",
+      "can_integrate_into_app_code": true,
+      "runtime_promoted": false,
+      "conditions": "rule_statistical_assessment_diagnostics_as_advisory",
+      "notes": "assessment-mode synthetic gate passed"
+    },
+    {
+      "component": "Recommendation ranking",
+      "can_integrate_into_app_code": true,
+      "runtime_promoted": false,
+      "conditions": "rule_first_advisory_prioritization_only",
+      "notes": "proxy benchmark partial, no learned recommender claim"
+    },
+    {
+      "component": "Readiness layer",
+      "can_integrate_into_app_code": true,
+      "runtime_promoted": "controls_promotion",
+      "conditions": "keep_unchanged",
+      "notes": "prevents overclaiming under low real-data conditions"
+    }
+  ],
+  "allowed_claims": [
+    "ML pipeline and evaluation loop were implemented",
+    "Real app data remains low so runtime ML is non-promoted",
+    "Synthetic benchmark was used for controlled model-behavior evaluation",
+    "Regression baselines outperformed ML so fallback is retained",
+    "Classification improved high-risk recall but remains non-promoted",
+    "Hybrid assessment-mode anomaly diagnostics outperformed IsolationForest on synthetic benchmark",
+    "Recommendation ranking showed useful proxy behavior but not real-world uplift",
+    "Readiness gates prevent overclaiming"
+  ],
+  "forbidden_claims": [
+    "production-ready ML",
+    "real cooperative model accuracy from synthetic metrics",
+    "learned recommendation effectiveness validated in production",
+    "validated production anomaly detection from synthetic-only evidence",
+    "synthetic metrics as real app performance",
+    "runtime ML_PROMOTED under current low-data state"
+  ],
+  "pfe_safe_wording": "The WeeFarm ML pipeline and governance gates were implemented end-to-end with source-aware reporting. Real operational data remains insufficient for runtime promotion. Synthetic benchmarking supports controlled diagnostic conclusions only and does not represent production deployment accuracy."
+}

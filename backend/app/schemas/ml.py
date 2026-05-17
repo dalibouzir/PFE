@@ -73,6 +73,48 @@ class AssessmentFeaturePayload(PredictiveFeaturePayload):
     efficiency_pct: Optional[float] = None
 
 
+class MLReadinessMetadata(MLSchemaBase):
+    ml_readiness_state: Optional[str] = None
+    dataset_n: Optional[int] = None
+    minimum_required_n: Optional[int] = None
+    dataset_readiness_level: Optional[str] = None
+    model_gate_status: Optional[str] = None
+    promoted: Optional[bool] = None
+    fallback_reason: Optional[str] = None
+    recommendation_mode: Optional[str] = None
+    evidence_sources: List[str] = Field(default_factory=list)
+    caveat: Optional[str] = None
+
+
+class BaselineEstimateOutput(MLSchemaBase):
+    estimate_loss_pct: float
+    baseline_type: str
+    evidence_count: int
+    confidence_label: str
+
+
+class CriticalRiskAdvisoryOutput(MLSchemaBase):
+    risk_level: str
+    risk_score: float
+    advisory_flags: List[str] = Field(default_factory=list)
+    caveat: Optional[str] = None
+
+
+class AssessmentAnomalyDiagnosticsOutput(MLSchemaBase):
+    is_anomalous: bool
+    anomaly_flags: List[str] = Field(default_factory=list)
+    severity: float
+    severity_label: str
+    evidence: Dict[str, Any] = Field(default_factory=dict)
+    explanation: str
+
+
+class RankedRecommendationAdvisoryOutput(MLSchemaBase):
+    action: str
+    priority_score: float
+    priority_reason: str
+
+
 class MLPredictRequest(MLSchemaBase):
     features: List[PredictiveFeaturePayload]
     include_explanation: bool = False
@@ -84,7 +126,7 @@ class MLAssessRequest(MLSchemaBase):
     include_explanation: bool = False
 
 
-class MLPredictionOutput(MLSchemaBase):
+class MLPredictionOutput(MLReadinessMetadata):
     mode: str
     batch_id: Optional[str]
     product: str
@@ -99,9 +141,15 @@ class MLPredictionOutput(MLSchemaBase):
     feature_schema_version: Optional[str] = None
     warning_flags: List[str] = Field(default_factory=list)
     latency_ms: Optional[float] = None
+    baseline_estimate: Optional[BaselineEstimateOutput] = None
+    critical_risk_advisory: Optional[CriticalRiskAdvisoryOutput] = None
+    ml_strategy: Optional[str] = None
+    benchmark_source: Optional[str] = None
+    integrated_strategy: Optional[bool] = None
+    advisory_only: Optional[bool] = None
 
 
-class MLAssessmentOutput(MLSchemaBase):
+class MLAssessmentOutput(MLReadinessMetadata):
     mode: str
     batch_id: Optional[str]
     product: str
@@ -113,6 +161,13 @@ class MLAssessmentOutput(MLSchemaBase):
     anomaly_score: float
     is_anomalous: bool
     top_signals: List[str]
+    baseline_estimate: Optional[BaselineEstimateOutput] = None
+    critical_risk_advisory: Optional[CriticalRiskAdvisoryOutput] = None
+    assessment_anomaly_diagnostics: Optional[AssessmentAnomalyDiagnosticsOutput] = None
+    ml_strategy: Optional[str] = None
+    benchmark_source: Optional[str] = None
+    integrated_strategy: Optional[bool] = None
+    advisory_only: Optional[bool] = None
 
 
 class RankedActionOutput(MLSchemaBase):
@@ -137,13 +192,18 @@ class RecommendationDecisionOutput(MLSchemaBase):
     ranked_actions: List[RankedActionOutput] = Field(default_factory=list)
 
 
-class RecommendationOutput(MLSchemaBase):
+class RecommendationOutput(MLReadinessMetadata):
     issue_type: str
     critical_stage: str
     severity: str
     recommended_actions: List[str]
     reasoning_signals: List[str]
     decision: Optional[RecommendationDecisionOutput] = None
+    ranked_recommendations: List[RankedRecommendationAdvisoryOutput] = Field(default_factory=list)
+    ml_strategy: Optional[str] = None
+    benchmark_source: Optional[str] = None
+    integrated_strategy: Optional[bool] = None
+    advisory_only: Optional[bool] = None
 
 
 class MLPredictResponse(MLSchemaBase):

@@ -1,0 +1,227 @@
+{
+  "warning": "SYNTHETIC BENCHMARK \u2014 NOT REAL APP PERFORMANCE. These metrics evaluate pipeline behavior under controlled simulated data and must not be reported as production model accuracy.",
+  "source": "synthetic",
+  "dataset": {
+    "row_count": 2000,
+    "crops": [
+      "arachide",
+      "mangue",
+      "mil"
+    ],
+    "stages": [
+      "emballage",
+      "nettoyage",
+      "sechage",
+      "tri"
+    ],
+    "seasons": [
+      "dry",
+      "hot",
+      "rainy"
+    ],
+    "regions": [
+      "dakar",
+      "kaolack",
+      "saint_louis",
+      "thies"
+    ],
+    "data_origin": "SYNTHETIC_BENCHMARK"
+  },
+  "generation_and_noise_assumptions": {
+    "drying_rule": "sensitive to humidity/rainfall/duration/delay",
+    "sorting_rule": "depends on grade and product quality",
+    "cleaning_rule": "moderate loss profile",
+    "packaging_rule": "mostly low loss profile",
+    "mango_rule": "higher sensitivity to humidity and delay",
+    "noise": "gaussian and random shocks",
+    "anomalies": "explicitly injected and labeled as synthetic"
+  },
+  "split_info": {
+    "time_split": {
+      "strategy": "time_based",
+      "split_cutoff_event_ordinal": 739452,
+      "train_rows": 1604,
+      "test_rows": 396
+    },
+    "random_split": {
+      "strategy": "random_80_20",
+      "train_rows": 1600,
+      "test_rows": 400
+    }
+  },
+  "evaluation": {
+    "time_based": {
+      "split": "time_based",
+      "regression": {
+        "model": {
+          "mae": 3.645487694250194
+        },
+        "baselines": {
+          "global_mean_loss": {
+            "mae": 4.657557577961661,
+            "mae_delta_vs_model": 1.0120698837114674
+          },
+          "stage_mean_loss": {
+            "mae": 2.634954219697847,
+            "mae_delta_vs_model": -1.0105334745523469
+          },
+          "product_stage_mean_loss": {
+            "mae": 2.6664020853743824,
+            "mae_delta_vs_model": -0.9790856088758115
+          }
+        },
+        "best_baseline": {
+          "name": "stage_mean_loss",
+          "mae": 2.634954219697847,
+          "model_beats_baseline": false
+        }
+      },
+      "classification": {
+        "model": {
+          "accuracy": 0.8939393939393939,
+          "macro_f1": 0.5976734197805009,
+          "weighted_f1": 0.8685317965686417,
+          "per_class": {
+            "low": {
+              "precision": 0.9225589225589226,
+              "recall": 0.9716312056737588,
+              "f1": 0.9464594127806563,
+              "support": 282
+            },
+            "medium": {
+              "precision": 0.8163265306122449,
+              "recall": 0.8791208791208791,
+              "f1": 0.8465608465608465,
+              "support": 91
+            },
+            "high": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 23
+            }
+          }
+        },
+        "majority_baseline": {
+          "accuracy": 0.7121212121212122,
+          "macro_f1": 0.2772861356932153,
+          "weighted_f1": 0.5923840171627782,
+          "per_class": {
+            "low": {
+              "precision": 0.7121212121212122,
+              "recall": 1.0,
+              "f1": 0.831858407079646,
+              "support": 282
+            },
+            "medium": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 91
+            },
+            "high": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 23
+            }
+          }
+        }
+      },
+      "anomaly_synthetic": {
+        "label_type": "synthetic_anomaly_labels_only",
+        "precision": 0.018867924528301886,
+        "recall": 0.034482758620689655,
+        "f1": 0.024390243902439025,
+        "support_positive": 29
+      }
+    },
+    "random_split": {
+      "split": "random_split",
+      "regression": {
+        "model": {
+          "mae": 2.958475318269231
+        },
+        "baselines": {
+          "global_mean_loss": {
+            "mae": 4.642629525,
+            "mae_delta_vs_model": 1.6841542067307693
+          },
+          "stage_mean_loss": {
+            "mae": 2.686171183150368,
+            "mae_delta_vs_model": -0.27230413511886287
+          },
+          "product_stage_mean_loss": {
+            "mae": 2.739982498357315,
+            "mae_delta_vs_model": -0.21849281991191605
+          }
+        },
+        "best_baseline": {
+          "name": "stage_mean_loss",
+          "mae": 2.686171183150368,
+          "model_beats_baseline": false
+        }
+      },
+      "classification": {
+        "model": {
+          "accuracy": 0.905,
+          "macro_f1": 0.6139747995418099,
+          "weighted_f1": 0.8765292096219932,
+          "per_class": {
+            "low": {
+              "precision": 0.9046052631578947,
+              "recall": 0.9892086330935251,
+              "f1": 0.9450171821305842,
+              "support": 278
+            },
+            "medium": {
+              "precision": 0.90625,
+              "recall": 0.8877551020408163,
+              "f1": 0.8969072164948454,
+              "support": 98
+            },
+            "high": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 24
+            }
+          }
+        },
+        "majority_baseline": {
+          "accuracy": 0.695,
+          "macro_f1": 0.27335299901671584,
+          "weighted_f1": 0.5699410029498525,
+          "per_class": {
+            "low": {
+              "precision": 0.695,
+              "recall": 1.0,
+              "f1": 0.8200589970501475,
+              "support": 278
+            },
+            "medium": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 98
+            },
+            "high": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 24
+            }
+          }
+        }
+      },
+      "anomaly_synthetic": {
+        "label_type": "synthetic_anomaly_labels_only",
+        "precision": 0.07142857142857142,
+        "recall": 0.06666666666666667,
+        "f1": 0.06896551724137931,
+        "support_positive": 30
+      }
+    }
+  },
+  "promotion_policy": "synthetic benchmark is not used for production promotion"
+}

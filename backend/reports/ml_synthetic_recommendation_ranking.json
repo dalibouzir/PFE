@@ -1,0 +1,737 @@
+{
+  "warning": "SYNTHETIC OFFLINE BENCHMARK \u2014 NOT REAL APP PERFORMANCE. These results are for controlled model development only and must not be used as production accuracy claims.",
+  "source_label": "SYNTHETIC_OFFLINE_BENCHMARK",
+  "source": "synthetic_offline_recommendation_ranking",
+  "dataset": {
+    "row_count": 2000,
+    "products": [
+      "arachide",
+      "mangue",
+      "mil"
+    ],
+    "stages": [
+      "emballage",
+      "nettoyage",
+      "sechage",
+      "tri"
+    ],
+    "data_origin_expected": "SYNTHETIC_BENCHMARK"
+  },
+  "split_info": {
+    "time_split": {
+      "strategy": "time_based",
+      "split_cutoff_event_ordinal": 739452,
+      "train_rows": 1604,
+      "test_rows": 396,
+      "lot_overlap_count": 2
+    },
+    "random_split": {
+      "strategy": "random_80_20",
+      "train_rows": 1600,
+      "test_rows": 400
+    },
+    "grouped_lot_time_split": {
+      "strategy": "grouped_lot_time",
+      "train_rows": 1600,
+      "test_rows": 400,
+      "train_lots": 400,
+      "test_lots": 100,
+      "lot_overlap_count": 0
+    }
+  },
+  "proxy_relevance_warning": "Synthetic proxy relevance is not real recommendation outcome evidence.",
+  "status_summary_frozen": {
+    "regression": "baseline_fallback_not_ml_promoted",
+    "classification": "PARTIAL_improved_but_non_promoted",
+    "anomaly": {
+      "decision": "PASS",
+      "reason": "assessment_mode_hybrid_passed_offline_gate"
+    },
+    "runtime": "unchanged_non_promoted_rule_based"
+  },
+  "action_templates": {
+    "increase_ventilation_delay_drying": "increase ventilation / delay drying / protect from humidity",
+    "inspect_process_step_material_balance": "inspect process step and verify material balance",
+    "reduce_waiting_time_before_next_stage": "reduce waiting time before next stage",
+    "verify_packaging_method_material": "verify packaging method and material",
+    "review_stage_procedure_operator_method": "review stage procedure and operator method",
+    "monitor_only_no_strong_action": "monitor only / no strong action"
+  },
+  "ranking_score_definition": {
+    "components": [
+      "loss_severity_score",
+      "anomaly_score_assessment_mode",
+      "classification_risk_score",
+      "weather_duration_risk_score",
+      "stage_priority_score",
+      "recurrence_or_product_stage_baseline_score",
+      "evidence_quality_score",
+      "confidence_penalty"
+    ],
+    "strategies": [
+      "RuleDefaultRanking",
+      "SeverityFirstRanking",
+      "HybridEvidenceRanking",
+      "ConservativeRanking",
+      "FinalConservativeEvidenceRanking"
+    ]
+  },
+  "proxy_relevance_definition": {
+    "high": "anomaly true OR high loss OR severe stage/weather/duration condition",
+    "medium": "moderate loss or moderate contextual risk",
+    "low": "otherwise",
+    "boundary": "Synthetic proxy relevance is not real recommendation outcome evidence."
+  },
+  "prediction_mode_candidates": [
+    {
+      "strategy": "FinalConservativeEvidenceRanking",
+      "mode": "prediction_mode",
+      "precision_at_3": 0.7095959595959596,
+      "precision_at_5": 0.47575757575757577,
+      "ndcg_at_5": 0.938033839779988,
+      "mean_relevance_top_1": 1.1161616161616161,
+      "top_priority_anomaly_high_loss_coverage": 1.0,
+      "gate_pass": false,
+      "sample_top_actions": [
+        [
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "review_stage_procedure_operator_method",
+          "monitor_only_no_strong_action",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "increase_ventilation_delay_drying",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "monitor_only_no_strong_action",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "verify_packaging_method_material",
+          "monitor_only_no_strong_action",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "monitor_only_no_strong_action",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ]
+      ]
+    },
+    {
+      "strategy": "ConservativeRanking",
+      "mode": "prediction_mode",
+      "precision_at_3": 0.7053872053872055,
+      "precision_at_5": 0.4767676767676768,
+      "ndcg_at_5": 0.8642786811765849,
+      "mean_relevance_top_1": 0.8888888888888888,
+      "top_priority_anomaly_high_loss_coverage": 0.6470588235294118,
+      "gate_pass": false,
+      "sample_top_actions": [
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "monitor_only_no_strong_action",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "monitor_only_no_strong_action",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "verify_packaging_method_material",
+          "monitor_only_no_strong_action",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "monitor_only_no_strong_action",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ]
+      ]
+    },
+    {
+      "strategy": "RuleDefaultRanking",
+      "mode": "prediction_mode",
+      "precision_at_3": 0.6725589225589225,
+      "precision_at_5": 0.47171717171717176,
+      "ndcg_at_5": 0.8102854676234542,
+      "mean_relevance_top_1": 0.7954545454545454,
+      "top_priority_anomaly_high_loss_coverage": 0.9411764705882353,
+      "gate_pass": false,
+      "sample_top_actions": [
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "monitor_only_no_strong_action",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "monitor_only_no_strong_action",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "monitor_only_no_strong_action",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ]
+      ]
+    },
+    {
+      "strategy": "HybridEvidenceRanking",
+      "mode": "prediction_mode",
+      "precision_at_3": 0.6346801346801347,
+      "precision_at_5": 0.47171717171717176,
+      "ndcg_at_5": 0.81457103151968,
+      "mean_relevance_top_1": 0.8459595959595959,
+      "top_priority_anomaly_high_loss_coverage": 0.9411764705882353,
+      "gate_pass": false,
+      "sample_top_actions": [
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "increase_ventilation_delay_drying",
+          "review_stage_procedure_operator_method",
+          "monitor_only_no_strong_action",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "increase_ventilation_delay_drying",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "monitor_only_no_strong_action",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "monitor_only_no_strong_action",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance"
+        ]
+      ]
+    },
+    {
+      "strategy": "SeverityFirstRanking",
+      "mode": "prediction_mode",
+      "precision_at_3": 0.5572390572390573,
+      "precision_at_5": 0.4257575757575757,
+      "ndcg_at_5": 0.6650518405198654,
+      "mean_relevance_top_1": 0.6616161616161617,
+      "top_priority_anomaly_high_loss_coverage": 1.0,
+      "gate_pass": false,
+      "sample_top_actions": [
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "monitor_only_no_strong_action",
+          "verify_packaging_method_material",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ]
+      ]
+    }
+  ],
+  "assessment_mode_candidates": [
+    {
+      "strategy": "ConservativeRanking",
+      "mode": "assessment_mode",
+      "precision_at_3": 0.6734006734006733,
+      "precision_at_5": 0.4621212121212121,
+      "ndcg_at_5": 0.9172073762277545,
+      "mean_relevance_top_1": 0.9924242424242424,
+      "top_priority_anomaly_high_loss_coverage": 1.0,
+      "gate_pass": false,
+      "sample_top_actions": [
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "monitor_only_no_strong_action",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "reduce_waiting_time_before_next_stage",
+          "inspect_process_step_material_balance",
+          "verify_packaging_method_material",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "monitor_only_no_strong_action",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "monitor_only_no_strong_action",
+          "verify_packaging_method_material",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "monitor_only_no_strong_action",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ]
+      ]
+    },
+    {
+      "strategy": "RuleDefaultRanking",
+      "mode": "assessment_mode",
+      "precision_at_3": 0.6666666666666666,
+      "precision_at_5": 0.4666666666666667,
+      "ndcg_at_5": 0.8598488553141044,
+      "mean_relevance_top_1": 0.8358585858585859,
+      "top_priority_anomaly_high_loss_coverage": 1.0,
+      "gate_pass": false,
+      "sample_top_actions": [
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "monitor_only_no_strong_action",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "reduce_waiting_time_before_next_stage",
+          "inspect_process_step_material_balance",
+          "verify_packaging_method_material",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "monitor_only_no_strong_action",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "monitor_only_no_strong_action",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "monitor_only_no_strong_action",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ]
+      ]
+    },
+    {
+      "strategy": "FinalConservativeEvidenceRanking",
+      "mode": "assessment_mode",
+      "precision_at_3": 0.6649831649831649,
+      "precision_at_5": 0.46060606060606063,
+      "ndcg_at_5": 0.9522731619373701,
+      "mean_relevance_top_1": 1.1136363636363635,
+      "top_priority_anomaly_high_loss_coverage": 1.0,
+      "gate_pass": false,
+      "sample_top_actions": [
+        [
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "review_stage_procedure_operator_method",
+          "monitor_only_no_strong_action",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "reduce_waiting_time_before_next_stage",
+          "inspect_process_step_material_balance",
+          "verify_packaging_method_material",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "monitor_only_no_strong_action",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "monitor_only_no_strong_action",
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "monitor_only_no_strong_action",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ]
+      ]
+    },
+    {
+      "strategy": "HybridEvidenceRanking",
+      "mode": "assessment_mode",
+      "precision_at_3": 0.6456228956228957,
+      "precision_at_5": 0.4671717171717172,
+      "ndcg_at_5": 0.8595362207131146,
+      "mean_relevance_top_1": 0.8611111111111112,
+      "top_priority_anomaly_high_loss_coverage": 1.0,
+      "gate_pass": false,
+      "sample_top_actions": [
+        [
+          "reduce_waiting_time_before_next_stage",
+          "verify_packaging_method_material",
+          "increase_ventilation_delay_drying",
+          "review_stage_procedure_operator_method",
+          "monitor_only_no_strong_action",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "reduce_waiting_time_before_next_stage",
+          "inspect_process_step_material_balance",
+          "verify_packaging_method_material",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "monitor_only_no_strong_action",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "monitor_only_no_strong_action",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "monitor_only_no_strong_action",
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance"
+        ]
+      ]
+    },
+    {
+      "strategy": "SeverityFirstRanking",
+      "mode": "assessment_mode",
+      "precision_at_3": 0.585016835016835,
+      "precision_at_5": 0.4540404040404041,
+      "ndcg_at_5": 0.7583877404844794,
+      "mean_relevance_top_1": 0.7045454545454546,
+      "top_priority_anomaly_high_loss_coverage": 1.0,
+      "gate_pass": false,
+      "sample_top_actions": [
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "reduce_waiting_time_before_next_stage",
+          "inspect_process_step_material_balance",
+          "verify_packaging_method_material",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "verify_packaging_method_material",
+          "inspect_process_step_material_balance",
+          "monitor_only_no_strong_action"
+        ],
+        [
+          "verify_packaging_method_material",
+          "reduce_waiting_time_before_next_stage",
+          "review_stage_procedure_operator_method",
+          "increase_ventilation_delay_drying",
+          "monitor_only_no_strong_action",
+          "inspect_process_step_material_balance"
+        ],
+        [
+          "review_stage_procedure_operator_method",
+          "reduce_waiting_time_before_next_stage",
+          "monitor_only_no_strong_action",
+          "verify_packaging_method_material",
+          "increase_ventilation_delay_drying",
+          "inspect_process_step_material_balance"
+        ]
+      ]
+    }
+  ],
+  "best_prediction_mode_candidate": {
+    "strategy": "FinalConservativeEvidenceRanking",
+    "mode": "prediction_mode",
+    "precision_at_3": 0.7095959595959596,
+    "precision_at_5": 0.47575757575757577,
+    "ndcg_at_5": 0.938033839779988,
+    "mean_relevance_top_1": 1.1161616161616161,
+    "top_priority_anomaly_high_loss_coverage": 1.0,
+    "gate_pass": false,
+    "sample_top_actions": [
+      [
+        "reduce_waiting_time_before_next_stage",
+        "verify_packaging_method_material",
+        "review_stage_procedure_operator_method",
+        "monitor_only_no_strong_action",
+        "increase_ventilation_delay_drying",
+        "inspect_process_step_material_balance"
+      ],
+      [
+        "increase_ventilation_delay_drying",
+        "review_stage_procedure_operator_method",
+        "reduce_waiting_time_before_next_stage",
+        "verify_packaging_method_material",
+        "inspect_process_step_material_balance",
+        "monitor_only_no_strong_action"
+      ],
+      [
+        "review_stage_procedure_operator_method",
+        "reduce_waiting_time_before_next_stage",
+        "monitor_only_no_strong_action",
+        "increase_ventilation_delay_drying",
+        "verify_packaging_method_material",
+        "inspect_process_step_material_balance"
+      ],
+      [
+        "verify_packaging_method_material",
+        "monitor_only_no_strong_action",
+        "reduce_waiting_time_before_next_stage",
+        "review_stage_procedure_operator_method",
+        "increase_ventilation_delay_drying",
+        "inspect_process_step_material_balance"
+      ],
+      [
+        "monitor_only_no_strong_action",
+        "review_stage_procedure_operator_method",
+        "reduce_waiting_time_before_next_stage",
+        "verify_packaging_method_material",
+        "increase_ventilation_delay_drying",
+        "inspect_process_step_material_balance"
+      ]
+    ]
+  },
+  "best_assessment_mode_candidate": {
+    "strategy": "ConservativeRanking",
+    "mode": "assessment_mode",
+    "precision_at_3": 0.6734006734006733,
+    "precision_at_5": 0.4621212121212121,
+    "ndcg_at_5": 0.9172073762277545,
+    "mean_relevance_top_1": 0.9924242424242424,
+    "top_priority_anomaly_high_loss_coverage": 1.0,
+    "gate_pass": false,
+    "sample_top_actions": [
+      [
+        "verify_packaging_method_material",
+        "reduce_waiting_time_before_next_stage",
+        "monitor_only_no_strong_action",
+        "review_stage_procedure_operator_method",
+        "increase_ventilation_delay_drying",
+        "inspect_process_step_material_balance"
+      ],
+      [
+        "review_stage_procedure_operator_method",
+        "increase_ventilation_delay_drying",
+        "reduce_waiting_time_before_next_stage",
+        "inspect_process_step_material_balance",
+        "verify_packaging_method_material",
+        "monitor_only_no_strong_action"
+      ],
+      [
+        "review_stage_procedure_operator_method",
+        "reduce_waiting_time_before_next_stage",
+        "monitor_only_no_strong_action",
+        "increase_ventilation_delay_drying",
+        "verify_packaging_method_material",
+        "inspect_process_step_material_balance"
+      ],
+      [
+        "monitor_only_no_strong_action",
+        "verify_packaging_method_material",
+        "review_stage_procedure_operator_method",
+        "reduce_waiting_time_before_next_stage",
+        "increase_ventilation_delay_drying",
+        "inspect_process_step_material_balance"
+      ],
+      [
+        "monitor_only_no_strong_action",
+        "review_stage_procedure_operator_method",
+        "reduce_waiting_time_before_next_stage",
+        "verify_packaging_method_material",
+        "increase_ventilation_delay_drying",
+        "inspect_process_step_material_balance"
+      ]
+    ]
+  },
+  "gate_definition": {
+    "assessment_mode": {
+      "precision_at_3_min": 0.7,
+      "ndcg_at_5_min": 0.85,
+      "top_priority_anomaly_high_loss_coverage_min": 0.9
+    },
+    "prediction_mode": {
+      "report_only": true
+    }
+  },
+  "final_recommendation_ranking_decision": {
+    "decision": "PARTIAL",
+    "reason": "proxy_ranking_is_useful_but_gate_not_fully_met"
+  },
+  "forbidden_claims": [
+    "production-ready learned recommender",
+    "real cooperative recommendation uplift",
+    "runtime promoted recommendation model"
+  ],
+  "boundary": {
+    "offline_only": true,
+    "non_production_claims_only": true,
+    "runtime_model_unchanged": true
+  }
+}

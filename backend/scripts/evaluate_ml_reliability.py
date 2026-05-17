@@ -342,6 +342,11 @@ def main() -> None:
         default="reports/ml_reliability_audit.md",
         help="Markdown report path.",
     )
+    parser.add_argument(
+        "--allow-sqlite-fallback",
+        action="store_true",
+        help="LEGACY ONLY: allow local SQLite fallback if Supabase is unavailable.",
+    )
     args = parser.parse_args()
 
     db = SessionLocal()
@@ -355,6 +360,11 @@ def main() -> None:
             source_info=_source_info(fallback_used=False, seeded_local=False),
         )
     except OperationalError:
+        if not args.allow_sqlite_fallback:
+            raise RuntimeError(
+                "Supabase connection failed. SQLite fallback is disabled for final validation. "
+                "Use --allow-sqlite-fallback only for legacy/local diagnostics."
+            )
         db.close()
         db, local_seeded = _local_sqlite_session()
         used_local_fallback = True

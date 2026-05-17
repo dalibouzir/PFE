@@ -1,0 +1,55 @@
+{
+  "warning": "SYNTHETIC BENCHMARK \u2014 NOT REAL APP PERFORMANCE. These metrics evaluate pipeline behavior under controlled simulated data and must not be reported as production model accuracy.",
+  "source": "synthetic",
+  "rows_requested": 2000,
+  "rows_generated": 2000,
+  "seed": 42,
+  "crops": [
+    "mangue",
+    "arachide",
+    "mil"
+  ],
+  "stages": [
+    "nettoyage",
+    "sechage",
+    "tri",
+    "emballage"
+  ],
+  "data_origin_value": "SYNTHETIC_BENCHMARK",
+  "generation_assumptions": {
+    "drying_sensitivity": "loss increases with humidity, rainfall, and long duration/delay",
+    "sorting_sensitivity": "loss depends on grade/product quality with noise",
+    "cleaning_behavior": "moderate baseline loss",
+    "packaging_behavior": "typically low loss",
+    "mango_profile": "higher humidity and delay sensitivity",
+    "noise": "gaussian noise plus random shocks",
+    "anomalies": "explicitly injected and labeled via anomaly_label_synthetic"
+  },
+  "columns": [
+    "synthetic_lot_id",
+    "synthetic_cooperative_id",
+    "product",
+    "stage",
+    "stage_order",
+    "qty_in",
+    "qty_out",
+    "loss_qty",
+    "loss_pct",
+    "efficiency_pct",
+    "event_time",
+    "season",
+    "region",
+    "grade",
+    "humidity",
+    "temperature",
+    "rainfall",
+    "wind_speed",
+    "dew_point",
+    "step_duration_minutes",
+    "delay_since_previous_step_minutes",
+    "cumulative_duration_before_stage",
+    "missing_duration_flag",
+    "anomaly_label_synthetic",
+    "data_origin"
+  ]
+}

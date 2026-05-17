@@ -1,800 +1,124 @@
 {
   "dataset": {
-    "row_count": 45,
+    "row_count": 12,
     "product_distribution": {
-      "Mangue": 19,
-      "Arachide": 8,
-      "Mil": 8,
-      "Bissap": 5,
-      "Banane": 5
+      "mango": 12
     },
     "stage_distribution_raw": {
-      "Nettoyage": 12,
-      "Tri": 9,
-      "S\u00e9chage": 7,
-      "Emballage": 3,
-      "perte_tri": 3,
-      "livraison": 3,
-      "Conditionnement": 1,
-      "cleaning": 1,
-      "drying": 1,
-      "Suivi du r\u00e9gime": 1,
-      "Protection des r\u00e9gimes": 1,
-      "Contr\u00f4le maturit\u00e9": 1,
-      "Testing": 1,
-      "R\u00e9colte verte": 1
+      "cleaning": 3,
+      "drying": 3,
+      "sorting": 3,
+      "packaging": 3
     },
     "stage_distribution_canonical": {
-      "cleaning": 13,
-      "unknown": 11,
-      "sorting": 9,
-      "drying": 8,
-      "packaging": 4
+      "cleaning": 3,
+      "drying": 3,
+      "sorting": 3,
+      "packaging": 3
     },
     "risk_class_distribution": {
-      "low": 41,
-      "medium": 3,
-      "high": 1
+      "low": 12
     }
   },
   "split_details": {
     "time_based": {
       "strategy": "time_based",
-      "split_cutoff_date_ordinal": 739697,
-      "train_rows": 28,
-      "test_rows": 17
+      "split_cutoff_date_ordinal": 739738,
+      "train_rows": 10,
+      "test_rows": 2
     },
     "random": {
-      "train_rows": 36,
-      "test_rows": 9
+      "train_rows": 9,
+      "test_rows": 3
     }
   },
   "evaluation": {
     "time_based": {
       "split_name": "time_based",
-      "train_rows": 28,
-      "test_rows": 17,
+      "train_rows": 10,
+      "test_rows": 2,
       "regression": {
         "model": {
-          "mae": 3.7136060569240574,
-          "rmse": 4.608693970536991,
-          "r2": 0.42679602042479026
+          "mae": 0.5124797096789102,
+          "rmse": 0.6217485745263356,
+          "r2": -0.5426960327363917
         },
         "baselines": {
           "global_mean_loss": {
-            "mae": 4.9791728000107645,
-            "rmse": 6.47916670432523,
-            "r2": -0.13290048754710226,
-            "mae_improvement_vs_model": 1.265566743086707,
-            "rmse_improvement_vs_model": 1.8704727337882394
+            "mae": 1.200129478353528,
+            "rmse": 1.3003431843356208,
+            "r2": -5.747870472255575,
+            "mae_improvement_vs_model": 0.6876497686746177,
+            "rmse_improvement_vs_model": 0.6785946098092852
           },
           "product_mean_loss": {
-            "mae": 4.336221010977442,
-            "rmse": 6.067483339567037,
-            "r2": 0.006493665814178096,
-            "mae_improvement_vs_model": 0.6226149540533847,
-            "rmse_improvement_vs_model": 1.458789369030046
+            "mae": 1.200129478353527,
+            "rmse": 1.30034318433562,
+            "r2": -5.747870472255567,
+            "mae_improvement_vs_model": 0.6876497686746168,
+            "rmse_improvement_vs_model": 0.6785946098092843
           },
           "stage_mean_loss": {
-            "mae": 4.150741176543122,
-            "rmse": 5.083957823135249,
-            "r2": 0.3024789261454699,
-            "mae_improvement_vs_model": 0.4371351196190649,
-            "rmse_improvement_vs_model": 0.47526385259825776
+            "mae": 0.0,
+            "rmse": 0.0,
+            "r2": 1.0,
+            "mae_improvement_vs_model": -0.5124797096789102,
+            "rmse_improvement_vs_model": -0.6217485745263356
           },
           "product_stage_mean_loss": {
-            "mae": 3.8362454907928663,
-            "rmse": 4.76110655774023,
-            "r2": 0.3882566482045906,
-            "mae_improvement_vs_model": 0.12263943386880882,
-            "rmse_improvement_vs_model": 0.15241258720323891
+            "mae": 0.0,
+            "rmse": 0.0,
+            "r2": 1.0,
+            "mae_improvement_vs_model": -0.5124797096789102,
+            "rmse_improvement_vs_model": -0.6217485745263356
           },
           "stage_season_mean_loss": {
-            "mae": 4.247801226860819,
-            "rmse": 5.238448616473757,
-            "r2": 0.25944241926985245,
-            "mae_improvement_vs_model": 0.5341951699367615,
-            "rmse_improvement_vs_model": 0.6297546459367664
+            "mae": 0.0,
+            "rmse": 0.0,
+            "r2": 1.0,
+            "mae_improvement_vs_model": -0.5124797096789102,
+            "rmse_improvement_vs_model": -0.6217485745263356
           },
           "product_stage_season_mean_loss": {
-            "mae": 3.9791587918384628,
-            "rmse": 4.9267284275449965,
-            "r2": 0.3449556536548458,
-            "mae_improvement_vs_model": 0.26555273491440534,
-            "rmse_improvement_vs_model": 0.3180344570080056
+            "mae": 0.0,
+            "rmse": 0.0,
+            "r2": 1.0,
+            "mae_improvement_vs_model": -0.5124797096789102,
+            "rmse_improvement_vs_model": -0.6217485745263356
           },
           "product_stage_rolling_mean_loss": {
-            "mae": 4.03798359748758,
-            "rmse": 4.932692734382177,
-            "r2": 0.3433686977783208,
-            "mae_improvement_vs_model": 0.3243775405635225,
-            "rmse_improvement_vs_model": 0.3239987638451858
+            "mae": 0.0,
+            "rmse": 0.0,
+            "r2": 1.0,
+            "mae_improvement_vs_model": -0.5124797096789102,
+            "rmse_improvement_vs_model": -0.6217485745263356
           },
           "previous_batch_loss_baseline": {
-            "mae": 5.528414673044184,
-            "rmse": 7.169605886262116,
-            "r2": -0.38721578385056454,
-            "mae_improvement_vs_model": 1.8148086161201262,
-            "rmse_improvement_vs_model": 2.560911915725125
+            "mae": 1.000107898627939,
+            "rmse": 1.1183905584065805,
+            "r2": -3.9915767168441425,
+            "mae_improvement_vs_model": 0.4876281889490288,
+            "rmse_improvement_vs_model": 0.49664198388024494
           }
         }
       },
       "classification": {
         "model": {
-          "accuracy": 0.8823529411764706,
-          "macro_f1": 0.3125,
-          "weighted_f1": 0.8272058823529411,
-          "per_class": {
-            "low": {
-              "precision": 0.8823529411764706,
-              "recall": 1.0,
-              "f1": 0.9375,
-              "support": 15
-            },
-            "medium": {
-              "precision": 0.0,
-              "recall": 0.0,
-              "f1": 0.0,
-              "support": 1
-            },
-            "high": {
-              "precision": 0.0,
-              "recall": 0.0,
-              "f1": 0.0,
-              "support": 1
-            }
-          },
-          "confusion_matrix": [
-            [
-              15,
-              0,
-              0
-            ],
-            [
-              1,
-              0,
-              0
-            ],
-            [
-              1,
-              0,
-              0
-            ]
-          ],
-          "labels": [
-            "low",
-            "medium",
-            "high"
-          ],
-          "false_low_high_risk_rate": 1.0,
-          "medium_recall": 0.0,
-          "high_recall": 0.0
-        },
-        "majority_class_baseline": {
-          "accuracy": 0.8823529411764706,
-          "macro_f1": 0.3125,
-          "weighted_f1": 0.8272058823529411,
-          "per_class": {
-            "low": {
-              "precision": 0.8823529411764706,
-              "recall": 1.0,
-              "f1": 0.9375,
-              "support": 15
-            },
-            "medium": {
-              "precision": 0.0,
-              "recall": 0.0,
-              "f1": 0.0,
-              "support": 1
-            },
-            "high": {
-              "precision": 0.0,
-              "recall": 0.0,
-              "f1": 0.0,
-              "support": 1
-            }
-          },
-          "confusion_matrix": [
-            [
-              15,
-              0,
-              0
-            ],
-            [
-              1,
-              0,
-              0
-            ],
-            [
-              1,
-              0,
-              0
-            ]
-          ],
-          "labels": [
-            "low",
-            "medium",
-            "high"
-          ],
-          "false_low_high_risk_rate": 1.0,
-          "medium_recall": 0.0,
-          "high_recall": 0.0
-        },
-        "thresholded_predicted_loss_baseline": {
-          "accuracy": 0.9411764705882353,
-          "macro_f1": 0.5555555555555555,
-          "weighted_f1": 0.9215686274509803,
+          "accuracy": 1.0,
+          "macro_f1": 1.0,
+          "weighted_f1": 1.0,
           "per_class": {
             "low": {
               "precision": 1.0,
               "recall": 1.0,
               "f1": 1.0,
-              "support": 15
-            },
-            "medium": {
-              "precision": 0.5,
-              "recall": 1.0,
-              "f1": 0.6666666666666666,
-              "support": 1
-            },
-            "high": {
-              "precision": 0.0,
-              "recall": 0.0,
-              "f1": 0.0,
-              "support": 1
-            }
-          },
-          "confusion_matrix": [
-            [
-              15,
-              0,
-              0
-            ],
-            [
-              0,
-              1,
-              0
-            ],
-            [
-              0,
-              1,
-              0
-            ]
-          ],
-          "labels": [
-            "low",
-            "medium",
-            "high"
-          ],
-          "false_low_high_risk_rate": 0.0,
-          "medium_recall": 1.0,
-          "high_recall": 0.0
-        },
-        "thresholded_product_stage_average_baseline": {
-          "accuracy": 0.9411764705882353,
-          "macro_f1": 0.5555555555555555,
-          "weighted_f1": 0.9215686274509803,
-          "per_class": {
-            "low": {
-              "precision": 1.0,
-              "recall": 1.0,
-              "f1": 1.0,
-              "support": 15
-            },
-            "medium": {
-              "precision": 0.5,
-              "recall": 1.0,
-              "f1": 0.6666666666666666,
-              "support": 1
-            },
-            "high": {
-              "precision": 0.0,
-              "recall": 0.0,
-              "f1": 0.0,
-              "support": 1
-            }
-          },
-          "confusion_matrix": [
-            [
-              15,
-              0,
-              0
-            ],
-            [
-              0,
-              1,
-              0
-            ],
-            [
-              0,
-              1,
-              0
-            ]
-          ],
-          "labels": [
-            "low",
-            "medium",
-            "high"
-          ],
-          "false_low_high_risk_rate": 0.0,
-          "medium_recall": 1.0,
-          "high_recall": 0.0
-        },
-        "risk_thresholds_used": {
-          "low_to_medium": 6.0,
-          "medium_to_high": 12.0
-        }
-      },
-      "segment_analysis": {
-        "by_product": [
-          {
-            "product": "Mangue",
-            "row_count": 9,
-            "mae": 5.443524368449189,
-            "mean_actual_loss_pct": 10.72696339777085,
-            "mean_predicted_loss_pct": 5.283439029321661,
-            "error_bias": -5.443524368449189
-          },
-          {
-            "product": "Banane",
-            "row_count": 5,
-            "mae": 1.9758057919553713,
-            "mean_actual_loss_pct": 0.8937504924598058,
-            "mean_predicted_loss_pct": 2.8695562844151774,
-            "error_bias": 1.9758057919553713
-          },
-          {
-            "product": "Arachide",
-            "row_count": 3,
-            "mae": 1.4201848972964752,
-            "mean_actual_loss_pct": 1.166477539455297,
-            "mean_predicted_loss_pct": 2.5866624367517725,
-            "error_bias": 1.4201848972964752
-          }
-        ],
-        "by_canonical_stage": [
-          {
-            "stage_canonical": "unknown",
-            "row_count": 11,
-            "mae": 3.2379066963005325,
-            "mean_actual_loss_pct": 4.953607628345628,
-            "mean_predicted_loss_pct": 3.511888015640888,
-            "error_bias": -1.4417196127047396
-          },
-          {
-            "stage_canonical": "cleaning",
-            "row_count": 2,
-            "mae": 3.160068457371511,
-            "mean_actual_loss_pct": 4.499999999999999,
-            "mean_predicted_loss_pct": 2.779955121531133,
-            "error_bias": -1.7200448784688662
-          },
-          {
-            "stage_canonical": "drying",
-            "row_count": 2,
-            "mae": 9.186830640336664,
-            "mean_actual_loss_pct": 19.260869565217387,
-            "mean_predicted_loss_pct": 10.074038924880723,
-            "error_bias": -9.186830640336664
-          },
-          {
-            "stage_canonical": "packaging",
-            "row_count": 1,
-            "mae": 1.488612055194447,
-            "mean_actual_loss_pct": 0.9995856639734803,
-            "mean_predicted_loss_pct": 2.4881977191679274,
-            "error_bias": 1.488612055194447
-          },
-          {
-            "stage_canonical": "sorting",
-            "row_count": 1,
-            "mae": 1.3319190577923334,
-            "mean_actual_loss_pct": 1.4998469543924136,
-            "mean_predicted_loss_pct": 2.831766012184747,
-            "error_bias": 1.3319190577923334
-          }
-        ],
-        "by_product_stage": [
-          {
-            "product": "Mangue",
-            "stage_canonical": "unknown",
-            "row_count": 6,
-            "mae": 4.289657449921498,
-            "mean_actual_loss_pct": 8.33682190825048,
-            "mean_predicted_loss_pct": 4.047164458328981,
-            "error_bias": -4.289657449921498
-          },
-          {
-            "product": "Banane",
-            "stage_canonical": "unknown",
-            "row_count": 5,
-            "mae": 1.9758057919553713,
-            "mean_actual_loss_pct": 0.8937504924598058,
-            "mean_predicted_loss_pct": 2.8695562844151774,
-            "error_bias": 1.9758057919553713
-          },
-          {
-            "product": "Mangue",
-            "stage_canonical": "drying",
-            "row_count": 2,
-            "mae": 9.186830640336664,
-            "mean_actual_loss_pct": 19.260869565217387,
-            "mean_predicted_loss_pct": 10.074038924880723,
-            "error_bias": -9.186830640336664
-          },
-          {
-            "product": "Arachide",
-            "stage_canonical": "cleaning",
-            "row_count": 1,
-            "mae": 1.440023578902645,
-            "mean_actual_loss_pct": 0.9999999999999978,
-            "mean_predicted_loss_pct": 2.4400235789026428,
-            "error_bias": 1.440023578902645
-          },
-          {
-            "product": "Arachide",
-            "stage_canonical": "packaging",
-            "row_count": 1,
-            "mae": 1.488612055194447,
-            "mean_actual_loss_pct": 0.9995856639734803,
-            "mean_predicted_loss_pct": 2.4881977191679274,
-            "error_bias": 1.488612055194447
-          },
-          {
-            "product": "Arachide",
-            "stage_canonical": "sorting",
-            "row_count": 1,
-            "mae": 1.3319190577923334,
-            "mean_actual_loss_pct": 1.4998469543924136,
-            "mean_predicted_loss_pct": 2.831766012184747,
-            "error_bias": 1.3319190577923334
-          },
-          {
-            "product": "Mangue",
-            "stage_canonical": "cleaning",
-            "row_count": 1,
-            "mae": 4.880113335840377,
-            "mean_actual_loss_pct": 8.0,
-            "mean_predicted_loss_pct": 3.119886664159623,
-            "error_bias": -4.880113335840377
-          }
-        ],
-        "by_risk_class": [
-          {
-            "actual_risk_level": "low",
-            "row_count": 15,
-            "mae": 2.9838427791357094,
-            "mean_actual_loss_pct": 4.399274435344521,
-            "mean_predicted_loss_pct": 3.300709476430981,
-            "error_bias": -1.0985649589135391
-          },
-          {
-            "actual_risk_level": "high",
-            "row_count": 1,
-            "mae": 11.0719209179422,
-            "mean_actual_loss_pct": 21.999999999999993,
-            "mean_predicted_loss_pct": 10.928079082057794,
-            "error_bias": -11.0719209179422
-          },
-          {
-            "actual_risk_level": "medium",
-            "row_count": 1,
-            "mae": 7.301740362731129,
-            "mean_actual_loss_pct": 16.52173913043478,
-            "mean_predicted_loss_pct": 9.219998767703652,
-            "error_bias": -7.301740362731129
-          }
-        ]
-      },
-      "top_prediction_errors": [
-        {
-          "product": "Mangue",
-          "process_type": "S\u00e9chage",
-          "stage_canonical": "drying",
-          "qty_in": 441.0,
-          "qty_out": 343.98,
-          "actual_loss_pct": 21.999999999999993,
-          "predicted_loss_pct": 10.928079082057794,
-          "abs_error": 11.0719209179422,
-          "actual_risk_level": "high",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "drying",
-          "stage_canonical": "drying",
-          "qty_in": 230.0,
-          "qty_out": 192.0,
-          "actual_loss_pct": 16.52173913043478,
-          "predicted_loss_pct": 9.219998767703652,
-          "abs_error": 7.301740362731129,
-          "actual_risk_level": "medium",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "livraison",
-          "stage_canonical": "unknown",
-          "qty_in": 280.0,
-          "qty_out": 250.0,
-          "actual_loss_pct": 10.714285714285714,
-          "predicted_loss_pct": 4.09582778612443,
-          "abs_error": 6.618457928161283,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "livraison",
-          "stage_canonical": "unknown",
-          "qty_in": 245.0,
-          "qty_out": 220.0,
-          "actual_loss_pct": 10.204081632653061,
-          "predicted_loss_pct": 4.1278462358251975,
-          "abs_error": 6.0762353968278635,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "perte_tri",
-          "stage_canonical": "unknown",
-          "qty_in": 100.0,
-          "qty_out": 90.0,
-          "actual_loss_pct": 10.0,
-          "predicted_loss_pct": 4.059821568268997,
-          "abs_error": 5.940178431731003,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "cleaning",
-          "stage_canonical": "cleaning",
-          "qty_in": 250.0,
-          "qty_out": 230.0,
-          "actual_loss_pct": 8.0,
-          "predicted_loss_pct": 3.119886664159623,
-          "abs_error": 4.880113335840377,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Banane",
-          "process_type": "Testing",
-          "stage_canonical": "unknown",
-          "qty_in": 2432.0,
-          "qty_out": 2420.0,
-          "actual_loss_pct": 0.4934210526315789,
-          "predicted_loss_pct": 3.2639378758266178,
-          "abs_error": 2.770516823195039,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "perte_tri",
-          "stage_canonical": "unknown",
-          "qty_in": 300.0,
-          "qty_out": 280.0,
-          "actual_loss_pct": 6.666666666666667,
-          "predicted_loss_pct": 4.027826972590203,
-          "abs_error": 2.638839694076464,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "livraison",
-          "stage_canonical": "unknown",
-          "qty_in": 90.0,
-          "qty_out": 84.0,
-          "actual_loss_pct": 6.666666666666667,
-          "predicted_loss_pct": 4.095827517508808,
-          "abs_error": 2.570839149157859,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Banane",
-          "process_type": "Protection des r\u00e9gimes",
-          "stage_canonical": "unknown",
-          "qty_in": 2488.0,
-          "qty_out": 2482.0,
-          "actual_loss_pct": 0.2411575562700965,
-          "predicted_loss_pct": 2.751955363175742,
-          "abs_error": 2.5107978069056456,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        }
-      ],
-      "anomaly_review": {
-        "anomaly_accuracy_reported": false,
-        "note": "Exploratory only: no labeled anomaly ground truth available.",
-        "flag_rate": 0.17647058823529413,
-        "score_negative_rate": 0.17647058823529413,
-        "flagged_count": 3,
-        "flagged_high_loss_rate": 0.3333333333333333,
-        "top_anomaly_examples": [
-          {
-            "product": "Mangue",
-            "process_type": "drying",
-            "stage_canonical": "drying",
-            "actual_loss_pct": 16.52173913043478,
-            "predicted_loss_pct": 9.219998767703652,
-            "anomaly_score_raw": -0.10128258026177317,
-            "is_anomalous": true
-          },
-          {
-            "product": "Mangue",
-            "process_type": "S\u00e9chage",
-            "stage_canonical": "drying",
-            "actual_loss_pct": 21.999999999999993,
-            "predicted_loss_pct": 10.928079082057794,
-            "anomaly_score_raw": -0.08237782150546913,
-            "is_anomalous": true
-          },
-          {
-            "product": "Mangue",
-            "process_type": "cleaning",
-            "stage_canonical": "cleaning",
-            "actual_loss_pct": 8.0,
-            "predicted_loss_pct": 3.119886664159623,
-            "anomaly_score_raw": -0.019488957531376694,
-            "is_anomalous": true
-          },
-          {
-            "product": "Mangue",
-            "process_type": "livraison",
-            "stage_canonical": "unknown",
-            "actual_loss_pct": 6.666666666666667,
-            "predicted_loss_pct": 4.095827517508808,
-            "anomaly_score_raw": 0.0009073941059013491,
-            "is_anomalous": false
-          },
-          {
-            "product": "Mangue",
-            "process_type": "livraison",
-            "stage_canonical": "unknown",
-            "actual_loss_pct": 10.714285714285714,
-            "predicted_loss_pct": 4.09582778612443,
-            "anomaly_score_raw": 0.005906331716867941,
-            "is_anomalous": false
-          },
-          {
-            "product": "Mangue",
-            "process_type": "perte_tri",
-            "stage_canonical": "unknown",
-            "actual_loss_pct": 10.0,
-            "predicted_loss_pct": 4.059821568268997,
-            "anomaly_score_raw": 0.0063537796103045885,
-            "is_anomalous": false
-          },
-          {
-            "product": "Mangue",
-            "process_type": "livraison",
-            "stage_canonical": "unknown",
-            "actual_loss_pct": 10.204081632653061,
-            "predicted_loss_pct": 4.1278462358251975,
-            "anomaly_score_raw": 0.014199049234841832,
-            "is_anomalous": false
-          },
-          {
-            "product": "Arachide",
-            "process_type": "Emballage",
-            "stage_canonical": "packaging",
-            "actual_loss_pct": 0.9995856639734803,
-            "predicted_loss_pct": 2.4881977191679274,
-            "anomaly_score_raw": 0.014578392564621345,
-            "is_anomalous": false
-          },
-          {
-            "product": "Mangue",
-            "process_type": "perte_tri",
-            "stage_canonical": "unknown",
-            "actual_loss_pct": 6.666666666666667,
-            "predicted_loss_pct": 4.027826972590203,
-            "anomaly_score_raw": 0.026681861635924953,
-            "is_anomalous": false
-          },
-          {
-            "product": "Mangue",
-            "process_type": "perte_tri",
-            "stage_canonical": "unknown",
-            "actual_loss_pct": 5.769230769230769,
-            "predicted_loss_pct": 3.875836669656251,
-            "anomaly_score_raw": 0.04112122095445009,
-            "is_anomalous": false
-          }
-        ]
-      }
-    },
-    "random_split": {
-      "split_name": "random",
-      "train_rows": 36,
-      "test_rows": 9,
-      "regression": {
-        "model": {
-          "mae": 2.206479727471341,
-          "rmse": 2.8128099423790744,
-          "r2": 0.6798243530174035
-        },
-        "baselines": {
-          "global_mean_loss": {
-            "mae": 4.2113659157054935,
-            "rmse": 5.179041473765081,
-            "r2": -0.08544118623796781,
-            "mae_improvement_vs_model": 2.0048861882341527,
-            "rmse_improvement_vs_model": 2.3662315313860067
-          },
-          "product_mean_loss": {
-            "mae": 2.2632837785531454,
-            "rmse": 3.5757629580879366,
-            "r2": 0.4825779156866772,
-            "mae_improvement_vs_model": 0.05680405108180464,
-            "rmse_improvement_vs_model": 0.7629530157088622
-          },
-          "stage_mean_loss": {
-            "mae": 3.6305253967846536,
-            "rmse": 4.310692904594691,
-            "r2": 0.2480279682162555,
-            "mae_improvement_vs_model": 1.4240456693133128,
-            "rmse_improvement_vs_model": 1.4978829622156167
-          },
-          "product_stage_mean_loss": {
-            "mae": 2.322616572031067,
-            "rmse": 3.889077207326552,
-            "r2": 0.387930626743599,
-            "mae_improvement_vs_model": 0.11613684455972617,
-            "rmse_improvement_vs_model": 1.0762672649474774
-          },
-          "stage_season_mean_loss": {
-            "mae": 3.708518596776316,
-            "rmse": 4.311835542311276,
-            "r2": 0.24762926410865727,
-            "mae_improvement_vs_model": 1.5020388693049753,
-            "rmse_improvement_vs_model": 1.4990255999322017
-          },
-          "product_stage_season_mean_loss": {
-            "mae": 2.2392660640604825,
-            "rmse": 3.020481792781503,
-            "r2": 0.6308014700029825,
-            "mae_improvement_vs_model": 0.03278633658914165,
-            "rmse_improvement_vs_model": 0.20767185040242842
-          },
-          "product_stage_rolling_mean_loss": {
-            "mae": 2.5607431666455156,
-            "rmse": 4.033607141089931,
-            "r2": 0.3415925850720719,
-            "mae_improvement_vs_model": 0.3542634391741748,
-            "rmse_improvement_vs_model": 1.2207971987108563
-          },
-          "previous_batch_loss_baseline": {
-            "mae": 3.7158833004959857,
-            "rmse": 6.09546640421388,
-            "r2": -0.5035622132334323,
-            "mae_improvement_vs_model": 1.509403573024645,
-            "rmse_improvement_vs_model": 3.2826564618348058
-          }
-        }
-      },
-      "classification": {
-        "model": {
-          "accuracy": 0.8888888888888888,
-          "macro_f1": 0.47058823529411764,
-          "weighted_f1": 0.8366013071895425,
-          "per_class": {
-            "low": {
-              "precision": 0.8888888888888888,
-              "recall": 1.0,
-              "f1": 0.9411764705882353,
-              "support": 8
+              "support": 2
             },
             "medium": {
               "precision": 0.0,
               "recall": 0.0,
               "f1": 0.0,
-              "support": 1
+              "support": 0
             },
             "high": {
               "precision": 0.0,
@@ -805,12 +129,12 @@
           },
           "confusion_matrix": [
             [
-              8,
+              2,
               0,
               0
             ],
             [
-              1,
+              0,
               0,
               0
             ],
@@ -830,21 +154,21 @@
           "high_recall": 0.0
         },
         "majority_class_baseline": {
-          "accuracy": 0.8888888888888888,
-          "macro_f1": 0.47058823529411764,
-          "weighted_f1": 0.8366013071895425,
+          "accuracy": 1.0,
+          "macro_f1": 1.0,
+          "weighted_f1": 1.0,
           "per_class": {
             "low": {
-              "precision": 0.8888888888888888,
+              "precision": 1.0,
               "recall": 1.0,
-              "f1": 0.9411764705882353,
-              "support": 8
+              "f1": 1.0,
+              "support": 2
             },
             "medium": {
               "precision": 0.0,
               "recall": 0.0,
               "f1": 0.0,
-              "support": 1
+              "support": 0
             },
             "high": {
               "precision": 0.0,
@@ -855,12 +179,12 @@
           },
           "confusion_matrix": [
             [
-              8,
+              2,
               0,
               0
             ],
             [
-              1,
+              0,
               0,
               0
             ],
@@ -880,21 +204,21 @@
           "high_recall": 0.0
         },
         "thresholded_predicted_loss_baseline": {
-          "accuracy": 0.5555555555555556,
-          "macro_f1": 0.5,
-          "weighted_f1": 0.6296296296296295,
+          "accuracy": 0.0,
+          "macro_f1": 0.0,
+          "weighted_f1": 0.0,
           "per_class": {
             "low": {
-              "precision": 1.0,
-              "recall": 0.5,
-              "f1": 0.6666666666666666,
-              "support": 8
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 2
             },
             "medium": {
-              "precision": 0.2,
-              "recall": 1.0,
-              "f1": 0.3333333333333333,
-              "support": 1
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0
             },
             "high": {
               "precision": 0.0,
@@ -905,13 +229,13 @@
           },
           "confusion_matrix": [
             [
-              4,
-              4,
+              0,
+              2,
               0
             ],
             [
               0,
-              1,
+              0,
               0
             ],
             [
@@ -926,25 +250,25 @@
             "high"
           ],
           "false_low_high_risk_rate": 0.0,
-          "medium_recall": 1.0,
+          "medium_recall": 0.0,
           "high_recall": 0.0
         },
         "thresholded_product_stage_average_baseline": {
-          "accuracy": 0.4444444444444444,
-          "macro_f1": 0.2222222222222222,
-          "weighted_f1": 0.5925925925925926,
+          "accuracy": 0.5,
+          "macro_f1": 0.3333333333333333,
+          "weighted_f1": 0.6666666666666666,
           "per_class": {
             "low": {
               "precision": 1.0,
               "recall": 0.5,
               "f1": 0.6666666666666666,
-              "support": 8
+              "support": 2
             },
             "medium": {
               "precision": 0.0,
               "recall": 0.0,
               "f1": 0.0,
-              "support": 1
+              "support": 0
             },
             "high": {
               "precision": 0.0,
@@ -955,14 +279,14 @@
           },
           "confusion_matrix": [
             [
-              4,
-              3,
-              1
+              1,
+              1,
+              0
             ],
             [
               0,
               0,
-              1
+              0
             ],
             [
               0,
@@ -987,253 +311,85 @@
       "segment_analysis": {
         "by_product": [
           {
-            "product": "Mangue",
-            "row_count": 5,
-            "mae": 2.8971611761795706,
-            "mean_actual_loss_pct": 9.57425598628606,
-            "mean_predicted_loss_pct": 8.548752667509493,
-            "error_bias": -1.0255033187765674
-          },
-          {
-            "product": "Bissap",
+            "product": "mango",
             "row_count": 2,
-            "mae": 1.1188970991296885,
-            "mean_actual_loss_pct": 1.4998999587892938,
-            "mean_predicted_loss_pct": 2.6187970579189823,
-            "error_bias": 1.1188970991296885
-          },
-          {
-            "product": "Arachide",
-            "row_count": 1,
-            "mae": 0.20445477304180049,
-            "mean_actual_loss_pct": 1.9994819994820063,
-            "mean_predicted_loss_pct": 2.203936772523807,
-            "error_bias": 0.20445477304180049
-          },
-          {
-            "product": "Banane",
-            "row_count": 1,
-            "mae": 2.9302626950430364,
-            "mean_actual_loss_pct": 0.4934210526315789,
-            "mean_predicted_loss_pct": 3.423683747674615,
-            "error_bias": 2.9302626950430364
+            "mae": 0.5124797096789102,
+            "mean_actual_loss_pct": 6.5002157972558745,
+            "mean_predicted_loss_pct": 6.148170577017124,
+            "error_bias": -0.3520452202387503
           }
         ],
         "by_canonical_stage": [
           {
-            "stage_canonical": "unknown",
-            "row_count": 4,
-            "mae": 1.8732464185901,
-            "mean_actual_loss_pct": 6.841042337987827,
-            "mean_predicted_loss_pct": 6.562360636252459,
-            "error_bias": -0.2786817017353671
-          },
-          {
-            "stage_canonical": "drying",
-            "row_count": 2,
-            "mae": 4.961541450790245,
-            "mean_actual_loss_pct": 10.500265816055288,
-            "mean_predicted_loss_pct": 9.959002270106122,
-            "error_bias": -0.5412635459491661
+            "stage_canonical": "packaging",
+            "row_count": 1,
+            "mae": 0.8645249299176605,
+            "mean_actual_loss_pct": 7.000797091587765,
+            "mean_predicted_loss_pct": 6.136272161670105,
+            "error_bias": -0.8645249299176605
           },
           {
             "stage_canonical": "sorting",
-            "row_count": 2,
-            "mae": 0.5794394109222899,
-            "mean_actual_loss_pct": 1.999443911208623,
-            "mean_predicted_loss_pct": 2.5788833221309133,
-            "error_bias": 0.5794394109222899
-          },
-          {
-            "stage_canonical": "packaging",
             "row_count": 1,
-            "mae": 1.2833701494565974,
-            "mean_actual_loss_pct": 1.0003940946433478,
-            "mean_predicted_loss_pct": 2.2837642440999453,
-            "error_bias": 1.2833701494565974
+            "mae": 0.16043448944015992,
+            "mean_actual_loss_pct": 5.999634502923984,
+            "mean_predicted_loss_pct": 6.160068992364144,
+            "error_bias": 0.16043448944015992
           }
         ],
         "by_product_stage": [
           {
-            "product": "Mangue",
-            "stage_canonical": "unknown",
-            "row_count": 3,
-            "mae": 1.5209076597724547,
-            "mean_actual_loss_pct": 8.956916099773244,
-            "mean_predicted_loss_pct": 7.608586265778409,
-            "error_bias": -1.3483298339948349
-          },
-          {
-            "product": "Mangue",
-            "stage_canonical": "drying",
-            "row_count": 2,
-            "mae": 4.961541450790245,
-            "mean_actual_loss_pct": 10.500265816055288,
-            "mean_predicted_loss_pct": 9.959002270106122,
-            "error_bias": -0.5412635459491661
-          },
-          {
-            "product": "Arachide",
-            "stage_canonical": "sorting",
-            "row_count": 1,
-            "mae": 0.20445477304180049,
-            "mean_actual_loss_pct": 1.9994819994820063,
-            "mean_predicted_loss_pct": 2.203936772523807,
-            "error_bias": 0.20445477304180049
-          },
-          {
-            "product": "Banane",
-            "stage_canonical": "unknown",
-            "row_count": 1,
-            "mae": 2.9302626950430364,
-            "mean_actual_loss_pct": 0.4934210526315789,
-            "mean_predicted_loss_pct": 3.423683747674615,
-            "error_bias": 2.9302626950430364
-          },
-          {
-            "product": "Bissap",
+            "product": "mango",
             "stage_canonical": "packaging",
             "row_count": 1,
-            "mae": 1.2833701494565974,
-            "mean_actual_loss_pct": 1.0003940946433478,
-            "mean_predicted_loss_pct": 2.2837642440999453,
-            "error_bias": 1.2833701494565974
+            "mae": 0.8645249299176605,
+            "mean_actual_loss_pct": 7.000797091587765,
+            "mean_predicted_loss_pct": 6.136272161670105,
+            "error_bias": -0.8645249299176605
           },
           {
-            "product": "Bissap",
+            "product": "mango",
             "stage_canonical": "sorting",
             "row_count": 1,
-            "mae": 0.9544240488027793,
-            "mean_actual_loss_pct": 1.99940582293524,
-            "mean_predicted_loss_pct": 2.9538298717380194,
-            "error_bias": 0.9544240488027793
+            "mae": 0.16043448944015992,
+            "mean_actual_loss_pct": 5.999634502923984,
+            "mean_predicted_loss_pct": 6.160068992364144,
+            "error_bias": 0.16043448944015992
           }
         ],
         "by_risk_class": [
           {
             "actual_risk_level": "low",
-            "row_count": 8,
-            "mae": 1.794439068812832,
-            "mean_actual_loss_pct": 4.67049786264031,
-            "mean_predicted_loss_pct": 5.388972871290408,
-            "error_bias": 0.7184750086500984
-          },
-          {
-            "actual_risk_level": "medium",
-            "row_count": 1,
-            "mae": 5.50280499673941,
-            "mean_actual_loss_pct": 15.999999999999998,
-            "mean_predicted_loss_pct": 10.497195003260588,
-            "error_bias": -5.50280499673941
+            "row_count": 2,
+            "mae": 0.5124797096789102,
+            "mean_actual_loss_pct": 6.5002157972558745,
+            "mean_predicted_loss_pct": 6.148170577017124,
+            "error_bias": -0.3520452202387503
           }
         ]
       },
       "top_prediction_errors": [
         {
-          "product": "Mangue",
-          "process_type": "S\u00e9chage",
-          "stage_canonical": "drying",
-          "qty_in": 679.0,
-          "qty_out": 570.36,
-          "actual_loss_pct": 15.999999999999998,
-          "predicted_loss_pct": 10.497195003260588,
-          "abs_error": 5.50280499673941,
-          "actual_risk_level": "medium",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "S\u00e9chage",
-          "stage_canonical": "drying",
-          "qty_in": 940.5,
-          "qty_out": 893.47,
-          "actual_loss_pct": 5.000531632110577,
-          "predicted_loss_pct": 9.420809536951655,
-          "abs_error": 4.420277904841078,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Banane",
-          "process_type": "Testing",
-          "stage_canonical": "unknown",
-          "qty_in": 2432.0,
-          "qty_out": 2420.0,
-          "actual_loss_pct": 0.4934210526315789,
-          "predicted_loss_pct": 3.423683747674615,
-          "abs_error": 2.9302626950430364,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "livraison",
-          "stage_canonical": "unknown",
-          "qty_in": 245.0,
-          "qty_out": 220.0,
-          "actual_loss_pct": 10.204081632653061,
-          "predicted_loss_pct": 7.391634141211157,
-          "abs_error": 2.8124474914419038,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "perte_tri",
-          "stage_canonical": "unknown",
-          "qty_in": 100.0,
-          "qty_out": 90.0,
-          "actual_loss_pct": 10.0,
-          "predicted_loss_pct": 8.50859125079097,
-          "abs_error": 1.4914087492090307,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Bissap",
-          "process_type": "Emballage",
+          "product": "mango",
+          "process_type": "packaging",
           "stage_canonical": "packaging",
-          "qty_in": 659.74,
-          "qty_out": 653.14,
-          "actual_loss_pct": 1.0003940946433478,
-          "predicted_loss_pct": 2.2837642440999453,
-          "abs_error": 1.2833701494565974,
+          "qty_in": 514.37,
+          "qty_out": 478.36,
+          "actual_loss_pct": 7.000797091587765,
+          "predicted_loss_pct": 6.136272161670105,
+          "abs_error": 0.8645249299176605,
           "actual_risk_level": "low",
           "predicted_risk_level": "low"
         },
         {
-          "product": "Bissap",
-          "process_type": "Tri",
+          "product": "mango",
+          "process_type": "sorting",
           "stage_canonical": "sorting",
-          "qty_in": 673.2,
-          "qty_out": 659.74,
-          "actual_loss_pct": 1.99940582293524,
-          "predicted_loss_pct": 2.9538298717380194,
-          "abs_error": 0.9544240488027793,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Mangue",
-          "process_type": "perte_tri",
-          "stage_canonical": "unknown",
-          "qty_in": 300.0,
-          "qty_out": 280.0,
-          "actual_loss_pct": 6.666666666666667,
-          "predicted_loss_pct": 6.925533405333097,
-          "abs_error": 0.2588667386664296,
-          "actual_risk_level": "low",
-          "predicted_risk_level": "low"
-        },
-        {
-          "product": "Arachide",
-          "process_type": "Tri",
-          "stage_canonical": "sorting",
-          "qty_in": 772.2,
-          "qty_out": 756.76,
-          "actual_loss_pct": 1.9994819994820063,
-          "predicted_loss_pct": 2.203936772523807,
-          "abs_error": 0.20445477304180049,
+          "qty_in": 547.2,
+          "qty_out": 514.37,
+          "actual_loss_pct": 5.999634502923984,
+          "predicted_loss_pct": 6.160068992364144,
+          "abs_error": 0.16043448944015992,
           "actual_risk_level": "low",
           "predicted_risk_level": "low"
         }
@@ -1247,84 +403,449 @@
         "flagged_high_loss_rate": 0.0,
         "top_anomaly_examples": [
           {
-            "product": "Mangue",
-            "process_type": "S\u00e9chage",
-            "stage_canonical": "drying",
-            "actual_loss_pct": 15.999999999999998,
-            "predicted_loss_pct": 10.497195003260588,
-            "anomaly_score_raw": 0.008549738121759076,
-            "is_anomalous": false
-          },
-          {
-            "product": "Mangue",
-            "process_type": "perte_tri",
-            "stage_canonical": "unknown",
-            "actual_loss_pct": 10.0,
-            "predicted_loss_pct": 8.50859125079097,
-            "anomaly_score_raw": 0.009687543940072596,
-            "is_anomalous": false
-          },
-          {
-            "product": "Mangue",
-            "process_type": "S\u00e9chage",
-            "stage_canonical": "drying",
-            "actual_loss_pct": 5.000531632110577,
-            "predicted_loss_pct": 9.420809536951655,
-            "anomaly_score_raw": 0.020279431273245052,
-            "is_anomalous": false
-          },
-          {
-            "product": "Bissap",
-            "process_type": "Emballage",
+            "product": "mango",
+            "process_type": "packaging",
             "stage_canonical": "packaging",
-            "actual_loss_pct": 1.0003940946433478,
-            "predicted_loss_pct": 2.2837642440999453,
-            "anomaly_score_raw": 0.03236300964947331,
+            "actual_loss_pct": 7.000797091587765,
+            "predicted_loss_pct": 6.136272161670105,
+            "anomaly_score_raw": 0.01708902480183272,
             "is_anomalous": false
           },
           {
-            "product": "Bissap",
-            "process_type": "Tri",
+            "product": "mango",
+            "process_type": "sorting",
             "stage_canonical": "sorting",
-            "actual_loss_pct": 1.99940582293524,
-            "predicted_loss_pct": 2.9538298717380194,
-            "anomaly_score_raw": 0.03296225142771475,
+            "actual_loss_pct": 5.999634502923984,
+            "predicted_loss_pct": 6.160068992364144,
+            "anomaly_score_raw": 0.050997683563564156,
             "is_anomalous": false
+          }
+        ]
+      }
+    },
+    "random_split": {
+      "split_name": "random",
+      "train_rows": 9,
+      "test_rows": 3,
+      "regression": {
+        "model": {
+          "mae": 0.5679838452997359,
+          "rmse": 0.736948836240678,
+          "r2": 0.18506179790395094
+        },
+        "baselines": {
+          "global_mean_loss": {
+            "mae": 0.8888285484047099,
+            "rmse": 1.054170754928942,
+            "r2": -0.6675233714838831,
+            "mae_improvement_vs_model": 0.32084470310497404,
+            "rmse_improvement_vs_model": 0.3172219186882641
+          },
+          "product_mean_loss": {
+            "mae": 0.8888285484047099,
+            "rmse": 1.054170754928942,
+            "r2": -0.6675233714838831,
+            "mae_improvement_vs_model": 0.32084470310497404,
+            "rmse_improvement_vs_model": 0.3172219186882641
+          },
+          "stage_mean_loss": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "r2": 1.0,
+            "mae_improvement_vs_model": -0.5679838452997359,
+            "rmse_improvement_vs_model": -0.736948836240678
+          },
+          "product_stage_mean_loss": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "r2": 1.0,
+            "mae_improvement_vs_model": -0.5679838452997359,
+            "rmse_improvement_vs_model": -0.736948836240678
+          },
+          "stage_season_mean_loss": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "r2": 1.0,
+            "mae_improvement_vs_model": -0.5679838452997359,
+            "rmse_improvement_vs_model": -0.736948836240678
+          },
+          "product_stage_season_mean_loss": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "r2": 1.0,
+            "mae_improvement_vs_model": -0.5679838452997359,
+            "rmse_improvement_vs_model": -0.736948836240678
+          },
+          "product_stage_rolling_mean_loss": {
+            "mae": 0.0,
+            "rmse": 0.0,
+            "r2": 1.0,
+            "mae_improvement_vs_model": -0.5679838452997359,
+            "rmse_improvement_vs_model": -0.736948836240678
+          },
+          "previous_batch_loss_baseline": {
+            "mae": 4.83349113190132,
+            "rmse": 5.393042116345416,
+            "r2": -42.64330445977202,
+            "mae_improvement_vs_model": 4.265507286601584,
+            "rmse_improvement_vs_model": 4.656093280104738
+          }
+        }
+      },
+      "classification": {
+        "model": {
+          "accuracy": 1.0,
+          "macro_f1": 1.0,
+          "weighted_f1": 1.0,
+          "per_class": {
+            "low": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "f1": 1.0,
+              "support": 3
+            },
+            "medium": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0
+            },
+            "high": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0
+            }
+          },
+          "confusion_matrix": [
+            [
+              3,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "labels": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "false_low_high_risk_rate": 0.0,
+          "medium_recall": 0.0,
+          "high_recall": 0.0
+        },
+        "majority_class_baseline": {
+          "accuracy": 1.0,
+          "macro_f1": 1.0,
+          "weighted_f1": 1.0,
+          "per_class": {
+            "low": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "f1": 1.0,
+              "support": 3
+            },
+            "medium": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0
+            },
+            "high": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0
+            }
+          },
+          "confusion_matrix": [
+            [
+              3,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "labels": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "false_low_high_risk_rate": 0.0,
+          "medium_recall": 0.0,
+          "high_recall": 0.0
+        },
+        "thresholded_predicted_loss_baseline": {
+          "accuracy": 1.0,
+          "macro_f1": 1.0,
+          "weighted_f1": 1.0,
+          "per_class": {
+            "low": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "f1": 1.0,
+              "support": 3
+            },
+            "medium": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0
+            },
+            "high": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0
+            }
+          },
+          "confusion_matrix": [
+            [
+              3,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "labels": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "false_low_high_risk_rate": 0.0,
+          "medium_recall": 0.0,
+          "high_recall": 0.0
+        },
+        "thresholded_product_stage_average_baseline": {
+          "accuracy": 1.0,
+          "macro_f1": 1.0,
+          "weighted_f1": 1.0,
+          "per_class": {
+            "low": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "f1": 1.0,
+              "support": 3
+            },
+            "medium": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0
+            },
+            "high": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0
+            }
+          },
+          "confusion_matrix": [
+            [
+              3,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "labels": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "false_low_high_risk_rate": 0.0,
+          "medium_recall": 0.0,
+          "high_recall": 0.0
+        },
+        "risk_thresholds_used": {
+          "low_to_medium": 6.0,
+          "medium_to_high": 12.0
+        }
+      },
+      "segment_analysis": {
+        "by_product": [
+          {
+            "product": "mango",
+            "row_count": 3,
+            "mae": 0.5679838452997359,
+            "mean_actual_loss_pct": 4.999878167641325,
+            "mean_predicted_loss_pct": 5.413281458314933,
+            "error_bias": 0.4134032906736073
+          }
+        ],
+        "by_canonical_stage": [
+          {
+            "stage_canonical": "cleaning",
+            "row_count": 1,
+            "mae": 1.2320271862405496,
+            "mean_actual_loss_pct": 4.0,
+            "mean_predicted_loss_pct": 5.23202718624055,
+            "error_bias": 1.2320271862405496
           },
           {
-            "product": "Mangue",
-            "process_type": "livraison",
-            "stage_canonical": "unknown",
-            "actual_loss_pct": 10.204081632653061,
-            "predicted_loss_pct": 7.391634141211157,
-            "anomaly_score_raw": 0.0385947846145826,
-            "is_anomalous": false
+            "stage_canonical": "drying",
+            "row_count": 1,
+            "mae": 0.24005351771946515,
+            "mean_actual_loss_pct": 4.999999999999992,
+            "mean_predicted_loss_pct": 5.240053517719457,
+            "error_bias": 0.24005351771946515
           },
           {
-            "product": "Banane",
-            "process_type": "Testing",
-            "stage_canonical": "unknown",
-            "actual_loss_pct": 0.4934210526315789,
-            "predicted_loss_pct": 3.423683747674615,
-            "anomaly_score_raw": 0.042191191116097426,
-            "is_anomalous": false
-          },
-          {
-            "product": "Mangue",
-            "process_type": "perte_tri",
-            "stage_canonical": "unknown",
-            "actual_loss_pct": 6.666666666666667,
-            "predicted_loss_pct": 6.925533405333097,
-            "anomaly_score_raw": 0.0430114604843006,
-            "is_anomalous": false
-          },
-          {
-            "product": "Arachide",
-            "process_type": "Tri",
             "stage_canonical": "sorting",
-            "actual_loss_pct": 1.9994819994820063,
-            "predicted_loss_pct": 2.203936772523807,
-            "anomaly_score_raw": 0.08319549909110924,
+            "row_count": 1,
+            "mae": 0.2318708319391929,
+            "mean_actual_loss_pct": 5.999634502923984,
+            "mean_predicted_loss_pct": 5.767763670984791,
+            "error_bias": -0.2318708319391929
+          }
+        ],
+        "by_product_stage": [
+          {
+            "product": "mango",
+            "stage_canonical": "cleaning",
+            "row_count": 1,
+            "mae": 1.2320271862405496,
+            "mean_actual_loss_pct": 4.0,
+            "mean_predicted_loss_pct": 5.23202718624055,
+            "error_bias": 1.2320271862405496
+          },
+          {
+            "product": "mango",
+            "stage_canonical": "drying",
+            "row_count": 1,
+            "mae": 0.24005351771946515,
+            "mean_actual_loss_pct": 4.999999999999992,
+            "mean_predicted_loss_pct": 5.240053517719457,
+            "error_bias": 0.24005351771946515
+          },
+          {
+            "product": "mango",
+            "stage_canonical": "sorting",
+            "row_count": 1,
+            "mae": 0.2318708319391929,
+            "mean_actual_loss_pct": 5.999634502923984,
+            "mean_predicted_loss_pct": 5.767763670984791,
+            "error_bias": -0.2318708319391929
+          }
+        ],
+        "by_risk_class": [
+          {
+            "actual_risk_level": "low",
+            "row_count": 3,
+            "mae": 0.5679838452997359,
+            "mean_actual_loss_pct": 4.999878167641325,
+            "mean_predicted_loss_pct": 5.413281458314933,
+            "error_bias": 0.4134032906736073
+          }
+        ]
+      },
+      "top_prediction_errors": [
+        {
+          "product": "mango",
+          "process_type": "cleaning",
+          "stage_canonical": "cleaning",
+          "qty_in": 600.0,
+          "qty_out": 576.0,
+          "actual_loss_pct": 4.0,
+          "predicted_loss_pct": 5.23202718624055,
+          "abs_error": 1.2320271862405496,
+          "actual_risk_level": "low",
+          "predicted_risk_level": "low"
+        },
+        {
+          "product": "mango",
+          "process_type": "drying",
+          "stage_canonical": "drying",
+          "qty_in": 576.0,
+          "qty_out": 547.2,
+          "actual_loss_pct": 4.999999999999992,
+          "predicted_loss_pct": 5.240053517719457,
+          "abs_error": 0.24005351771946515,
+          "actual_risk_level": "low",
+          "predicted_risk_level": "low"
+        },
+        {
+          "product": "mango",
+          "process_type": "sorting",
+          "stage_canonical": "sorting",
+          "qty_in": 547.2,
+          "qty_out": 514.37,
+          "actual_loss_pct": 5.999634502923984,
+          "predicted_loss_pct": 5.767763670984791,
+          "abs_error": 0.2318708319391929,
+          "actual_risk_level": "low",
+          "predicted_risk_level": "low"
+        }
+      ],
+      "anomaly_review": {
+        "anomaly_accuracy_reported": false,
+        "note": "Exploratory only: no labeled anomaly ground truth available.",
+        "flag_rate": 0.6666666666666666,
+        "score_negative_rate": 0.6666666666666666,
+        "flagged_count": 2,
+        "flagged_high_loss_rate": 0.0,
+        "top_anomaly_examples": [
+          {
+            "product": "mango",
+            "process_type": "sorting",
+            "stage_canonical": "sorting",
+            "actual_loss_pct": 5.999634502923984,
+            "predicted_loss_pct": 5.767763670984791,
+            "anomaly_score_raw": -0.01189237901693374,
+            "is_anomalous": true
+          },
+          {
+            "product": "mango",
+            "process_type": "drying",
+            "stage_canonical": "drying",
+            "actual_loss_pct": 4.999999999999992,
+            "predicted_loss_pct": 5.240053517719457,
+            "anomaly_score_raw": -0.006918481177692226,
+            "is_anomalous": true
+          },
+          {
+            "product": "mango",
+            "process_type": "cleaning",
+            "stage_canonical": "cleaning",
+            "actual_loss_pct": 4.0,
+            "predicted_loss_pct": 5.23202718624055,
+            "anomaly_score_raw": 0.010637842639783068,
             "is_anomalous": false
           }
         ]

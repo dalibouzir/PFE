@@ -686,7 +686,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
   }, [pathname, startNavTransition]);
 
   return (
-    <div className="relative min-h-[100svh] overflow-x-clip bg-transparent md:min-h-[100dvh]" style={shellLayoutStyle}>
+    <div className="relative h-[100svh] overflow-hidden bg-transparent md:h-[100dvh]" style={shellLayoutStyle}>
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-width)] bg-[#f3f7fb] px-3 py-4 transition-[width] duration-300 ease-out md:block">
         <div className="flex h-full flex-col rounded-[24px] border border-[rgba(255,255,255,0.08)] bg-[linear-gradient(180deg,#1C2722_0%,#16201B_100%)] p-3 shadow-[0_18px_40px_rgba(20,16,11,0.32)]">
           <SidebarBrand collapsed={collapsed} role={role} onCollapse={() => setCollapsed(true)} onExpand={() => setCollapsed(false)} />
@@ -805,11 +805,8 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
 
       <div
         className={cx(
-          "relative z-10 min-w-0 bg-[#f3f7fb] px-3 pt-0 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:px-7 md:pt-6",
-          isAssistantPage && "flex flex-col",
-          isAssistantPage
-            ? "h-[100svh] overflow-hidden pb-0 md:h-[100dvh]"
-            : "min-h-[100svh] pb-[calc(2rem+env(safe-area-inset-bottom))] md:min-h-[100dvh]",
+          "relative z-10 flex h-[100svh] min-w-0 flex-col overflow-hidden bg-[#f3f7fb] px-3 pt-0 touch-pan-y transition-[margin-left] duration-300 ease-out sm:px-5 md:ml-[var(--sidebar-width)] md:h-[100dvh] md:px-7 md:pt-6",
+          isAssistantPage ? "pb-0" : "pb-[calc(2rem+env(safe-area-inset-bottom))]",
         )}
       >
         <header
@@ -919,7 +916,12 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
 
         <div className="md:hidden" aria-hidden="true" style={{ height: `${loaderTop}px` }} />
 
-        <div className={cx("relative z-0", isAssistantPage && "min-h-0 flex-1")}>
+        <div
+          className={cx(
+            "relative z-0 min-h-0 flex-1",
+            isAssistantPage ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden",
+          )}
+        >
           <div
             className={cx(
               "transition-opacity duration-150",
