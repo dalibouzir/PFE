@@ -4,6 +4,15 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { ProcessStep } from "@/lib/api/types";
 import type { WorkflowPhase } from "@/lib/ui/lot-workflow";
 
+const MINUTES_PER_DAY = 60 * 24;
+
+function formatDurationDays(minutes?: number | null): string {
+  if (minutes === null || minutes === undefined) return "-";
+  const days = minutes / MINUTES_PER_DAY;
+  const formatted = Number.isInteger(days) ? String(days) : String(Number(days.toFixed(2)));
+  return `${formatted} j`;
+}
+
 export type ProcessTableRow = {
   key: string;
   order: number;
@@ -35,7 +44,7 @@ export function LotProcessTable({
 
   return (
     <article className="premium-card reveal min-w-0 overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "130ms" }}>
-      <div className="max-w-full overflow-x-auto">
+      <div className="thin-scrollbar max-w-full overflow-x-auto">
         <table className="wf-table min-w-full text-left text-sm">
           <thead>
             <tr>
@@ -96,7 +105,7 @@ export function LotProcessTable({
                   </td>
                   <td className="px-5 py-3.5 font-semibold text-[var(--text)]">{step ? `${step.qty_out.toFixed(2)} kg` : "-"}</td>
                   <td className="px-5 py-3.5">{step ? step.date : "-"}</td>
-                  <td className="px-5 py-3.5">{step?.duration_minutes ? `${step.duration_minutes} min` : "-"}</td>
+                  <td className="px-5 py-3.5">{formatDurationDays(step?.duration_minutes)}</td>
                   <td className="px-5 py-3.5 text-xs text-[var(--muted)]">{step?.notes?.trim() || "-"}</td>
                   <td className="px-5 py-3.5">
                     <button

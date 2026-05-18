@@ -170,7 +170,24 @@ class SQLAnalyticsAgent(BaseAgent):
             sources.extend(coop.get("sources", []))
             warnings.extend(coop.get("warnings", []))
 
-        if _contains_stock_keyword(normalized):
+        phase3_stock_movement_intent = any(
+            token in normalized
+            for token in (
+                "stock movement",
+                "mouvement de stock",
+                "mouvements de stock",
+                "journal de stock",
+                "journal stock",
+                "journal des mouvements",
+                "journal des mouvement",
+                "mouvement",
+                "mouvements",
+                "movement_type",
+                "action_type",
+                "source du mouvement",
+            )
+        ) and any(token in normalized for token in ("stock", "mouvement", "movement", "journal"))
+        if _contains_stock_keyword(normalized) and not phase3_stock_movement_intent:
             stock = self.sql_tools.get_current_stock(product=product)
             payload["current_stock"] = stock.get("items", [])
             sources.extend(stock.get("sources", []))
@@ -233,6 +250,145 @@ class SQLAnalyticsAgent(BaseAgent):
             sources.extend(finance.get("sources", []))
             warnings.extend(finance.get("warnings", []))
 
+        phase3_collecte_traceability_intent = (
+            any(token in normalized for token in ("collecte", "collectes", "input", "bl", "input_reference_bl"))
+            and any(token in normalized for token in ("traceabil", "bl", "justificatif", "linked lot", "lot lie", "lot lié", "stock impact policy", "validation duplique"))
+        )
+        if any(token in normalized for token in ("collecte", "collectes", "input")) and any(
+            token in normalized for token in ("bl", "justificatif", "lot", "producteur", "produit", "fichier", "statut")
+        ):
+            phase3_collecte_traceability_intent = True
+        if "collecte" in normalized and any(token in normalized for token in ("creation", "création", "validation")) and "stock" in normalized:
+            phase3_collecte_traceability_intent = True
+        if any(token in normalized for token in ("stock impact policy", "validation duplique", "duplication a la validation", "duplication validation")):
+            phase3_collecte_traceability_intent = True
+        phase3_file_evidence_intent = any(
+            token in normalized
+            for token in (
+                "uploaded file",
+                "fichier upload",
+                "fichiers upload",
+                "fichier",
+                "fichiers",
+                "upload",
+                "devis",
+                "justificatif",
+                "file_url",
+                "evidence document",
+                "preuve documentaire",
+            )
+        )
+        phase3_advance_intent = any(
+            token in normalized
+            for token in (
+                "avance",
+                "avances",
+                "farmer advance",
+                "treasury sync",
+                "devis status",
+                "producteur",
+                "producer",
+                "parcelle",
+            )
+        )
+        phase3_treasury_intent = any(
+            token in normalized
+            for token in (
+                "status tresorerie",
+                "status treasury",
+                "statut tresorerie",
+                "statut treasury",
+                "receipt_reference",
+                "enregistre_complet",
+                "transaction sans justificatif",
+                "transactions missing justificatif",
+                "transaction complete",
+                "transaction verrouillee",
+                "transaction verrouille",
+                "tresorerie",
+                "trésorerie",
+            )
+        )
+        phase3_commercial_link_intent = any(
+            token in normalized
+            for token in (
+                "paid order",
+                "commande payee",
+                "invoice paid",
+                "facture payee",
+                "treasury income linked",
+                "commercial invoice generated income",
+                "idempotency",
+                "lien facture",
+                "lien tresorerie",
+                "paid orders",
+                "generated invoices",
+                "facture generee",
+                "factures en statut",
+                "revenu tresorerie",
+                "chainage",
+                "chainage commercial",
+            )
+        )
+        if all(token in normalized for token in ("commande", "facture", "tresorerie")):
+            phase3_commercial_link_intent = True
+        if phase3_commercial_link_intent:
+            phase3_treasury_intent = False
+        if phase3_treasury_intent and (
+            "transaction" in normalized
+            or not any(token in normalized for token in ("avance", "avances", "farmer advance", "producteur"))
+        ):
+            phase3_advance_intent = False
+        if phase3_collecte_traceability_intent and not any(token in normalized for token in ("avance", "avances", "farmer advance")):
+            phase3_advance_intent = False
+
+        if phase3_stock_movement_intent:
+            movement_rows = self.sql_tools.get_stock_movements_journal(product=product, batch_ref=batch_ref)
+            payload["stock_movements_journal"] = movement_rows.get("items", [])
+            sources.extend(movement_rows.get("sources", []))
+            warnings.extend(movement_rows.get("warnings", []))
+        explicit_file_evidence_prompt = any(token in normalized for token in ("uploaded", "upload", "fichier", "file", "evidence"))
+        if explicit_file_evidence_prompt and not any(token in normalized for token in ("collecte", "input", "bl", "justificatif")):
+            phase3_collecte_traceability_intent = False
+        if phase3_advance_intent and not explicit_file_evidence_prompt:
+            phase3_file_evidence_intent = False
+        if phase3_treasury_intent:
+            phase3_collecte_traceability_intent = False
+        if phase3_file_evidence_intent and not explicit_file_evidence_prompt:
+            # Keep uploaded-files route focused on explicit evidence/file prompts.
+            phase3_file_evidence_intent = False
+
+        if phase3_collecte_traceability_intent:
+            collecte = self.sql_tools.get_collecte_traceability()
+            payload["collecte_traceability"] = collecte.get("items", [])
+            payload["collecte_traceability_summary"] = collecte.get("summary", [])
+            sources.extend(collecte.get("sources", []))
+            warnings.extend(collecte.get("warnings", []))
+        if phase3_file_evidence_intent:
+            file_ev = self.sql_tools.get_uploaded_files_evidence()
+            payload["uploaded_files_evidence"] = file_ev.get("items", [])
+            payload["uploaded_files_evidence_summary"] = file_ev.get("summary", [])
+            sources.extend(file_ev.get("sources", []))
+            warnings.extend(file_ev.get("warnings", []))
+        if phase3_advance_intent:
+            adv = self.sql_tools.get_farmer_advances_traceability()
+            payload["farmer_advances_traceability"] = adv.get("items", [])
+            payload["farmer_advances_traceability_summary"] = adv.get("summary", [])
+            sources.extend(adv.get("sources", []))
+            warnings.extend(adv.get("warnings", []))
+        if phase3_treasury_intent:
+            tx = self.sql_tools.get_treasury_traceability()
+            payload["treasury_traceability"] = tx.get("items", [])
+            payload["treasury_traceability_summary"] = tx.get("summary", [])
+            sources.extend(tx.get("sources", []))
+            warnings.extend(tx.get("warnings", []))
+        if phase3_commercial_link_intent:
+            links = self.sql_tools.get_commercial_invoice_linkage()
+            payload["commercial_invoice_linkage"] = links.get("items", [])
+            payload["commercial_invoice_linkage_summary"] = links.get("summary", [])
+            sources.extend(links.get("sources", []))
+            warnings.extend(links.get("warnings", []))
+
         if (batch_ref or any(token in normalized for token in ("lot", "batch"))) and not reset_lot_context:
             batch = self.sql_tools.get_batch_summary(batch_ref=batch_ref)
             payload["batch_summary"] = batch.get("items", [])
@@ -246,7 +402,7 @@ class SQLAnalyticsAgent(BaseAgent):
                 payload["low_efficiency_lots"] = [
                     row for row in (batch.get("items", []) or []) if float(row.get("efficiency_pct", 0.0) or 0.0) < 85.0
                 ]
-            if any(
+            asks_top_loss = any(
                 token in normalized
                 for token in (
                     "plus de pertes",
@@ -260,16 +416,35 @@ class SQLAnalyticsAgent(BaseAgent):
                     "risque",
                     "risk",
                 )
-            ):
+            )
+            if asks_top_loss:
                 high_risk_lots = self.sql_tools.get_high_risk_lots()
                 payload["high_risk_lots"] = high_risk_lots.get("items", [])
                 sources.extend(high_risk_lots.get("sources", []))
                 warnings.extend(high_risk_lots.get("warnings", []))
-                payload["top_loss_batches"] = sorted(
-                    batch.get("items", []),
-                    key=lambda item: float(item.get("loss_pct", 0.0) or 0.0),
-                    reverse=True,
-                )[:5]
+                # Anchor "worst-loss lot" on process-step losses when available.
+                loss_rows = self.sql_tools.get_process_step_losses(batch_ref=None, stage=None, product=product, date_range=effective_date_range).get("items", [])
+                by_batch: dict[str, dict[str, Any]] = {}
+                for row in loss_rows:
+                    key = str(row.get("batch_ref") or "").strip()
+                    if not key:
+                        continue
+                    current = by_batch.get(key)
+                    loss_pct = float(row.get("loss_pct", 0.0) or 0.0)
+                    if current is None or loss_pct > float(current.get("loss_pct", 0.0) or 0.0):
+                        by_batch[key] = {"batch_ref": key, "loss_pct": loss_pct}
+                if by_batch:
+                    payload["top_loss_batches"] = sorted(
+                        by_batch.values(),
+                        key=lambda item: float(item.get("loss_pct", 0.0) or 0.0),
+                        reverse=True,
+                    )[:5]
+                else:
+                    payload["top_loss_batches"] = sorted(
+                        batch.get("items", []),
+                        key=lambda item: float(item.get("loss_pct", 0.0) or 0.0),
+                        reverse=True,
+                    )[:5]
 
         if any(token in normalized for token in ("perte", "loss", "efficacit", "efficiency", "sechage", "tri", "drying", "sorting", "emballage", "packaging")):
             losses = self.sql_tools.get_process_step_losses(
@@ -453,6 +628,134 @@ def _detect_product_from_text(normalized: str) -> str | None:
 
 
 def _build_sql_answer(payload: dict[str, Any]) -> str:
+    if payload.get("stock_movements_journal") is not None:
+        rows = payload.get("stock_movements_journal", [])
+        if not rows:
+            return "Aucun mouvement de stock correspondant n’a été trouvé."
+        top = rows[0]
+        return (
+            f"Journal mouvements ({len(rows)}): dernier mouvement {top.get('movement_date')} | {top.get('movement_type')} / {top.get('action_type')} | "
+            f"{float(top.get('quantity_kg', 0.0)):.1f} kg | source {top.get('source')} | "
+            f"lot {top.get('batch_ref') or 'N/A'} | collecte {top.get('input_reference') or 'N/A'} | BL {top.get('bl_number') or 'N/A'}."
+        )
+    if payload.get("collecte_traceability_summary") is not None:
+        rows = payload.get("collecte_traceability_summary", [])
+        detailed_rows = payload.get("collecte_traceability", []) or []
+        normalized_query = _normalize_text(str(payload.get("query_text") or ""))
+        if rows:
+            row = rows[0]
+            needs_detail = any(token in normalized_query for token in ("membre", "producteur", "produit", "lot", "bl"))
+            detail_line = ""
+            if needs_detail and detailed_rows:
+                top = detailed_rows[0]
+                detail_line = (
+                    f" Exemple récent: membre {top.get('member_name') or 'N/A'} | produit {top.get('product') or 'N/A'} | "
+                    f"lot {top.get('batch_ref') or 'N/A'} | BL {top.get('bl_number') or 'N/A'}."
+                )
+            return (
+                "Traçabilité collectes: "
+                f"{int(row.get('total_inputs', 0))} collectes, "
+                f"{int(row.get('with_bl_number', 0))} avec BL, "
+                f"{int(row.get('with_justificatif', 0))} avec justificatif, "
+                f"{int(row.get('linked_to_lot', 0))} liées à un lot. "
+                "Politique stock: impact à la création de collecte, pas de duplication à la validation."
+                + detail_line
+            )
+        return "Aucun enregistrement collecte correspondant n’a été trouvé."
+    if payload.get("uploaded_files_evidence_summary") is not None:
+        rows = payload.get("uploaded_files_evidence_summary", [])
+        file_rows = payload.get("uploaded_files_evidence", []) or []
+        normalized_query = _normalize_text(str(payload.get("query_text") or ""))
+        if rows:
+            row = rows[0]
+            needs_file_detail = any(token in normalized_query for token in ("filename", "fichier", "file", "entity", "statut", "status", "lien"))
+            detail_line = ""
+            if needs_file_detail and file_rows:
+                top = file_rows[0]
+                detail_line = (
+                    f" Dernier fichier: {top.get('filename') or 'N/A'} | type {top.get('entity_type') or 'N/A'} | "
+                    f"entity_id {top.get('entity_id') or 'N/A'}."
+                )
+            return (
+                "Preuves documentaires: "
+                f"{int(row.get('uploaded_files_total', 0))} fichiers uploadés, "
+                f"{int(row.get('collecte_with_justificatif', 0))} collectes avec justificatif, "
+                f"{int(row.get('advance_with_devis', 0))} avances avec devis, "
+                f"{int(row.get('treasury_with_justificatif', 0))} transactions trésorerie avec justificatif."
+                + detail_line
+            )
+        return "Aucun fichier de preuve correspondant n’a été trouvé."
+    if payload.get("farmer_advances_traceability_summary") is not None:
+        rows = payload.get("farmer_advances_traceability_summary", [])
+        detail_rows = payload.get("farmer_advances_traceability", []) or []
+        normalized_query = _normalize_text(str(payload.get("query_text") or ""))
+        if rows:
+            row = rows[0]
+            needs_detail = any(token in normalized_query for token in ("farmer", "producteur", "parcelle", "lot", "produit", "devis", "sync"))
+            detail_line = ""
+            if needs_detail and detail_rows:
+                top = detail_rows[0]
+                detail_line = (
+                    f" Exemple: {top.get('member_name') or 'N/A'} | lot {top.get('batch_ref') or 'N/A'} | "
+                    f"parcelle {top.get('parcel_name') or 'N/A'} | produit {top.get('product') or 'N/A'} | "
+                    f"devis {'oui' if top.get('has_devis') else 'non'} | sync trésorerie {'oui' if top.get('treasury_synced') else 'non'}."
+                )
+            return (
+                "Avances producteurs: "
+                f"{int(row.get('advance_total', 0))} avances, "
+                f"{int(row.get('with_devis', 0))} avec devis, "
+                f"{int(row.get('with_treasury_sync', 0))} synchronisées trésorerie."
+                + detail_line
+            )
+        return "Aucune avance producteur correspondante n’a été trouvée."
+    if payload.get("treasury_traceability_summary") is not None:
+        rows = payload.get("treasury_traceability_summary", [])
+        detail_rows = payload.get("treasury_traceability", []) or []
+        normalized_query = _normalize_text(str(payload.get("query_text") or ""))
+        if rows:
+            row = rows[0]
+            needs_detail = any(token in normalized_query for token in ("receipt_reference", "reference", "source", "status", "statut"))
+            detail_line = ""
+            if needs_detail and detail_rows:
+                top = detail_rows[0]
+                detail_line = (
+                    f" Exemple récent: ref {top.get('reference') or 'N/A'} | source {top.get('source_type') or 'N/A'} | "
+                    f"receipt_reference {top.get('receipt_reference') or 'N/A'}."
+                )
+            return (
+                "Trésorerie: "
+                f"{int(row.get('missing_justificatif_count', 0))} transactions sans justificatif, "
+                f"{int(row.get('enregistre_complet_count', 0))} ENREGISTRE_COMPLET, "
+                f"{int(row.get('with_receipt_reference_count', 0))} avec receipt_reference, "
+                f"{int(row.get('farmer_advance_linked_count', 0))} liées aux avances, "
+                f"{int(row.get('commercial_invoice_income_linked_count', 0))} revenus liés aux factures commerciales."
+                + detail_line
+            )
+        return "Aucune transaction trésorerie correspondante n’a été trouvée."
+    if payload.get("commercial_invoice_linkage_summary") is not None:
+        rows = payload.get("commercial_invoice_linkage_summary", [])
+        detail_rows = payload.get("commercial_invoice_linkage", []) or []
+        normalized_query = _normalize_text(str(payload.get("query_text") or ""))
+        if rows:
+            row = rows[0]
+            needs_detail = any(token in normalized_query for token in ("receipt_reference", "source", "link", "lien", "invoice", "facture", "order", "commande"))
+            detail_line = ""
+            if needs_detail and detail_rows:
+                top = detail_rows[0]
+                detail_line = (
+                    f" Exemple: commande {top.get('order_number') or 'N/A'} ({top.get('order_status') or 'N/A'}) | "
+                    f"facture {top.get('invoice_number') or 'N/A'} ({top.get('invoice_status') or 'N/A'}) | "
+                    f"treasury_ref {top.get('treasury_reference') or 'N/A'} | receipt_reference {top.get('receipt_reference') or 'N/A'}."
+                )
+            return (
+                "Lien commercial/factures/trésorerie: "
+                f"{int(row.get('linked_rows', 0))} lignes liées, "
+                f"{int(row.get('paid_orders_with_invoice', 0))} commandes payées avec facture, "
+                f"{int(row.get('paid_invoices_count', 0))} factures en statut payé, "
+                f"{int(row.get('treasury_income_linked_count', 0))} revenus trésorerie liés à facture."
+                + detail_line
+            )
+        return "Aucun lien commande/facture/trésorerie correspondant n’a été trouvé."
     if payload.get("avg_paid_invoices_current_quarter") is not None:
         rows = payload.get("avg_paid_invoices_current_quarter", [])
         if rows:

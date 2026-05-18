@@ -14,3 +14,5 @@ joblib==1.4.2
 numpy==1.26.4
 pandas==2.2.3
 scikit-learn==1.5.2
+torch==2.5.1+cpu
+sentence-transformers==3.2.1

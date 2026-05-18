@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+import time
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.orchestrator.agent_orchestrator import AgentOrchestrator
+from app.ai.schemas.agent_schemas import AgentRoute
 from app.ai.schemas.chat_schemas import ChatAgentResponse
 from app.models.chat import ChatMessage, ChatSession
 from app.models.mixins import current_utc
@@ -25,18 +28,39 @@ def generate_agent_chat_reply(
     session = _resolve_or_create_session(db, current_user=current_user, conversation_id=conversation_id, seed_text=message)
 
     try:
+        persistence_started_at = time.perf_counter()
         db.add(ChatMessage(session_id=session.id, role="user", content=message))
         db.flush()
 
         orchestrator = AgentOrchestrator(db, current_user)
-        response = asyncio.run(
-            orchestrator.handle(
-                message=message,
-                language=language,
-                conversation_id=str(session.id),
-                user_id=user_id,
+        try:
+            pool = ThreadPoolExecutor(max_workers=1)
+            future = pool.submit(
+                asyncio.run,
+                orchestrator.handle(
+                    message=message,
+                    language=language,
+                    conversation_id=str(session.id),
+                    user_id=user_id,
+                ),
             )
-        )
+            response = future.result(timeout=_request_timeout_seconds())
+            pool.shutdown(wait=True, cancel_futures=False)
+        except FutureTimeoutError:
+            try:
+                pool.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+            response = ChatAgentResponse(
+                answer="La requête a dépassé le délai d’exécution. Réessayez avec une question plus ciblée.",
+                route=AgentRoute.OUT_OF_SCOPE,
+                agents_used=[],
+                response_blocks=[],
+                sources=[],
+                confidence=0.0,
+                warnings=["Délai d’exécution dépassé sur cette requête."],
+                metadata={"warning_codes": ["REQUEST_TIMEOUT"]},
+            )
 
         db.add(
             ChatMessage(
@@ -77,13 +101,27 @@ def generate_agent_chat_reply(
             synchronize_session=False,
         )
         db.commit()
+        persistence_ms = int((time.perf_counter() - persistence_started_at) * 1000)
     except Exception:
         db.rollback()
         raise
 
     payload = response.model_dump()
-    payload["metadata"] = {**payload.get("metadata", {}), "conversation_id": str(session.id)}
+    payload["metadata"] = {
+        **payload.get("metadata", {}),
+        "conversation_id": str(session.id),
+        "persistence_ms": persistence_ms,
+    }
     return ChatAgentResponse(**payload)
+
+
+def _request_timeout_seconds() -> float:
+    raw = str(__import__("os").environ.get("AGENT_REQUEST_TIMEOUT_SECONDS", "")).strip()
+    try:
+        value = float(raw) if raw else 60.0
+    except ValueError:
+        value = 60.0
+    return max(10.0, min(value, 300.0))
 
 
 def _resolve_or_create_session(db: Session, *, current_user: User, conversation_id: str | None, seed_text: str) -> ChatSession:

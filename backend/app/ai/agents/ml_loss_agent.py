@@ -25,8 +25,9 @@ class MLLossAgent(BaseAgent):
         normalized = _normalize_text(query)
 
         asks_max_anomaly = (
-            ("anomaly_score" in normalized and ("plus grand" in normalized or "max" in normalized))
+            ("anomaly_score" in normalized and any(token in normalized for token in ("plus grand", "max", "plus eleve", "plus élevé", "top")))
             or ("lot" in normalized and "anormal" in normalized and "ml" in normalized)
+            or ("anomaly" in normalized and "lot" in normalized and any(token in normalized for token in ("plus", "max", "top", "eleve", "élevé")))
         )
         if asks_max_anomaly:
             result = self.ml_tools.max_anomaly_score_lot()

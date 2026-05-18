@@ -79,7 +79,7 @@ class RAGChunk(TimestampMixin, Base):
     )
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[str] = mapped_column(Vector(1536), nullable=False)
+    embedding: Mapped[str] = mapped_column(Vector(384), nullable=False)
     metadata_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     document: Mapped["RAGDocument"] = relationship(back_populates="chunks")

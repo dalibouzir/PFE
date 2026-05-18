@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
+import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -51,6 +52,7 @@ import {
 import { getProductStepTemplate } from "@/lib/workflow/productStepTemplates";
 
 const KG_PER_TON = 1000;
+const MINUTES_PER_DAY = 60 * 24;
 const todayIso = new Date().toISOString().slice(0, 10);
 const defaultSteps = getProductStepTemplate(null, "post_harvest");
 
@@ -118,16 +120,31 @@ function formatKg(value: number): string {
   return `${Math.max(value, 0).toFixed(1).replace(".", ",")} kg`;
 }
 
+function durationDaysFromMinutes(minutes?: number | null): number | undefined {
+  if (minutes === null || minutes === undefined) return undefined;
+  const days = minutes / MINUTES_PER_DAY;
+  return Number.isInteger(days) ? days : Number(days.toFixed(2));
+}
+
+function durationMinutesFromDays(days?: number): number | undefined {
+  if (days === undefined || days === null || Number.isNaN(days)) return undefined;
+  return Math.round(days * MINUTES_PER_DAY);
+}
+
 export default function LotsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryTab = searchParams.get("tab");
   const queryLot = searchParams.get("lot");
 
-  const { data: batches = [] } = useBatches();
-  const { data: products = [] } = useProducts();
-  const { data: stocks = [] } = useStocks();
-  const { data: steps = [] } = useProcessSteps();
+  const batchesQuery = useBatches();
+  const productsQuery = useProducts();
+  const stocksQuery = useStocks();
+  const stepsQuery = useProcessSteps();
+  const { data: batches = [] } = batchesQuery;
+  const { data: products = [] } = productsQuery;
+  const { data: stocks = [] } = stocksQuery;
+  const { data: steps = [] } = stepsQuery;
   const { data: dashboard } = useDashboard();
 
   const createBatch = useCreateBatch();
@@ -141,6 +158,7 @@ export default function LotsPage() {
 
   const [activeTab, setActiveTab] = useState<LotWorkspaceTab>(() => normalizeTab(queryTab));
   const [query, setQuery] = useState("");
+  const [productFilterId, setProductFilterId] = useState("all");
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(queryLot);
 
   const [lotFormOpen, setLotFormOpen] = useState(false);
@@ -215,9 +233,19 @@ export default function LotsPage() {
   }, [batches, query, productLookup]);
 
   const visibleBatches = useMemo(() => {
-    const sorted = filteredBatches.slice().sort((a, b) => a.creation_date.localeCompare(b.creation_date));
+    const productFiltered = filteredBatches.filter(
+      (item) => productFilterId === "all" || item.product_id === productFilterId,
+    );
+    const sorted = productFiltered.slice().sort((a, b) => a.creation_date.localeCompare(b.creation_date));
     return tableControls.sortOrder === "asc" ? sorted : sorted.reverse();
-  }, [filteredBatches, tableControls.sortOrder]);
+  }, [filteredBatches, productFilterId, tableControls.sortOrder]);
+
+  const postHarvestProductFilterOptions = useMemo(() => {
+    const ids = Array.from(new Set(filteredBatches.map((batch) => batch.product_id)));
+    return ids
+      .map((id) => ({ id, name: productLookup.get(id) ?? id }))
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  }, [filteredBatches, productLookup]);
 
   const selectedBatch = useMemo(() => {
     if (selectedBatchId) {
@@ -227,6 +255,8 @@ export default function LotsPage() {
     return visibleBatches[0] ?? null;
   }, [selectedBatchId, visibleBatches]);
   const { data: materialBalanceData } = useBatchMaterialBalance(selectedBatch?.id ?? null);
+  const requiredLoading = batchesQuery.isLoading || productsQuery.isLoading || stocksQuery.isLoading || stepsQuery.isLoading;
+  const requiredError = batchesQuery.isError || productsQuery.isError || stocksQuery.isError || stepsQuery.isError;
 
   useEffect(() => {
     setActiveTab(normalizeTab(queryTab));
@@ -720,7 +750,7 @@ export default function LotsPage() {
       qty_out: step.qty_out,
       loss_unit: step.loss_unit,
       notes: step.notes ?? "",
-      duration_minutes: step.duration_minutes ?? undefined,
+      duration_minutes: durationDaysFromMinutes(step.duration_minutes),
     });
     setFormError(null);
     setStepFormOpen(true);
@@ -812,7 +842,7 @@ export default function LotsPage() {
             qty_out: Number(values.qty_out),
             loss_unit: values.loss_unit,
             notes: values.notes?.trim() || null,
-            duration_minutes: Number(values.duration_minutes),
+            duration_minutes: durationMinutesFromDays(values.duration_minutes ?? undefined),
           };
           await completeStep.mutateAsync({ id: editingStep.id, payload });
         } else {
@@ -821,7 +851,7 @@ export default function LotsPage() {
             qty_out: values.qty_out !== undefined ? Number(values.qty_out) : undefined,
             loss_unit: values.loss_unit,
             notes: values.notes?.trim() || null,
-            duration_minutes: Number(values.duration_minutes),
+            duration_minutes: durationMinutesFromDays(values.duration_minutes ?? undefined),
           };
           await updateStep.mutateAsync({ id: editingStep.id, payload });
         }
@@ -835,7 +865,7 @@ export default function LotsPage() {
             qty_out: Number(values.qty_out),
             loss_unit: values.loss_unit,
             notes: values.notes?.trim() || null,
-            duration_minutes: Number(values.duration_minutes),
+            duration_minutes: durationMinutesFromDays(values.duration_minutes ?? undefined),
           };
         await createStep.mutateAsync(payload);
       }
@@ -893,6 +923,29 @@ export default function LotsPage() {
   const stepModalTitle = editingStep
     ? `${completingPendingStep ? "Completer" : "Modifier"} - ${stepPreset?.label ?? stageLabelFromType(editingStep.type)}`
     : `Executer - ${stepPreset?.label ?? "Etape"}`;
+
+  if (requiredLoading) {
+    return (
+      <main className="relative min-h-[60vh]">
+        <PageIntro title="Flux matière" />
+        <ContentAreaLoader
+          title="Chargement Flux matière"
+          subtitle="Synchronisation des lots, étapes et stocks..."
+        />
+      </main>
+    );
+  }
+
+  if (requiredError) {
+    return (
+      <main>
+        <PageIntro title="Flux matière" />
+        <section className="premium-card reveal mt-4 rounded-2xl p-4">
+          <p className="text-sm text-[var(--danger)]">Impossible de charger les données requises de la page Flux matière.</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="min-w-0 overflow-x-hidden">
@@ -962,11 +1015,30 @@ export default function LotsPage() {
         </section>
       ) : (
         <section className="min-w-0 grid gap-4 xl:grid-cols-[300px_1fr]">
-          <LotActiveSidebar
-            items={lotSidebarItems}
-            selectedId={selectedBatch.id}
-            onSelect={handleSelectLot}
-          />
+          <aside className="space-y-3">
+            <article className="premium-card reveal rounded-2xl p-3" style={{ ["--delay" as string]: "40ms" }}>
+              <label className="block text-xs font-medium text-[var(--text)]">
+                Filtrer par produit
+                <select
+                  value={productFilterId}
+                  onChange={(event) => setProductFilterId(event.target.value)}
+                  className="wf-input mt-1 h-9 w-full px-2.5 text-xs"
+                >
+                  <option value="all">Tous les produits</option>
+                  {postHarvestProductFilterOptions.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </article>
+            <LotActiveSidebar
+              items={lotSidebarItems}
+              selectedId={selectedBatch.id}
+              onSelect={handleSelectLot}
+            />
+          </aside>
 
           <div className="min-w-0 space-y-4">
             <LotHeroBanner
@@ -1381,11 +1453,11 @@ export default function LotsPage() {
               />
             </label>
             <label className="block text-sm font-medium text-[var(--text)]">
-              Durée (minutes)
+              Durée (jours)
               <input
                 type="number"
-                min="1"
-                step="1"
+                min="0"
+                step="0.1"
                 {...stepForm.register("duration_minutes", { required: "Durée requise.", valueAsNumber: true })}
                 className="wf-input mt-2 h-11 w-full px-3 text-sm"
               />

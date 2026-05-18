@@ -41,6 +41,7 @@ class AnswerPlan:
     chart_metric: str | None = None
     chart_group_by: str | None = None
     chart_series: list[str] | None = None
+    answer_contract: dict[str, Any] | None = None
 
 
 @dataclass
@@ -318,6 +319,14 @@ def plan_answer(*, query: str, detected_entities: dict[str, Any], route: AgentRo
         required_answer_fields = ["lot_code", "anomaly_score"]
         allowed_sources = ["ml"]
 
+    answer_contract = _build_answer_contract(
+        query=query,
+        normalized=normalized,
+        detected_entities=detected_entities,
+        route=route,
+        required_sources=required_sources,
+    )
+
     return AnswerPlan(
         module=module,
         intent=intent,
@@ -342,6 +351,7 @@ def plan_answer(*, query: str, detected_entities: dict[str, Any], route: AgentRo
         chart_metric=chart_metric,
         chart_group_by=chart_group_by,
         chart_series=chart_series,
+        answer_contract=answer_contract,
     )
 
 
@@ -563,41 +573,42 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
     ]
     blocks.append({"type": "warnings", "title": "Avertissements", "items": warning_items})
 
+    explanation = _compose_explanation(pack=pack, sql_payload=sql_payload)
+    next_action = _compose_next_action(pack=pack, recommendation_block=recommendation_block, sql_payload=sql_payload)
+    limitations = _compose_limitations(pack=pack, verification=verification, warning_items=warning_items)
+    normalized_q = _normalize_for_match(pack.question)
+    if "le premier" in normalized_q and summary:
+        summary = f"Le premier élément demandé: {summary}"
+    elif "ce lot" in normalized_q and summary:
+        summary = f"Pour ce lot: {summary}"
+    elif "ce produit" in normalized_q and summary:
+        summary = f"Pour ce produit: {summary}"
+    if "conclusion" in normalized_q and not summary.lower().startswith("conclusion"):
+        summary = f"Conclusion: {summary}"
+
     answer_lines = [
-        "1. Résultat principal",
+        "1. Réponse directe",
         summary,
         "",
-        "2. Explication courte",
+        "2. Interprétation opérationnelle",
+        explanation,
+        "",
+        "3. Preuves",
     ]
 
-    explanation = _compose_explanation(pack=pack, sql_payload=sql_payload)
-    answer_lines.append(explanation)
-
-    answer_lines.extend(["", "3. Recommandations si pertinentes"])
-    if recommendation_block and recommendation_block.get("items"):
-        for idx, item in enumerate(recommendation_block.get("items", [])[:3], start=1):
-            priority = str(item.get("priority") or "MEDIUM").upper()
-            reason = str(item.get("reason") or "").strip()
-            target_tokens = [item.get("affected_lot"), item.get("affected_product"), item.get("affected_stage")]
-            target = " / ".join([str(token) for token in target_tokens if str(token or "").strip()])
-            suffix = f" | Cible: {target}" if target else ""
-            if reason:
-                answer_lines.append(f"{idx}. [{priority}] {item.get('action')} - {reason}{suffix}")
-            else:
-                answer_lines.append(f"{idx}. [{priority}] {item.get('action')}{suffix}")
+    source_items = blocks[-2].get("items", [])
+    if source_items:
+        for item in source_items[:6]:
+            answer_lines.append(f"- {item.get('role')}: {item.get('source')}")
     else:
-        answer_lines.append("Aucune recommandation prioritaire confirmée.")
+        answer_lines.append("- Aucune source exploitable n’a été récupérée.")
 
-    answer_lines.extend(["", "4. Sources utilisées"])
-    for item in blocks[-2].get("items", [])[:8]:
-        answer_lines.append(f"- {item.get('role')}: {item.get('source')}")
-
-    answer_lines.extend(["", "5. Avertissements si nécessaires"])
-    if warning_items:
-        for item in warning_items:
+    answer_lines.extend(["", "4. Action recommandée", next_action, "", "5. Limitation"])
+    if limitations:
+        for item in limitations:
             answer_lines.append(f"- {item}")
     else:
-        answer_lines.append("Aucun avertissement critique.")
+        answer_lines.append("- Aucune limite critique signalée.")
 
     answer = "\n".join(answer_lines)
     answer, post_warnings = post_validate_answer(answer=answer, pack=pack)
@@ -608,9 +619,107 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
         "answer_type": pack.plan.answer_type,
         "evidence_roles": _evidence_roles(pack),
         "module_registry": pack.module_registry,
+        "answer_contract": pack.plan.answer_contract or {},
     }
 
     return answer, blocks, metadata
+
+
+def _compose_next_action(*, pack: EvidencePack, recommendation_block: dict[str, Any] | None, sql_payload: dict[str, Any]) -> str:
+    if recommendation_block and recommendation_block.get("items"):
+        lead = recommendation_block.get("items", [])[0]
+        priority = str(lead.get("priority") or "MEDIUM").upper()
+        reason = str(lead.get("reason") or "").strip()
+        target_tokens = [lead.get("affected_lot"), lead.get("affected_product"), lead.get("affected_stage")]
+        target = " / ".join([str(token) for token in target_tokens if str(token or "").strip()])
+        target_suffix = f" (cible: {target})" if target else ""
+        if reason:
+            return f"[{priority}] {lead.get('action')}{target_suffix}. Justification: {reason}"
+        return f"[{priority}] {lead.get('action')}{target_suffix}."
+
+    anchor_lot: str | None = None
+    if sql_payload.get("process_step_losses"):
+        rows = sql_payload.get("process_step_losses") or []
+        if rows:
+            top = max(rows, key=lambda r: float(r.get("loss_pct", 0.0) or 0.0))
+            anchor_lot = str(top.get("batch_ref") or top.get("lot_code") or "").strip() or None
+    elif sql_payload.get("batch_summary"):
+        row = (sql_payload.get("batch_summary") or [{}])[0]
+        anchor_lot = str(row.get("batch_ref") or row.get("lot_code") or "").strip() or None
+    elif sql_payload.get("material_balance"):
+        row = (sql_payload.get("material_balance") or [{}])[0]
+        anchor_lot = str(row.get("batch_ref") or row.get("lot_code") or "").strip() or None
+    elif pack.ml:
+        anchor_lot = str(pack.ml.get("affected_batch") or pack.ml.get("batch_ref") or "").strip() or None
+
+    requested_target = ((pack.plan.answer_contract or {}).get("target") or {}).get("value")
+    if requested_target:
+        anchor_lot = str(requested_target)
+
+    if anchor_lot:
+        return (
+            f"Prioriser le lot {anchor_lot}: vérifier la cause de perte observée, "
+            "renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot."
+        )
+
+    top_losses = _top_loss_rows(sql_payload)
+    if top_losses:
+        row = next(
+            (
+                item for item in top_losses
+                if anchor_lot and str(item.get("batch_ref") or item.get("lot_code") or "").strip() == anchor_lot
+            ),
+            top_losses[0],
+        )
+        lot = str(row.get("batch_ref") or row.get("lot_code") or anchor_lot or "N/A")
+        return (
+            f"Prioriser le lot {lot}: vérifier la cause de perte, sécuriser l’étape critique "
+            "et lancer un suivi terrain sur le prochain cycle."
+        )
+    if pack.route == AgentRoute.RAG_ONLY:
+        return "Appliquer immédiatement la check-list proposée sur le prochain lot traité et contrôler humidité/conditionnement."
+
+    return "Aucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles."
+
+
+def _compose_limitations(*, pack: EvidencePack, verification: EvidenceVerification, warning_items: list[str]) -> list[str]:
+    limits: list[str] = []
+    required = {str(item).upper() for item in (pack.plan.required_sources or [])}
+
+    has_sql = bool(pack.sql.get("rows") or pack.sql.get("metrics") or pack.sql.get("payload"))
+    has_rag = bool(pack.rag.get("chunks") or pack.rag.get("content_snippets"))
+    has_ml = bool(pack.ml)
+    has_reco = bool(pack.recommendations.get("actions"))
+
+    if "SQL" in required and not has_sql:
+        limits.append("Données SQL indisponibles pour cette demande.")
+    if "RAG" in required and not has_rag:
+        limits.append("Connaissances RAG indisponibles pour cette demande.")
+    if "ML" in required and not has_ml:
+        limits.append("Signal ML indisponible pour cette entité.")
+    if "RECOMMENDATION" in required and not has_reco:
+        limits.append("Recommandation exploitable indisponible pour cette entité.")
+    contract = pack.plan.answer_contract or {}
+    layers = contract.get("required_layers") or {}
+    if layers.get("sql") and not has_sql and "Données SQL indisponibles pour cette demande." not in limits:
+        limits.append("Données SQL indisponibles pour cette demande.")
+    if layers.get("ml") and not has_ml and "Signal ML indisponible pour cette entité." not in limits:
+        limits.append("Signal ML indisponible pour cette entité.")
+    if layers.get("rag") and not has_rag and "Connaissances RAG indisponibles pour cette demande." not in limits:
+        limits.append("Connaissances RAG indisponibles pour cette demande.")
+    if layers.get("recommendation") and not has_reco and "Recommandation exploitable indisponible pour cette entité." not in limits:
+        limits.append("Recommandation exploitable indisponible pour cette entité.")
+
+    if not verification.ok:
+        for issue in verification.issues[:3]:
+            label = _warning_label(issue)
+            if label and label not in limits:
+                limits.append(label)
+
+    for item in warning_items[:3]:
+        if item and item not in limits:
+            limits.append(item)
+    return limits
 
 
 def post_validate_answer(*, answer: str, pack: EvidencePack) -> tuple[str, list[str]]:
@@ -634,8 +743,114 @@ def post_validate_answer(*, answer: str, pack: EvidencePack) -> tuple[str, list[
 
 def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
     plan = pack.plan
+    normalized_q = _normalize_for_match(pack.question)
+    contract = plan.answer_contract or {}
+    def _q_has(*tokens: str) -> bool:
+        return any(token in normalized_q for token in tokens)
+    if sql_payload.get("collecte_traceability_summary") is not None and _q_has("collecte", "input", "bl", "justificatif"):
+        srows = sql_payload.get("collecte_traceability_summary") or []
+        drows = sql_payload.get("collecte_traceability") or []
+        if srows:
+            row = srows[0]
+            file_status = "indisponible"
+            if drows:
+                with_file = sum(1 for r in drows if bool(r.get("has_justificatif")))
+                file_status = f"{with_file}/{len(drows)} fichiers présents"
+            return (
+                f"Collectes traçables: {int(row.get('with_bl_number', 0) or 0)} avec BL, "
+                f"{int(row.get('with_justificatif', 0) or 0)} avec justificatif, "
+                f"{int(row.get('linked_to_lot', 0) or 0)} liées à un lot. "
+                f"Producteur/produit/statut fichier: {file_status}."
+            )
+    # Count/ranking first-sentence strictness: make requested noun/value explicit.
+    if _q_has("parcelle") and sql_payload.get("parcel_count") is not None:
+        return f"Parcelles: {int(sql_payload.get('parcel_count', 0) or 0)}."
+    if _q_has("collecte", "inputs") and sql_payload.get("collections_summary") is not None:
+        rows = sql_payload.get("collections_summary") or []
+        total = sum(float(row.get("total_quantity_kg", 0.0) or 0.0) for row in rows)
+        return f"Collectes: {len(rows)} enregistrements, quantité totale {total:.1f} kg."
+    if _q_has("stock disponible", "stock par produit", "stock net", "stock") and sql_payload.get("current_stock"):
+        rows = sql_payload.get("current_stock") or []
+        total = sum(float(r.get("available_stock_kg", 0.0) or 0.0) for r in rows)
+        return f"Stock: {len(rows)} produit(s), disponible total {total:.1f} kg."
+    if _q_has("commande") and _q_has("facture") and _q_has("trésorer", "tresorer", "receipt", "écriture", "ecriture") and sql_payload.get("commercial_invoice_linkage_summary") is not None:
+        rows = sql_payload.get("commercial_invoice_linkage_summary") or []
+        if rows:
+            row = rows[0]
+            return (
+                f"Commandes/factures/trésorerie: {int(row.get('paid_orders_with_invoice', 0) or 0)} commandes payées avec facture, "
+                f"{int(row.get('paid_invoices_count', 0) or 0)} factures payées, "
+                f"{int(row.get('treasury_income_linked_count', 0) or 0)} écritures de trésorerie liées."
+            )
+    if _q_has("commande") and _q_has("facture") and sql_payload.get("commercial_invoice_linkage_summary") is not None:
+        rows = sql_payload.get("commercial_invoice_linkage_summary") or []
+        if rows:
+            row = rows[0]
+            return (
+                f"Commandes/factures: {int(row.get('paid_orders_with_invoice', 0) or 0)} commandes payées avec facture, "
+                f"{int(row.get('paid_invoices_count', 0) or 0)} factures payées."
+            )
+    if "ADVICE_KNOWLEDGE_MISSING" in set(pack.warnings or []):
+        return "Le contexte documentaire disponible est insuffisant pour répondre précisément avec des bonnes pratiques fiables."
     rec_actions = pack.recommendations.get("actions") or []
     op = str(plan.operation or "")
+    if sql_payload.get("stock_movements_journal") is not None and _q_has("mouvement", "journal stock", "stock movement"):
+        rows = sql_payload.get("stock_movements_journal") or []
+        if rows:
+            top = rows[0]
+            return (
+                f"Journal mouvements ({len(rows)}): type {top.get('movement_type')} | produit {top.get('product') or 'N/A'} | "
+                f"quantité {float(top.get('quantity_kg', 0.0) or 0.0):.1f} kg | source {top.get('source')} | "
+                f"lot {top.get('batch_ref') or 'N/A'} | collecte {top.get('input_reference') or 'N/A'}."
+            )
+        return "Aucun mouvement de stock correspondant n’a été trouvé."
+    if sql_payload.get("collecte_traceability_summary") is not None and _q_has("collecte", "input", "bl", "justificatif"):
+        rows = sql_payload.get("collecte_traceability_summary") or []
+        if rows:
+            row = rows[0]
+            return (
+                f"Traçabilité collectes: {int(row.get('total_inputs', 0) or 0)} collectes (inputs), "
+                f"{int(row.get('with_bl_number', 0) or 0)} avec BL, "
+                f"{int(row.get('with_justificatif', 0) or 0)} avec justificatif, "
+                f"{int(row.get('linked_to_lot', 0) or 0)} liées à un lot."
+            )
+    if sql_payload.get("uploaded_files_evidence_summary") is not None and _q_has("fichier", "upload", "justificatif", "devis", "evidence"):
+        rows = sql_payload.get("uploaded_files_evidence_summary") or []
+        if rows:
+            row = rows[0]
+            return (
+                f"Preuves documentaires: {int(row.get('uploaded_files_total', 0) or 0)} fichiers, "
+                f"{int(row.get('collecte_with_justificatif', 0) or 0)} collectes avec justificatif, "
+                f"{int(row.get('advance_with_devis', 0) or 0)} avances avec devis, "
+                f"{int(row.get('treasury_with_justificatif', 0) or 0)} transactions trésorerie avec justificatif."
+            )
+    if sql_payload.get("farmer_advances_traceability_summary") is not None and _q_has("avance", "devis", "producteur", "treasor"):
+        rows = sql_payload.get("farmer_advances_traceability_summary") or []
+        if rows:
+            row = rows[0]
+            return (
+                f"Avances producteurs: {int(row.get('advance_total', 0) or 0)} avances, "
+                f"{int(row.get('with_devis', 0) or 0)} avec devis, "
+                f"{int(row.get('with_treasury_sync', 0) or 0)} synchronisées trésorerie."
+            )
+    if sql_payload.get("treasury_traceability_summary") is not None and _q_has("tresorer", "trésorer", "receipt", "justificatif", "enregistre_complet"):
+        rows = sql_payload.get("treasury_traceability_summary") or []
+        if rows:
+            row = rows[0]
+            return (
+                f"Trésorerie: {int(row.get('enregistre_complet_count', 0) or 0)} ENREGISTRE_COMPLET, "
+                f"{int(row.get('with_receipt_reference_count', 0) or 0)} avec receipt_reference, "
+                f"{int(row.get('missing_justificatif_count', 0) or 0)} sans justificatif."
+            )
+    if sql_payload.get("commercial_invoice_linkage_summary") is not None and _q_has("commande", "facture", "invoice", "treasor", "trésorer"):
+        rows = sql_payload.get("commercial_invoice_linkage_summary") or []
+        if rows:
+            row = rows[0]
+            return (
+                f"Lien commande/facture/trésorerie: {int(row.get('paid_orders_with_invoice', 0) or 0)} commandes payées avec facture, "
+                f"{int(row.get('paid_invoices_count', 0) or 0)} factures payées, "
+                f"{int(row.get('treasury_income_linked_count', 0) or 0)} revenus trésorerie liés."
+            )
     if op == "rag_practical_checklist":
         snippets = pack.rag.get("content_snippets") or []
         return snippets[0] if snippets else "Donnée non disponible pour cette requête précise."
@@ -668,7 +883,28 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
         rows = pack.ml.get("max_anomaly_score_lot") or []
         if rows:
             r = rows[0]
-            return f"Lot anomaly_score max: {r.get('lot_code')} ({float(r.get('anomaly_score', 0.0)):.4f})."
+            lot = str(r.get("lot_code") or "")
+            sql_rows = sql_payload.get("batch_summary") or []
+            match = None
+            for row in sql_rows:
+                code = str(row.get("batch_ref") or row.get("lot_code") or "")
+                if lot and code.lower() == lot.lower():
+                    match = row
+                    break
+            if match:
+                return (
+                    f"Lot anomaly_score max: {lot} ({float(r.get('anomaly_score', 0.0)):.4f}) | "
+                    f"SQL: perte {float(match.get('loss_pct', 0.0) or 0.0):.1f}% | efficacité {float(match.get('efficiency_pct', 0.0) or 0.0):.1f}%."
+                )
+            step_rows = sql_payload.get("process_step_losses") or []
+            step_match = next((row for row in step_rows if str(row.get("batch_ref") or "").lower() == lot.lower()), None)
+            if step_match:
+                return (
+                    f"Lot anomaly_score max: {lot} ({float(r.get('anomaly_score', 0.0)):.4f}) | "
+                    f"SQL: produit {step_match.get('product') or 'N/A'} | perte {float(step_match.get('loss_pct', 0.0) or 0.0):.1f}% | "
+                    f"étape {step_match.get('stage') or 'N/A'}."
+                )
+            return f"Lot anomaly_score max: {lot} ({float(r.get('anomaly_score', 0.0)):.4f}) | SQL indisponible pour ce lot."
         return "Donnée non disponible pour cette requête précise."
     if op == "ml_high_signal_count":
         rows = pack.ml.get("ml_high_signal_count") or []
@@ -676,6 +912,10 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
             r = rows[0]
             return f"Signaux ML HIGH ({int(r.get('days', 0))} jours): {int(r.get('high_signal_count', 0))}."
         return "Donnée non disponible pour cette requête précise."
+    if pack.ml.get("max_anomaly_score_lot"):
+        rows = pack.ml.get("max_anomaly_score_lot") or []
+        r = rows[0]
+        return f"Lot anomaly_score max: {r.get('lot_code')} ({float(r.get('anomaly_score', 0.0)):.4f})."
 
     if plan.answer_type == "chart_stock":
         rows = sql_payload.get("current_stock") or []
@@ -771,27 +1011,55 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
 
     if pack.route == AgentRoute.HYBRID_FULL:
         sql_rows = _top_loss_rows(sql_payload) or (sql_payload.get("high_risk_lots") or []) or (sql_payload.get("batch_summary") or [])
-        sql_line = "SQL indisponible."
+        sql_line = "Les données SQL ne permettent pas d’identifier un lot prioritaire."
+        anchor_lot = None
         if sql_rows:
             row = sql_rows[0]
+            anchor_lot = str(row.get('batch_ref') or row.get('lot_code') or '').strip() or None
+            target = (contract.get("target") or {}).get("value")
+            if target:
+                for candidate in sql_rows:
+                    code = str(candidate.get("batch_ref") or candidate.get("lot_code") or "").strip()
+                    if code and str(target).strip().lower() == code.lower():
+                        row = candidate
+                        anchor_lot = code
+                        break
             sql_line = (
-                f"SQL: lot {row.get('batch_ref') or row.get('lot_code') or '?'} | "
-                f"perte {float(row.get('loss_pct', row.get('loss_percentage', 0.0)) or 0.0):.1f}% | "
-                f"efficacité {float(row.get('efficiency_pct', row.get('efficiency_percentage', 0.0)) or 0.0):.1f}%."
+                f"Le lot {anchor_lot or '?'} est prioritaire, avec "
+                f"{float(row.get('loss_pct', row.get('loss_percentage', 0.0)) or 0.0):.1f}% de perte "
+                f"et {float(row.get('efficiency_pct', row.get('efficiency_percentage', 0.0)) or 0.0):.1f}% d’efficacité."
             )
-        ml_line = "ML indisponible."
+        ml_line = "Le signal ML n’est pas disponible pour cette entité."
         if pack.ml:
-            ml_line = (
-                f"ML: risque {str(pack.ml.get('risk_level') or 'UNKNOWN').upper()} | "
-                f"anomaly_score {float(pack.ml.get('anomaly_score', 0.0) or 0.0):.4f}."
-            )
-        rag_line = "RAG indisponible."
+            ml_batch = str(pack.ml.get("affected_batch") or pack.ml.get("batch_ref") or "").strip()
+            if anchor_lot and ml_batch and ml_batch != anchor_lot:
+                ml_line = f"Le signal ML n’est pas disponible pour le lot {anchor_lot} (donnée ML trouvée pour {ml_batch})."
+            else:
+                ml_line = (
+                    f"Signal ML: le modèle indique un risque {str(pack.ml.get('risk_level') or 'UNKNOWN').upper()} "
+                    f"(anomaly_score {float(pack.ml.get('anomaly_score', 0.0) or 0.0):.4f})."
+                )
+        rag_line = "La base de connaissances RAG n’apporte pas de conseil exploitable ici."
         if pack.rag.get("content_snippets"):
-            rag_line = f"RAG: {_compact(pack.rag.get('content_snippets')[0], 150)}"
-        reco_line = "Recommandations indisponibles."
+            safe_snippet = _best_generic_rag_snippet(pack.rag.get("content_snippets") or [], anchor_lot=anchor_lot)
+            if safe_snippet:
+                rag_line = f"Conseil opérationnel: {_compact(safe_snippet, 150)}"
+        reco_line = "Aucune recommandation prioritaire n’a été confirmée."
         if rec_actions:
-            reco_line = f"Action prioritaire: {rec_actions[0].get('action') or rec_actions[0].get('title') or 'N/A'}."
-        return f"{sql_line}\n{ml_line}\n{rag_line}\n{reco_line}"
+            selected_action = rec_actions[0]
+            if anchor_lot:
+                for action in rec_actions:
+                    rel = str(action.get("related_batch") or "").strip()
+                    if rel == anchor_lot:
+                        selected_action = action
+                        break
+                else:
+                    selected_action = None
+            if selected_action is None and anchor_lot:
+                reco_line = f"Aucune recommandation spécifique n’est disponible pour le lot {anchor_lot}."
+            else:
+                reco_line = f"Action prioritaire: {(selected_action or {}).get('action') or (selected_action or {}).get('title') or 'N/A'}."
+        return f"Conclusion: {sql_line}\n{ml_line}\n{rag_line}\n{reco_line}"
 
     if sql_payload.get("cooperative_overview"):
         row = (sql_payload.get("cooperative_overview") or [{}])[0]
@@ -875,7 +1143,7 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
         rows = sql_payload.get("collections_summary") or []
         if rows:
             total = sum(float(row.get("total_quantity_kg", 0.0) or 0.0) for row in rows)
-            return f"Quantité collectée observée: {total:.1f} kg."
+            return f"Collectes observées: quantité totale collectée {total:.1f} kg."
         return "Aucune collecte n’est disponible dans les données actuelles."
 
     if sql_payload.get("parcels_list") is not None:
@@ -909,6 +1177,14 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
         rows = sql_payload.get("process_step_losses") or []
         top = max(rows, key=lambda row: float(row.get("loss_pct", 0.0) or 0.0), default=None)
         if top:
+            if _q_has("ou perd", "perd on", "perd-on"):
+                base = (
+                    f"On perd le plus à l’étape {_fr_stage(top.get('stage'))} sur le lot {top.get('batch_ref')}: "
+                    f"{float(top.get('loss_pct', 0.0) or 0.0):.1f}%."
+                )
+                if _q_has("amelior", "amélior", "que faire", "action"):
+                    return base + " Action: renforcer le contrôle à cette étape sur le prochain lot et corriger la cause principale."
+                return base
             return (
                 f"Perte observée sur {_fr_stage(top.get('stage'))} "
                 f"du lot {top.get('batch_ref')}: {float(top.get('loss_pct', 0.0) or 0.0):.1f}% "
@@ -925,6 +1201,8 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
     if sql_payload.get("invoices_summary") is not None:
         rows = sql_payload.get("invoices_summary") or []
         if rows:
+            if _q_has("commande"):
+                return f"Commandes/factures: {len(rows)} facture(s) disponible(s) liées au module commercial."
             return f"Factures disponibles: {len(rows)}."
         return "Aucune facture n’est disponible dans les données actuelles."
 
@@ -949,17 +1227,33 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
     if pack.route in {AgentRoute.RAG_ONLY, AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_RAG_RECOMMENDATION, AgentRoute.HYBRID_FULL}:
         snippets = pack.rag.get("content_snippets") or []
         if snippets:
+            if pack.route == AgentRoute.RAG_ONLY:
+                points = _best_practice_points(snippets[0])
+                if points:
+                    return "Conseils pratiques basés sur la base de connaissances post-récolte."
             return snippets[0]
 
     if pack.route in {AgentRoute.HYBRID_SQL_ML, AgentRoute.ML_ONLY} and pack.ml:
         risk = str(pack.ml.get("risk_level") or "UNKNOWN").upper()
         anomaly = bool(pack.ml.get("anomaly_detected"))
-        return f"Signal ML: risque {risk} | anomalie {'oui' if anomaly else 'non'}."
+        sql_line = ""
+        if sql_payload.get("batch_summary"):
+            row = (sql_payload.get("batch_summary") or [{}])[0]
+            sql_line = (
+                f"Fait SQL: lot {row.get('batch_ref') or row.get('lot_code')} | perte {float(row.get('loss_pct', 0.0) or 0.0):.1f}% | "
+                f"efficacité {float(row.get('efficiency_pct', 0.0) or 0.0):.1f}%."
+            )
+        return (sql_line + " " if sql_line else "") + f"Signal ML: risque {risk} | anomalie {'oui' if anomaly else 'non'}."
+    if pack.route == AgentRoute.HYBRID_SQL_ML and not pack.ml:
+        return "Signal ML indisponible pour cette entité; la synthèse ci-dessus reste basée sur les faits SQL vérifiés."
 
     return "Je n’ai pas trouvé de preuve opérationnelle exploitable pour répondre précisément à cette demande."
 
 
 def _compose_explanation(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
+    if "ADVICE_KNOWLEDGE_MISSING" in set(pack.warnings or []):
+        return "Le contexte documentaire disponible est insuffisant pour répondre précisément avec des bonnes pratiques fiables."
+
     snippets = pack.rag.get("content_snippets") or []
     rec_actions = pack.recommendations.get("actions") or []
 
@@ -976,17 +1270,33 @@ def _compose_explanation(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
         return "Les preuves disponibles sont insuffisantes pour établir une priorisation robuste."
 
     if pack.route in {AgentRoute.RAG_ONLY}:
+        qn = _normalize_for_match(pack.question)
         if snippets:
             points = _best_practice_points(snippets[0])
             if points:
-                return "Bonnes pratiques: " + " ; ".join(points[:4])
-            return snippets[0]
+                top_points = points[:5]
+                vigilance = _derive_vigilance_point(snippets[0])
+                parts = []
+                if any(token in qn for token in ("precaution", "précaution", "emballage", "conditionnement", "casse", "stockage")):
+                    parts.append("Précautions pratiques: " + " ; ".join(top_points))
+                else:
+                    parts.append("Bonnes pratiques: " + " ; ".join(top_points))
+                if "stockage" in qn and "stockage" not in " ".join(parts).lower():
+                    parts.append("Inclure un stockage sec, ventilé et traçable après conditionnement.")
+                if vigilance:
+                    parts.append(f"Point de vigilance: {vigilance}")
+                if ("casse" in qn or "emballage" in qn or "conditionnement" in qn) and "casse" not in " ".join(parts).lower():
+                    parts.append("Point spécifique casse/emballage: limiter la compression, utiliser un emballage sec/propre et manipuler les lots sans choc.")
+                return " ".join(parts).strip()
+            return "Bonnes pratiques: appliquer une procédure standard de tri, séchage, stockage et conditionnement. Point de vigilance: surveiller humidité et manutention."
         return "Aucune explication détaillée n’a pu être extraite des sources RAG disponibles."
 
     if pack.route in {AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_FULL}:
         sql_line = ""
+        anchor_lot: str | None = None
         if sql_payload.get("material_balance"):
             item = (sql_payload.get("material_balance") or [{}])[0]
+            anchor_lot = str(item.get("batch_ref") or item.get("lot_code") or "").strip() or None
             sql_line = (
                 f"Mesures SQL: perte {float(item.get('loss_percentage', 0.0)):.1f}% et efficacité "
                 f"{float(item.get('efficiency_percentage', 0.0)):.1f}%"
@@ -998,10 +1308,12 @@ def _compose_explanation(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
                 default=None,
             )
             if top:
+                anchor_lot = str(top.get("batch_ref") or top.get("lot_code") or "").strip() or None
                 sql_line = f"Mesures SQL: étape critique {top.get('stage')} ({float(top.get('loss_pct', 0.0)):.1f}%)."
 
         if snippets:
-            rag_line = "Explication RAG: " + snippets[0]
+            safe = _best_generic_rag_snippet(snippets, anchor_lot=anchor_lot)
+            rag_line = "Conseil pratique (RAG): " + _compact(safe or snippets[0], 180)
             return (sql_line + " " + rag_line).strip()
         if sql_line:
             return sql_line
@@ -1009,14 +1321,93 @@ def _compose_explanation(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
     if pack.route in {AgentRoute.HYBRID_SQL_ML, AgentRoute.ML_ONLY} and pack.ml:
         return (
             f"Signal ML: risque {str(pack.ml.get('risk_level') or 'UNKNOWN').upper()} | "
-            f"anomalie {'oui' if pack.ml.get('anomaly_detected') else 'non'}; "
+            f"anomalie {'oui' if pack.ml.get('anomaly_detected') else 'non'} | "
+            f"anomaly_score {float(pack.ml.get('anomaly_score', 0.0) or 0.0):.4f}; "
             "les mesures SQL restent la vérité opérationnelle."
         )
+    if pack.route == AgentRoute.HYBRID_SQL_ML and not pack.ml:
+        return "ML indisponible pour cette entité. Les constats et priorités sont fournis uniquement à partir des mesures SQL."
 
     return "Aucune explication détaillée disponible."
 
 
+def _build_answer_contract(
+    *,
+    query: str,
+    normalized: str,
+    detected_entities: dict[str, Any],
+    route: AgentRoute,
+    required_sources: list[str],
+) -> dict[str, Any]:
+    q = (normalized or _normalize_for_match(query)).lower()
+    layers = {
+        "sql": "SQL" in required_sources or any(t in q for t in ("selon nos donnees", "données sql", "donnees sql", "operat", "opération")),
+        "ml": "ML" in required_sources or any(t in q for t in ("ml", "anomaly", "risque", "signal")),
+        "rag": "RAG" in required_sources or any(t in q for t in ("bonnes pratiques", "conseils", "precautions", "précautions", "comment améliorer", "comment ameliorer")),
+        "recommendation": "RECOMMENDATION" in required_sources or any(t in q for t in ("recommand", "action", "que faire")),
+        "chart": any(t in q for t in ("graphique", "chart", "graphe", "diagramme")),
+        "memory_reference": any(t in q for t in ("le premier", "ce lot", "ce produit")),
+    }
+    requested_fields = []
+    for token in ("bl", "justificatif", "producteur", "produit", "lot", "status", "statut", "quantite", "quantité", "source", "invoice", "facture", "tresorer", "trésorer", "receipt_reference"):
+        if token in q:
+            requested_fields.append(token)
+    target_value = (
+        _first_or_none((detected_entities or {}).get("batch_ref"))
+        or _first_or_none((detected_entities or {}).get("product"))
+        or _first_or_none((detected_entities or {}).get("stage"))
+        or _first_or_none((detected_entities or {}).get("member"))
+    )
+    target_type = "current_cooperative"
+    if _first_or_none((detected_entities or {}).get("batch_ref")):
+        target_type = "lot"
+    elif _first_or_none((detected_entities or {}).get("product")):
+        target_type = "product"
+    elif _first_or_none((detected_entities or {}).get("stage")):
+        target_type = "stage"
+    elif _first_or_none((detected_entities or {}).get("member")):
+        target_type = "member"
+    mini_requests = {
+        "sql_facts": layers["sql"],
+        "ml_signal": layers["ml"],
+        "rag_advice": layers["rag"],
+        "recommendation_action": layers["recommendation"],
+        "chart_or_table": layers["chart"],
+        "memory_reference": layers["memory_reference"],
+    }
+    return {
+        "route": route.value,
+        "mini_requests": mini_requests,
+        "required_layers": layers,
+        "requested_fields": requested_fields,
+        "target": {"type": target_type, "value": target_value},
+    }
+
+
 def _compose_table_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> dict[str, Any] | None:
+    if sql_payload.get("collecte_traceability") is not None and any(
+        token in _normalize_for_match(pack.question) for token in ("collecte", "bl", "justificatif", "producteur", "produit", "lot", "fichier")
+    ):
+        rows = sql_payload.get("collecte_traceability") or []
+        if rows:
+            return {
+                "type": "table",
+                "title": "Traçabilité collectes",
+                "columns": ["Collecte", "BL", "Justificatif", "Producteur", "Produit", "Lot lié", "Statut fichier"],
+                "rows": [
+                    [
+                        str(r.get("input_reference") or r.get("collecte_reference") or "N/A"),
+                        str(r.get("bl_number") or "N/A"),
+                        "oui" if bool(r.get("has_justificatif")) else "non",
+                        str(r.get("member_name") or r.get("producer_name") or "N/A"),
+                        str(r.get("product") or r.get("product_name") or "N/A"),
+                        str(r.get("batch_ref") or r.get("linked_batch_ref") or "N/A"),
+                        str(r.get("file_status") or ("présent" if bool(r.get("has_justificatif")) else "absent")),
+                    ]
+                    for r in rows[:15]
+                ],
+            }
+
     if pack.plan.answer_type not in {"list", "ranking", "comparison", "risk_list", "hybrid_analysis", "chart_stock", "chart_stock_multi", "chart_stage_loss", "chart_lot_loss", "chart_lot_critical", "chart_product_loss", "chart_low_efficiency_lots", "chart_ml_anomaly_lots", "chart_recommendation_risk"}:
         return None
 
@@ -1701,6 +2092,33 @@ def _best_practice_points(text: str) -> list[str]:
     parts = [item.strip(" .") for item in content.replace("\n", " ").split(",")]
     points = [part for part in parts if len(part) >= 8]
     return points
+
+
+def _derive_vigilance_point(text: str) -> str | None:
+    lowered = str(text or "").lower()
+    if "humidit" in lowered:
+        return "éviter toute reprise d’humidité entre séchage, stockage et emballage."
+    if "casse" in lowered or "emball" in lowered or "conditionnement" in lowered:
+        return "limiter les chocs mécaniques pendant manutention, empilage et transport."
+    if "stockage" in lowered:
+        return "contrôler régulièrement l’aération, la propreté et la stabilité des conditions de stockage."
+    return None
+
+
+def _best_generic_rag_snippet(snippets: list[str], *, anchor_lot: str | None) -> str | None:
+    if not snippets:
+        return None
+    lot_token = str(anchor_lot or "").strip().lower()
+    for snippet in snippets:
+        value = str(snippet or "").strip()
+        lowered = value.lower()
+        if lot_token and lot_token in lowered:
+            return value
+        if "lot " not in lowered and "recommendation was generated for lot" not in lowered:
+            return value
+    if lot_token:
+        return None
+    return str(snippets[0]).strip() if snippets else None
 
 
 def _normalize_for_match(text: str) -> str:

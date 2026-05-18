@@ -4,16 +4,20 @@ import re
 from typing import Iterable, Optional
 
 import httpx
+import numpy as np
 
 from app.core.config import settings
 from app.utils.exceptions import ValidationError
 
 
 EMBEDDING_BATCH_SIZE = 64
+_LOCAL_MODEL = None
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     provider = settings.rag_embedding_provider.lower().strip()
+    if provider == "local":
+        return _local_embeddings(texts)
     if provider == "openai":
         if not settings.openai_api_key:
             raise ValidationError("OPENAI_API_KEY is missing for RAG embeddings.")
@@ -108,3 +112,42 @@ def _resolve_embedding_model(model: str, *, provider: str) -> str:
     if provider == "openai":
         return re.sub(r"^[^/]+/", "", cleaned)
     return cleaned
+
+
+def _local_embeddings(texts: list[str]) -> list[list[float]]:
+    if not texts:
+        return []
+    model_name = settings.rag_embedding_model.strip() or "sentence-transformers/all-MiniLM-L6-v2"
+    model = _get_local_model(model_name)
+    try:
+        vectors = model.encode(
+            texts,
+            batch_size=min(64, max(1, len(texts))),
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+    except Exception as exc:
+        raise ValidationError(f"Local embedding generation failed: {exc}") from exc
+
+    embeddings = np.asarray(vectors, dtype=np.float32).tolist()
+    for vector in embeddings:
+        if len(vector) != settings.rag_embedding_dimensions:
+            raise ValidationError(
+                f"Embedding dimension mismatch. Expected {settings.rag_embedding_dimensions}, got {len(vector)}."
+            )
+    return embeddings
+
+
+def _get_local_model(model_name: str):
+    global _LOCAL_MODEL
+    if _LOCAL_MODEL is not None:
+        return _LOCAL_MODEL
+    try:
+        from sentence_transformers import SentenceTransformer
+    except Exception as exc:
+        raise ValidationError(
+            "Local embeddings require sentence-transformers. Install dependency and retry."
+        ) from exc
+    _LOCAL_MODEL = SentenceTransformer(model_name)
+    return _LOCAL_MODEL

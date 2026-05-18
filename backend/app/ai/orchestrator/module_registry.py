@@ -18,7 +18,7 @@ class ModuleRegistry:
         self._modules: tuple[ModuleCapability, ...] = (
             ModuleCapability("members", "membres", ("membre", "membres", "member", "farmer", "producteur", "producteurs")),
             ModuleCapability("parcels", "parcelles", ("parcelle", "parcelles", "parcel", "pré-récolte", "pre-harvest", "culture")),
-            ModuleCapability("inputs", "collectes", ("collecte", "collectes", "input", "intrant", "quantité collectée")),
+            ModuleCapability("inputs", "collectes", ("collecte", "collectes", "input", "intrant", "quantité collectée", "bl", "justificatif", "fichier", "fichiers", "upload")),
             ModuleCapability("stocks", "stocks", ("stock", "stocks", "disponible", "reserved", "réservé", "seuil")),
             ModuleCapability("lots", "lots", ("lot", "lots", "batch", "bilan matière", "bilan matiere")),
             ModuleCapability("process_steps", "étapes de process", ("étape", "etape", "process", "séchage", "sechage", "tri", "nettoyage", "emballage")),
@@ -26,9 +26,9 @@ class ModuleRegistry:
             ModuleCapability("ml_logs", "signaux ML", ("ml", "anomal", "risque", "prediction", "prédiction")),
             ModuleCapability("rag", "bonnes pratiques", ("bonnes pratiques", "meilleures pratiques", "références", "references", "benchmark", "guidance")),
             ModuleCapability("recommendations", "recommandations", ("recommand", "actions prioritaires", "action prioritaire", "que faire", "plan d'action")),
-            ModuleCapability("commercial", "commercialisation", ("commande", "commandes", "vente", "commercial", "catalogue")),
+            ModuleCapability("commercial", "commercialisation", ("commande", "commandes", "vente", "commercial", "catalogue", "idempotency")),
             ModuleCapability("invoices", "facturation", ("facture", "factures", "invoice", "invoices")),
-            ModuleCapability("finance", "finance", ("finance", "trésorerie", "tresorerie", "charge", "charges", "dépense", "depense", "coût", "cout")),
+            ModuleCapability("finance", "finance", ("finance", "trésorerie", "tresorerie", "charge", "charges", "dépense", "depense", "coût", "cout", "receipt_reference", "enregistre_complet", "devis", "justificatif", "source linkage")),
             ModuleCapability("cooperative_summary", "vue globale coopérative", ("vue globale", "résumé", "resume", "synthèse", "synthese", "aperçu", "apercu", "coopérative", "cooperative")),
         )
 

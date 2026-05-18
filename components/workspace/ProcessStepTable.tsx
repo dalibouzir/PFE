@@ -22,7 +22,7 @@ export function ProcessStepTable({
 
   return (
     <article className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "80ms" }}>
-      <div className="overflow-x-auto">
+      <div className="thin-scrollbar overflow-x-auto">
         <table className="wf-table min-w-full text-left text-sm">
           <thead>
             <tr>

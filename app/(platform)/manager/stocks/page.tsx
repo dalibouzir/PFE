@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
+import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
 import { ExportActions } from "@/components/ui/table/ExportActions";
 import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import { PageIntro } from "@/components/ui/PageIntro";
@@ -34,9 +35,12 @@ type MovementTicketRow = {
 };
 
 export default function StocksPage() {
-  const { data: stocks = [] } = useStocks();
-  const { data: products = [] } = useProducts();
-  const { data: inputs = [] } = useInputs();
+  const stocksQuery = useStocks();
+  const productsQuery = useProducts();
+  const inputsQuery = useInputs();
+  const stocks = stocksQuery.data ?? [];
+  const products = productsQuery.data ?? [];
+  const inputs = inputsQuery.data ?? [];
 
   const [productId, setProductId] = useState<string>("Tous");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
@@ -159,6 +163,8 @@ export default function StocksPage() {
   }, [movementsQuery.data]);
 
   const movementRows = movementsQuery.data ?? [];
+  const requiredLoading = stocksQuery.isLoading || productsQuery.isLoading || inputsQuery.isLoading;
+  const requiredError = stocksQuery.isError || productsQuery.isError || inputsQuery.isError;
   const journalExportColumns: ExportColumn<StockMovement>[] = [
     { key: "movement_reference", header: "Référence" },
     { key: "movement_type", header: "Type", format: (_, row) => (row.movement_type === "in" ? "Entrée" : "Sortie") },
@@ -214,6 +220,29 @@ export default function StocksPage() {
       generatedAt: new Date(),
     });
   };
+
+  if (requiredLoading) {
+    return (
+      <main className="relative min-h-[60vh]">
+        <PageIntro title="Stocks" />
+        <ContentAreaLoader
+          title="Chargement Stocks"
+          subtitle="Synchronisation des stocks, mouvements, produits et collectes..."
+        />
+      </main>
+    );
+  }
+
+  if (requiredError) {
+    return (
+      <main>
+        <PageIntro title="Stocks" />
+        <section className="premium-card reveal mt-4 rounded-2xl p-4">
+          <p className="text-sm text-[var(--danger)]">Impossible de charger les données requises de la page Stocks.</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main>
@@ -309,7 +338,7 @@ export default function StocksPage() {
         </section>
       ) : (
         <section className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "70ms" }}>
-          <div className="overflow-x-auto">
+          <div className="thin-scrollbar overflow-x-auto">
             <table className="wf-table min-w-full text-left text-sm">
               <thead>
                 <tr>

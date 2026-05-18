@@ -260,6 +260,10 @@ def update_batch(db: Session, manager: User, batch_id, payload) -> Batch:
         batch.ordered_process_steps = _normalize_steps(data["process_steps"])
         if batch.preharvest_activated_at is None and batch.preharvest_completed_at is None:
             batch.preharvest_step_statuses = _build_default_preharvest_step_statuses(batch.ordered_process_steps)
+    if "estimated_charge_fcfa" in data:
+        if batch.charge_approved_at is not None:
+            raise ValidationError("Estimated charge cannot be changed after approval.")
+        batch.estimated_charge_fcfa = round_metric(float(data["estimated_charge_fcfa"]))
 
     db.commit()
     db.refresh(batch)

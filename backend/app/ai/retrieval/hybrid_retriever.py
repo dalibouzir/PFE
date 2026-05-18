@@ -208,6 +208,8 @@ def _apply_soft_filters(items: list[dict[str, Any]], *, filters: dict) -> list[d
     products = {str(p).lower() for p in (filters.get("product") or set())}
     stages = {str(s).lower() for s in (filters.get("stage") or set())}
     batch_ref = str(filters.get("batch_ref") or "").upper()
+    prefer_knowledge_sources = bool(filters.get("prefer_knowledge_sources"))
+    avoid_operational_sources = bool(filters.get("avoid_operational_sources"))
 
     for item in items:
         meta = item.get("metadata") or {}
@@ -227,6 +229,32 @@ def _apply_soft_filters(items: list[dict[str, Any]], *, filters: dict) -> list[d
             meta_batch = str(meta.get("batch_code") or meta.get("batch_ref") or "").upper()
             if meta_batch == batch_ref:
                 boost += 0.2
+
+        if prefer_knowledge_sources:
+            source_type = str(item.get("source_type") or "").lower()
+            topic = str(meta.get("topic") or meta.get("chunk_type") or "").lower()
+            if any(token in source_type for token in ("knowledge", "reference", "guide", "best_practice")) or any(
+                token in topic for token in ("best_practice", "good_practice", "guidance", "stockage", "tri", "sechage", "séchage", "humidite", "humidité", "conditionnement", "casse")
+            ):
+                boost += 0.25
+            elif avoid_operational_sources and any(
+                token in source_type
+                for token in (
+                    "farmer_advances",
+                    "batches",
+                    "process_steps",
+                    "stocks",
+                    "stock_movements",
+                    "commercial_orders",
+                    "commercial_invoices",
+                    "treasury_transactions",
+                    "global_charges",
+                    "inputs",
+                    "uploaded_files",
+                    "members",
+                )
+            ):
+                boost -= 0.2
 
         item["hybrid_score"] = min(1.0, float(item.get("hybrid_score", 0.0)) + boost)
 

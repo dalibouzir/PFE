@@ -36,7 +36,7 @@ export function LotActiveSidebar({
         <p className="text-xs text-[var(--muted)]">{items.length}</p>
       </div>
 
-      <div className="scroll-thin mt-3 flex-1 space-y-2.5 overflow-y-auto pr-1">
+      <div className="scroll-thin no-scrollbar mt-3 flex-1 space-y-2.5 overflow-y-auto pr-1">
         {items.length === 0 ? (
           <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-3 text-sm text-[var(--muted)]">
             Aucun lot actif.

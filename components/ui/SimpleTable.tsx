@@ -5,7 +5,7 @@ export function SimpleTable({ rows }: { rows: Row[] }) {
 
   return (
     <div className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "70ms" }}>
-      <div className="overflow-x-auto">
+      <div className="thin-scrollbar overflow-x-auto">
         <table className="wf-table min-w-full text-left">
           <thead>
             <tr>

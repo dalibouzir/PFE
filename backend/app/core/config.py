@@ -63,11 +63,11 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
 
     rag_enabled: bool = True
-    rag_embedding_provider: str = "openrouter"
-    rag_embedding_model: str = "openai/text-embedding-3-small"
+    rag_embedding_provider: str = "local"
+    rag_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     rag_embedding_base_url: str = ""
     rag_embedding_api_key: str = ""
-    rag_embedding_dimensions: int = 1536
+    rag_embedding_dimensions: int = 384
     rag_chunk_size: int = 900
     rag_chunk_overlap: int = 180
     rag_retrieval_top_k: int = 5

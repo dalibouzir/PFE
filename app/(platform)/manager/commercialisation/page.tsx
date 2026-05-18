@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
+import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { ExportActions } from "@/components/ui/table/ExportActions";
@@ -128,17 +129,26 @@ export default function CommercialisationPage() {
     description: "",
   });
 
-  const { data: products = [] } = useProducts();
-  const { data: stocks = [] } = useStocks();
-  const { data: catalog = [] } = useCatalogProducts();
-  const { data: orders = [] } = useCommercialOrders({ status: statusFilter });
-  const { data: stats } = useCommercialOrderStats();
+  const productsQuery = useProducts();
+  const stocksQuery = useStocks();
+  const catalogQuery = useCatalogProducts();
+  const ordersQuery = useCommercialOrders({ status: statusFilter });
+  const statsQuery = useCommercialOrderStats();
+  const products = productsQuery.data ?? [];
+  const stocks = stocksQuery.data ?? [];
+  const catalog = catalogQuery.data ?? [];
+  const orders = ordersQuery.data ?? [];
+  const stats = statsQuery.data;
   const createCatalogProduct = useCreateCatalogProduct();
   const updateCatalogProduct = useUpdateCatalogProduct();
   const deleteCatalogProduct = useDeleteCatalogProduct();
   const setCatalogProductStatus = useSetCatalogProductStatus();
   const updateOrderStatus = useUpdateCommercialOrderStatus();
   const orderTableControls = useTableControls([], "desc");
+  const requiredLoading =
+    productsQuery.isLoading || stocksQuery.isLoading || catalogQuery.isLoading || ordersQuery.isLoading || statsQuery.isLoading;
+  const requiredError =
+    productsQuery.isError || stocksQuery.isError || catalogQuery.isError || ordersQuery.isError || statsQuery.isError;
 
   const visibleCatalog = useMemo(() => {
     return catalog.slice().sort((a, b) => a.name.localeCompare(b.name, "fr"));
@@ -316,6 +326,29 @@ export default function CommercialisationPage() {
     { key: "status", header: "Statut", format: (_, row) => ORDER_STATUS_LABEL[row.status] },
   ];
 
+  if (requiredLoading) {
+    return (
+      <main className="relative min-h-[60vh]">
+        <PageIntro title="Commercialisation" />
+        <ContentAreaLoader
+          title="Chargement Commercialisation"
+          subtitle="Synchronisation du catalogue, des commandes, des produits et du stock..."
+        />
+      </main>
+    );
+  }
+
+  if (requiredError) {
+    return (
+      <main>
+        <PageIntro title="Commercialisation" />
+        <section className="premium-card reveal mt-4 rounded-2xl p-4">
+          <p className="text-sm text-[var(--danger)]">Impossible de charger les données requises de la page Commercialisation.</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main>
       <PageIntro title="Commercialisation" />
@@ -412,7 +445,7 @@ export default function CommercialisationPage() {
             </>
           ) : (
             <section className="premium-card overflow-hidden rounded-2xl">
-              <div className="overflow-x-auto">
+              <div className="thin-scrollbar overflow-x-auto">
                 <table className="wf-table min-w-full text-sm">
                   <thead>
                     <tr>
@@ -536,7 +569,7 @@ export default function CommercialisationPage() {
                 }
               />
             </div>
-            <div className="overflow-x-auto">
+            <div className="thin-scrollbar overflow-x-auto">
               <table className="wf-table min-w-full text-sm">
                 <thead>
                   <tr>

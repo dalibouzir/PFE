@@ -33,7 +33,6 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { AgriBrandLoader } from "@/components/ui/AgriBrandLoader";
 import { useAuth } from "@/context/auth/AuthContext";
 
 const THIES_WEATHER_API_URL =
@@ -920,14 +919,13 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
 
         <div
           className={cx(
-            "relative z-0 min-h-0 flex-1",
+            "shell-scroll-area relative z-0 min-h-0 flex-1",
             isAssistantPage ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden",
           )}
         >
           <div
             className={cx(
               "transition-opacity duration-150",
-              navLoading && "pointer-events-none opacity-60",
               isAssistantPage && "h-full min-h-0",
             )}
           >
@@ -935,24 +933,6 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
           </div>
         </div>
       </div>
-
-      {navLoading && (
-        <div
-          className="pointer-events-none fixed bottom-0 left-0 right-0 z-[45] md:left-[var(--sidebar-width)]"
-          style={{ top: `${loaderTop}px` }}
-        >
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(249,246,239,0.84)_0%,rgba(249,246,239,0.66)_32%,rgba(249,246,239,0.42)_72%,rgba(249,246,239,0.14)_100%)] backdrop-blur-[8px] [mask-image:linear-gradient(180deg,black,black_70%,transparent)]" />
-          <div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.72),rgba(255,255,255,0))]" />
-
-          <div className="relative flex h-full items-center justify-center px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-5 md:px-7">
-            <AgriBrandLoader
-              mode="panel"
-              title="Chargement de section"
-              subtitle="Mise a jour des donnees d'exploitation..."
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

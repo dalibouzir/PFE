@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { ExportActions } from "@/components/ui/table/ExportActions";
 import { TableToolbar } from "@/components/ui/table/TableToolbar";
@@ -38,8 +39,10 @@ function fmtDate(value: string) {
 export default function FacturationPage() {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { data: stats } = useCommercialInvoiceStats();
-  const { data: invoices = [] } = useCommercialInvoices();
+  const statsQuery = useCommercialInvoiceStats();
+  const invoicesQuery = useCommercialInvoices();
+  const stats = statsQuery.data;
+  const invoices = invoicesQuery.data ?? [];
   const invoiceRef = useRef<HTMLDivElement>(null);
   const tableControls = useTableControls(
     [
@@ -87,6 +90,29 @@ export default function FacturationPage() {
     { key: "total_amount_fcfa", header: "Total TTC (FCFA)", format: (_, row) => row.total_amount_fcfa.toLocaleString("fr-FR") },
     { key: "status", header: "Statut", format: (_, row) => (row.status === "paid" ? "Payee" : "En attente") },
   ];
+
+  if (statsQuery.isLoading || invoicesQuery.isLoading) {
+    return (
+      <main className="relative min-h-[60vh]">
+        <PageIntro title="Facturation" />
+        <ContentAreaLoader
+          title="Chargement Facturation"
+          subtitle="Synchronisation des factures et statistiques..."
+        />
+      </main>
+    );
+  }
+
+  if (statsQuery.isError || invoicesQuery.isError) {
+    return (
+      <main>
+        <PageIntro title="Facturation" />
+        <section className="premium-card reveal mt-4 rounded-2xl p-4">
+          <p className="text-sm text-[var(--danger)]">Impossible de charger les données requises de la page Facturation.</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main>

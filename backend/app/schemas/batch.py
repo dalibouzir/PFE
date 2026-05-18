@@ -30,6 +30,7 @@ class BatchStatusUpdate(BaseModel):
 
 class BatchUpdate(BaseModel):
     process_steps: Optional[List[str]] = Field(default=None, min_length=1)
+    estimated_charge_fcfa: Optional[float] = Field(default=None, ge=0)
     note: Optional[str] = Field(default=None, max_length=500)
 
 class PreHarvestStepStatusItem(BaseModel):

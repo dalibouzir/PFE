@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
+import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -68,9 +69,12 @@ const advanceStatusConfig: Record<string, { label: string; tone: "success" | "da
 };
 
 export default function FarmerAdvancesPage() {
-  const { data: members = [] } = useMembers();
-  const { data: batches = [] } = useBatches();
-  const { data: products = [] } = useProducts();
+  const membersQuery = useMembers();
+  const batchesQuery = useBatches();
+  const productsQuery = useProducts();
+  const members = membersQuery.data ?? [];
+  const batches = batchesQuery.data ?? [];
+  const products = productsQuery.data ?? [];
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortByField>("last_modified");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
@@ -88,6 +92,8 @@ export default function FarmerAdvancesPage() {
     order: sortOrder,
   });
   const detailQuery = useFarmerAdvanceDetail(selectedFarmer?.farmer_id ?? null);
+  const requiredLoading = membersQuery.isLoading || batchesQuery.isLoading || productsQuery.isLoading;
+  const requiredError = membersQuery.isError || batchesQuery.isError || productsQuery.isError;
 
   const createAdvance = useCreateFarmerAdvance();
   const updateAdvance = useUpdateFarmerAdvance();
@@ -122,6 +128,7 @@ export default function FarmerAdvancesPage() {
 
   const rows = summaryQuery.data?.items ?? [];
   const stats = summaryQuery.data?.stats;
+  const summaryErrorMessage = summaryQuery.error instanceof Error ? summaryQuery.error.message : "Erreur de chargement.";
   const visibleRows = rows.filter((row) => {
     const q = tableControls.search.trim().toLowerCase();
     if (!q) return true;
@@ -216,6 +223,29 @@ export default function FarmerAdvancesPage() {
     { key: "last_modified", header: "Dernière modification", format: (_, row) => formatDateTime(row.last_modified) },
   ];
 
+  if (requiredLoading) {
+    return (
+      <main className="relative min-h-[60vh]">
+        <PageIntro title="Avances Producteurs" />
+        <ContentAreaLoader
+          title="Chargement Avances Producteurs"
+          subtitle="Synchronisation des avances, membres, lots et produits..."
+        />
+      </main>
+    );
+  }
+
+  if (requiredError) {
+    return (
+      <main>
+        <PageIntro title="Avances Producteurs" />
+        <section className="premium-card reveal mt-4 rounded-2xl p-4">
+          <p className="text-sm text-[var(--danger)]">Impossible de charger les données requises de la page Avances Producteurs.</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main>
       <PageIntro title="Avances Producteurs" />
@@ -281,9 +311,9 @@ export default function FarmerAdvancesPage() {
         <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "90ms" }}>
           <p className="text-sm text-[var(--muted)]">Chargement des avances...</p>
         </section>
-      ) : summaryQuery.error ? (
+      ) : summaryQuery.isError ? (
         <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "90ms" }}>
-          <p className="text-sm text-[var(--danger)]">{summaryQuery.error instanceof Error ? summaryQuery.error.message : "Erreur de chargement."}</p>
+          <p className="text-sm text-[var(--danger)]">{summaryErrorMessage}</p>
           <button type="button" className="soft-focus wf-btn-secondary mt-3 px-4 py-2 text-sm font-semibold" onClick={() => summaryQuery.refetch()}>
             Réessayer
           </button>
@@ -297,7 +327,7 @@ export default function FarmerAdvancesPage() {
         </section>
       ) : (
         <section className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "90ms" }}>
-          <div className="overflow-x-auto">
+          <div className="thin-scrollbar overflow-x-auto">
             <table className="wf-table min-w-full text-left text-sm">
               <thead>
                 <tr>
@@ -379,7 +409,7 @@ export default function FarmerAdvancesPage() {
             {detailQuery.data.advances.length === 0 ? (
               <p className="text-sm text-[var(--muted)]">Aucune avance enregistrée pour ce producteur.</p>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-[var(--line)]">
+              <div className="thin-scrollbar overflow-x-auto rounded-xl border border-[var(--line)]">
                 <table className="wf-table min-w-full text-left text-sm">
                   <thead>
                     <tr>

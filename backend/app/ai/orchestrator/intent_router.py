@@ -48,6 +48,19 @@ UNSUPPORTED_FORECAST_HINTS = {
     "prochain mois",
     "tomorrow weather",
 }
+UNSUPPORTED_HR_SUBJECTIVE_HINTS = {
+    "licencier",
+    "licencie",
+    "licenciement",
+    "virer",
+    "renvoyer",
+    "plus fiable",
+    "moins fiable",
+    "fiable",
+    "performance humaine",
+    "ressources humaines",
+    "rh",
+}
 RECO_HINTS = {
     "recommand",
     "actions prioritaires",
@@ -104,6 +117,9 @@ EXPLANATION_HINTS = {
     "stockage",
     "check-list",
     "checklist",
+    "conseils",
+    "conseil",
+    "que faire",
 }
 BEST_PRACTICE_HINTS = {
     "bonnes pratiques",
@@ -125,6 +141,16 @@ BEST_PRACTICE_HINTS = {
     "casse",
     "procedure",
     "procédure",
+    "pratiques post-récolte",
+    "pratiques post recolte",
+    "conseils de manipulation",
+    "manipulation",
+    "conseils de séchage",
+    "conseils de sechage",
+    "conseils",
+    "que faire",
+    "pratiques opérationnelles",
+    "pratiques operationnelles",
 }
 REFERENCE_HINTS = {"ce lot", "celui-ci", "celui ci", "ces risques", "ce risque", "cette étape", "cette etape"}
 FOLLOWUP_REFERENCE_PATTERN = re.compile(
@@ -178,6 +204,64 @@ class IntentRouter:
         entities["module_supported"] = module in self.module_registry.module_keys if module else False
         if previous_module_hint:
             entities["previous_module_hint"] = previous_module_hint
+
+        manager_operational_synthesis = (
+            any(token in lowered for token in ("manager", "réponse manager", "reponse manager", "mode manager", "synthèse opérationnelle", "synthese operationnelle", "décision opérationnelle", "decision operationnelle"))
+            and any(token in lowered for token in ("conclusion", "conclus", "preuve", "preuves", "action", "actions", "plan d'action", "plan d action", "limite", "limitation", "limites"))
+        )
+        if manager_operational_synthesis:
+            entities["intent_family"] = "action_recommendation"
+            return _decision(
+                AgentRoute.HYBRID_FULL,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                "Manager-style operational synthesis request.",
+                0.9,
+            )
+
+        if all(
+            any(variant in lowered for variant in variants)
+            for variants in (
+                ("conclusion",),
+                ("preuve", "preuves"),
+                ("action", "actions"),
+                ("limite", "limitation", "limites"),
+            )
+        ) and any(
+            token in lowered for token in ("manager", "lot", "perte", "ml", "rag", "recommand")
+        ):
+            entities["intent_family"] = "action_recommendation"
+            return _decision(
+                AgentRoute.HYBRID_FULL,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                "Manager-style operational synthesis request.",
+                0.9,
+            )
+
+        if any(token in lowered for token in ("justificatif", "upload", "fichier", "fichiers")) and any(
+            token in lowered for token in ("répartition", "repartition", "par type", "type d'entité", "type d’entité", "entity type")
+        ):
+            entities["module"] = "collections"
+            entities["intent_family"] = "factual_sql"
+            return _decision(
+                AgentRoute.SQL_ONLY,
+                entities,
+                ["SQLAnalyticsAgent"],
+                "Uploaded evidence distribution should be resolved from SQL traceability tables.",
+                0.9,
+            )
+        if any(token in lowered for token in ("perd-on", "perd on", "plus de pertes", "pire perte")) and any(
+            token in lowered for token in ("pratiques", "bonnes pratiques", "appliquer", "réduire", "reduire")
+        ):
+            entities["intent_family"] = "hybrid_analysis"
+            return _decision(
+                AgentRoute.HYBRID_SQL_RAG,
+                entities,
+                ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
+                "Loss-priority + practices request should combine SQL and RAG.",
+                0.88,
+            )
         independent_guidance_query = any(
             token in lowered
             for token in (
@@ -194,7 +278,11 @@ class IntentRouter:
         )
 
         # Follow-up disambiguation from previous module context.
-        if previous_module_hint == "members" and RANKING_FOLLOWUP_PATTERN.search(lowered):
+        if (
+            previous_module_hint == "members"
+            and RANKING_FOLLOWUP_PATTERN.search(lowered)
+            and not any(token in lowered for token in ("ml", "anomaly_score", "anomal", "risque", "risk"))
+        ):
             entities["module"] = "members"
             entities["intent_family"] = "followup_members_ranking"
             return _decision(
@@ -234,6 +322,14 @@ class IntentRouter:
             entities["module"] = "post_harvest"
             entities["scope"] = "post_harvest"
             entities["intent_family"] = "followup_ranked_item_reasoning"
+            if any(token in lowered for token in ("recommand", "action", "ml", "anomaly", "risque")):
+                return _decision(
+                    AgentRoute.HYBRID_FULL,
+                    entities,
+                    ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                    "Ranked-item follow-up asks action/recommendation and should include full evidence layers.",
+                    0.89,
+                )
             return _decision(
                 AgentRoute.HYBRID_SQL_RAG,
                 entities,
@@ -247,6 +343,14 @@ class IntentRouter:
             entities["module"] = "post_harvest"
             entities["scope"] = "post_harvest"
             entities["intent_family"] = "followup_postharvest_reasoning"
+            if any(token in lowered for token in ("recommand", "action", "ml", "anomaly", "risque")):
+                return _decision(
+                    AgentRoute.HYBRID_FULL,
+                    entities,
+                    ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                    "Post-harvest follow-up asks action/recommendation and should include full evidence layers.",
+                    0.89,
+                )
             if any(token in lowered for token in ("pourquoi", "explique", "why", "cause", "critique")):
                 return _decision(
                     AgentRoute.HYBRID_SQL_RAG,
@@ -284,14 +388,38 @@ class IntentRouter:
             )
 
         if any(token in lowered for token in OUT_SCOPE) or self.module_registry.is_non_operational_topic(lowered):
-            entities["intent_family"] = "unsupported"
-            return IntentRouteDecision(
-                route=AgentRoute.OUT_OF_SCOPE,
-                confidence=0.97,
-                detected_entities=entities,
-                required_agents=["OutOfScopeAgent"],
-                explanation="Query appears outside cooperative decision-support domain.",
+            operational_guard = any(
+                token in lowered
+                for token in (
+                    "lot",
+                    "lots",
+                    "perte",
+                    "pertes",
+                    "stock",
+                    "ml",
+                    "anomaly",
+                    "anomal",
+                    "recommand",
+                    "séchage",
+                    "sechage",
+                    "tri",
+                    "conditionnement",
+                    "emballage",
+                    "post-récolte",
+                    "post recolte",
+                )
             )
+            if operational_guard:
+                pass
+            else:
+                entities["intent_family"] = "unsupported"
+                return IntentRouteDecision(
+                    route=AgentRoute.OUT_OF_SCOPE,
+                    confidence=0.97,
+                    detected_entities=entities,
+                    required_agents=["OutOfScopeAgent"],
+                    explanation="Query appears outside cooperative decision-support domain.",
+                )
         if any(token in lowered for token in UNSUPPORTED_FORECAST_HINTS):
             entities["intent_family"] = "unsupported_forecast"
             return IntentRouteDecision(
@@ -300,6 +428,24 @@ class IntentRouter:
                 detected_entities=entities,
                 required_agents=["OutOfScopeAgent"],
                 explanation="Forecasting/external-real-world request outside reliable app-data scope.",
+            )
+        if any(token in lowered for token in UNSUPPORTED_HR_SUBJECTIVE_HINTS):
+            entities["intent_family"] = "unsupported_hr_subjective"
+            return IntentRouteDecision(
+                route=AgentRoute.OUT_OF_SCOPE,
+                confidence=0.97,
+                detected_entities=entities,
+                required_agents=["OutOfScopeAgent"],
+                explanation="Subjective HR/disciplinary decision request outside objective app-data support scope.",
+            )
+        if "anomaly_score" in lowered and any(token in lowered for token in ("ml", "lot", "batch", "top", "max")):
+            entities["intent_family"] = "risk_ml"
+            return _decision(
+                AgentRoute.HYBRID_SQL_ML,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent"],
+                "Explicit anomaly_score request.",
+                0.93,
             )
 
         asks_recommendation = _has_any(lowered, RECO_HINTS) or any(regex.search(lowered) for regex in RECOMMENDATION_REGEXES)
@@ -333,6 +479,17 @@ class IntentRouter:
         if "pk " in lowered or lowered.startswith("pk"):
             asks_explanation = True
         asks_loss = any(token in lowered for token in ("perte", "pertes", "loss", "rendement", "efficacité", "efficacite"))
+        asks_anomaly_operational = (
+            any(token in lowered for token in ("anomaly", "anomalie", "anomaly_score", "anomal", "risque ml", "signal ml", "modele ml", "modèle ml"))
+            and any(token in lowered for token in ("ml", "anomaly", "anomal", "risque"))
+            and (
+                any(token in lowered for token in ("lot", "lots", "batch", "produit", "etape", "étape"))
+                or any(token in lowered for token in ("faits opérationnels", "faits operationnels", "faits oper", "données sql", "donnees sql", "donnees operationnelles", "données opérationnelles", "operational facts"))
+            )
+        )
+        asks_sql_ml_explicit = "sql" in lowered and "ml" in lowered
+        asks_sql_ml_rag_explicit = asks_sql_ml_explicit and "rag" in lowered
+        asks_manager_full = any(token in lowered for token in ("réponse complète", "reponse complete", "manager", "décision", "decision"))
         asks_reference = any(token in lowered for token in ("référence", "references", "source fiable", "avec source"))
         has_reference_pronoun = _has_any(lowered, REFERENCE_HINTS)
         is_referential_followup = has_reference_pronoun or bool(FOLLOWUP_REFERENCE_PATTERN.search(lowered))
@@ -356,20 +513,213 @@ class IntentRouter:
             [is_members, is_member_value, is_collections, is_stocks, is_invoices, is_commercial, is_finance, is_preharvest, is_material_balance, is_process, asks_risk]
         )
         asks_best_practice = _has_any(lowered, BEST_PRACTICE_HINTS)
+        asks_procedure_or_precautions = any(
+            token in lowered
+            for token in (
+                "procédure",
+                "procedure",
+                "précaution",
+                "precaution",
+                "avant l'emballage",
+                "avant emballage",
+                "avant de conditionner",
+                "conditionner",
+                "que faut-il vérifier",
+                "que faut il vérifier",
+                "que faut-il verifier",
+                "que faut il verifier",
+                "comment éviter",
+                "comment eviter",
+                "éviter",
+                "eviter",
+                "réduire",
+                "reduire",
+                "conseil",
+                "conseils",
+            )
+        )
+        asks_advice_topic = any(
+            token in lowered
+            for token in ("tri", "séchage", "sechage", "stockage", "humidit", "conditionnement", "conditionner", "casse", "emballage")
+        )
+        asks_best_practice = asks_best_practice or (asks_procedure_or_precautions and asks_advice_topic)
         asks_practical_guidance = asks_best_practice and any(
             token in lowered for token in ("humidit", "sechage", "séchage", "tri", "stockage", "casse", "check-list", "checklist")
+        )
+        asks_current_data_scope = any(
+            token in lowered
+            for token in (
+                "dans nos données",
+                "dans nos donnees",
+                "selon nos données",
+                "selon nos donnees",
+                "actuel",
+                "actuelle",
+                "ce lot",
+                "ce produit",
+                "notre coop",
+                "nos lots",
+            )
         )
         asks_stock = bool(re.search(r"\bstock(s)?\b", lowered)) or any(token in lowered for token in ("kg", "disponible"))
         asks_compare_product = any(token in lowered for token in ("compare", "compar", "versus", "vs")) and bool(entities.get("product"))
         explicit_operational_target = bool(
-            re.search(r"\b(lot|lots|batch|stock|collecte|membre|facture|commande|charge|tresorerie|coop[eé]rative|production)\b", lowered)
+            re.search(
+                r"\b(lot|lots|batch|stock|collecte|membre|facture|commande|charge|tresorerie|tr[eé]sorerie|coop[eé]rative|production|bl|justificatif|devis|receipt_reference|enregistre_complet|uploaded\s+file|fichier|fichiers|upload|traceabilit[eé])\b",
+                lowered,
+            )
         )
         asks_loss_best_practice = asks_loss and (asks_best_practice or asks_explanation) and (
             has_batch_or_postharvest or bool(entities.get("stage")) or bool(entities.get("product"))
         )
         asks_multi_sql_rag = asks_stock and (asks_best_practice or asks_explanation or asks_reference)
+        asks_sql_plus_rag = "sql" in lowered and (asks_best_practice or asks_explanation or asks_reference)
+        asks_operational_advice_combo = (
+            (
+                explicit_operational_target
+                or asks_current_data_scope
+                or (
+                    asks_loss
+                    and (
+                        has_batch_or_postharvest
+                        or bool(entities.get("stage"))
+                        or bool(entities.get("product"))
+                        or explicit_operational_target
+                        or asks_current_data_scope
+                    )
+                )
+            )
+            and (
+                asks_best_practice
+                or asks_explanation
+                or any(
+                    token in lowered
+                    for token in ("que faire", "comment améliorer", "comment ameliorer", "conseils", "comment corriger", "corriger", "corrige")
+                )
+            )
+            and not asks_risk
+            and not asks_ml_signal
+            and not asks_recommendation
+        )
+        asks_data_plus_rag_action = (
+            asks_action
+            and asks_loss
+            and (asks_best_practice or "rag" in lowered or "base rag" in lowered)
+            and any(token in lowered for token in ("nos données", "nos donnees", "selon nos données", "selon nos donnees"))
+        )
 
-        if asks_practical_guidance and not entities.get("batch_ref") and not asks_risk and not asks_ml_signal and not explicit_operational_target:
+        if (
+            asks_best_practice
+            and not explicit_operational_target
+            and not asks_current_data_scope
+            and not entities.get("batch_ref")
+            and "sql" not in lowered
+            and "nos données" not in lowered
+            and "nos donnees" not in lowered
+            and not asks_risk
+            and not asks_ml_signal
+        ):
+            entities["intent_family"] = "explanation"
+            return _decision(
+                AgentRoute.RAG_ONLY,
+                entities,
+                ["RAGKnowledgeAgent"],
+                "Pure best-practice guidance without explicit app-data scope should stay in RAG mode.",
+                0.9,
+            )
+
+        if asks_sql_ml_rag_explicit or (asks_manager_full and asks_sql_ml_explicit and asks_recommendation):
+            entities["intent_family"] = "action_recommendation"
+            return _decision(
+                AgentRoute.HYBRID_FULL,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                "Explicit full-stack SQL+ML+RAG+recommendation request.",
+                0.92,
+            )
+        if asks_manager_full and asks_recommendation and (
+            explicit_operational_target or asks_loss or asks_risk or asks_ml_signal or asks_current_data_scope
+        ):
+            entities["intent_family"] = "action_recommendation"
+            return _decision(
+                AgentRoute.HYBRID_FULL,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                "Manager-style operational recommendation synthesis.",
+                0.9,
+            )
+
+        if asks_sql_ml_explicit and not asks_recommendation:
+            entities["intent_family"] = "risk_ml"
+            return _decision(
+                AgentRoute.HYBRID_SQL_ML,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent"],
+                "Explicit SQL+ML comparison request.",
+                0.9,
+            )
+
+        if asks_sql_ml_explicit and asks_recommendation:
+            entities["intent_family"] = "action_recommendation"
+            return _decision(
+                AgentRoute.HYBRID_FULL,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                "SQL+ML request that also asks recommendation/action must use full hybrid route.",
+                0.91,
+            )
+
+        if asks_anomaly_operational:
+            entities["intent_family"] = "risk_ml"
+            return _decision(
+                AgentRoute.HYBRID_SQL_ML,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent"],
+                "Anomaly + operational facts request should combine SQL and ML.",
+                0.9,
+            )
+
+        if asks_data_plus_rag_action:
+            entities["intent_family"] = "action_recommendation"
+            return _decision(
+                AgentRoute.HYBRID_FULL,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                "Operational data + RAG action request should include recommendation and ML layers.",
+                0.9,
+            )
+
+        if asks_operational_advice_combo:
+            entities["intent_family"] = "hybrid_analysis"
+            return _decision(
+                AgentRoute.HYBRID_SQL_RAG,
+                entities,
+                ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
+                "Operational data + advice request should combine SQL and RAG.",
+                0.88,
+            )
+
+        if asks_loss and (asks_best_practice or asks_recommendation or asks_explanation) and not asks_ml_signal:
+            entities["intent_family"] = "hybrid_analysis"
+            return _decision(
+                AgentRoute.HYBRID_SQL_RAG,
+                entities,
+                ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
+                "Loss-focused improvement/action request should combine SQL and RAG.",
+                0.87,
+            )
+
+        if asks_current_data_scope and ("perd" in lowered or asks_loss or "loss" in lowered) and (asks_best_practice or asks_explanation or asks_recommendation):
+            entities["intent_family"] = "hybrid_analysis"
+            return _decision(
+                AgentRoute.HYBRID_SQL_RAG,
+                entities,
+                ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
+                "Current cooperative loss diagnostics + improvement request should combine SQL and RAG.",
+                0.9,
+            )
+
+        if asks_practical_guidance and not asks_loss and not entities.get("batch_ref") and not asks_risk and not asks_ml_signal and not explicit_operational_target and not asks_current_data_scope:
             entities["intent_family"] = "explanation"
             return _decision(
                 AgentRoute.RAG_ONLY,
@@ -386,6 +736,16 @@ class IntentRouter:
                 entities,
                 ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
                 "Question multi-intention SQL + bonnes pratiques.",
+                0.9,
+            )
+
+        if asks_sql_plus_rag:
+            entities["intent_family"] = "multi_intent"
+            return _decision(
+                AgentRoute.HYBRID_SQL_RAG,
+                entities,
+                ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
+                "Explicit SQL + best-practice request.",
                 0.9,
             )
 
@@ -410,7 +770,27 @@ class IntentRouter:
                 0.88,
             )
 
-        if asks_best_practice and (is_process or bool(entities.get("product")) or bool(entities.get("stage"))):
+        if asks_best_practice and not asks_risk and not asks_ml_signal and not asks_recommendation:
+            entities["intent_family"] = "explanation"
+            if asks_current_data_scope or entities.get("batch_ref") or asks_loss or "sql" in lowered:
+                return _decision(
+                    AgentRoute.HYBRID_SQL_RAG,
+                    entities,
+                    ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
+                    "Best-practice question with explicit operational scope should combine SQL and RAG.",
+                    0.87,
+                )
+            return _decision(
+                AgentRoute.RAG_ONLY,
+                entities,
+                ["RAGKnowledgeAgent"],
+                "Pure best-practice/procedure guidance should prioritize RAG knowledge.",
+                0.9,
+            )
+
+        if asks_best_practice and (is_process or bool(entities.get("product")) or bool(entities.get("stage"))) and (
+            explicit_operational_target or asks_current_data_scope or has_batch_or_postharvest
+        ):
             entities["intent_family"] = "explanation"
             return _decision(
                 AgentRoute.HYBRID_SQL_RAG,
@@ -418,6 +798,16 @@ class IntentRouter:
                 ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
                 "Best-practice question with operational context should combine SQL and RAG.",
                 0.84,
+            )
+
+        if asks_best_practice and asks_recommendation and not explicit_operational_target and not asks_current_data_scope and not asks_loss and not asks_risk and not asks_ml_signal:
+            entities["intent_family"] = "explanation"
+            return _decision(
+                AgentRoute.RAG_ONLY,
+                entities,
+                ["RAGKnowledgeAgent"],
+                "Pure best-practice advice wording should stay in RAG mode.",
+                0.86,
             )
 
         if asks_explicit_multi_evidence:

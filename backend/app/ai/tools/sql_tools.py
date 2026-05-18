@@ -18,8 +18,11 @@ from app.models.member import Member
 from app.models.parcel import Parcel
 from app.models.process_step import ProcessStep
 from app.models.product import Product
+from app.models.farmer_advance import FarmerAdvance
 from app.models.stock import Stock
+from app.models.stock_movement import StockMovement
 from app.models.treasury_transaction import TreasuryTransaction
+from app.models.uploaded_file import UploadedFile
 from app.models.user import User
 
 
@@ -713,6 +716,468 @@ class SQLTools:
                 }
             ],
             "warnings": warnings,
+        }
+
+    def get_stock_movements_journal(
+        self,
+        *,
+        limit: int = 30,
+        product: str | None = None,
+        batch_ref: str | None = None,
+        input_ref: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.module_available("stock_movements"):
+            return {"items": [], "sources": [], "warnings": ["MODULE_NOT_AVAILABLE"]}
+        stmt = (
+            select(
+                StockMovement.id,
+                StockMovement.movement_date,
+                StockMovement.quantity_kg,
+                StockMovement.movement_type,
+                StockMovement.action_type,
+                StockMovement.source,
+                StockMovement.idempotency_key,
+                StockMovement.notes,
+                Product.name,
+                Batch.code,
+                Input.id,
+                Input.bl_number,
+                Member.full_name,
+            )
+            .join(Product, Product.id == StockMovement.product_id)
+            .outerjoin(Batch, Batch.id == StockMovement.batch_id)
+            .outerjoin(Input, Input.id == StockMovement.input_id)
+            .outerjoin(Member, Member.id == Input.member_id)
+            .where(StockMovement.cooperative_id == self.cooperative_id)
+            .order_by(StockMovement.movement_date.desc(), StockMovement.created_at.desc())
+            .limit(max(1, int(limit)))
+        )
+        rows = self.db.execute(stmt).all()
+        items: list[dict[str, Any]] = []
+        batch_needle = str(batch_ref or "").strip().lower()
+        input_needle = str(input_ref or "").strip().lower()
+        for movement_id, movement_date, quantity_kg, movement_type, action_type, source, idem_key, notes, product_name, lot_code, input_id, bl_number, member_name in rows:
+            if product and _canonical_product_name(product_name) != _canonical_product_name(product):
+                continue
+            lot_code_str = str(lot_code or "")
+            if batch_needle and batch_needle not in lot_code_str.lower():
+                continue
+            input_reference = f"COL-{str(input_id)[:8].upper()}" if input_id is not None else ""
+            if input_needle and input_needle not in input_reference.lower():
+                continue
+            items.append(
+                {
+                    "movement_id": str(movement_id),
+                    "movement_date": str(movement_date),
+                    "quantity_kg": float(quantity_kg or 0.0),
+                    "movement_type": str(movement_type or ""),
+                    "action_type": str(action_type or ""),
+                    "source": str(source or ""),
+                    "product": str(product_name or ""),
+                    "batch_ref": lot_code_str,
+                    "input_reference": input_reference or None,
+                    "bl_number": str(bl_number or ""),
+                    "member_name": str(member_name or ""),
+                    "idempotency_key": str(idem_key or ""),
+                    "notes": str(notes or ""),
+                }
+            )
+        return {
+            "items": items,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "stock_movements,inputs,batches,products,members",
+                    "label": "Journal des mouvements de stock",
+                    "record_count": len(items),
+                    "related_product": product,
+                    "related_batch": batch_ref,
+                    "related_input": input_ref,
+                }
+            ],
+            "warnings": ["NO_SQL_DATA"] if not items else [],
+        }
+
+    def get_collecte_traceability(self) -> dict[str, Any]:
+        counts_row = self.db.execute(
+            select(
+                func.count(Input.id),
+                func.count(Input.bl_number),
+                func.count(Input.justificatif_file_id),
+                func.count(Input.batch_id),
+            ).where(Input.cooperative_id == self.cooperative_id)
+        ).one()
+        total_inputs, with_bl, with_justif, linked_lot = [int(value or 0) for value in counts_row]
+        rows = self.db.execute(
+            select(
+                Input.id,
+                Input.date,
+                Input.quantity,
+                Input.grade,
+                Input.bl_number,
+                Input.justificatif_file_id,
+                Batch.code,
+                Product.name,
+                Member.full_name,
+                Input.source_type,
+                Input.status,
+            )
+            .outerjoin(Batch, Batch.id == Input.batch_id)
+            .join(Product, Product.id == Input.product_id)
+            .join(Member, Member.id == Input.member_id)
+            .where(Input.cooperative_id == self.cooperative_id)
+            .order_by(Input.date.desc(), Input.created_at.desc())
+            .limit(20)
+        ).all()
+        items = []
+        for input_id, input_date, qty, grade, bl_number, justif_id, lot_code, product_name, member_name, source_type, status in rows:
+            items.append(
+                {
+                    "input_id": str(input_id),
+                    "input_date": str(input_date),
+                    "quantity_kg": float(qty or 0.0),
+                    "grade": str(grade or ""),
+                    "bl_number": str(bl_number or ""),
+                    "has_justificatif": bool(justif_id),
+                    "batch_ref": str(lot_code or ""),
+                    "product": str(product_name or ""),
+                    "member_name": str(member_name or ""),
+                    "source_type": str(source_type or ""),
+                    "status": str(status.value if hasattr(status, "value") else status),
+                }
+            )
+        summary = [
+            {
+                "total_inputs": total_inputs,
+                "with_bl_number": with_bl,
+                "with_justificatif": with_justif,
+                "linked_to_lot": linked_lot,
+            }
+        ]
+        return {
+            "items": items,
+            "summary": summary,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "inputs,batches,members,products",
+                    "label": "Traçabilité des collectes",
+                    "record_count": len(items),
+                }
+            ],
+            "warnings": ["NO_SQL_DATA"] if total_inputs == 0 else [],
+        }
+
+    def get_uploaded_files_evidence(self) -> dict[str, Any]:
+        if not self.module_available("uploaded_files"):
+            return {"items": [], "sources": [], "warnings": ["MODULE_NOT_AVAILABLE"]}
+        type_rows = self.db.execute(
+            select(UploadedFile.entity_type, func.count(UploadedFile.id))
+            .where(UploadedFile.cooperative_id == self.cooperative_id)
+            .group_by(UploadedFile.entity_type)
+            .order_by(func.count(UploadedFile.id).desc())
+        ).all()
+        file_rows = self.db.execute(
+            select(
+                UploadedFile.entity_type,
+                UploadedFile.entity_id,
+                UploadedFile.filename,
+                UploadedFile.file_url,
+                UploadedFile.mime_type,
+                UploadedFile.size_bytes,
+                UploadedFile.uploaded_at,
+            )
+            .where(UploadedFile.cooperative_id == self.cooperative_id)
+            .order_by(UploadedFile.uploaded_at.desc())
+            .limit(25)
+        ).all()
+        input_with_file = int(
+            self.db.scalar(
+                select(func.count(Input.id)).where(Input.cooperative_id == self.cooperative_id, Input.justificatif_file_id.isnot(None))
+            )
+            or 0
+        )
+        advance_with_devis = int(
+            self.db.scalar(
+                select(func.count(FarmerAdvance.id)).where(FarmerAdvance.cooperative_id == self.cooperative_id, FarmerAdvance.devis_file_id.isnot(None))
+            )
+            or 0
+        )
+        treasury_with_file = int(
+            self.db.scalar(
+                select(func.count(TreasuryTransaction.id)).where(
+                    TreasuryTransaction.cooperative_id == self.cooperative_id,
+                    TreasuryTransaction.justificatif_file_id.isnot(None),
+                )
+            )
+            or 0
+        )
+        items = [
+            {
+                "entity_type": str(entity_type or ""),
+                "entity_id": str(entity_id),
+                "filename": str(filename or ""),
+                "file_url": str(file_url or ""),
+                "mime_type": str(mime or ""),
+                "size_bytes": int(size_bytes or 0),
+                "uploaded_at": str(uploaded_at),
+            }
+            for entity_type, entity_id, filename, file_url, mime, size_bytes, uploaded_at in file_rows
+        ]
+        summary = [
+            {
+                "uploaded_files_total": int(sum(int(c or 0) for _, c in type_rows)),
+                "collecte_with_justificatif": input_with_file,
+                "advance_with_devis": advance_with_devis,
+                "treasury_with_justificatif": treasury_with_file,
+                "entity_type_counts": [{ "entity_type": str(t or ""), "count": int(c or 0)} for t, c in type_rows],
+            }
+        ]
+        return {
+            "items": items,
+            "summary": summary,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "uploaded_files,inputs,farmer_advances,treasury_transactions",
+                    "label": "Preuves documentaires uploadées",
+                    "record_count": len(items),
+                }
+            ],
+            "warnings": ["NO_SQL_DATA"] if not items else [],
+        }
+
+    def get_farmer_advances_traceability(self) -> dict[str, Any]:
+        if not self.module_available("farmer_advances"):
+            return {"items": [], "sources": [], "warnings": ["MODULE_NOT_AVAILABLE"]}
+        rows = self.db.execute(
+            select(
+                FarmerAdvance.id,
+                FarmerAdvance.advance_date,
+                FarmerAdvance.amount_fcfa,
+                FarmerAdvance.reason,
+                FarmerAdvance.status,
+                FarmerAdvance.source_type,
+                FarmerAdvance.devis_file_id,
+                FarmerAdvance.treasury_transaction_id,
+                Member.full_name,
+                Batch.code,
+                Parcel.name,
+                Product.name,
+            )
+            .join(Member, Member.id == FarmerAdvance.farmer_id)
+            .outerjoin(Batch, Batch.id == FarmerAdvance.batch_id)
+            .outerjoin(Parcel, Parcel.id == FarmerAdvance.parcel_id)
+            .outerjoin(Product, Product.id == FarmerAdvance.product_id)
+            .where(FarmerAdvance.cooperative_id == self.cooperative_id)
+            .order_by(FarmerAdvance.advance_date.desc(), FarmerAdvance.created_at.desc())
+            .limit(30)
+        ).all()
+        items = []
+        with_devis = 0
+        with_treasury = 0
+        for advance_id, advance_date, amount_fcfa, reason, status, source_type, devis_file_id, treasury_id, member_name, batch_code, parcel_name, product_name in rows:
+            if devis_file_id:
+                with_devis += 1
+            if treasury_id:
+                with_treasury += 1
+            items.append(
+                {
+                    "advance_id": str(advance_id),
+                    "advance_date": str(advance_date),
+                    "amount_fcfa": float(amount_fcfa or 0.0),
+                    "reason": str(reason or ""),
+                    "status": str(status.value if hasattr(status, "value") else status),
+                    "source_type": str(source_type or ""),
+                    "has_devis": bool(devis_file_id),
+                    "treasury_synced": bool(treasury_id),
+                    "member_name": str(member_name or ""),
+                    "batch_ref": str(batch_code or ""),
+                    "parcel_name": str(parcel_name or ""),
+                    "product": str(product_name or ""),
+                }
+            )
+        summary = [{"advance_total": len(items), "with_devis": with_devis, "with_treasury_sync": with_treasury}]
+        return {
+            "items": items,
+            "summary": summary,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "farmer_advances,members,batches,parcels,products,treasury_transactions",
+                    "label": "Traçabilité des avances producteurs",
+                    "record_count": len(items),
+                }
+            ],
+            "warnings": ["NO_SQL_DATA"] if not items else [],
+        }
+
+    def get_treasury_traceability(self) -> dict[str, Any]:
+        if not self.module_available("treasury_transactions"):
+            return {"items": [], "sources": [], "warnings": ["MODULE_NOT_AVAILABLE"]}
+        status_rows = self.db.execute(
+            select(
+                TreasuryTransaction.status,
+                func.count(TreasuryTransaction.id),
+                func.coalesce(func.sum(TreasuryTransaction.amount_fcfa), 0.0),
+            )
+            .where(TreasuryTransaction.cooperative_id == self.cooperative_id)
+            .group_by(TreasuryTransaction.status)
+            .order_by(func.count(TreasuryTransaction.id).desc())
+        ).all()
+        txn_rows = self.db.execute(
+            select(
+                TreasuryTransaction.reference,
+                TreasuryTransaction.transaction_date,
+                TreasuryTransaction.type,
+                TreasuryTransaction.status,
+                TreasuryTransaction.amount_fcfa,
+                TreasuryTransaction.source_type,
+                TreasuryTransaction.source_id,
+                TreasuryTransaction.receipt_reference,
+                TreasuryTransaction.justificatif_file_id,
+            )
+            .where(TreasuryTransaction.cooperative_id == self.cooperative_id)
+            .order_by(TreasuryTransaction.transaction_date.desc(), TreasuryTransaction.created_at.desc())
+            .limit(40)
+        ).all()
+        missing_justif = 0
+        enregistre_complet = 0
+        with_receipt = 0
+        linked_advances = 0
+        linked_invoice_income = 0
+        items = []
+        for reference, tx_date, tx_type, status, amount_fcfa, source_type, source_id, receipt_reference, justificatif_file_id in txn_rows:
+            status_value = str(status.value if hasattr(status, "value") else status)
+            source_type_value = str(source_type or "")
+            if not justificatif_file_id:
+                missing_justif += 1
+            if status_value.lower() == "enregistre_complet":
+                enregistre_complet += 1
+            if receipt_reference:
+                with_receipt += 1
+            if source_type_value == "farmer_advance":
+                linked_advances += 1
+            if source_type_value == "commercial_invoice":
+                linked_invoice_income += 1
+            items.append(
+                {
+                    "reference": str(reference or ""),
+                    "transaction_date": str(tx_date),
+                    "type": str(tx_type.value if hasattr(tx_type, "value") else tx_type),
+                    "status": status_value,
+                    "amount_fcfa": float(amount_fcfa or 0.0),
+                    "source_type": source_type_value,
+                    "source_id": str(source_id) if source_id else "",
+                    "receipt_reference": str(receipt_reference or ""),
+                    "has_justificatif": bool(justificatif_file_id),
+                }
+            )
+        summary = [
+            {
+                "status_counts": [
+                    {
+                        "status": str(status.value if hasattr(status, "value") else status),
+                        "count": int(count or 0),
+                        "amount_fcfa": float(amount or 0.0),
+                    }
+                    for status, count, amount in status_rows
+                ],
+                "missing_justificatif_count": missing_justif,
+                "enregistre_complet_count": enregistre_complet,
+                "with_receipt_reference_count": with_receipt,
+                "farmer_advance_linked_count": linked_advances,
+                "commercial_invoice_income_linked_count": linked_invoice_income,
+            }
+        ]
+        return {
+            "items": items,
+            "summary": summary,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "treasury_transactions",
+                    "label": "Traçabilité trésorerie",
+                    "record_count": len(items),
+                }
+            ],
+            "warnings": ["NO_SQL_DATA"] if not items else [],
+        }
+
+    def get_commercial_invoice_linkage(self) -> dict[str, Any]:
+        if not self.module_available("commercial_orders") or not self.module_available("commercial_invoices"):
+            return {"items": [], "sources": [], "warnings": ["MODULE_NOT_AVAILABLE"]}
+        rows = self.db.execute(
+            select(
+                CommercialOrder.order_number,
+                CommercialOrder.status,
+                CommercialOrder.total_amount_fcfa,
+                CommercialInvoice.invoice_number,
+                CommercialInvoice.status,
+                CommercialInvoice.total_amount_fcfa,
+                TreasuryTransaction.id,
+                TreasuryTransaction.reference,
+                TreasuryTransaction.receipt_reference,
+            )
+            .join(CommercialInvoice, CommercialInvoice.order_id == CommercialOrder.id)
+            .outerjoin(
+                TreasuryTransaction,
+                and_(
+                    TreasuryTransaction.source_type == "commercial_invoice",
+                    TreasuryTransaction.source_id == CommercialInvoice.id,
+                ),
+            )
+            .where(CommercialOrder.cooperative_id == self.cooperative_id)
+            .order_by(CommercialOrder.received_at.desc())
+            .limit(30)
+        ).all()
+        items = []
+        paid_with_invoice = 0
+        invoice_paid = 0
+        treasury_linked = 0
+        for order_number, order_status, order_total, invoice_number, invoice_status, invoice_total, treasury_id, treasury_ref, receipt_ref in rows:
+            order_status_value = str(order_status.value if hasattr(order_status, "value") else order_status)
+            invoice_status_value = str(invoice_status.value if hasattr(invoice_status, "value") else invoice_status)
+            has_treasury_income = bool(treasury_id)
+            if order_status_value.lower() == "paid":
+                paid_with_invoice += 1
+            if invoice_status_value.lower() == "paid":
+                invoice_paid += 1
+            if has_treasury_income:
+                treasury_linked += 1
+            items.append(
+                {
+                    "order_number": str(order_number or ""),
+                    "order_status": order_status_value,
+                    "order_total_fcfa": float(order_total or 0.0),
+                    "invoice_number": str(invoice_number or ""),
+                    "invoice_status": invoice_status_value,
+                    "invoice_total_fcfa": float(invoice_total or 0.0),
+                    "treasury_income_linked": has_treasury_income,
+                    "treasury_reference": str(treasury_ref or ""),
+                    "receipt_reference": str(receipt_ref or ""),
+                }
+            )
+        summary = [
+            {
+                "linked_rows": len(items),
+                "paid_orders_with_invoice": paid_with_invoice,
+                "paid_invoices_count": invoice_paid,
+                "treasury_income_linked_count": treasury_linked,
+            }
+        ]
+        return {
+            "items": items,
+            "summary": summary,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "commercial_orders,commercial_invoices,treasury_transactions",
+                    "label": "Lien commandes/factures/trésorerie",
+                    "record_count": len(items),
+                }
+            ],
+            "warnings": ["NO_SQL_DATA"] if not items else [],
         }
 
     def get_stage_efficiency_summary(self, product: str | None = None, date_range: list[str] | None = None) -> dict[str, Any]:

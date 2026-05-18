@@ -19,6 +19,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { AIInsightsStrip, type AIInsightItem } from "@/components/ui/AIInsightsStrip";
 import { useDashboard } from "@/hooks/useDashboard";
@@ -93,10 +94,14 @@ function flowBarClass(lossPct: number) {
 }
 
 export default function ManagerDashboardPage() {
-  const { data, isLoading, isError, refetch } = useDashboard();
-  const { data: catalogProducts = [] } = useCatalogProducts();
-  const { data: members = [] } = useMembers();
-  const { data: stocks = [] } = useStocks();
+  const dashboardQuery = useDashboard();
+  const catalogQuery = useCatalogProducts();
+  const membersQuery = useMembers();
+  const stocksQuery = useStocks();
+  const data = dashboardQuery.data;
+  const catalogProducts = catalogQuery.data ?? [];
+  const members = membersQuery.data ?? [];
+  const stocks = stocksQuery.data ?? [];
 
   const inputs = useMemo(() => data?.recent_inputs ?? [], [data?.recent_inputs]);
   const steps = useMemo(() => data?.recent_process_steps ?? [], [data?.recent_process_steps]);
@@ -273,14 +278,37 @@ export default function ManagerDashboardPage() {
   const primaryInsight = (data?.loss_rate ?? 0) > 9 ? "Drop detecte sur les etapes aval" : "Tendance stable sur la semaine";
   const secondaryInsight = (data?.efficiency_rate ?? 0) >= 80 ? "Trend increasing sur le rendement" : "Efficacite sous cible, suivi recommande";
 
-  if (isError) {
+  const requiredLoading =
+    dashboardQuery.isLoading || catalogQuery.isLoading || membersQuery.isLoading || stocksQuery.isLoading;
+  const requiredError =
+    dashboardQuery.isError || catalogQuery.isError || membersQuery.isError || stocksQuery.isError;
+
+  if (requiredLoading) {
+    return (
+      <main className="relative min-h-[60vh]">
+        <PageIntro title="Dashboard" />
+        <ContentAreaLoader
+          title="Chargement Dashboard"
+          subtitle="Synchronisation des indicateurs, stocks, membres et produits..."
+        />
+      </main>
+    );
+  }
+
+  if (requiredError) {
     return (
       <main>
+        <PageIntro title="Dashboard" />
         <section className="premium-card rounded-xl p-6">
           <p className="text-sm text-[var(--danger)]">Erreur de chargement du dashboard.</p>
           <button
             type="button"
-            onClick={() => refetch()}
+            onClick={() => {
+              void dashboardQuery.refetch();
+              void catalogQuery.refetch();
+              void membersQuery.refetch();
+              void stocksQuery.refetch();
+            }}
             className="mt-3 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white"
           >
             Reessayer
@@ -372,39 +400,31 @@ export default function ManagerDashboardPage() {
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {(isLoading && !data ? Array.from({ length: 4 }).map((_, i) => ({ id: `s-${i}` })) : kpiCards).map((kpi) =>
-          "label" in kpi ? (
-            <Link key={kpi.id} href={kpi.href} className="block">
-              <article className="rounded-xl border border-[#d8e2ee] bg-white p-4 shadow-[0_7px_18px_rgba(15,46,80,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,46,80,0.1)]">
-                <p className="text-[11px] uppercase tracking-[0.14em] text-[#688099]">{kpi.label}</p>
-                <p className="mt-2 text-3xl font-semibold text-[#132f47]">
-                  {kpi.value.toFixed(kpi.suffix ? 1 : 0)}
-                  {kpi.suffix}
-                </p>
-                <div className="mt-3 h-[42px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={kpi.trend.map((value, index) => ({ x: index, y: value }))}>
-                      <Line
-                        type="monotone"
-                        dataKey="y"
-                        stroke={kpi.tone === "positive" ? GREEN : GREEN_SOFT}
-                        strokeWidth={2.1}
-                        dot={false}
-                        isAnimationActive={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </article>
-            </Link>
-          ) : (
-            <article key={kpi.id} className="rounded-xl border border-[#d8e2ee] bg-white p-4 shadow-[0_7px_18px_rgba(15,46,80,0.06)]">
-              <div className="h-3 w-28 animate-pulse rounded bg-[#dfe8f2]" />
-              <div className="mt-3 h-8 w-20 animate-pulse rounded bg-[#dfe8f2]" />
-              <div className="mt-3 h-8 animate-pulse rounded bg-[#edf3f9]" />
+        {kpiCards.map((kpi) => (
+          <Link key={kpi.id} href={kpi.href} className="block">
+            <article className="rounded-xl border border-[#d8e2ee] bg-white p-4 shadow-[0_7px_18px_rgba(15,46,80,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,46,80,0.1)]">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-[#688099]">{kpi.label}</p>
+              <p className="mt-2 text-3xl font-semibold text-[#132f47]">
+                {kpi.value.toFixed(kpi.suffix ? 1 : 0)}
+                {kpi.suffix}
+              </p>
+              <div className="mt-3 h-[42px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={kpi.trend.map((value, index) => ({ x: index, y: value }))}>
+                    <Line
+                      type="monotone"
+                      dataKey="y"
+                      stroke={kpi.tone === "positive" ? GREEN : GREEN_SOFT}
+                      strokeWidth={2.1}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </article>
-          ),
-        )}
+          </Link>
+        ))}
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">

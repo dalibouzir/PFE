@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
+import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -54,6 +55,8 @@ type PreHarvestExecutionStep = {
   duration_minutes?: number | null;
   summary?: string | null;
 };
+
+const MINUTES_PER_DAY = 60 * 24;
 
 const INVALID_PRODUCT_TERMS = [
   "pre-recolte",
@@ -138,8 +141,32 @@ function getFrenchErrorMessage(error: unknown, fallback: string): string {
   return error.message;
 }
 
+function normalizeStepName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function formatDurationDaysFromMinutes(minutes?: number | null): string {
+  if (minutes === null || minutes === undefined) return "";
+  const days = minutes / MINUTES_PER_DAY;
+  if (!Number.isFinite(days) || days < 0) return "";
+  return Number.isInteger(days) ? String(days) : String(Number(days.toFixed(2)));
+}
+
+function parseDurationDaysToMinutes(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const parsed = Number(raw.replace(",", "."));
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  // Backend persists `duration_minutes`; UI captures days and maps to minutes.
+  return Math.round(parsed * MINUTES_PER_DAY);
+}
+
 export default function ParcellesCulturePage() {
   const [search, setSearch] = useState("");
+  const [productFilterId, setProductFilterId] = useState("all");
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [lotModalOpen, setLotModalOpen] = useState(false);
   const [workflowModalOpen, setWorkflowModalOpen] = useState(false);
@@ -149,7 +176,7 @@ export default function ParcellesCulturePage() {
   const [workflowStepsDraft, setWorkflowStepsDraft] = useState<WorkflowDraftStep[]>([]);
   const [workflowStepToAdd, setWorkflowStepToAdd] = useState("");
   const [workflowCustomStep, setWorkflowCustomStep] = useState("");
-  const [executionDetailsDraft, setExecutionDetailsDraft] = useState<Record<number, { execution_date: string; duration_minutes: string; summary: string }>>({});
+  const [executionDetailsDraft, setExecutionDetailsDraft] = useState<Record<number, { execution_date: string; duration_days: string; summary: string }>>({});
   const [editingExecutionStepIndex, setEditingExecutionStepIndex] = useState<number | null>(null);
   const [isCreatingLot, setIsCreatingLot] = useState(false);
   const [pendingAction, setPendingAction] = useState<
@@ -162,6 +189,7 @@ export default function ParcellesCulturePage() {
     | "update_step_status"
   >(null);
   const [pendingApproveCharge, setPendingApproveCharge] = useState(false);
+  const [approveChargeDraft, setApproveChargeDraft] = useState("");
   const [pendingStopLot, setPendingStopLot] = useState(false);
   const [pendingDeleteLot, setPendingDeleteLot] = useState(false);
   const tableControls = useTableControls(
@@ -183,8 +211,10 @@ export default function ParcellesCulturePage() {
   );
 
   const farmersQuery = useFarmers();
-  const { data: products = [] } = useProducts();
-  const { data: batches = [] } = useBatches();
+  const productsQuery = useProducts();
+  const batchesQuery = useBatches();
+  const products = productsQuery.data ?? [];
+  const batches = batchesQuery.data ?? [];
 
   const createBatch = useCreateBatch();
   const updateBatch = useUpdateBatch();
@@ -201,7 +231,7 @@ export default function ParcellesCulturePage() {
   const productsById = useMemo(() => new Map(products.map((item) => [item.id, item])), [products]);
 
   const preHarvestLots = useMemo(() => {
-    const rows = batches.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const rows = [...batches].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     const needle = search.trim().toLowerCase();
     if (!needle) return rows;
@@ -216,10 +246,21 @@ export default function ParcellesCulturePage() {
 
   const visiblePreHarvestLots = useMemo(() => {
     const stateValue = tableControls.filters.state;
-    const filtered = preHarvestLots.filter((item) => stateValue === "all" || getPreHarvestState(item) === stateValue);
-    const sorted = filtered.slice().sort((a, b) => a.creation_date.localeCompare(b.creation_date));
+    const filtered = preHarvestLots.filter((item) => {
+      const stateMatches = stateValue === "all" || getPreHarvestState(item) === stateValue;
+      const productMatches = productFilterId === "all" || item.product_id === productFilterId;
+      return stateMatches && productMatches;
+    });
+    const sorted = filtered.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     return tableControls.sortOrder === "asc" ? sorted : sorted.reverse();
-  }, [preHarvestLots, tableControls.filters.state, tableControls.sortOrder]);
+  }, [preHarvestLots, productFilterId, tableControls.filters.state, tableControls.sortOrder]);
+
+  const preHarvestProductFilterOptions = useMemo(() => {
+    const ids = Array.from(new Set(preHarvestLots.map((lot) => lot.product_id)));
+    return ids
+      .map((id) => ({ id, name: productsById.get(id)?.name ?? id }))
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  }, [preHarvestLots, productsById]);
 
   const selectedBatch = useMemo(() => {
     if (!selectedBatchId) return visiblePreHarvestLots[0] ?? null;
@@ -250,6 +291,8 @@ export default function ParcellesCulturePage() {
     () => (selectedBatch ? getPreHarvestState(selectedBatch) : null),
     [selectedBatch],
   );
+  const requiredLoading = farmersQuery.isLoading || productsQuery.isLoading || batchesQuery.isLoading;
+  const requiredError = farmersQuery.isError || productsQuery.isError || batchesQuery.isError;
 
   const activeExecutionSteps = useMemo<PreHarvestExecutionStep[]>(() => {
     if (!selectedBatch) return [];
@@ -293,11 +336,11 @@ export default function ParcellesCulturePage() {
   );
 
   useEffect(() => {
-    const draft: Record<number, { execution_date: string; duration_minutes: string; summary: string }> = {};
+    const draft: Record<number, { execution_date: string; duration_days: string; summary: string }> = {};
     for (const step of activeExecutionSteps) {
       draft[step.index] = {
         execution_date: step.execution_date ?? "",
-        duration_minutes: step.duration_minutes !== null && step.duration_minutes !== undefined ? String(step.duration_minutes) : "",
+        duration_days: formatDurationDaysFromMinutes(step.duration_minutes),
         summary: step.summary ?? "",
       };
     }
@@ -458,9 +501,22 @@ export default function ParcellesCulturePage() {
 
   const handleApproveLotCharge = async () => {
     if (!selectedBatch) return;
+    const parsedCharge = Number(approveChargeDraft.replace(",", "."));
+    if (!Number.isFinite(parsedCharge) || parsedCharge <= 0) {
+      setFormError("Le montant de charge doit être supérieur à 0.");
+      return;
+    }
     try {
       setPendingAction("approve_charge");
+      if ((selectedBatch.estimated_charge_fcfa ?? 0) !== parsedCharge) {
+        await updateBatch.mutateAsync({
+          id: selectedBatch.id,
+          payload: { estimated_charge_fcfa: parsedCharge },
+        });
+      }
       await approveBatchCharge.mutateAsync(selectedBatch.id);
+      setPendingApproveCharge(false);
+      setFormError(null);
     } catch (error) {
       setFormError(getFrenchErrorMessage(error, "Impossible d'approuver la charge."));
     } finally {
@@ -510,8 +566,8 @@ export default function ParcellesCulturePage() {
 
   const handleTryEditWorkflow = () => {
     if (!selectedBatch || !selectedLotState) return;
-    if (selectedLotState !== "preparation") {
-      window.alert("Ce lot est actif et ne peut plus être modifié.");
+    if (selectedBatch.preharvest_completed_at) {
+      window.alert("La Pré-récolte est terminée. Le workflow ne peut plus être modifié.");
       return;
     }
     const source = selectedBatch.ordered_process_steps ?? [];
@@ -578,8 +634,8 @@ export default function ParcellesCulturePage() {
 
   const handleSaveWorkflowSteps = async () => {
     if (!selectedBatch) return;
-    if (selectedLotState !== "preparation") {
-      window.alert("Ce lot est actif et ne peut plus être modifié.");
+    if (selectedBatch.preharvest_completed_at) {
+      window.alert("La Pré-récolte est terminée. Le workflow ne peut plus être modifié.");
       setWorkflowModalOpen(false);
       return;
     }
@@ -606,6 +662,42 @@ export default function ParcellesCulturePage() {
         id: selectedBatch.id,
         payload: { process_steps: normalized },
       });
+      if (selectedLotState === "active") {
+        const existing = selectedBatch.preharvest_step_statuses ?? [];
+        const grouped = new Map<string, PreHarvestExecutionStep[]>();
+        for (const step of existing) {
+          const key = normalizeStepName(step.name);
+          const current = grouped.get(key) ?? [];
+          current.push(step);
+          grouped.set(key, current);
+        }
+        const rebuilt = normalized.map((name, index) => {
+          const key = normalizeStepName(name);
+          const bucket = grouped.get(key) ?? [];
+          const preserved = bucket.shift();
+          grouped.set(key, bucket);
+          if (preserved) {
+            return {
+              ...preserved,
+              index,
+              name,
+            };
+          }
+          return {
+            index,
+            name,
+            status: "todo" as const,
+            updated_at: null,
+            execution_date: null,
+            duration_minutes: null,
+            summary: null,
+          };
+        });
+        await updatePreHarvestStepStatuses.mutateAsync({
+          id: selectedBatch.id,
+          payload: { statuses: rebuilt },
+        });
+      }
       setWorkflowModalOpen(false);
       setWorkflowError(null);
     } catch (error) {
@@ -659,20 +751,20 @@ export default function ParcellesCulturePage() {
   };
 
   const saveExecutionDetails = async (stepIndex: number) => {
-    const draft = executionDetailsDraft[stepIndex] ?? { execution_date: "", duration_minutes: "", summary: "" };
+    const draft = executionDetailsDraft[stepIndex] ?? { execution_date: "", duration_days: "", summary: "" };
     await updateExecutionStep(stepIndex, {
       execution_date: draft.execution_date || null,
-      duration_minutes: draft.duration_minutes ? Number(draft.duration_minutes) : null,
+      duration_minutes: parseDurationDaysToMinutes(draft.duration_days),
       summary: draft.summary || null,
     });
   };
 
   const completeExecutionStepWithDetails = async (stepIndex: number) => {
-    const draft = executionDetailsDraft[stepIndex] ?? { execution_date: "", duration_minutes: "", summary: "" };
+    const draft = executionDetailsDraft[stepIndex] ?? { execution_date: "", duration_days: "", summary: "" };
     await updateExecutionStep(stepIndex, {
       status: "done",
       execution_date: draft.execution_date || null,
-      duration_minutes: draft.duration_minutes ? Number(draft.duration_minutes) : null,
+      duration_minutes: parseDurationDaysToMinutes(draft.duration_days),
       summary: draft.summary || null,
     });
     setEditingExecutionStepIndex(null);
@@ -690,6 +782,29 @@ export default function ParcellesCulturePage() {
       setPendingAction(null);
     }
   };
+
+  if (requiredLoading) {
+    return (
+      <main className="relative min-h-[60vh]">
+        <PageIntro title="Parcelles & Culture" />
+        <ContentAreaLoader
+          title="Chargement Parcelles & Culture"
+          subtitle="Synchronisation des lots, membres et produits..."
+        />
+      </main>
+    );
+  }
+
+  if (requiredError) {
+    return (
+      <main>
+        <PageIntro title="Parcelles & Culture" />
+        <section className="premium-card reveal mt-4 rounded-2xl p-4">
+          <p className="text-sm text-[var(--danger)]">Impossible de charger les données requises de la page Parcelles & Culture.</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main>
@@ -736,13 +851,28 @@ export default function ParcellesCulturePage() {
       <section className="grid min-h-0 gap-4 xl:grid-cols-[340px_1fr]">
         <aside className="space-y-3">
           <article
-            className="premium-card reveal h-[calc(100vh-140px)] overflow-y-auto rounded-2xl p-4"
+            className="premium-card reveal max-h-[calc(100dvh-190px)] overflow-y-auto no-scrollbar rounded-2xl p-4"
             style={{ ["--delay" as string]: "40ms" }}
           >
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-[var(--text)]">Lots Pré-récolte</h3>
               <span className="text-xs text-[var(--muted)]">{visiblePreHarvestLots.length} lot(s)</span>
             </div>
+            <label className="mb-3 block text-xs font-medium text-[var(--text)]">
+              Filtrer par produit
+              <select
+                value={productFilterId}
+                onChange={(event) => setProductFilterId(event.target.value)}
+                className="wf-input mt-1 h-9 w-full px-2.5 text-xs"
+              >
+                <option value="all">Tous les produits</option>
+                {preHarvestProductFilterOptions.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             {visiblePreHarvestLots.length === 0 ? (
               <p className="text-xs text-[var(--muted)]">Aucun lot Pré-récolte disponible.</p>
             ) : (
@@ -752,6 +882,8 @@ export default function ParcellesCulturePage() {
                   const farmerName = lot.member_id ? farmersById.get(lot.member_id)?.full_name ?? "-" : "-";
                   const productName = productsById.get(lot.product_id)?.name ?? "-";
                   const state = getPreHarvestState(lot);
+                  const executedStepsCount = (lot.preharvest_step_statuses ?? []).filter((step) => step.status === "done").length;
+                  const totalStepsCount = lot.ordered_process_steps?.length ?? 0;
                   return (
                     <article
                       key={lot.id}
@@ -764,17 +896,18 @@ export default function ParcellesCulturePage() {
                       <div className="mb-2 flex items-start justify-between gap-2">
                         <button type="button" onClick={() => setSelectedBatchId(lot.id)} className="min-w-0 text-left">
                           <p className="text-sm font-semibold text-[var(--text)]">{lot.code}</p>
+                          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                            Créé le: {new Date(lot.created_at).toLocaleString("fr-FR")}
+                          </p>
                         </button>
                         <StatusBadge label={stateLabel(state)} tone={stateTone(state)} />
                       </div>
                       <button type="button" onClick={() => setSelectedBatchId(lot.id)} className="w-full text-left">
-                        <div className="mt-2 grid gap-1">
+                        <div className="mt-3 grid gap-1">
                           <p className="text-xs text-[var(--muted)]">Agriculteur: {farmerName}</p>
                           <p className="text-xs text-[var(--muted)]">Produit: {productName}</p>
+                          <p className="text-xs text-[var(--muted)]">Étapes exécutées: {executedStepsCount}/{totalStepsCount}</p>
                           <p className="text-xs text-[var(--muted)]">Surface: {(lot.surface_ha ?? 0).toLocaleString("fr-FR")} ha</p>
-                          <p className="text-xs text-[var(--muted)]">Quantité estimée: {(lot.estimated_qty_kg ?? 0).toLocaleString("fr-FR")} kg</p>
-                          <p className="text-xs text-[var(--muted)]">Charge estimée: {(lot.estimated_charge_fcfa ?? 0).toLocaleString("fr-FR")} FCFA</p>
-                          <p className="text-xs text-[var(--muted)]">Charge: {lot.charge_approved_at ? "Approuvée" : "En attente"}</p>
                         </div>
                       </button>
                     </article>
@@ -858,14 +991,14 @@ export default function ParcellesCulturePage() {
                       {pendingAction === "stop" ? "Arrêt en cours..." : "Stopper le lot"}
                     </button>
                   ) : null}
-                  {selectedLotState === "preparation" ? (
+                  {!selectedBatch.preharvest_completed_at ? (
                     <button
                       type="button"
                       onClick={handleTryEditWorkflow}
                       disabled={pendingAction !== null}
                       className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Modifier lot
+                      Modifier workflow
                     </button>
                   ) : null}
                   {selectedLotState === "preparation" ? (
@@ -880,7 +1013,11 @@ export default function ParcellesCulturePage() {
                   ) : null}
                   <button
                     type="button"
-                    onClick={() => setPendingApproveCharge(true)}
+                    onClick={() => {
+                      setApproveChargeDraft(String(selectedBatch.estimated_charge_fcfa ?? 0));
+                      setPendingApproveCharge(true);
+                      setFormError(null);
+                    }}
                     disabled={Boolean(selectedBatch.charge_approved_at) || pendingAction !== null}
                     className="soft-focus wf-btn-secondary px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -916,9 +1053,14 @@ export default function ParcellesCulturePage() {
                     Le stock réel sera créé uniquement après la Collecte liée à ce lot.
                   </p>
                 ) : null}
+                {selectedBatch.preharvest_completed_at ? (
+                  <p className="mt-2 text-xs text-[var(--muted)]">
+                    La Pré-récolte est terminée. Le workflow ne peut plus être modifié.
+                  </p>
+                ) : null}
               </article>
 
-              {selectedLotState === "preparation" ? (
+              {!selectedBatch.preharvest_completed_at ? (
               <article className="mb-4 rounded-2xl border border-[var(--line)] bg-[#FFF9F1] p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-sm font-semibold text-[var(--text)]">Workflow Pré-récolte planifié</p>
@@ -993,7 +1135,7 @@ export default function ParcellesCulturePage() {
                         {activeExecutionSteps.map((step) => {
                           const draft = executionDetailsDraft[step.index] ?? {
                             execution_date: "",
-                            duration_minutes: "",
+                            duration_days: "",
                             summary: "",
                           };
                           const statusLabel = step.status === "done" ? "Terminé" : "En cours";
@@ -1023,8 +1165,8 @@ export default function ParcellesCulturePage() {
                                     {step.execution_date || "Non renseignée"}
                                   </p>
                                   <p>
-                                    <span className="font-semibold text-[var(--text)]">Durée:</span>{" "}
-                                    {step.duration_minutes != null ? `${step.duration_minutes} min` : "Non renseignée"}
+                                    <span className="font-semibold text-[var(--text)]">Durée (jours):</span>{" "}
+                                    {step.duration_minutes != null ? formatDurationDaysFromMinutes(step.duration_minutes) : "Non renseignée"}
                                   </p>
                                   <p>
                                     <span className="font-semibold text-[var(--text)]">Résumé:</span>{" "}
@@ -1053,7 +1195,7 @@ export default function ParcellesCulturePage() {
                                       setExecutionDetailsDraft((current) => ({
                                         ...current,
                                         [step.index]: {
-                                          ...(current[step.index] ?? { execution_date: "", duration_minutes: "", summary: "" }),
+                                          ...(current[step.index] ?? { execution_date: "", duration_days: "", summary: "" }),
                                           execution_date: event.target.value,
                                         },
                                       }))
@@ -1063,18 +1205,18 @@ export default function ParcellesCulturePage() {
                                   />
                                 </label>
                                 <label className="block text-xs font-medium text-[var(--text)]">
-                                  Durée (minutes)
+                                  Durée (jours)
                                   <input
                                     type="number"
                                     min="0"
-                                    step="1"
-                                    value={draft.duration_minutes}
+                                    step="0.1"
+                                    value={draft.duration_days}
                                     onChange={(event) =>
                                       setExecutionDetailsDraft((current) => ({
                                         ...current,
                                         [step.index]: {
-                                          ...(current[step.index] ?? { execution_date: "", duration_minutes: "", summary: "" }),
-                                          duration_minutes: event.target.value,
+                                          ...(current[step.index] ?? { execution_date: "", duration_days: "", summary: "" }),
+                                          duration_days: event.target.value,
                                         },
                                       }))
                                     }
@@ -1096,7 +1238,7 @@ export default function ParcellesCulturePage() {
                                         setExecutionDetailsDraft((current) => ({
                                           ...current,
                                           [step.index]: {
-                                            ...(current[step.index] ?? { execution_date: "", duration_minutes: "", summary: "" }),
+                                            ...(current[step.index] ?? { execution_date: "", duration_days: "", summary: "" }),
                                             summary: event.target.value,
                                           },
                                         }))
@@ -1185,7 +1327,7 @@ export default function ParcellesCulturePage() {
                             </div>
                             <div className="mt-2 grid gap-1 text-xs text-[var(--muted)] sm:grid-cols-2">
                               <p>Date: {step.execution_date || "Non renseignée"}</p>
-                              <p>Durée: {step.duration_minutes != null ? `${step.duration_minutes} min` : "Non renseignée"}</p>
+                              <p>Durée (jours): {step.duration_minutes != null ? formatDurationDaysFromMinutes(step.duration_minutes) : "Non renseignée"}</p>
                             </div>
                             <p className="mt-1 text-xs text-[var(--muted)]">Résumé: {step.summary?.trim() ? step.summary : "Aucun résumé"}</p>
                           </article>
@@ -1234,7 +1376,7 @@ export default function ParcellesCulturePage() {
                             </div>
                             <div className="mt-2 grid gap-1 text-xs text-[var(--muted)] sm:grid-cols-3">
                               <p>📅 Date: {step.execution_date || "Non renseignée"}</p>
-                              <p>⏱️ Durée: {step.duration_minutes != null ? `${step.duration_minutes} min` : "Non renseignée"}</p>
+                              <p>⏱️ Durée (jours): {step.duration_minutes != null ? formatDurationDaysFromMinutes(step.duration_minutes) : "Non renseignée"}</p>
                               <p>📝 Résumé: {step.summary?.trim() ? step.summary : "Aucun résumé"}</p>
                             </div>
                           </article>
@@ -1390,12 +1532,12 @@ export default function ParcellesCulturePage() {
         open={workflowModalOpen}
         onClose={() => setWorkflowModalOpen(false)}
         title="Modifier workflow Pré-récolte"
-        subtitle="Sélection des actions terrain prévues avant activation."
+        subtitle="Sélection des actions terrain prévues avant clôture Pré-récolte."
         size="lg"
       >
         <div className="space-y-4">
           <div className="rounded-xl border border-[#BDD6FB] bg-[#EEF5FF] px-3 py-2 text-xs text-[#2F80ED]">
-            Sélectionnez les actions terrain prévues pour ce lot. Après activation, elles seront exécutées avec date, durée et résumé.
+            Sélectionnez les actions terrain prévues pour ce lot. Pendant l&apos;activité, vous pouvez encore ajouter, retirer et réordonner les étapes.
           </div>
           <div className="space-y-2 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
             <p className="text-sm font-semibold text-[var(--text)]">Actions Pré-récolte disponibles</p>
@@ -1407,11 +1549,16 @@ export default function ParcellesCulturePage() {
                 disabled={pendingAction !== null}
               >
                 <option value="">Choisir une action standard</option>
-                {preHarvestTemplateSteps.map((step) => (
-                  <option key={step} value={step}>
-                    {step}
-                  </option>
-                ))}
+                {preHarvestTemplateSteps.map((step) => {
+                  const exists = workflowStepsDraft.some(
+                    (draftStep) => normalizeStepName(draftStep.name) === normalizeStepName(step),
+                  );
+                  return (
+                    <option key={step} value={step}>
+                      {exists ? `${step} (déjà ajoutée)` : step}
+                    </option>
+                  );
+                })}
               </select>
               <button
                 type="button"
@@ -1499,14 +1646,7 @@ export default function ParcellesCulturePage() {
           )}
           {workflowError ? <p className="text-xs text-[#A53A3A]">{workflowError}</p> : null}
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line)] pt-3">
-            <button
-              type="button"
-              onClick={handleAddWorkflowStep}
-              className="soft-focus wf-btn-secondary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={pendingAction !== null}
-            >
-              + Ajouter étape
-            </button>
+            <span className="text-xs text-[var(--muted)]">Étapes du modèle produit + action personnalisée.</span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1528,18 +1668,50 @@ export default function ParcellesCulturePage() {
           </div>
         </div>
       </LiquidGlassModal>
-      <ConfirmActionModal
+      <LiquidGlassModal
         open={pendingApproveCharge}
+        onClose={() => setPendingApproveCharge(false)}
         title="Approuver la charge estimée"
-        message="Créer Avance Producteur + Trésorerie OUT pour ce lot ?"
-        confirmLabel="Approuver"
-        loading={pendingAction === "approve_charge"}
-        onCancel={() => setPendingApproveCharge(false)}
-        onConfirm={() => {
-          void handleApproveLotCharge();
-          setPendingApproveCharge(false);
-        }}
-      />
+        subtitle="Vous pouvez ajuster la charge avant validation."
+        size="sm"
+      >
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Montant charge (FCFA)
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={approveChargeDraft}
+              onChange={(event) => setApproveChargeDraft(event.target.value)}
+              className="wf-input mt-2 h-10 w-full px-3 text-sm"
+              disabled={pendingAction === "approve_charge"}
+            />
+          </label>
+          <p className="text-xs text-[var(--muted)]">Cette validation crée Avance Producteur + Trésorerie OUT.</p>
+          {formError ? <p className="text-xs text-[#A53A3A]">{formError}</p> : null}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setPendingApproveCharge(false)}
+              className="soft-focus wf-btn-secondary px-3 py-2 text-sm font-semibold"
+              disabled={pendingAction === "approve_charge"}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleApproveLotCharge();
+              }}
+              className="soft-focus wf-btn-primary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={pendingAction === "approve_charge"}
+            >
+              {pendingAction === "approve_charge" ? "Approbation en cours..." : "Enregistrer et approuver"}
+            </button>
+          </div>
+        </div>
+      </LiquidGlassModal>
       <ConfirmActionModal
         open={pendingStopLot}
         title="Stopper le lot"

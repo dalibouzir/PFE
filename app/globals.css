@@ -126,16 +126,98 @@ h6 {
 
 .scroll-thin {
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary) 28%, var(--line) 72%) transparent;
 }
 
 .scroll-thin::-webkit-scrollbar {
-  height: 8px;
-  width: 8px;
+  height: 7px;
+  width: 7px;
 }
 
 .scroll-thin::-webkit-scrollbar-thumb {
   border-radius: 9999px;
-  background: color-mix(in srgb, var(--line) 70%, #8f8777 30%);
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  background: color-mix(in srgb, var(--primary) 24%, var(--line) 76%);
+}
+
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer utilities {
+  .thin-scrollbar {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--primary) 28%, var(--line) 72%) transparent;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar {
+    height: 7px;
+    width: 7px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    background: color-mix(in srgb, var(--primary) 24%, var(--line) 76%);
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.shell-scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary) 30%, var(--line) 70%) transparent;
+}
+
+.shell-scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.shell-scroll-area::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  background: color-mix(in srgb, var(--primary) 24%, var(--line) 76%);
+}
+
+.shell-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:where(.overflow-x-auto, .overflow-y-auto, .overflow-auto) {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary) 26%, var(--line) 74%) transparent;
+}
+
+:where(.overflow-x-auto, .overflow-y-auto, .overflow-auto)::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+:where(.overflow-x-auto, .overflow-y-auto, .overflow-auto)::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  background: color-mix(in srgb, var(--primary) 24%, var(--line) 76%);
+}
+
+:where(.overflow-x-auto, .overflow-y-auto, .overflow-auto)::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .soft-focus:focus-visible {

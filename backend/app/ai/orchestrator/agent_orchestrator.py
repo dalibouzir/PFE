@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import time
@@ -48,6 +49,7 @@ class AgentOrchestrator:
         user_id: str | None,
     ) -> FinalAgentResponse:
         started_at = time.perf_counter()
+        route_started_at = time.perf_counter()
         previous_user_query = self._get_previous_user_message(conversation_id) if conversation_id else None
         decision: IntentRouteDecision = self.router.classify(
             message,
@@ -55,7 +57,9 @@ class AgentOrchestrator:
             known_batch_refs=self._known_batch_refs(),
             previous_user_query=previous_user_query,
         )
+        route_ms = int((time.perf_counter() - route_started_at) * 1000)
 
+        context_started_at = time.perf_counter()
         context = build_agent_context(
             query=message,
             language=decision.detected_entities.get("language") or (language or "fr"),
@@ -64,14 +68,67 @@ class AgentOrchestrator:
             user_id=user_id,
             previous_messages=None,
         )
+        context_ms = int((time.perf_counter() - context_started_at) * 1000)
+
+        warnings_from_runtime: list[str] = []
+        agent_timings: list[dict[str, int | str]] = []
+        timeout_s = _agent_timeout_seconds()
 
         if conversation_id:
-            memory_result = await self.registry.memory_agent.run(message, context)
-            context.detected_entities = memory_result.data.get("entities", context.detected_entities)
+            memory_started_at = time.perf_counter()
+            try:
+                memory_result = await asyncio.wait_for(
+                    self.registry.memory_agent.run(message, context),
+                    timeout=_memory_timeout_seconds(),
+                )
+                context.detected_entities = memory_result.data.get("entities", context.detected_entities)
+            except TimeoutError:
+                warnings_from_runtime.append("MEMORY_TIMEOUT")
+            except Exception:
+                warnings_from_runtime.append("MEMORY_ERROR")
+            memory_ms = int((time.perf_counter() - memory_started_at) * 1000)
+        else:
+            memory_ms = 0
 
         agent_results: list[AgentResult] = []
         for agent in self.registry.agents_for_route(decision.route):
-            result = await agent.run(message, context)
+            agent_label = str(getattr(agent, "name", agent.__class__.__name__))
+            agent_started_at = time.perf_counter()
+            try:
+                result = await asyncio.wait_for(agent.run(message, context), timeout=timeout_s)
+            except TimeoutError:
+                runtime_ms = int((time.perf_counter() - agent_started_at) * 1000)
+                warning_code = f"AGENT_TIMEOUT_{agent_label.upper()}"
+                warnings_from_runtime.append(warning_code)
+                agent_timings.append({"agent": agent_label, "execution_ms": runtime_ms, "status": "timeout"})
+                result = AgentResult(
+                    agent_name=agent_label,
+                    route=decision.route,
+                    answer_part="Couche temporairement indisponible (timeout).",
+                    data={},
+                    sources=[],
+                    confidence=0.0,
+                    warnings=[warning_code],
+                    execution_time_ms=runtime_ms,
+                )
+            except Exception:
+                runtime_ms = int((time.perf_counter() - agent_started_at) * 1000)
+                warning_code = f"AGENT_ERROR_{agent_label.upper()}"
+                warnings_from_runtime.append(warning_code)
+                agent_timings.append({"agent": agent_label, "execution_ms": runtime_ms, "status": "error"})
+                result = AgentResult(
+                    agent_name=agent_label,
+                    route=decision.route,
+                    answer_part="Couche temporairement indisponible.",
+                    data={},
+                    sources=[],
+                    confidence=0.0,
+                    warnings=[warning_code],
+                    execution_time_ms=runtime_ms,
+                )
+            else:
+                runtime_ms = int((time.perf_counter() - agent_started_at) * 1000)
+                agent_timings.append({"agent": agent_label, "execution_ms": runtime_ms, "status": "ok"})
             agent_results.append(result)
             if result.agent_name == "SQLAnalyticsAgent":
                 context.sql_results = {"data": result.data, "sources": result.sources}
@@ -91,20 +148,29 @@ class AgentOrchestrator:
                 language=context.language,
                 detected_entities=context.detected_entities,
             )
+            plan_ms = evidence_pack_ms = evidence_verify_ms = compose_ms = 0
         else:
+            plan_started_at = time.perf_counter()
             plan = plan_answer(
                 query=message,
                 detected_entities=context.detected_entities,
                 route=decision.route,
             )
+            plan_ms = int((time.perf_counter() - plan_started_at) * 1000)
+            evidence_pack_started_at = time.perf_counter()
             evidence_pack = build_evidence_pack(
                 question=message,
                 plan=plan,
                 route=decision.route,
                 agent_results=agent_results,
             )
+            evidence_pack_ms = int((time.perf_counter() - evidence_pack_started_at) * 1000)
+            evidence_verify_started_at = time.perf_counter()
             evidence_verification = verify_evidence(evidence_pack)
+            evidence_verify_ms = int((time.perf_counter() - evidence_verify_started_at) * 1000)
+            compose_started_at = time.perf_counter()
             answer, response_blocks, evidence_metadata = compose_answer(evidence_pack, evidence_verification)
+            compose_ms = int((time.perf_counter() - compose_started_at) * 1000)
 
             # Keep the previous text builder as a fallback guard if composition returns an empty body.
             if not str(answer or "").strip():
@@ -115,17 +181,20 @@ class AgentOrchestrator:
                     detected_entities=context.detected_entities,
                 )
 
+        verify_started_at = time.perf_counter()
         verification = self.verifier.verify(
             context=context,
             answer=answer,
             route=decision.route,
             results=agent_results,
         )
+        verify_ms = int((time.perf_counter() - verify_started_at) * 1000)
 
         if verification.missing_expected_source and decision.route not in {AgentRoute.SMALL_TALK, AgentRoute.OUT_OF_SCOPE}:
             if "Les données disponibles ne permettent pas de confirmer ce point." not in answer:
                 answer = f"{answer}\n\nLes données disponibles ne permettent pas de confirmer ce point."
 
+        confidence_started_at = time.perf_counter()
         final_confidence = compute_final_confidence(
             agent_results=agent_results,
             route_confidence=decision.confidence,
@@ -135,13 +204,16 @@ class AgentOrchestrator:
             contradiction=verification.contradiction,
             weak_ml_confidence=verification.weak_ml_confidence,
         )
+        confidence_ms = int((time.perf_counter() - confidence_started_at) * 1000)
 
+        source_started_at = time.perf_counter()
         sources, source_contract_warnings = build_source_contract(
             route=decision.route,
             agent_results=agent_results,
         )
+        source_contract_ms = int((time.perf_counter() - source_started_at) * 1000)
         agents_used = [item.agent_name for item in agent_results]
-        warning_codes = sorted(set([*verification.warnings, *source_contract_warnings]))
+        warning_codes = sorted(set([*verification.warnings, *source_contract_warnings, *warnings_from_runtime]))
         french_warnings = [_humanize_warning(warning) for warning in warning_codes]
 
         execution_time_ms = int((time.perf_counter() - started_at) * 1000)
@@ -153,6 +225,20 @@ class AgentOrchestrator:
             "route_confidence": decision.confidence,
             "warning_codes": warning_codes,
             "source_contract_warnings": source_contract_warnings,
+            "timing_ms": {
+                "route_planning": route_ms,
+                "context_build": context_ms,
+                "memory": memory_ms,
+                "agents": agent_timings,
+                "plan_answer": plan_ms,
+                "evidence_pack": evidence_pack_ms,
+                "evidence_verify": evidence_verify_ms,
+                "compose_answer": compose_ms,
+                "response_verify": verify_ms,
+                "confidence": confidence_ms,
+                "source_contract": source_contract_ms,
+                "total": execution_time_ms,
+            },
             **evidence_metadata,
         }
 
@@ -209,13 +295,16 @@ class AgentOrchestrator:
                 select(ChatMessage.content)
                 .where(ChatMessage.session_id == session_id, ChatMessage.role == "user")
                 .order_by(ChatMessage.created_at.desc())
-                .limit(3)
+                .limit(4)
             ).all()
         except Exception:
             return None
         snippets = [str(item).strip() for item in rows if str(item or "").strip()]
-        if not snippets:
+        if len(snippets) <= 1:
             return None
+        # The current user message is already persisted before orchestration.
+        # Drop it so "previous" context only reflects earlier turns.
+        snippets = snippets[1:]
         # Keep oldest->newest in the hint string to preserve conversational progression.
         snippets.reverse()
         return " || ".join(snippets)
@@ -423,6 +512,24 @@ def _flatten_numeric_values(payload) -> list[float]:
         elif isinstance(current, (int, float)):
             values.append(float(current))
     return values
+
+
+def _agent_timeout_seconds() -> float:
+    raw = os.environ.get("AGENT_LAYER_TIMEOUT_SECONDS", "").strip()
+    try:
+        value = float(raw) if raw else 25.0
+    except ValueError:
+        value = 25.0
+    return max(5.0, min(value, 120.0))
+
+
+def _memory_timeout_seconds() -> float:
+    raw = os.environ.get("AGENT_MEMORY_TIMEOUT_SECONDS", "").strip()
+    try:
+        value = float(raw) if raw else 8.0
+    except ValueError:
+        value = 8.0
+    return max(2.0, min(value, 30.0))
 
 
 def _humanize_warning(value) -> str:

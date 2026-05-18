@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
+import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
@@ -102,10 +103,14 @@ function mergeMemberProductTokens(products?: string[] | null, mainProduct?: stri
 }
 
 export default function InputsPage() {
-  const { data: inputs = [] } = useInputs();
-  const { data: batches = [] } = useBatches();
-  const { data: members = [] } = useMembers();
-  const { data: products = [] } = useProducts();
+  const inputsQuery = useInputs();
+  const batchesQuery = useBatches();
+  const membersQuery = useMembers();
+  const productsQuery = useProducts();
+  const inputs = inputsQuery.data ?? [];
+  const batches = batchesQuery.data ?? [];
+  const members = membersQuery.data ?? [];
+  const products = productsQuery.data ?? [];
   const createInput = useCreateInput();
   const updateInput = useUpdateInput();
   const deleteInput = useDeleteInput();
@@ -186,6 +191,10 @@ export default function InputsPage() {
   const pendingCount = filtered.filter((item) => item.status !== "validated").length;
   const validatedCount = filtered.filter((item) => item.status === "validated").length;
   const gradeA = filtered.filter((item) => item.grade.toUpperCase() === "A").length;
+  const requiredLoading =
+    inputsQuery.isLoading || batchesQuery.isLoading || membersQuery.isLoading || productsQuery.isLoading;
+  const requiredError =
+    inputsQuery.isError || batchesQuery.isError || membersQuery.isError || productsQuery.isError;
 
   const selectedMemberId = watch("member_id");
   const selectedMember = useMemo(() => members.find((item) => item.id === selectedMemberId), [members, selectedMemberId]);
@@ -401,8 +410,21 @@ export default function InputsPage() {
   ];
 
   return (
-    <main>
+    <main className="relative min-h-[60vh]">
       <PageIntro title="Collecte" />
+      {requiredLoading ? (
+        <ContentAreaLoader
+          title="Chargement Collecte"
+          subtitle="Synchronisation des collectes, lots, membres et produits..."
+        />
+      ) : null}
+      {requiredError ? (
+        <section className="premium-card reveal mt-4 rounded-2xl p-4">
+          <p className="text-sm text-[var(--danger)]">Impossible de charger les données requises de la page Collecte.</p>
+        </section>
+      ) : null}
+      {!requiredLoading && !requiredError ? (
+        <>
 
       <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "20ms" }}>
@@ -491,7 +513,7 @@ export default function InputsPage() {
               void handleJustificatifPicked(event.target.files?.[0] ?? null);
             }}
           />
-          <div className="overflow-x-auto">
+          <div className="thin-scrollbar overflow-x-auto">
             <table className="wf-table min-w-full text-left text-sm">
               <thead>
                 <tr>
@@ -788,6 +810,8 @@ export default function InputsPage() {
         message="Cette action supprimera définitivement cette collecte."
         confirmLabel="Supprimer"
       />
+        </>
+      ) : null}
     </main>
   );
 }

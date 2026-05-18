@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
+import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { ExportActions } from "@/components/ui/table/ExportActions";
 import { TableToolbar } from "@/components/ui/table/TableToolbar";
@@ -153,6 +154,8 @@ export default function TreasuryPage() {
   });
   const statsQuery = useTreasuryStats();
   const batchesQuery = useBatches();
+  const requiredLoading = statsQuery.isLoading || batchesQuery.isLoading;
+  const requiredError = statsQuery.isError || batchesQuery.isError;
 
   const createTransaction = useCreateTreasuryTransaction();
   const updateTransaction = useUpdateTreasuryTransaction();
@@ -311,6 +314,29 @@ export default function TreasuryPage() {
     exportRowsToPdf(options);
   };
 
+  if (requiredLoading) {
+    return (
+      <main className="relative min-h-[60vh]">
+        <PageIntro title="Trésorerie" />
+        <ContentAreaLoader
+          title="Chargement Trésorerie"
+          subtitle="Synchronisation des transactions, statistiques et lots..."
+        />
+      </main>
+    );
+  }
+
+  if (requiredError) {
+    return (
+      <main>
+        <PageIntro title="Trésorerie" />
+        <section className="premium-card reveal mt-4 rounded-2xl p-4">
+          <p className="text-sm text-[var(--danger)]">Impossible de charger les données requises de la page Trésorerie.</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main>
       <PageIntro title="Trésorerie" />
@@ -380,7 +406,7 @@ export default function TreasuryPage() {
         </section>
       ) : (
         <section className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "90ms" }}>
-          <div className="overflow-x-auto">
+          <div className="thin-scrollbar overflow-x-auto">
             <table className="wf-table min-w-full text-left text-sm">
               <thead>
 	                <tr>

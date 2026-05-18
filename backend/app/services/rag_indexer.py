@@ -114,8 +114,8 @@ def reindex_cooperative(
 ) -> RAGReindexResponse:
     if not settings.rag_enabled:
         raise ValidationError("RAG indexing is disabled.")
-    if settings.rag_embedding_dimensions != 1536:
-        raise ValidationError("Current schema expects 1536-dim embeddings.")
+    if int(settings.rag_embedding_dimensions) <= 0:
+        raise ValidationError("RAG_EMBEDDING_DIMENSIONS must be > 0.")
 
     scoped_cooperative_id = _resolve_target_cooperative_id(current_user, cooperative_id)
     started_at = current_utc()
@@ -152,7 +152,7 @@ def reindex_targeted_sources(
     cooperative_id: Optional[UUID] = None,
     force: bool = False,
 ) -> ReindexCounters:
-    if not settings.rag_enabled or settings.rag_embedding_dimensions != 1536 or not targets:
+    if not settings.rag_enabled or int(settings.rag_embedding_dimensions) <= 0 or not targets:
         return ReindexCounters()
 
     scoped_cooperative_id = _resolve_target_cooperative_id(current_user, cooperative_id)

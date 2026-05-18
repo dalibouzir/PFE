@@ -691,6 +691,7 @@ export type BatchCreate = {
 
 export type BatchUpdate = {
   process_steps?: string[];
+  estimated_charge_fcfa?: number | null;
 };
 
 export type BatchStatusUpdate = {
