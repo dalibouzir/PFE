@@ -14,6 +14,7 @@ InvoiceStatusLiteral = Literal["pending", "paid"]
 
 class CatalogProductCreate(BaseModel):
     source_product_id: UUID
+    source_grade: str = Field(default="Non spécifié", min_length=1, max_length=40)
     name: str = Field(min_length=2, max_length=120)
     description: Optional[str] = Field(default=None, max_length=2000)
     category: str = Field(min_length=2, max_length=120)
@@ -26,6 +27,7 @@ class CatalogProductCreate(BaseModel):
 
 
 class CatalogProductUpdate(BaseModel):
+    source_grade: Optional[str] = Field(default=None, min_length=1, max_length=40)
     name: Optional[str] = Field(default=None, min_length=2, max_length=120)
     description: Optional[str] = Field(default=None, max_length=2000)
     category: Optional[str] = Field(default=None, min_length=2, max_length=120)
@@ -41,6 +43,7 @@ class CatalogProductRead(BaseModel):
     cooperative_id: UUID
     source_product_id: Optional[UUID]
     source_product_name: Optional[str]
+    source_grade: str
     name: str
     description: Optional[str]
     category: str
@@ -64,6 +67,7 @@ class CatalogProductRead(BaseModel):
 
 class OrderLineCreate(BaseModel):
     catalog_product_id: UUID
+    grade: Optional[str] = Field(default=None, min_length=1, max_length=40)
     quantity: float = Field(gt=0)
 
 
@@ -85,6 +89,7 @@ class CommercialOrderStatusUpdate(BaseModel):
 class CommercialOrderLineRead(BaseModel):
     id: UUID
     catalog_product_id: UUID
+    grade: str
     product_name: str
     unit: str
     quantity: float
@@ -134,6 +139,14 @@ class CommercialOrderStats(BaseModel):
     new_count: int
     in_progress_count: int
     paid_this_month_fcfa: float
+
+
+class CommercialOrderListResponse(BaseModel):
+    items: list[CommercialOrderRead]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
 
 
 class CommercialInvoiceLineRead(BaseModel):

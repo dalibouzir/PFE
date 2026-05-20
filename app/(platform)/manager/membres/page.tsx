@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
 import { LiquidGlassModal } from "@/components/ui/LiquidGlassModal";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { ExportActions } from "@/components/ui/table/ExportActions";
 import { useCreateMember, useDeleteMember, useMembers, useUpdateMember } from "@/hooks/useMembers";
 import { useFields } from "@/hooks/useFields";
+import { exportRowsToCsv, exportRowsToExcel, exportRowsToPdf, type ExportColumn } from "@/lib/export/client";
 import type { Member, MemberCreate } from "@/lib/api/types";
 
 const statusTone: Record<string, "success" | "warning" | "info"> = {
@@ -155,6 +157,8 @@ export default function MembersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editingMember, setEditingMember] = useState<MemberSummary | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const { register, handleSubmit, reset, setValue, watch, control, formState } = useForm<MemberFormValues>({
     defaultValues: {
@@ -218,6 +222,24 @@ export default function MembersPage() {
       return byProduct && byStatus && byText;
     });
   }, [summaries, product, status, query]);
+  const pagedFiltered = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+  const totalPages = Math.max(Math.ceil(filtered.length / pageSize), 1);
+  useEffect(() => {
+    setPage(1);
+  }, [query, product, status, pageSize]);
+  const memberExportColumns: ExportColumn<MemberSummary>[] = [
+    { key: "code", header: "Code" },
+    { key: "fullName", header: "Nom" },
+    { key: "phone", header: "Téléphone" },
+    { key: "zone", header: "Zone" },
+    { key: "culture", header: "Culture" },
+    { key: "parcels", header: "Parcelles" },
+    { key: "totalArea", header: "Surface (ha)" },
+    { key: "status", header: "Statut" },
+  ];
 
   const totalParcels = filtered.reduce((acc, item) => acc + item.parcels, 0);
   const totalSurface = filtered.reduce((acc, item) => acc + item.totalArea, 0);
@@ -396,9 +418,21 @@ export default function MembersPage() {
               <p className="text-lg font-semibold text-[var(--text)]">{totalSurface.toFixed(1)} ha</p>
             </div>
           </div>
-
-          <GlassViewToggle value={viewMode} onChange={setViewMode} className="shrink-0" />
+          <div className="flex items-center gap-2">
+            <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="wf-input h-10 w-[110px] px-2 text-xs">
+              <option value={10}>10 / page</option>
+              <option value={20}>20 / page</option>
+              <option value={50}>50 / page</option>
+            </select>
+            <ExportActions
+              onCsv={() => exportRowsToCsv({ filename: "membres", title: "Membres", columns: memberExportColumns, rows: filtered })}
+              onExcel={() => exportRowsToExcel({ filename: "membres", title: "Membres", columns: memberExportColumns, rows: filtered })}
+              onPdf={() => exportRowsToPdf({ filename: "membres", title: "Membres", columns: memberExportColumns, rows: filtered })}
+            />
+            <GlassViewToggle value={viewMode} onChange={setViewMode} className="shrink-0" />
+          </div>
         </div>
+        <p className="mt-2 text-xs text-[var(--muted)]">Exporte toutes les lignes filtrées.</p>
       </section>
 
       {filtered.length === 0 ? (
@@ -421,7 +455,7 @@ export default function MembersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item) => (
+                {pagedFiltered.map((item) => (
                   <tr key={item.id}>
                     <td className="px-5 py-4 font-medium text-[var(--text)]">{item.fullName}</td>
                     <td className="px-5 py-4">{item.phone}</td>
@@ -448,10 +482,20 @@ export default function MembersPage() {
               </tbody>
             </table>
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] px-4 py-3">
+            <p className="text-xs text-[var(--muted)]">
+              {Math.min((page - 1) * pageSize + 1, filtered.length)}–{Math.min(page * pageSize, filtered.length)} sur {filtered.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <button type="button" className="soft-focus rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>Précédent</button>
+              <span className="text-xs text-[var(--muted)]">{page}/{totalPages}</span>
+              <button type="button" className="soft-focus rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={page >= totalPages} onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}>Suivant</button>
+            </div>
+          </div>
         </section>
       ) : (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((item, index) => (
+          {pagedFiltered.map((item, index) => (
             <article key={item.id} className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: `${90 + index * 30}ms` }}>
               <div className="flex items-start justify-between gap-3">
                 <div>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import List
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from app.schemas.commercial import (
     CommercialInvoiceRead,
     CommercialInvoiceStats,
     CommercialOrderIntake,
+    CommercialOrderListResponse,
     CommercialOrderRead,
     CommercialOrderStats,
     CommercialOrderStatusUpdate,
@@ -50,14 +52,55 @@ def delete_catalog(catalog_product_id: UUID, db: Session = Depends(get_db), curr
     return commercial_service.delete_catalog_product(db, current_manager, catalog_product_id)
 
 
-@router.get("/orders", response_model=List[CommercialOrderRead], summary="List commercial orders.")
+@router.get("/orders", response_model=CommercialOrderListResponse | List[CommercialOrderRead], summary="List commercial orders.")
 def list_orders(
     status: str | None = Query(default=None),
     search: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    product: str | None = Query(default=None),
+    product_id: UUID | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    client: str | None = Query(default=None),
+    sort_by: str = Query(default="date"),
+    sort_order: str = Query(default="desc"),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=200),
     db: Session = Depends(get_db),
     current_manager=Depends(get_current_manager),
 ):
-    return commercial_service.list_orders(db, current_manager, status=status, search=search)
+    has_extended_filters = any(
+        value is not None for value in [category, product, product_id, date_from, date_to, client, page, page_size]
+    ) or sort_by != "date" or sort_order != "desc"
+    if not has_extended_filters:
+        return commercial_service.list_orders(db, current_manager, status=status, search=search)
+
+    safe_page = page or 1
+    safe_page_size = page_size or 20
+    items, total = commercial_service.list_orders_paginated(
+        db,
+        current_manager,
+        page=safe_page,
+        page_size=safe_page_size,
+        status=status,
+        search=search,
+        category=category,
+        product=product,
+        product_id=product_id,
+        date_from=date_from,
+        date_to=date_to,
+        client=client,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    total_pages = max((total + safe_page_size - 1) // safe_page_size, 1)
+    return CommercialOrderListResponse(
+        items=items,
+        page=safe_page,
+        page_size=safe_page_size,
+        total=total,
+        total_pages=total_pages,
+    )
 
 
 @router.get("/orders/stats", response_model=CommercialOrderStats, summary="Get commercial order stats.")

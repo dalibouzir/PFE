@@ -11,6 +11,12 @@ from app.utils.exceptions import NotFoundError, ValidationError
 
 
 CRITICAL_STOCK_RATIO = 0.2
+DEFAULT_STOCK_GRADE = "Non spécifié"
+
+
+def normalize_stock_grade(grade: str | None) -> str:
+    normalized = str(grade or "").strip()
+    return normalized or DEFAULT_STOCK_GRADE
 
 
 def _require_product_in_scope(db: Session, manager: User, product_id):
@@ -23,10 +29,30 @@ def _require_product_in_scope(db: Session, manager: User, product_id):
     return product
 
 
-def get_stock_by_product(db: Session, cooperative_id, product_id):
-    return db.scalar(
-        select(Stock).where(Stock.cooperative_id == cooperative_id, Stock.product_id == product_id)
+def get_stock_by_product(db: Session, cooperative_id, product_id, grade: str | None = None):
+    normalized_grade = normalize_stock_grade(grade)
+    explicit_grade_requested = grade is not None
+    stock = db.scalar(
+        select(Stock).where(
+            Stock.cooperative_id == cooperative_id,
+            Stock.product_id == product_id,
+            Stock.grade == normalized_grade,
+        )
     )
+    if stock is not None or explicit_grade_requested:
+        return stock
+
+    # Backward compatibility: older product-level callers have no grade context.
+    # If there is a single bucket for a product, use it.
+    rows = db.scalars(
+        select(Stock).where(
+            Stock.cooperative_id == cooperative_id,
+            Stock.product_id == product_id,
+        )
+    ).all()
+    if len(rows) == 1:
+        return rows[0]
+    return stock
 
 
 def available_stock_kg(stock: Stock) -> float:
@@ -72,6 +98,7 @@ def _hydrate_total_from_existing_inputs(db: Session, stock: Stock) -> bool:
         select(func.coalesce(func.sum(Input.quantity), 0.0)).where(
             Input.cooperative_id == stock.cooperative_id,
             Input.product_id == stock.product_id,
+            Input.grade == normalize_stock_grade(stock.grade),
         )
     )
     total_kg = round_metric(total_from_inputs or 0.0)
@@ -90,6 +117,7 @@ def _serialize_stock(stock: Stock) -> StockRead:
         id=stock.id,
         cooperative_id=stock.cooperative_id,
         product_id=stock.product_id,
+        grade=normalize_stock_grade(stock.grade),
         quantity=from_kg(available_kg, unit),
         threshold=from_kg(threshold_kg, unit),
         total_stock=from_kg(stock.total_stock_kg, unit),
@@ -112,11 +140,12 @@ def serialize_stock_read(stock: Stock) -> StockRead:
     return _serialize_stock(stock)
 
 
-def _create_stock_row(db: Session, cooperative_id, product: Product, unit=None) -> Stock:
+def _create_stock_row(db: Session, cooperative_id, product: Product, unit=None, grade: str | None = None) -> Stock:
     normalized_unit = normalize_mass_unit(unit or product.unit)
     stock = Stock(
         cooperative_id=cooperative_id,
         product_id=product.id,
+        grade=normalize_stock_grade(grade),
         quantity=0.0,
         total_stock_kg=0.0,
         reserved_in_lots_kg=0.0,
@@ -187,12 +216,14 @@ def apply_total_stock_delta(
     product: Product,
     delta_kg: float,
     create_if_missing: bool = False,
+    grade: str | None = None,
 ) -> Stock:
-    stock = get_stock_by_product(db, cooperative_id, product.id)
+    normalized_grade = normalize_stock_grade(grade)
+    stock = get_stock_by_product(db, cooperative_id, product.id, normalized_grade)
     if stock is None:
         if not create_if_missing:
             raise ValidationError("Stock row not found for the requested product.")
-        stock = _create_stock_row(db, cooperative_id, product, unit=product.unit)
+        stock = _create_stock_row(db, cooperative_id, product, unit=product.unit, grade=normalized_grade)
     else:
         # Avoid double-counting when caller already persisted a new input row and
         # is now applying its explicit delta.
@@ -217,12 +248,14 @@ def apply_reserved_stock_delta(
     product: Product,
     delta_reserved_kg: float,
     create_if_missing: bool = False,
+    grade: str | None = None,
 ) -> Stock:
-    stock = get_stock_by_product(db, cooperative_id, product.id)
+    normalized_grade = normalize_stock_grade(grade)
+    stock = get_stock_by_product(db, cooperative_id, product.id, normalized_grade)
     if stock is None:
         if not create_if_missing:
             raise ValidationError("Stock row not found for the requested product.")
-        stock = _create_stock_row(db, cooperative_id, product, unit=product.unit)
+        stock = _create_stock_row(db, cooperative_id, product, unit=product.unit, grade=normalized_grade)
     else:
         _repair_legacy_stock_row(stock)
 
@@ -237,8 +270,8 @@ def apply_reserved_stock_delta(
     return stock
 
 
-def reserve_stock_for_lot(db: Session, cooperative_id, product: Product, quantity_kg: float) -> Stock:
-    stock = get_stock_by_product(db, cooperative_id, product.id)
+def reserve_stock_for_lot(db: Session, cooperative_id, product: Product, quantity_kg: float, grade: str | None = None) -> Stock:
+    stock = get_stock_by_product(db, cooperative_id, product.id, grade)
     if stock is None:
         raise ValidationError("Stock row not found for the requested product.")
 
@@ -255,8 +288,8 @@ def reserve_stock_for_lot(db: Session, cooperative_id, product: Product, quantit
     return stock
 
 
-def release_reserved_stock_for_lot(db: Session, cooperative_id, product: Product, quantity_kg: float) -> Stock:
-    stock = get_stock_by_product(db, cooperative_id, product.id)
+def release_reserved_stock_for_lot(db: Session, cooperative_id, product: Product, quantity_kg: float, grade: str | None = None) -> Stock:
+    stock = get_stock_by_product(db, cooperative_id, product.id, grade)
     if stock is None:
         raise ValidationError("Stock row not found for the requested product.")
 

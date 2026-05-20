@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 from uuid import UUID
+import uuid
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -15,8 +16,12 @@ from app.models.product import Product
 from app.models.stock_movement import StockMovement
 from app.models.user import User
 from app.schemas.stock_movement import StockMovementDetailRead, StockMovementRead
+from app.schemas.stock_movement import ManualStockMovementCreate
 from app.services.helpers import get_manager_cooperative_id, round_metric
+from app.services.stocks import normalize_stock_grade
+from app.services.stocks import apply_total_stock_delta
 from app.utils.exceptions import NotFoundError
+from app.utils.exceptions import ValidationError
 
 
 def _source_label(row: StockMovement) -> str:
@@ -27,6 +32,8 @@ def _source_label(row: StockMovement) -> str:
         return "Collecte liée au lot"
     if source in {"manual", "independent_collecte", "collecte_independante"}:
         return "Collecte indépendante"
+    if source == "manual_adjustment":
+        return "Ajustement manuel"
     if source == "post_harvest_step":
         if any(token in action_type for token in ("perte", "loss", "rejet", "reject", "casse", "avarie")):
             return "Perte Post-récolte"
@@ -50,17 +57,25 @@ def _traceability_status(row: StockMovement, batch: Batch | None) -> str:
 
 
 def _movement_reference(row: StockMovement, batch: Batch | None, input_row: Input | None) -> str:
+    if row.movement_reference and row.movement_reference.strip():
+        return row.movement_reference.strip()
+    if input_row is not None and input_row.collecte_reference:
+        return input_row.collecte_reference
     if input_row is not None:
-        return f"COL-{str(input_row.id)[:8].upper()}"
+        return f"COL-HIST-{str(input_row.id)[:8].upper()}"
     if batch is not None:
+        if batch.postharvest_reference:
+            return batch.postharvest_reference
         return batch.code
-    return f"MVT-{str(row.id)[:8].upper()}"
+    return f"MVT-HIST-{str(row.id)[:8].upper()}"
 
 
 def _input_reference(input_row: Input | None) -> Optional[str]:
     if input_row is None:
         return None
-    return f"COL-{str(input_row.id)[:8].upper()}"
+    if input_row.collecte_reference:
+        return input_row.collecte_reference
+    return f"COL-HIST-{str(input_row.id)[:8].upper()}"
 
 
 def _extract_manager_name(notes: Optional[str]) -> Optional[str]:
@@ -91,6 +106,7 @@ def _serialize(
     input_row: Input | None,
     member: Member | None,
     batch_owner: User | None = None,
+    default_actor: User | None = None,
 ) -> StockMovementRead:
     member_name = member.full_name if member is not None else None
     source = (row.source or "").strip().lower()
@@ -99,17 +115,27 @@ def _serialize(
     if member_name is None and source == "post_harvest_step":
         member_name = _display_user_name(batch_owner)
 
+    actor_name = _extract_manager_name(row.notes)
+    if actor_name is None:
+        actor_name = _display_user_name(batch_owner)
+    if actor_name is None:
+        actor_name = _display_user_name(default_actor)
+
     return StockMovementRead(
         id=row.id,
         cooperative_id=row.cooperative_id,
         cooperative_name=cooperative.name if cooperative is not None else None,
         movement_reference=_movement_reference(row, batch, input_row),
+        preharvest_reference=batch.code if batch is not None else None,
+        collecte_reference=_input_reference(input_row),
+        postharvest_reference=batch.postharvest_reference if batch is not None else None,
         movement_type=row.movement_type,
         action_type=row.action_type,
         source=row.source,
         source_label=_source_label(row),
         traceability_status=_traceability_status(row, batch),
         product_id=row.product_id,
+        grade=normalize_stock_grade(row.grade),
         product_name=product.name if product is not None else None,
         batch_id=row.batch_id,
         batch_reference=batch.code if batch is not None else None,
@@ -118,7 +144,9 @@ def _serialize(
         input_reference_bl=(input_row.bl_number if input_row is not None else None),
         member_id=member.id if member is not None else None,
         member_name=member_name,
+        actor_name=actor_name,
         process_step_id=row.process_step_id,
+        process_step_type=(row.action_type if source == "post_harvest_step" else None),
         workflow_step_id=row.workflow_step_id,
         quantity_kg=round_metric(row.quantity_kg),
         movement_date=row.movement_date,
@@ -136,6 +164,7 @@ def list_stock_movements(
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     product_id: Optional[UUID] = None,
+    grade: Optional[str] = None,
     movement_type: Optional[str] = None,
     source: Optional[str] = None,
     batch_reference: Optional[str] = None,
@@ -153,6 +182,8 @@ def list_stock_movements(
         stmt = stmt.where(StockMovement.movement_date <= date_to)
     if product_id is not None:
         stmt = stmt.where(StockMovement.product_id == product_id)
+    if grade and grade.strip():
+        stmt = stmt.where(StockMovement.grade == grade.strip())
     if movement_type:
         stmt = stmt.where(StockMovement.movement_type == movement_type.strip().lower())
     if source:
@@ -232,7 +263,7 @@ def list_stock_movements(
         batch_owner = batch_owners.get(batch.created_by_user_id) if batch is not None else None
         product = products.get(row.product_id)
 
-        serialized = _serialize(row, cooperative, product, batch, input_row, member, batch_owner)
+        serialized = _serialize(row, cooperative, product, batch, input_row, member, batch_owner, manager)
 
         if batch_ref_needle and not ((serialized.batch_reference or "").lower().find(batch_ref_needle) >= 0):
             continue
@@ -259,6 +290,86 @@ def list_stock_movements(
         result.append(serialized)
 
     return result
+
+
+def _generate_manual_movement_reference(db: Session, *, year: int) -> str:
+    prefix = f"MVT-MAN-{year}-"
+    rows = db.scalars(
+        select(StockMovement.movement_reference).where(
+            StockMovement.movement_reference.is_not(None),
+            StockMovement.movement_reference.like(f"{prefix}%"),
+        )
+    ).all()
+    max_increment = 0
+    for ref in rows:
+        if not ref:
+            continue
+        suffix = ref[len(prefix) :]
+        if suffix.isdigit():
+            max_increment = max(max_increment, int(suffix))
+    return f"{prefix}{max_increment + 1:03d}"
+
+
+def create_manual_stock_movement(db: Session, manager: User, payload: ManualStockMovementCreate) -> StockMovementDetailRead:
+    cooperative_id = get_manager_cooperative_id(manager)
+    product = db.scalar(
+        select(Product).where(Product.id == payload.product_id, Product.cooperative_id == cooperative_id)
+    )
+    if product is None:
+        raise NotFoundError("Product not found in the current cooperative.")
+
+    movement_type = payload.movement_type.strip().lower()
+    if movement_type not in {"in", "out", "correction"}:
+        raise ValidationError("movement_type must be 'in', 'out' or 'correction'.")
+    grade = normalize_stock_grade(payload.grade)
+    quantity_kg = round_metric(float(payload.quantity_kg))
+    if movement_type == "correction":
+        direction = (payload.correction_direction or "").strip().lower()
+        if direction not in {"positive", "negative"}:
+            raise ValidationError("correction_direction is required for correction movement.")
+        delta = quantity_kg if direction == "positive" else -quantity_kg
+        action_type = "manual_correction"
+    else:
+        delta = quantity_kg if movement_type == "in" else -quantity_kg
+        action_type = "manual_adjustment"
+
+    apply_total_stock_delta(
+        db,
+        cooperative_id,
+        product,
+        delta,
+        create_if_missing=True,
+        grade=grade,
+    )
+
+    actor = _display_user_name(manager) or "manager_inconnu"
+    movement = StockMovement(
+        cooperative_id=cooperative_id,
+        product_id=product.id,
+        grade=grade,
+        movement_type=("in" if delta >= 0 else "out"),
+        action_type=action_type,
+        source="manual_adjustment",
+        quantity_kg=quantity_kg,
+        movement_date=date.today(),
+        movement_reference=_generate_manual_movement_reference(db, year=date.today().year),
+        idempotency_key=f"manual:{uuid.uuid4().hex}",
+        notes=f"{payload.notes.strip()} | manager:{actor}",
+    )
+    db.add(movement)
+    db.commit()
+
+    cooperative = db.scalar(select(Cooperative).where(Cooperative.id == cooperative_id))
+    serialized = _serialize(
+        movement,
+        cooperative,
+        product,
+        batch=None,
+        input_row=None,
+        member=None,
+        batch_owner=manager,
+    )
+    return StockMovementDetailRead(**serialized.model_dump())
 
 
 def get_stock_movement_detail(db: Session, manager: User, movement_id: UUID) -> StockMovementDetailRead:
@@ -295,5 +406,5 @@ def get_stock_movement_detail(db: Session, manager: User, movement_id: UUID) -> 
     if batch is not None:
         batch_owner = db.scalar(select(User).where(User.id == batch.created_by_user_id))
 
-    serialized = _serialize(row, cooperative, product, batch, input_row, member, batch_owner)
+    serialized = _serialize(row, cooperative, product, batch, input_row, member, batch_owner, manager)
     return StockMovementDetailRead(**serialized.model_dump())

@@ -33,15 +33,42 @@ STAGE_MAP = {
 }
 SMALL_TALK = {"bonjour", "salut", "hello", "hi", "bonsoir", "ok", "merci", "coucou", "ca va", "ça va"}
 OUT_SCOPE = {"champions league", "football", "nba", "bitcoin", "weather", "météo", "movie", "film"}
+UI_ACTION_HINTS = {
+    "connecte-toi",
+    "connecte toi",
+    "connecte toi avec",
+    "login",
+    "log in",
+    "verifie le dashboard",
+    "vérifie le dashboard",
+    "ouvre la page",
+    "ouvrir la page",
+    "teste la page",
+    "tester la page",
+    "dashboard charge",
+    "dashboard load",
+    "vérifie l’interface",
+    "verifie l'interface",
+    "verifie l’interface",
+    "va dans la page",
+    "page stocks",
+}
+UNSAFE_OPERATION_HINTS = {
+    "supprime",
+    "supprimer",
+    "delete",
+    "invente",
+    "falsifie",
+    "manipule",
+    "manipuler",
+    "sans confirmation",
+    "without confirmation",
+}
 UNSUPPORTED_FORECAST_HINTS = {
     "predis",
     "prédis",
     "predire",
     "prédire",
-    "precis",
-    "précis",
-    "précisément",
-    "precisement",
     "exactement le prix",
     "prix de vente du mois prochain",
     "mois prochain",
@@ -84,6 +111,9 @@ RECO_HINTS = {
     "faut-il faire",
     "quoi faire concretement",
     "quoi faire concrètement",
+    "quelle action",
+    "quelles actions",
+    "reco",
 }
 RECOMMENDATION_REGEXES = (
     re.compile(r"\bconseill\w*\b", re.IGNORECASE),
@@ -194,6 +224,45 @@ class IntentRouter:
         previous_module_hint = self._infer_previous_module_hint(previous_user_query, known_batch_refs=known_batch_refs)
 
         entities = self.entity_extractor.extract(raw, language_hint=language_hint, known_batch_refs=known_batch_refs).as_dict()
+        explicit_product_focus = re.search(r"\bproduit\s+([^,:;]+)", raw, re.IGNORECASE)
+        if explicit_product_focus and not entities.get("product"):
+            label = explicit_product_focus.group(1).strip()
+            if label:
+                entities["product"] = [label]
+        explicit_lot_focus = re.search(r"\banalyse\s+([A-Z0-9][A-Z0-9\-_]+)\s+uniquement\b", raw, re.IGNORECASE)
+        if explicit_lot_focus:
+            entities["batch_ref"] = explicit_lot_focus.group(1).upper()
+        previous_entities = self.entity_extractor.extract(previous_user_query or "", known_batch_refs=known_batch_refs).as_dict() if previous_user_query else {}
+        referential_tokens = ("le premier", "ce lot", "ce produit", "cette étape", "cette etape", "celui-ci", "celui ci")
+        if any(token in lowered for token in referential_tokens):
+            if not entities.get("batch_ref") and previous_entities.get("batch_ref"):
+                entities["batch_ref"] = previous_entities.get("batch_ref")
+            if not entities.get("product") and previous_entities.get("product"):
+                entities["product"] = previous_entities.get("product")
+            if not entities.get("stage") and previous_entities.get("stage"):
+                entities["stage"] = previous_entities.get("stage")
+            if (not entities.get("module") or entities.get("module") == "global") and previous_entities.get("module"):
+                entities["module"] = previous_entities.get("module")
+            if (not entities.get("scope") or entities.get("scope") == "global") and previous_entities.get("scope"):
+                entities["scope"] = previous_entities.get("scope")
+        if any(token in lowered for token in UI_ACTION_HINTS):
+            entities["intent_family"] = "unsupported_ui_action"
+            return _decision(
+                AgentRoute.OUT_OF_SCOPE,
+                entities,
+                ["OutOfScopeAgent"],
+                "UI/action command detected; chatbot should provide guidance instead of analytics.",
+                0.99,
+            )
+        if any(token in lowered for token in UNSAFE_OPERATION_HINTS):
+            entities["intent_family"] = "unsupported_unsafe_action"
+            return _decision(
+                AgentRoute.OUT_OF_SCOPE,
+                entities,
+                ["OutOfScopeAgent"],
+                "Unsafe/manipulative action request detected; refuse analytics/action execution.",
+                0.99,
+            )
         scope = str(entities.get("scope") or "global")
         module = str(entities.get("module") or "global")
         registry_module = self.module_registry.detect_module(lowered)
@@ -318,7 +387,7 @@ class IntentRouter:
                 "Collection follow-up tied to previous inputs context.",
                 0.89,
             )
-        if RANKING_FOLLOWUP_PATTERN.search(lowered) and any(token in lowered for token in ("pourquoi", "critique", "cause", "explique")):
+        if previous_module_hint and RANKING_FOLLOWUP_PATTERN.search(lowered) and any(token in lowered for token in ("pourquoi", "critique", "cause", "explique")):
             entities["module"] = "post_harvest"
             entities["scope"] = "post_harvest"
             entities["intent_family"] = "followup_ranked_item_reasoning"
@@ -407,6 +476,14 @@ class IntentRouter:
                     "emballage",
                     "post-récolte",
                     "post recolte",
+                    "ecart",
+                    "écart",
+                    "entree",
+                    "entrée",
+                    "sortie",
+                    "rendement",
+                    "matiere",
+                    "matière",
                 )
             )
             if operational_guard:
@@ -478,7 +555,26 @@ class IntentRouter:
         asks_explanation = _has_any(lowered, EXPLANATION_HINTS)
         if "pk " in lowered or lowered.startswith("pk"):
             asks_explanation = True
-        asks_loss = any(token in lowered for token in ("perte", "pertes", "loss", "rendement", "efficacité", "efficacite"))
+        asks_loss = any(token in lowered for token in ("perte", "pertes", "loss", "rendement", "efficacité", "efficacite", "lowest efficiency", "pire efficacité", "pire efficacite"))
+        asks_loss = asks_loss or bool(
+            re.search(r"\b(ecarts?|écarts?|gap|difference)\b.*\b(entree|entrée|input)\b.*\b(sortie|output)\b", lowered)
+            or re.search(r"\b(bilan matiere|bilan matière|material balance)\b.*\b(lot|batch)\b", lowered)
+            or re.search(r"\b(loss|efficiency)\s+ranking\b", lowered)
+            or re.search(r"\b(rendement le plus faible|plus mauvais rendement|lowest yield)\b", lowered)
+        )
+        postharvest_loss_ranking_intent = bool(
+            (
+                re.search(r"\b(lot|lots|batch|batches)\b", lowered)
+                or re.search(r"\b(ecarts?|écarts?|gap|difference)\b.*\b(entree|entrée|input)\b.*\b(sortie|output)\b", lowered)
+            )
+            and (
+                re.search(r"\b(top|classement|classe|ranking|critiques?|prioris|pire|pires|plus elev|plus eleve|plus fortes?|plus\s+penalis\w*)\b", lowered)
+                or re.search(r"\b(perte|pertes|loss|efficacite|efficacité|efficiency|rendement|matiere|matière)\b", lowered)
+                or re.search(r"\b(ecarts?|écarts?|gap|difference)\b.*\b(entree|entrée|input)\b.*\b(sortie|output)\b", lowered)
+                or re.search(r"\b(bilan matiere|bilan matière|material balance)\b", lowered)
+                or (re.search(r"\bpost-?recolte|post-?harvest\b", lowered) and re.search(r"\b(top|classement|classe|ranking|critiques?|prioris|pire|pires|plus elev|plus eleve|plus fortes?|plus\s+penalis\w*)\b", lowered))
+            )
+        )
         asks_anomaly_operational = (
             any(token in lowered for token in ("anomaly", "anomalie", "anomaly_score", "anomal", "risque ml", "signal ml", "modele ml", "modèle ml"))
             and any(token in lowered for token in ("ml", "anomaly", "anomal", "risque"))
@@ -565,7 +661,7 @@ class IntentRouter:
         asks_compare_product = any(token in lowered for token in ("compare", "compar", "versus", "vs")) and bool(entities.get("product"))
         explicit_operational_target = bool(
             re.search(
-                r"\b(lot|lots|batch|stock|collecte|membre|facture|commande|charge|tresorerie|tr[eé]sorerie|coop[eé]rative|production|bl|justificatif|devis|receipt_reference|enregistre_complet|uploaded\s+file|fichier|fichiers|upload|traceabilit[eé])\b",
+                r"\b(lot|lots|batch|stock|collecte|membre|facture|commande|charge|tresorerie|tr[eé]sorerie|coop[eé]rative|production|bl|justificatif|devis|receipt_reference|enregistre_complet|uploaded\s+file|fichier|fichiers|upload|traceabilit[eé]|perte|pertes|loss|s[eé]chage|tri|emballage|conditionnement)\b",
                 lowered,
             )
         )
@@ -668,6 +764,15 @@ class IntentRouter:
                 "SQL+ML request that also asks recommendation/action must use full hybrid route.",
                 0.91,
             )
+        if ("produit" in lowered and ("seulement" in lowered or "uniquement" in lowered) and ("action" in lowered or "recommand" in lowered)):
+            entities["intent_family"] = "action_recommendation"
+            return _decision(
+                AgentRoute.HYBRID_FULL,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                "Product-anchored action request should include hybrid evidence layers.",
+                0.9,
+            )
 
         if asks_anomaly_operational:
             entities["intent_family"] = "risk_ml"
@@ -677,6 +782,47 @@ class IntentRouter:
                 ["SQLAnalyticsAgent", "MLLossAgent"],
                 "Anomaly + operational facts request should combine SQL and ML.",
                 0.9,
+            )
+
+        if any(token in lowered for token in ("mouvement", "mouvements", "stock movement", "journal mouvements")):
+            entities["intent_family"] = "factual_sql"
+            entities["module"] = "stocks"
+            return _decision(
+                AgentRoute.SQL_ONLY,
+                entities,
+                ["SQLAnalyticsAgent"],
+                "Stock movement request should be deterministic SQL.",
+                0.92,
+            )
+
+        if postharvest_loss_ranking_intent:
+            entities["intent_family"] = "factual_sql"
+            entities["module"] = "post_harvest"
+            if asks_ml_signal:
+                return _decision(
+                    AgentRoute.HYBRID_SQL_ML,
+                    entities,
+                    ["SQLAnalyticsAgent", "MLLossAgent"],
+                    "Post-harvest loss ranking with ML signal request.",
+                    0.92,
+                )
+            return _decision(
+                AgentRoute.SQL_ONLY,
+                entities,
+                ["SQLAnalyticsAgent"],
+                "Post-harvest loss ranking should use deterministic SQL with strict ranking renderer.",
+                0.92,
+            )
+
+        if ("top" in lowered and "lot" in lowered and "critique" in lowered and not asks_recommendation and not asks_explanation):
+            entities["intent_family"] = "factual_sql"
+            entities["module"] = "post_harvest"
+            return _decision(
+                AgentRoute.SQL_ONLY,
+                entities,
+                ["SQLAnalyticsAgent"],
+                "Top critical lots without explicit recommendation/explanation should stay SQL-only.",
+                0.88,
             )
 
         if asks_data_plus_rag_action:
@@ -699,7 +845,7 @@ class IntentRouter:
                 0.88,
             )
 
-        if asks_loss and (asks_best_practice or asks_recommendation or asks_explanation) and not asks_ml_signal:
+        if asks_loss and (asks_best_practice or asks_explanation) and not asks_ml_signal:
             entities["intent_family"] = "hybrid_analysis"
             return _decision(
                 AgentRoute.HYBRID_SQL_RAG,

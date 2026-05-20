@@ -13,6 +13,7 @@ from app.schemas.batch import (
     BatchMaterialBalanceRead,
     BatchPreHarvestStepStatusesUpdate,
     BatchRead,
+    BatchStartPostHarvestRequest,
     BatchStatusUpdate,
     BatchUpdate,
 )
@@ -104,7 +105,23 @@ def complete_preharvest(batch_id: UUID, payload: BatchCompletePreHarvestRequest,
 
 @router.post("/{batch_id}/start-postharvest", response_model=BatchRead, summary="Start post-harvest lifecycle for a ready lot.")
 def start_postharvest(batch_id: UUID, db: Session = Depends(get_db), current_manager=Depends(get_current_manager)):
-    batch = batch_service.start_postharvest(db, current_manager, batch_id)
+    batch = batch_service.start_postharvest(
+        db,
+        current_manager,
+        batch_id,
+        payload=None,
+    )
+    return batch_service.serialize_batch(batch)
+
+
+@router.post("/{batch_id}/start-postharvest-with-stock", response_model=BatchRead, summary="Start post-harvest by selecting product/grade/quantity stock bucket.")
+def start_postharvest_with_stock(
+    batch_id: UUID,
+    payload: BatchStartPostHarvestRequest,
+    db: Session = Depends(get_db),
+    current_manager=Depends(get_current_manager),
+):
+    batch = batch_service.start_postharvest(db, current_manager, batch_id, payload=payload)
     return batch_service.serialize_batch(batch)
 
 

@@ -9,6 +9,7 @@ from app.schemas.base import ORMModel
 
 class StockCreate(BaseModel):
     product_id: UUID
+    grade: str = Field(default="Non spécifié", min_length=1, max_length=40)
     quantity: float = Field(default=0, ge=0)
     threshold: float = Field(ge=0)
     unit: str = Field(default="kg", min_length=1, max_length=40)
@@ -27,6 +28,7 @@ class StockRead(ORMModel):
     id: UUID
     cooperative_id: UUID
     product_id: UUID
+    grade: str
     quantity: float
     threshold: float
     total_stock: float

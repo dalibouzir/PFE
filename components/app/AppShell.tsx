@@ -410,12 +410,16 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
               : user?.role === "manager"
                 ? "Manager cooperative"
                 : base.roleLabel;
+    const cooperativeLabel =
+      user?.cooperative_name?.trim() ||
+      (role === "manager" ? base.cooperativeLabel : base.cooperativeLabel);
 
     return {
       ...base,
       name,
       initials: initials || base.initials,
       roleLabel,
+      cooperativeLabel,
     };
   }, [role, user]);
   const isAssistantPage = role === "manager" && pathname.startsWith("/manager/assistant-ia");

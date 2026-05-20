@@ -25,6 +25,7 @@ class Batch(TimestampMixin, Base):
     member_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("members.id", ondelete="SET NULL"), nullable=True, index=True)
     parcel_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("parcels.id", ondelete="SET NULL"), nullable=True, index=True)
     code: Mapped[str] = mapped_column(String(80), nullable=False, unique=True, index=True)
+    postharvest_reference: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True, index=True)
     creation_date: Mapped[date] = mapped_column(Date, nullable=False)
     unit: Mapped[str] = mapped_column(String(16), nullable=False, default="kg")
     ordered_process_steps: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)

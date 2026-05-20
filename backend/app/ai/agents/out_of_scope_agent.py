@@ -13,9 +13,8 @@ class OutOfScopeAgent(BaseAgent):
             agent_name=self.name,
             route=context.route,
             answer_part=(
-                "Je suis conçu pour analyser les données de la coopérative : stocks, lots, pertes, "
-                "transformation, recommandations et connaissances post-récolte. "
-                "Je ne dispose pas de contexte fiable pour répondre à cette question."
+                "Je ne peux pas exécuter cette demande ici. "
+                "Utilisez l’application pour les actions d’interface et posez une question analytique vérifiable."
             ),
             data={},
             sources=[],

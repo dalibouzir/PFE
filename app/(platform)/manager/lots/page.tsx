@@ -21,7 +21,6 @@ import {
   useBatchMaterialBalance,
   useBatchReferencePreview,
   useBatches,
-  useCompletePostHarvest,
   useCreateBatch,
   useStartPostHarvest,
   useUpdateBatch,
@@ -58,6 +57,11 @@ const defaultSteps = getProductStepTemplate(null, "post_harvest");
 
 type MassUnit = "kg" | "ton";
 type StagePreset = Pick<WorkflowStageDef, "key" | "label" | "icon" | "typeTag">;
+type PostHarvestFluxMeta = {
+  product_id: string;
+  grade: string;
+  allocated_qty_kg: number;
+} | null;
 
 const batchStatusTone: Record<string, "success" | "warning" | "info" | "danger"> = {
   created: "info",
@@ -72,6 +76,22 @@ const batchStatusLabel: Record<string, string> = {
   completed: "Terminé",
   archived: "Archivé",
 };
+
+function lotPostHarvestStatusLabel(batch: Batch): string {
+  if (batch.postharvest_status === "ready_post_recolte" && (batch.collecte_created || batch.stock_in_created)) {
+    return "Collecté · En attente Post-récolte";
+  }
+  if (batch.postharvest_status === "in_post_recolte") return "Post-récolte en cours";
+  if (batch.postharvest_status === "post_recolte_completed") return "Post-récolte terminée";
+  return batchStatusLabel[batch.status] ?? batch.status;
+}
+
+function lotPostHarvestStatusTone(batch: Batch): "success" | "warning" | "info" | "danger" {
+  if (batch.postharvest_status === "ready_post_recolte" && (batch.collecte_created || batch.stock_in_created)) return "info";
+  if (batch.postharvest_status === "in_post_recolte") return "warning";
+  if (batch.postharvest_status === "post_recolte_completed") return "success";
+  return batchStatusTone[batch.status] ?? "info";
+}
 
 function normalizeTab(raw: string | null): LotWorkspaceTab {
   if (raw === "overview") return "overview";
@@ -131,6 +151,27 @@ function durationMinutesFromDays(days?: number): number | undefined {
   return Math.round(days * MINUTES_PER_DAY);
 }
 
+function parsePostHarvestStockMeta(statusNote?: string | null): PostHarvestFluxMeta {
+  const raw = (statusNote || "").trim();
+  const prefix = "POSTHARVEST_STOCK:";
+  if (!raw.startsWith(prefix)) return null;
+  try {
+    const parsed = JSON.parse(raw.slice(prefix.length).trim()) as Partial<PostHarvestFluxMeta>;
+    if (!parsed || typeof parsed !== "object") return null;
+    const productId = typeof parsed.product_id === "string" ? parsed.product_id : "";
+    const grade = typeof parsed.grade === "string" && parsed.grade.trim() ? parsed.grade.trim() : "Non spécifié";
+    const allocated = Number(parsed.allocated_qty_kg ?? 0);
+    if (!productId) return null;
+    return {
+      product_id: productId,
+      grade,
+      allocated_qty_kg: Number.isFinite(allocated) ? allocated : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function LotsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -150,7 +191,6 @@ export default function LotsPage() {
   const createBatch = useCreateBatch();
   const updateBatch = useUpdateBatch();
   const startPostHarvest = useStartPostHarvest();
-  const completePostHarvest = useCompletePostHarvest();
   const createStep = useCreateProcessStep();
   const completeStep = useCompleteProcessStep();
   const updateStep = useUpdateProcessStep();
@@ -167,6 +207,11 @@ export default function LotsPage() {
   const [editingStep, setEditingStep] = useState<ProcessStep | null>(null);
   const [completingPendingStep, setCompletingPendingStep] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [postHarvestModalOpen, setPostHarvestModalOpen] = useState(false);
+  const [postHarvestProductId, setPostHarvestProductId] = useState<string>("");
+  const [postHarvestGrade, setPostHarvestGrade] = useState<string>("");
+  const [postHarvestQuantity, setPostHarvestQuantity] = useState<string>("");
+  const [postHarvestFormError, setPostHarvestFormError] = useState<string | null>(null);
   const [pendingDeleteStep, setPendingDeleteStep] = useState<ProcessStep | null>(null);
   const tableControls = useTableControls([], "desc");
 
@@ -176,6 +221,8 @@ export default function LotsPage() {
 
   const [stepPreset, setStepPreset] = useState<StagePreset | null>(null);
   const [stepTargetOrder, setStepTargetOrder] = useState<number | null>(null);
+  const [listPage, setListPage] = useState(1);
+  const [listPageSize, setListPageSize] = useState(10);
 
   const lotForm = useForm<BatchCreate>({
     defaultValues: {
@@ -191,7 +238,7 @@ export default function LotsPage() {
       batch_id: "",
       type: "",
       date: todayIso,
-      qty_out: 0,
+      loss_value: 0,
       loss_unit: "kg",
       notes: "",
       duration_minutes: undefined,
@@ -216,12 +263,15 @@ export default function LotsPage() {
     const base = [...batches]
       .filter((item) =>
         Boolean(
-          item.member_id &&
+          // Linked pre-harvest lots ready for post-harvest continuation.
+          (item.member_id &&
             item.parcel_id &&
             item.preharvest_completed_at &&
             (item.collecte_created || item.stock_in_created) &&
             item.confirmed_weight_kg &&
-            item.postharvest_status !== "not_ready_post_recolte",
+            item.postharvest_status !== "not_ready_post_recolte") ||
+            // Free post-harvest lots (not linked to pre-harvest/collecte).
+            (!item.member_id && !item.parcel_id),
         ),
       )
       .sort((a, b) => b.creation_date.localeCompare(a.creation_date));
@@ -239,6 +289,13 @@ export default function LotsPage() {
     const sorted = productFiltered.slice().sort((a, b) => a.creation_date.localeCompare(b.creation_date));
     return tableControls.sortOrder === "asc" ? sorted : sorted.reverse();
   }, [filteredBatches, productFilterId, tableControls.sortOrder]);
+  const pagedVisibleBatches = useMemo(() => {
+    const start = (listPage - 1) * listPageSize;
+    return visibleBatches.slice(start, start + listPageSize);
+  }, [visibleBatches, listPage, listPageSize]);
+  useEffect(() => {
+    setListPage(1);
+  }, [query, productFilterId, tableControls.sortOrder, listPageSize]);
 
   const postHarvestProductFilterOptions = useMemo(() => {
     const ids = Array.from(new Set(filteredBatches.map((batch) => batch.product_id)));
@@ -254,6 +311,10 @@ export default function LotsPage() {
     }
     return visibleBatches[0] ?? null;
   }, [selectedBatchId, visibleBatches]);
+  const selectedBatchFluxMeta = useMemo(
+    () => parsePostHarvestStockMeta(selectedBatch?.status_note ?? null),
+    [selectedBatch?.status_note],
+  );
   const { data: materialBalanceData } = useBatchMaterialBalance(selectedBatch?.id ?? null);
   const requiredLoading = batchesQuery.isLoading || productsQuery.isLoading || stocksQuery.isLoading || stepsQuery.isLoading;
   const requiredError = batchesQuery.isError || productsQuery.isError || stocksQuery.isError || stepsQuery.isError;
@@ -547,7 +608,7 @@ export default function LotsPage() {
   );
 
   const lotSidebarItems = useMemo<ActiveLotItem[]>(() => {
-    return visibleBatches.map((batch) => {
+    return pagedVisibleBatches.map((batch) => {
       const lotSteps = stepsByBatch.get(batch.id) ?? [];
       const total = Math.max(batch.ordered_process_steps.length, 1);
       const done = Math.min(lotSteps.length, total);
@@ -565,11 +626,11 @@ export default function LotsPage() {
         currentQty: batch.current_qty,
         unit: batch.unit,
         progressPct,
-        statusLabel: batchStatusLabel[batch.status] ?? batch.status,
-        statusTone: batchStatusTone[batch.status] ?? "info",
+        statusLabel: lotPostHarvestStatusLabel(batch),
+        statusTone: lotPostHarvestStatusTone(batch),
       };
     });
-  }, [productLookup, stepsByBatch, visibleBatches]);
+  }, [pagedVisibleBatches, productLookup, stepsByBatch]);
 
   const lotExportColumns: ExportColumn<Batch>[] = [
     { key: "code", header: "Lot" },
@@ -577,7 +638,7 @@ export default function LotsPage() {
     { key: "product", header: "Produit", format: (_, row) => productLookup.get(row.product_id) ?? row.product_id },
     { key: "confirmed_weight_kg", header: "Poids confirmé (kg)", format: (_, row) => row.confirmed_weight_kg?.toLocaleString("fr-FR") ?? "—" },
     { key: "current_qty", header: "Stock actuel (kg)", format: (_, row) => row.current_qty?.toLocaleString("fr-FR") ?? "—" },
-    { key: "status", header: "Statut", format: (_, row) => batchStatusLabel[row.status] ?? row.status },
+    { key: "status", header: "Statut", format: (_, row) => lotPostHarvestStatusLabel(row) },
   ];
 
   const anomalyCount = selectedSteps.filter((step) => step.warning || step.loss_pct >= 12).length;
@@ -601,6 +662,71 @@ export default function LotsPage() {
 
   const availableStockKg = selectedProductStock?.available_stock_kg ?? 0;
   const availableStockDisplay = fromKg(availableStockKg, watchedLotUnit);
+
+  const selectedBatchAvailableBuckets = useMemo(() => {
+    if (!selectedBatch) return [];
+    return stocks
+      .filter((row) => row.product_id === selectedBatch.product_id && row.available_stock_kg > 0)
+      .sort((a, b) => b.available_stock_kg - a.available_stock_kg);
+  }, [selectedBatch, stocks]);
+
+  const selectedBatchCanStartPostHarvest = useMemo(() => {
+    if (!selectedBatch) return false;
+    const isFreeLot = !selectedBatch.member_id && !selectedBatch.parcel_id;
+    if (!isFreeLot) {
+      if (selectedBatch.postharvest_status !== "ready_post_recolte") return false;
+      if (!(selectedBatch.collecte_created || selectedBatch.stock_in_created)) return false;
+    } else {
+      if (selectedBatch.postharvest_status === "in_post_recolte" || selectedBatch.postharvest_status === "post_recolte_completed") return false;
+    }
+    return selectedBatchAvailableBuckets.length > 0;
+  }, [selectedBatch, selectedBatchAvailableBuckets.length]);
+
+  const postHarvestGradeOptions = useMemo(() => {
+    if (!postHarvestProductId) return [];
+    return stocks
+      .filter((row) => row.product_id === postHarvestProductId && row.available_stock_kg > 0)
+      .sort((a, b) => b.available_stock_kg - a.available_stock_kg)
+      .map((row) => ({ grade: row.grade, available: row.available_stock_kg }));
+  }, [postHarvestProductId, stocks]);
+
+  const selectedPostHarvestGradeBucket = useMemo(
+    () => postHarvestGradeOptions.find((entry) => entry.grade === postHarvestGrade) ?? null,
+    [postHarvestGradeOptions, postHarvestGrade],
+  );
+  const selectedPostHarvestAvailableKg = selectedPostHarvestGradeBucket?.available ?? 0;
+  const postHarvestQuantityNumber = Number(postHarvestQuantity);
+  const postHarvestQuantityInvalid =
+    !Number.isFinite(postHarvestQuantityNumber) ||
+    postHarvestQuantityNumber <= 0 ||
+    postHarvestQuantityNumber > selectedPostHarvestAvailableKg;
+  const postHarvestSubmitDisabled =
+    !selectedBatch ||
+    !postHarvestProductId ||
+    !postHarvestGrade ||
+    postHarvestQuantity.trim() === "" ||
+    postHarvestQuantityInvalid ||
+    startPostHarvest.isPending;
+  const selectedBatchFluxRemainingKg = useMemo(() => {
+    if (!selectedBatchFluxMeta) return 0;
+    return (
+      stocks.find(
+        (row) => row.product_id === selectedBatchFluxMeta.product_id && row.grade === selectedBatchFluxMeta.grade,
+      )?.available_stock_kg ?? 0
+    );
+  }, [selectedBatchFluxMeta, stocks]);
+
+  useEffect(() => {
+    if (!postHarvestModalOpen || !selectedBatch) return;
+    const fallbackBucket = selectedBatchAvailableBuckets[0] ?? null;
+    setPostHarvestProductId(selectedBatch.product_id);
+    setPostHarvestGrade((current) => (current ? current : fallbackBucket?.grade ?? ""));
+    setPostHarvestQuantity((current) => {
+      if (current.trim()) return current;
+      const fallbackQty = fallbackBucket ? Math.max(1, Math.floor(fallbackBucket.available_stock_kg)) : 0;
+      return fallbackQty > 0 ? String(fallbackQty) : "";
+    });
+  }, [postHarvestModalOpen, selectedBatch, selectedBatchAvailableBuckets]);
 
   const historyItems = useMemo(() => {
     if (!selectedBatch) return [];
@@ -695,6 +821,23 @@ export default function LotsPage() {
     setLotFormOpen(true);
   };
 
+  const openCreateLot = () => {
+    const firstProduct = productsInStock[0];
+    setEditingBatch(null);
+    lotForm.reset({
+      product_id: firstProduct?.id ?? "",
+      creation_date: todayIso,
+      initial_qty: 0,
+      unit: "kg",
+      process_steps: defaultSteps,
+    });
+    setPlannedStepsDraft(defaultSteps);
+    setStepToAdd("");
+    setCustomStepInput("");
+    setFormError(null);
+    setLotFormOpen(true);
+  };
+
   const expectedInputForOrder = (order: number): number => {
     if (!selectedBatch) return 0;
     if (order <= 1) return Number(selectedBatch.confirmed_weight_kg ?? selectedBatch.current_qty ?? 0);
@@ -718,7 +861,7 @@ export default function LotsPage() {
       type: target.label,
       date: todayIso,
       qty_in: expectedInputForOrder(target.order),
-      qty_out: 0,
+      loss_value: 0,
       loss_unit: selectedBatch.unit,
       notes: "",
       duration_minutes: undefined,
@@ -747,7 +890,7 @@ export default function LotsPage() {
       type: step.type,
       date: step.date,
       qty_in: step.qty_in,
-      qty_out: step.qty_out,
+      loss_value: step.normalized_loss_value,
       loss_unit: step.loss_unit,
       notes: step.notes ?? "",
       duration_minutes: durationDaysFromMinutes(step.duration_minutes),
@@ -835,11 +978,15 @@ export default function LotsPage() {
         return;
       }
 
+      const incomingQty = Number(values.qty_in ?? expectedInputForOrder(stepTargetOrder ?? workflowRows.length + 1));
+      const lossKg = Number(values.loss_value ?? 0);
+      const computedQtyOut = Math.max(incomingQty - lossKg, 0);
+
       if (editingStep) {
         if (completingPendingStep) {
           const payload: ProcessStepCompletePayload = {
             date: values.date,
-            qty_out: Number(values.qty_out),
+            loss_value: lossKg,
             loss_unit: values.loss_unit,
             notes: values.notes?.trim() || null,
             duration_minutes: durationMinutesFromDays(values.duration_minutes ?? undefined),
@@ -848,7 +995,7 @@ export default function LotsPage() {
         } else {
           const payload: ProcessStepUpdate = {
             date: values.date,
-            qty_out: values.qty_out !== undefined ? Number(values.qty_out) : undefined,
+            qty_out: computedQtyOut,
             loss_unit: values.loss_unit,
             notes: values.notes?.trim() || null,
             duration_minutes: durationMinutesFromDays(values.duration_minutes ?? undefined),
@@ -862,7 +1009,7 @@ export default function LotsPage() {
             type: stepPreset?.label,
             date: values.date,
             qty_in: computedQtyIn,
-            qty_out: Number(values.qty_out),
+            loss_value: lossKg,
             loss_unit: values.loss_unit,
             notes: values.notes?.trim() || null,
             duration_minutes: durationMinutesFromDays(values.duration_minutes ?? undefined),
@@ -884,40 +1031,57 @@ export default function LotsPage() {
     }
   };
 
+  const openPostHarvestModal = () => {
+    if (!selectedBatch) return;
+    if (!selectedBatchCanStartPostHarvest) {
+      setFormError("Lot non éligible au démarrage Post-récolte ou stock indisponible.");
+      return;
+    }
+    setPostHarvestFormError(null);
+    setPostHarvestModalOpen(true);
+  };
+
+  const closePostHarvestModal = () => {
+    setPostHarvestModalOpen(false);
+    setPostHarvestFormError(null);
+  };
+
   const handleStartPostHarvest = async () => {
     if (!selectedBatch) return;
     setFormError(null);
-    try {
-      await startPostHarvest.mutateAsync(selectedBatch.id);
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Impossible de démarrer la Post-récolte.");
+    setPostHarvestFormError(null);
+    if (!postHarvestProductId || !postHarvestGrade) {
+      setPostHarvestFormError("Produit et grade sont requis.");
+      return;
     }
-  };
-
-  const handleCompletePostHarvest = async () => {
-    if (!selectedBatch) return;
-    setFormError(null);
+    if (postHarvestQuantityInvalid) {
+      setPostHarvestFormError("La quantité doit être > 0 et ≤ au stock disponible.");
+      return;
+    }
     try {
-      await completePostHarvest.mutateAsync(selectedBatch.id);
+      await startPostHarvest.mutateAsync({
+        id: selectedBatch.id,
+        payload: {
+          product_id: postHarvestProductId,
+          grade: postHarvestGrade,
+          quantity_kg: postHarvestQuantityNumber,
+        },
+      });
+      closePostHarvestModal();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Impossible de finaliser la Post-récolte.");
+      const message = error instanceof Error ? error.message : "Impossible de démarrer la Post-récolte.";
+      setPostHarvestFormError(message);
     }
   };
 
   const handleEnterStage = (row: ProcessTableRow) => {
     if (!row.isExecutable) return;
     if (!selectedBatch) return;
-    void (async () => {
-      setFormError(null);
-      try {
-        if (selectedBatch.postharvest_status === "ready_post_recolte") {
-          await startPostHarvest.mutateAsync(selectedBatch.id);
-        }
-        openCreateStep(row);
-      } catch (error) {
-        setFormError(error instanceof Error ? error.message : "Impossible de démarrer l'étape.");
-      }
-    })();
+    if (selectedBatch.postharvest_status === "ready_post_recolte") {
+      setFormError("Démarrez d'abord la Post-récolte pour ce lot.");
+      return;
+    }
+    openCreateStep(row);
   };
 
   const stepModalTitle = editingStep
@@ -950,32 +1114,23 @@ export default function LotsPage() {
   return (
     <main className="min-w-0 overflow-x-hidden">
       <PageIntro title="Flux matière" />
-      <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "20ms" }}>
-        <p className="text-sm font-semibold text-[var(--text)]">Continuation Post-récolte du même lot</p>
-        <p className="text-xs text-[var(--muted)]">Les lots prêts depuis Pré-récolte sont prioritaires. Cette page ne crée pas un nouveau lot.</p>
-      </section>
-
-      <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "30ms" }}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
+      <section className="premium-card reveal rounded-2xl p-3" style={{ ["--delay" as string]: "30ms" }}>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-3">
             <button
               type="button"
-              onClick={handleStartPostHarvest}
-              className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold"
-              disabled={!selectedBatch || selectedBatch.postharvest_status !== "ready_post_recolte"}
+              onClick={openCreateLot}
+              className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold"
             >
-              Demarrer Post-récolte
+              + Nouveau lot Post-récolte
             </button>
-            <button type="button" onClick={() => openCreateStep()} className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold" disabled={!selectedBatch}>
+            <button
+              type="button"
+              onClick={() => openCreateStep()}
+              className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold"
+              disabled={!selectedBatch || selectedBatch.postharvest_status === "ready_post_recolte"}
+            >
               + Compléter étape
-            </button>
-            <button
-              type="button"
-              onClick={handleCompletePostHarvest}
-              className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold"
-              disabled={!selectedBatch || selectedBatch.postharvest_status === "post_recolte_completed"}
-            >
-              Clôturer post-récolte
             </button>
             <button
               type="button"
@@ -986,21 +1141,45 @@ export default function LotsPage() {
             </button>
           </div>
 
-          <div className="w-full">
+          <div className="sm:col-span-2 xl:col-span-4">
             <TableToolbar
               search={query}
               onSearchChange={setQuery}
               searchPlaceholder="Rechercher un lot..."
+              filters={[
+                {
+                  key: "product",
+                  label: "Filtrer par produit",
+                  value: productFilterId,
+                  options: [
+                    { value: "all", label: "Tous les produits" },
+                    ...postHarvestProductFilterOptions.map((product) => ({
+                      value: product.id,
+                      label: product.name,
+                    })),
+                  ],
+                },
+              ]}
+              onFilterChange={(key, value) => {
+                if (key === "product") setProductFilterId(value);
+              }}
               sortOrder={tableControls.sortOrder}
               onSortOrderChange={tableControls.setSortOrder}
               sortAscLabel="Date asc"
               sortDescLabel="Date desc"
               rightActions={
-                <ExportActions
-                  onCsv={() => exportRowsToCsv({ filename: "lots-post-recolte", title: "Lots Post-récolte", columns: lotExportColumns, rows: visibleBatches })}
-                  onExcel={() => exportRowsToExcel({ filename: "lots-post-recolte", title: "Lots Post-récolte", columns: lotExportColumns, rows: visibleBatches })}
-                  onPdf={() => exportRowsToPdf({ filename: "lots-post-recolte", title: "Lots Post-récolte", columns: lotExportColumns, rows: visibleBatches })}
-                />
+                <div className="flex items-center gap-2">
+                  <select value={listPageSize} onChange={(event) => setListPageSize(Number(event.target.value))} className="soft-focus wf-input h-10 min-w-[110px] px-3 text-sm">
+                    <option value={10}>10 / page</option>
+                    <option value={20}>20 / page</option>
+                    <option value={50}>50 / page</option>
+                  </select>
+                  <ExportActions
+                    onCsv={() => exportRowsToCsv({ filename: "lots-post-recolte", title: "Lots Post-récolte", columns: lotExportColumns, rows: visibleBatches })}
+                    onExcel={() => exportRowsToExcel({ filename: "lots-post-recolte", title: "Lots Post-récolte", columns: lotExportColumns, rows: visibleBatches })}
+                    onPdf={() => exportRowsToPdf({ filename: "lots-post-recolte", title: "Lots Post-récolte", columns: lotExportColumns, rows: visibleBatches })}
+                  />
+                </div>
               }
             />
           </div>
@@ -1016,23 +1195,6 @@ export default function LotsPage() {
       ) : (
         <section className="min-w-0 grid gap-4 xl:grid-cols-[300px_1fr]">
           <aside className="space-y-3">
-            <article className="premium-card reveal rounded-2xl p-3" style={{ ["--delay" as string]: "40ms" }}>
-              <label className="block text-xs font-medium text-[var(--text)]">
-                Filtrer par produit
-                <select
-                  value={productFilterId}
-                  onChange={(event) => setProductFilterId(event.target.value)}
-                  className="wf-input mt-1 h-9 w-full px-2.5 text-xs"
-                >
-                  <option value="all">Tous les produits</option>
-                  {postHarvestProductFilterOptions.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </article>
             <LotActiveSidebar
               items={lotSidebarItems}
               selectedId={selectedBatch.id}
@@ -1049,8 +1211,8 @@ export default function LotsPage() {
               initialQty={postHarvestInitialQty}
               currentQty={postHarvestCurrentQty}
               lossPct={selectedLossPct}
-              statusLabel={batchStatusLabel[selectedBatch.status] ?? selectedBatch.status}
-              statusTone={batchStatusTone[selectedBatch.status] ?? "info"}
+              statusLabel={lotPostHarvestStatusLabel(selectedBatch)}
+              statusTone={lotPostHarvestStatusTone(selectedBatch)}
               onEditLot={() => openEditLot(selectedBatch)}
             />
             {forecastGap ? (
@@ -1096,10 +1258,44 @@ export default function LotsPage() {
                       <p className="text-[11px] text-[var(--muted)]">Statut lot</p>
                       <div className="mt-1">
                         <StatusBadge
-                          label={batchStatusLabel[selectedBatch.status] ?? selectedBatch.status}
-                          tone={batchStatusTone[selectedBatch.status] ?? "info"}
+                          label={lotPostHarvestStatusLabel(selectedBatch)}
+                          tone={lotPostHarvestStatusTone(selectedBatch)}
                         />
                       </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+                      <p className="text-[11px] text-[var(--muted)]">Réf. Pré-récolte</p>
+                      <p className="text-sm font-semibold text-[var(--text)]">{selectedBatch.preharvest_reference || selectedBatch.code}</p>
+                    </div>
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+                      <p className="text-[11px] text-[var(--muted)]">Réf. Collecte</p>
+                      <p className="text-sm font-semibold text-[var(--text)]">{selectedBatch.collecte_reference || "Référence historique"}</p>
+                    </div>
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+                      <p className="text-[11px] text-[var(--muted)]">Réf. Post-récolte</p>
+                      <p className="text-sm font-semibold text-[var(--text)]">{selectedBatch.postharvest_reference || "En attente de démarrage"}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
+                    <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Flux Post-récolte sélectionné</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <p className="text-xs text-[var(--muted)]">
+                        Réf. Post-récolte: <span className="font-semibold text-[var(--text)]">{selectedBatch.postharvest_reference || "En attente de démarrage"}</span>
+                      </p>
+                      <p className="text-xs text-[var(--muted)]">
+                        Produit: <span className="font-semibold text-[var(--text)]">{productLookup.get(selectedBatchFluxMeta?.product_id || selectedBatch.product_id) ?? selectedBatch.product_id}</span>
+                      </p>
+                      <p className="text-xs text-[var(--muted)]">
+                        Grade: <span className="font-semibold text-[var(--text)]">{selectedBatchFluxMeta?.grade || "Non spécifié"}</span>
+                      </p>
+                      <p className="text-xs text-[var(--muted)]">
+                        Quantité allouée: <span className="font-semibold text-[var(--text)]">{(selectedBatchFluxMeta?.allocated_qty_kg ?? selectedBatch.confirmed_weight_kg ?? 0).toFixed(2)} kg</span>
+                      </p>
+                      <p className="text-xs text-[var(--muted)] sm:col-span-2">
+                        Stock disponible/restant: <span className="font-semibold text-[var(--text)]">{selectedBatchFluxRemainingKg.toFixed(2)} kg</span>
+                      </p>
                     </div>
                   </div>
                   <div className="mt-3 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
@@ -1207,6 +1403,100 @@ export default function LotsPage() {
           </div>
         </section>
       )}
+
+      <LiquidGlassModal
+        open={postHarvestModalOpen}
+        onClose={closePostHarvestModal}
+        title="Nouveau lot Post-récolte"
+        subtitle="Sélectionnez le stock à transformer."
+        closeLabel="✕"
+        size="md"
+        footer={
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold" onClick={closePostHarvestModal}>
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={handleStartPostHarvest}
+              className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold"
+              disabled={postHarvestSubmitDisabled}
+            >
+              {startPostHarvest.isPending ? "Démarrage..." : "Démarrer Post-récolte"}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Produit
+              <select
+                value={postHarvestProductId}
+                onChange={(event) => setPostHarvestProductId(event.target.value)}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+                disabled
+              >
+                <option value={selectedBatch?.product_id ?? ""}>
+                  {selectedBatch ? (productLookup.get(selectedBatch.product_id) ?? selectedBatch.product_id) : "Sélectionner"}
+                </option>
+              </select>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Produit verrouillé sur le produit du lot sélectionné.
+              </p>
+            </label>
+
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Grade/qualité
+              <select
+                value={postHarvestGrade}
+                onChange={(event) => setPostHarvestGrade(event.target.value)}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+              >
+                <option value="" disabled>
+                  Sélectionner
+                </option>
+                {postHarvestGradeOptions.map((entry) => (
+                  <option key={entry.grade} value={entry.grade}>
+                    {entry.grade}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Quantité à allouer (kg)
+            <input
+              type="number"
+              min={0.01}
+              step="0.01"
+              value={postHarvestQuantity}
+              onChange={(event) => setPostHarvestQuantity(event.target.value)}
+              className="wf-input mt-2 h-11 w-full px-3 text-sm"
+            />
+          </label>
+
+          <div className="rounded-xl border border-[#BDD6FB] bg-[#EEF5FF] px-3 py-2 text-xs text-[#2F80ED]">
+            Disponible: {selectedPostHarvestAvailableKg.toFixed(2)} kg
+          </div>
+          <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 text-xs text-[var(--muted)]">
+            <p>Réf. Pré-récolte: <span className="font-semibold text-[var(--text)]">{selectedBatch?.preharvest_reference || "—"}</span></p>
+            <p>Réf. Collecte: <span className="font-semibold text-[var(--text)]">{selectedBatch?.collecte_reference || "—"}</span></p>
+          </div>
+
+          {postHarvestQuantity.trim() !== "" && postHarvestQuantityInvalid ? (
+            <p className="rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">
+              Quantité invalide: elle doit être supérieure à 0 et inférieure ou égale au stock disponible.
+            </p>
+          ) : null}
+          {postHarvestFormError ? (
+            <p className="rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">
+              {postHarvestFormError}
+            </p>
+          ) : null}
+        </div>
+      </LiquidGlassModal>
 
       <LiquidGlassModal
         open={lotFormOpen}
@@ -1426,20 +1716,23 @@ export default function LotsPage() {
             </label>
 
             <label className="block text-sm font-medium text-[var(--text)]">
-              Quantite sortante (kg)
+              Quantité perte (kg)
               <input
                 type="number"
                 step="0.01"
-                min="0.01"
-                {...stepForm.register("qty_out", {
-                  required: "Quantité sortante requise.",
+                min="0"
+                {...stepForm.register("loss_value", {
+                  required: "Quantité perte requise.",
                   valueAsNumber: true,
-                  validate: (value) => Number(value) > 0 || "La quantité sortante doit être supérieure à 0.",
+                  validate: (value) => Number(value) >= 0 || "La perte doit être positive.",
                 })}
                 className="wf-input mt-2 h-11 w-full px-3 text-sm"
               />
             </label>
           </div>
+          <p className="text-xs text-[var(--muted)]">
+            Quantité sortante calculée automatiquement = Entrante - Perte.
+          </p>
 
           <input type="hidden" {...stepForm.register("loss_unit")} />
 

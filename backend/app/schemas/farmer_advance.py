@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.base import ORMModel
+from app.schemas.treasury import TreasuryTransactionRead
 from app.schemas.uploaded_file import UploadedFileRead
 
 
@@ -48,6 +49,7 @@ class FarmerAdvanceRead(ORMModel):
     status: str
     source_type: str
     treasury_transaction_id: Optional[UUID]
+    linked_treasury_transaction: Optional[TreasuryTransactionRead] = None
     batch_code: Optional[str] = None
     parcel_name: Optional[str] = None
     product_name: Optional[str] = None

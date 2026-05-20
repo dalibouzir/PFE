@@ -1004,9 +1004,17 @@ export default function AssistantIAPage() {
   const [activeRequestId, setActiveRequestId] = useState("");
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [loadingStepIndex, setLoadingStepIndex] = useState(0);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const streamEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(false);
+  const loadingSteps = [
+    "Analyse de la question",
+    "Consultation des données",
+    "Vérification des preuves",
+    "Préparation de la réponse",
+  ];
+
 
   const sessionsQuery = useQuery({
     queryKey: ["assistant-chat-sessions"],
@@ -1041,6 +1049,17 @@ export default function AssistantIAPage() {
         body: { conversation_id: sessionId, message, language: "fr" },
       }),
   });
+
+  useEffect(() => {
+    if (!askMutation.isPending) {
+      setLoadingStepIndex(0);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setLoadingStepIndex((value) => (value + 1) % loadingSteps.length);
+    }, 1300);
+    return () => window.clearInterval(timer);
+  }, [askMutation.isPending, loadingSteps.length]);
 
   useEffect(() => {
     const sessions = sessionsQuery.data ?? [];
@@ -1252,7 +1271,17 @@ export default function AssistantIAPage() {
                       <Bot className="h-5 w-5" />
                     </div>
                     <article className="w-full rounded-[22px] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--muted)] shadow-[0_8px_18px_rgba(35,30,21,0.06)]">
-                      Traitement en cours...
+                      <p className="font-medium text-[var(--text)]">Analyse des données...</p>
+                      <ul className="mt-2 grid gap-1 text-xs">
+                        {loadingSteps.map((step, index) => (
+                          <li
+                            key={step}
+                            className={index === loadingStepIndex ? "font-semibold text-[#0a8f43]" : "text-[var(--muted)]"}
+                          >
+                            {index + 1}. {step}
+                          </li>
+                        ))}
+                      </ul>
                     </article>
                   </div>
                 )}

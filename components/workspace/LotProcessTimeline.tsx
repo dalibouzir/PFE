@@ -31,7 +31,8 @@ export function LotProcessTimeline({ stages }: { stages: TimelineStage[] }) {
         {postHarvestStages.length === 0 ? (
           <p className="mt-3 text-sm text-[var(--muted)]">Aucune etape post-recolte configuree.</p>
         ) : (
-          <div className="mt-3 space-y-2">
+          <div className="thin-scrollbar mt-4 overflow-x-auto pb-1">
+            <div className="flex min-w-max items-stretch gap-2 pr-2">
             {postHarvestStages.map((stage, index) => {
               const isLast = index === postHarvestStages.length - 1;
               const isDone = stage.status === "done";
@@ -52,11 +53,10 @@ export function LotProcessTimeline({ stages }: { stages: TimelineStage[] }) {
                     : "bg-[var(--line)]";
               const lineClass = isDone ? "bg-[#2F80ED]" : "bg-[var(--line)]";
               return (
-                <div key={stage.key} className="relative pl-6">
-                  <span className={`absolute left-2 top-3 h-2.5 w-2.5 rounded-full ${dotClass}`} />
-                  {!isLast ? <span className={`absolute left-2 top-6 h-[calc(100%-1.5rem)] w-px ${lineClass}`} /> : null}
-                  <div className={`rounded-xl border px-3 py-2 ${boxClass}`}>
+                <div key={stage.key} className="flex items-center gap-2">
+                  <div className={`min-w-[220px] rounded-xl border px-3 py-2.5 ${boxClass}`}>
                     <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
                       <span>{stage.icon}</span>
                       <p className="text-sm font-semibold text-[var(--text)]">
                         {stage.order}. {stage.label}
@@ -73,9 +73,11 @@ export function LotProcessTimeline({ stages }: { stages: TimelineStage[] }) {
                       <p className="mt-1 text-xs text-[var(--muted)]">En attente de saisie</p>
                     )}
                   </div>
+                  {!isLast ? <span className={`h-px w-8 shrink-0 ${lineClass}`} /> : null}
                 </div>
               );
             })}
+            </div>
           </div>
         )}
       </article>

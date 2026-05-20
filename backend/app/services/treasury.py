@@ -92,6 +92,7 @@ def serialize_treasury_transaction(transaction: TreasuryTransaction, farmer_name
         justificatif_status = "référence_générée"
     else:
         justificatif_status = "manquant"
+    linked_farmer_advance = transaction.farmer_advance if transaction.source_type == FARMER_ADVANCE_SOURCE else None
     return TreasuryTransactionRead(
         id=transaction.id,
         cooperative_id=transaction.cooperative_id,
@@ -109,6 +110,8 @@ def serialize_treasury_transaction(transaction: TreasuryTransaction, farmer_name
         justificatif_file=transaction.justificatif_file,
         source_type=transaction.source_type,
         source_id=transaction.source_id,
+        linked_farmer_advance_id=linked_farmer_advance.id if linked_farmer_advance is not None else None,
+        linked_advance_devis_file=linked_farmer_advance.devis_file if linked_farmer_advance is not None else None,
         farmer_id=transaction.farmer_id,
         farmer_name=farmer_name if farmer_name is not None else (transaction.farmer.full_name if transaction.farmer else None),
         created_at=transaction.created_at,
@@ -202,7 +205,7 @@ def _apply_status_transition(transaction: TreasuryTransaction, next_status: Trea
     if transaction.status == TreasuryTransactionStatus.ENREGISTRE_COMPLET and next_status != TreasuryTransactionStatus.ENREGISTRE_COMPLET:
         raise ValidationError("Transaction verrouillée: impossible de modifier un enregistrement complet.")
     if next_status == TreasuryTransactionStatus.ENREGISTRE_COMPLET and not _has_completion_evidence(transaction):
-        raise ValidationError("Enregistré complet exige un justificatif uploadé ou une référence de reçu/facture générée.")
+        raise ValidationError("Enregistré complet exige un justificatif uploadé ou une référence externe générée.")
     if transaction.status == TreasuryTransactionStatus.CANCELLED and next_status != TreasuryTransactionStatus.CANCELLED:
         raise ValidationError("Impossible de réactiver une transaction annulée.")
     transaction.status = next_status
@@ -389,3 +392,4 @@ def upload_treasury_justificatif(db: Session, manager: User, transaction_id, fil
     db.commit()
     db.refresh(transaction)
     return serialize_treasury_transaction(transaction)
+    linked_farmer_advance = transaction.farmer_advance if transaction.source_type == FARMER_ADVANCE_SOURCE else None

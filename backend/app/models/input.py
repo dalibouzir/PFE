@@ -32,6 +32,7 @@ class Input(TimestampMixin, Base):
     grade: Mapped[str] = mapped_column(String(40), nullable=False)
     estimated_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     bl_number: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, index=True)
+    collecte_reference: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, unique=True, index=True)
     justificatif_file_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("uploaded_files.id", ondelete="SET NULL"), nullable=True, index=True)
     status: Mapped[InputStatus] = mapped_column(
         Enum(InputStatus, native_enum=False),

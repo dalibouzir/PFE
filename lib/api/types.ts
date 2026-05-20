@@ -10,6 +10,7 @@ export type AuthUser = {
   role: UserRole;
   status: UserStatus;
   cooperative_id?: string | null;
+  cooperative_name?: string | null;
   institution_id?: string | null;
   created_at: string;
   updated_at: string;
@@ -393,6 +394,7 @@ export type Input = {
   grade: string;
   estimated_value?: number | null;
   bl_number?: string | null;
+  collecte_reference?: string | null;
   status: string;
   source_type: string;
   justificatif_file?: UploadedFile | null;
@@ -433,6 +435,7 @@ export type FarmerAdvance = {
   status: FarmerAdvanceStatus;
   source_type: string;
   treasury_transaction_id?: string | null;
+  linked_treasury_transaction?: TreasuryTransaction | null;
   batch_code?: string | null;
   parcel_name?: string | null;
   product_name?: string | null;
@@ -521,6 +524,8 @@ export type TreasuryTransaction = {
   justificatif_file?: UploadedFile | null;
   source_type: string;
   source_id?: string | null;
+  linked_farmer_advance_id?: string | null;
+  linked_advance_devis_file?: UploadedFile | null;
   farmer_id?: string | null;
   farmer_name?: string | null;
   created_at: string;
@@ -535,7 +540,6 @@ export type TreasuryTransactionCreate = {
   amount_fcfa: number;
   note?: string | null;
   status?: TreasuryTransactionStatus;
-  receipt_reference?: string | null;
   source_type?: string;
   farmer_id?: string | null;
 };
@@ -553,6 +557,7 @@ export type Stock = {
   id: string;
   cooperative_id: string;
   product_id: string;
+  grade: string;
   quantity: number;
   threshold: number;
   total_stock: number;
@@ -572,6 +577,7 @@ export type Stock = {
 
 export type StockCreate = {
   product_id: string;
+  grade?: string;
   quantity?: number;
   threshold: number;
   unit: "kg" | "ton";
@@ -592,12 +598,16 @@ export type StockMovement = {
   cooperative_id: string;
   cooperative_name?: string | null;
   movement_reference: string;
+  preharvest_reference?: string | null;
+  collecte_reference?: string | null;
+  postharvest_reference?: string | null;
   movement_type: string;
   action_type: string;
   source: string;
   source_label: string;
   traceability_status: "linked_lot" | "missing_lot" | "legacy_unlinked" | "unresolved_lot";
   product_id: string;
+  grade: string;
   product_name?: string | null;
   batch_id?: string | null;
   batch_reference?: string | null;
@@ -606,6 +616,9 @@ export type StockMovement = {
   input_reference_bl?: string | null;
   member_id?: string | null;
   member_name?: string | null;
+  actor_name?: string | null;
+  process_step_id?: string | null;
+  process_step_type?: string | null;
   workflow_step_id?: string | null;
   quantity_kg: number;
   movement_date: string;
@@ -615,10 +628,20 @@ export type StockMovement = {
   updated_at: string;
 };
 
+export type ManualStockMovementCreate = {
+  product_id: string;
+  grade: string;
+  movement_type: "in" | "out" | "correction";
+  correction_direction?: "positive" | "negative";
+  quantity_kg: number;
+  notes: string;
+};
+
 export type StockMovementFilters = {
   date_from?: string;
   date_to?: string;
   product_id?: string;
+  grade?: string;
   movement_type?: string;
   source?: string;
   batch_reference?: string;
@@ -635,6 +658,9 @@ export type Batch = {
   member_id?: string | null;
   parcel_id?: string | null;
   code: string;
+  preharvest_reference: string;
+  collecte_reference?: string | null;
+  postharvest_reference?: string | null;
   creation_date: string;
   unit: "kg" | "ton";
   ordered_process_steps: string[];
@@ -696,6 +722,12 @@ export type BatchUpdate = {
 
 export type BatchStatusUpdate = {
   status: string;
+};
+
+export type BatchStartPostHarvestPayload = {
+  product_id: string;
+  grade: string;
+  quantity_kg: number;
 };
 
 export type BatchPreHarvestStepStatusesUpdate = {
@@ -1035,6 +1067,7 @@ export type CatalogProduct = {
   cooperative_id: string;
   source_product_id?: string | null;
   source_product_name?: string | null;
+  source_grade: string;
   name: string;
   description?: string | null;
   category: string;
@@ -1058,6 +1091,7 @@ export type CatalogProduct = {
 
 export type CatalogProductCreate = {
   source_product_id: string;
+  source_grade?: string;
   name: string;
   description?: string | null;
   category: string;
@@ -1076,6 +1110,7 @@ export type CatalogProductUpdate = Partial<
 export type CommercialOrderLine = {
   id: string;
   catalog_product_id: string;
+  grade: string;
   product_name: string;
   unit: "kg" | "ton";
   quantity: number;
@@ -1122,6 +1157,7 @@ export type CommercialOrderIntake = {
   notes?: string | null;
   lines: Array<{
     catalog_product_id: string;
+    grade?: string;
     quantity: number;
   }>;
 };
@@ -1143,6 +1179,14 @@ export type CommercialOrderStats = {
   new_count: number;
   in_progress_count: number;
   paid_this_month_fcfa: number;
+};
+
+export type CommercialOrdersListResponse = {
+  items: CommercialOrder[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
 };
 
 export type CommercialInvoiceLine = {

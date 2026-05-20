@@ -9,12 +9,60 @@ import type {
   CatalogProductUpdate,
   CommercialInvoice,
   CommercialInvoiceStats,
+  CommercialOrdersListResponse,
   CommercialOrder,
   CommercialOrderIntake,
   CommercialOrderStats,
   CommercialOrderStatus,
   CommercialOrderStatusUpdate,
 } from "@/lib/api/types";
+
+type CommercialOrdersQueryParams = {
+  status?: CommercialOrderStatus | "all";
+  search?: string;
+  category?: string;
+  product?: string;
+  product_id?: string;
+  date_from?: string;
+  date_to?: string;
+  client?: string;
+  sort_by?: "date" | "total" | "client" | "status";
+  sort_order?: "asc" | "desc";
+  page?: number;
+  page_size?: number;
+};
+
+function buildCommercialOrdersPath(params?: CommercialOrdersQueryParams) {
+  const query = new URLSearchParams();
+  if (params?.status && params.status !== "all") query.set("status", params.status);
+  if (params?.search?.trim()) query.set("search", params.search.trim());
+  if (params?.category?.trim()) query.set("category", params.category.trim());
+  if (params?.product?.trim()) query.set("product", params.product.trim());
+  if (params?.product_id && params.product_id !== "all") query.set("product_id", params.product_id);
+  if (params?.date_from) query.set("date_from", params.date_from);
+  if (params?.date_to) query.set("date_to", params.date_to);
+  if (params?.client?.trim()) query.set("client", params.client.trim());
+  if (params?.sort_by) query.set("sort_by", params.sort_by);
+  if (params?.sort_order) query.set("sort_order", params.sort_order);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.page_size) query.set("page_size", String(params.page_size));
+  const qs = query.toString();
+  return qs ? `${endpoints.commercial.orders}?${qs}` : endpoints.commercial.orders;
+}
+
+async function fetchCommercialOrdersPage(params?: CommercialOrdersQueryParams): Promise<CommercialOrdersListResponse> {
+  const response = await apiFetch<CommercialOrdersListResponse | CommercialOrder[]>(buildCommercialOrdersPath(params));
+  if (Array.isArray(response)) {
+    return {
+      items: response,
+      page: 1,
+      page_size: response.length || 1,
+      total: response.length,
+      total_pages: 1,
+    };
+  }
+  return response;
+}
 
 export function useCatalogProducts() {
   return useQuery({
@@ -72,18 +120,34 @@ export function useDeleteCatalogProduct() {
   });
 }
 
-export function useCommercialOrders(params?: { status?: CommercialOrderStatus | "all"; search?: string }) {
+export function useCommercialOrders(params?: {
+  status?: CommercialOrderStatus | "all";
+  search?: string;
+  category?: string;
+  product?: string;
+  product_id?: string;
+  date_from?: string;
+  date_to?: string;
+  client?: string;
+  sort_by?: "date" | "total" | "client" | "status";
+  sort_order?: "asc" | "desc";
+  page?: number;
+  page_size?: number;
+}) {
   return useQuery({
     queryKey: ["commercial", "orders", params ?? {}],
-    queryFn: () => {
-      const query = new URLSearchParams();
-      if (params?.status && params.status !== "all") query.set("status", params.status);
-      if (params?.search?.trim()) query.set("search", params.search.trim());
-      const qs = query.toString();
-      const path = qs ? `${endpoints.commercial.orders}?${qs}` : endpoints.commercial.orders;
-      return apiFetch<CommercialOrder[]>(path);
-    },
+    queryFn: () => fetchCommercialOrdersPage(params),
   });
+}
+
+export async function fetchCommercialOrdersForExport(params?: Omit<CommercialOrdersQueryParams, "page" | "page_size">) {
+  const first = await fetchCommercialOrdersPage({ ...params, page: 1, page_size: 200 });
+  const rows = [...first.items];
+  for (let page = 2; page <= first.total_pages; page += 1) {
+    const chunk = await fetchCommercialOrdersPage({ ...params, page, page_size: 200 });
+    rows.push(...chunk.items);
+  }
+  return rows;
 }
 
 export function useCommercialOrderStats() {

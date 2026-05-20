@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, UniqueConstraint
+from sqlalchemy import DateTime, Float, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -12,7 +12,7 @@ from app.models.mixins import TimestampMixin, current_utc
 class Stock(TimestampMixin, Base):
     __tablename__ = "stocks"
     __table_args__ = (
-        UniqueConstraint("cooperative_id", "product_id", name="uq_stocks_cooperative_product"),
+        UniqueConstraint("cooperative_id", "product_id", "grade", name="uq_stocks_cooperative_product_grade"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -23,6 +23,7 @@ class Stock(TimestampMixin, Base):
         index=True,
     )
     product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    grade: Mapped[str] = mapped_column(String(40), nullable=False, default="Non spécifié")
     # Stored in kg (normalized).
     quantity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     total_stock_kg: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)

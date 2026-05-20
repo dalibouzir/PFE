@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
@@ -37,7 +37,6 @@ type TreasuryFormValues = {
   amount_fcfa: number;
   note: string;
   status: TreasuryTransactionStatus;
-  receipt_reference: string;
   source_type: string;
 };
 
@@ -120,7 +119,15 @@ export default function TreasuryPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [pendingCancelTransaction, setPendingCancelTransaction] = useState<TreasuryTransaction | null>(null);
   const [pendingCompleteTransaction, setPendingCompleteTransaction] = useState<TreasuryTransaction | null>(null);
+  const [detailTransaction, setDetailTransaction] = useState<TreasuryTransaction | null>(null);
   const [uploadingTransactionId, setUploadingTransactionId] = useState<string | null>(null);
+  const [selectedCreateJustificatif, setSelectedCreateJustificatif] = useState<File | null>(null);
+  const [createUploadWarning, setCreateUploadWarning] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | TreasuryTransaction["status"]>("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const tableControls = useTableControls([
     {
@@ -171,12 +178,24 @@ export default function TreasuryPage() {
       amount_fcfa: 0,
       note: "",
       status: "non_enregistre",
-      receipt_reference: "",
       source_type: "manual",
     },
   });
 
   const transactions = useMemo(() => transactionsQuery.data ?? [], [transactionsQuery.data]);
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((tx) => {
+      const byStatus = statusFilter === "all" || tx.status === statusFilter;
+      const byFrom = fromDate ? tx.transaction_date >= fromDate : true;
+      const byTo = toDate ? tx.transaction_date <= toDate : true;
+      return byStatus && byFrom && byTo;
+    });
+  }, [transactions, statusFilter, fromDate, toDate]);
+  const pagedTransactions = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredTransactions.slice(start, start + pageSize);
+  }, [filteredTransactions, page, pageSize]);
+  const totalPages = Math.max(Math.ceil(filteredTransactions.length / pageSize), 1);
   const stats = statsQuery.data;
   const totalEstimatedCharges = useMemo(
     () =>
@@ -187,7 +206,7 @@ export default function TreasuryPage() {
     [batchesQuery.data],
   );
 
-  const exportRows = useMemo(() => mapTransactionsForExport(transactions), [transactions]);
+  const exportRows = useMemo(() => mapTransactionsForExport(filteredTransactions), [filteredTransactions]);
   const exportColumns = useMemo(() => treasuryExportColumns(), []);
 
   const openCreateForm = () => {
@@ -200,12 +219,16 @@ export default function TreasuryPage() {
       amount_fcfa: 0,
       note: "",
       status: "non_enregistre",
-      receipt_reference: "",
       source_type: "manual",
     });
     setFormError(null);
+    setCreateUploadWarning(null);
+    setSelectedCreateJustificatif(null);
     setFormOpen(true);
   };
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, fromDate, toDate, tableControls.search, tableControls.filters.type, tableControls.filters.source_type, tableControls.sortOrder, pageSize]);
 
   const openEditForm = (transaction: TreasuryTransaction) => {
     setEditingTransaction(transaction);
@@ -217,16 +240,19 @@ export default function TreasuryPage() {
       amount_fcfa: transaction.amount_fcfa,
       note: transaction.note ?? "",
       status: transaction.status,
-      receipt_reference: transaction.receipt_reference ?? "",
       source_type: transaction.source_type || "manual",
     });
     setFormError(null);
+    setCreateUploadWarning(null);
+    setSelectedCreateJustificatif(null);
     setFormOpen(true);
   };
 
   const closeForm = () => {
     setFormOpen(false);
     setFormError(null);
+    setCreateUploadWarning(null);
+    setSelectedCreateJustificatif(null);
   };
 
   const submitTransaction = handleSubmit(async (values) => {
@@ -239,7 +265,6 @@ export default function TreasuryPage() {
       amount_fcfa: Number(values.amount_fcfa),
       note: values.note.trim() || null,
       status: values.status,
-      receipt_reference: values.receipt_reference.trim() || null,
       source_type: values.source_type,
     };
 
@@ -247,7 +272,19 @@ export default function TreasuryPage() {
       if (editingTransaction) {
         await updateTransaction.mutateAsync({ id: editingTransaction.id, payload });
       } else {
-        await createTransaction.mutateAsync(payload);
+        const created = await createTransaction.mutateAsync(payload);
+        if (selectedCreateJustificatif) {
+          try {
+            await uploadJustificatif.mutateAsync({ id: created.id, file: selectedCreateJustificatif });
+          } catch (uploadError) {
+            setCreateUploadWarning(
+              uploadError instanceof Error
+                ? `Transaction créée, mais upload justificatif échoué: ${uploadError.message}`
+                : "Transaction créée, mais upload justificatif échoué.",
+            );
+            return;
+          }
+        }
       }
       closeForm();
     } catch (error) {
@@ -365,6 +402,20 @@ export default function TreasuryPage() {
       </section>
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
+        <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | TreasuryTransaction["status"])} className="soft-focus wf-input px-3 py-2.5 text-sm">
+            <option value="all">Tous statuts</option>
+            <option value="non_enregistre">Non enregistré</option>
+            <option value="enregistre_sans_justificatif">Sans justificatif</option>
+            <option value="enregistre_complet">Enregistré complet</option>
+            <option value="cancelled">Annulé</option>
+          </select>
+          <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm" />
+          <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm" />
+          <button type="button" onClick={openCreateForm} className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold">
+            + Nouvelle transaction
+          </button>
+        </div>
         <TableToolbar
           search={tableControls.search}
           onSearchChange={tableControls.setSearch}
@@ -377,13 +428,21 @@ export default function TreasuryPage() {
           sortDescLabel="Date desc"
           rightActions={
             <>
-              <button type="button" onClick={openCreateForm} className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold">
-                + Nouvelle transaction
-              </button>
+              <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="wf-input h-10 w-[110px] px-2 text-xs">
+                <option value={10}>10 / page</option>
+                <option value={20}>20 / page</option>
+                <option value={50}>50 / page</option>
+              </select>
               <ExportActions onCsv={() => runExport("csv")} onExcel={() => runExport("excel")} onPdf={() => runExport("pdf")} />
             </>
           }
         />
+        <p className="mt-3 text-xs text-[var(--muted)]">
+          Exporte toutes les lignes filtrées.
+        </p>
+        <p className="text-xs text-[var(--muted)]">
+          Le dernier fichier importé est lié à l&apos;enregistrement.
+        </p>
       </section>
 
       {transactionsQuery.isLoading ? (
@@ -397,7 +456,7 @@ export default function TreasuryPage() {
             Réessayer
           </button>
         </section>
-      ) : transactions.length === 0 ? (
+      ) : filteredTransactions.length === 0 ? (
         <section className="premium-card reveal rounded-2xl p-6 text-center" style={{ ["--delay" as string]: "90ms" }}>
           <p className="text-sm text-[var(--muted)]">Aucune transaction enregistrée pour le moment.</p>
           <button type="button" className="soft-focus wf-btn-primary mt-3 px-4 py-2 text-sm font-semibold" onClick={openCreateForm}>
@@ -409,25 +468,23 @@ export default function TreasuryPage() {
           <div className="thin-scrollbar overflow-x-auto">
             <table className="wf-table min-w-full text-left text-sm">
               <thead>
-	                <tr>
+                <tr>
                   <th className="px-5 py-3.5">Référence</th>
                   <th className="px-5 py-3.5">Date</th>
                   <th className="px-5 py-3.5">Type</th>
                   <th className="px-5 py-3.5">Catégorie</th>
-                  <th className="px-5 py-3.5">Libellé</th>
                   <th className="px-5 py-3.5">Montant</th>
-	                  <th className="px-5 py-3.5">Source</th>
-	                  <th className="px-5 py-3.5">Statut</th>
-	                  <th className="px-5 py-3.5">Justificatif</th>
-	                  <th className="px-5 py-3.5">Actions</th>
-	                </tr>
+                  <th className="px-5 py-3.5">Source</th>
+                  <th className="px-5 py-3.5">Statut</th>
+                  <th className="px-5 py-3.5">Justificatif</th>
+                  <th className="px-5 py-3.5">Actions</th>
+                </tr>
               </thead>
               <tbody>
-                {transactions.map((transaction) => {
+                {pagedTransactions.map((transaction) => {
                   const type = typeBadge[transaction.type] ?? { label: transaction.type, tone: "danger" as const };
                   const status = statusBadge[transaction.status] ?? { label: transaction.status, tone: "info" as const };
-	                  const isFarmerAdvance = transaction.source_type === "farmer_advance";
-	                  const canEditOrCancel = !isFarmerAdvance && !transaction.is_locked && transaction.status !== "cancelled";
+                  const hasJustificatif = Boolean(transaction.justificatif_file);
 
                   return (
                     <tr key={transaction.id}>
@@ -437,71 +494,197 @@ export default function TreasuryPage() {
                         <StatusBadge label={type.label} tone={type.tone} />
                       </td>
                       <td className="px-5 py-4">{transaction.category}</td>
-                      <td className="px-5 py-4">
-                        <p>{transaction.label}</p>
-                        {transaction.farmer_name ? <p className="text-xs text-[var(--muted)]">{transaction.farmer_name}</p> : null}
-                      </td>
                       <td className="px-5 py-4">{formatAmount(transaction.amount_fcfa)}</td>
                       <td className="px-5 py-4">{sourceLabel(transaction.source_type)}</td>
-	                      <td className="px-5 py-4">
-	                        <StatusBadge label={status.label} tone={status.tone} />
-	                      </td>
-	                      <td className="px-5 py-4 text-xs">
-	                        {transaction.justificatif_file ? (
-	                          <a className="font-semibold text-[var(--primary)] hover:underline" href={transaction.justificatif_file.file_url} target="_blank" rel="noreferrer">
-	                            {transaction.justificatif_file.filename}
-	                          </a>
-	                        ) : (
-	                          <span className="text-[var(--muted)]">{transaction.justificatif_status}</span>
-	                        )}
-	                      </td>
-	                      <td className="px-5 py-4">
-	                        {isFarmerAdvance ? (
-	                          <span className="text-xs text-[var(--muted)]">Géré via avances</span>
-	                        ) : (
-	                          <div className="flex items-center gap-2 flex-wrap">
-	                            <button className="text-xs font-semibold text-[var(--primary)] hover:underline disabled:opacity-40" onClick={() => openEditForm(transaction)} disabled={!canEditOrCancel}>
-	                              Modifier
-	                            </button>
-	                            <button
-	                              className="text-xs font-semibold text-[var(--danger)] hover:underline disabled:opacity-40"
-	                              onClick={() => setPendingCancelTransaction(transaction)}
-	                              disabled={!canEditOrCancel || cancelTransaction.isPending}
-	                            >
-	                              Annuler
-	                            </button>
-	                            <label className={`text-xs font-semibold ${transaction.is_locked ? "text-[var(--muted)]" : "text-[var(--text)]"} ${transaction.is_locked ? "" : "cursor-pointer hover:underline"}`}>
-	                              {uploadingTransactionId === transaction.id ? "Upload..." : "Uploader justificatif"}
-	                              <input
-	                                type="file"
-	                                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-	                                className="hidden"
-	                                disabled={transaction.is_locked || uploadJustificatif.isPending}
-	                                onChange={(event) => {
-	                                  const file = event.target.files?.[0] ?? null;
-	                                  void handleUploadJustificatif(transaction, file);
-	                                  event.currentTarget.value = "";
-	                                }}
-	                              />
-	                            </label>
-	                            <button
-	                              className="text-xs font-semibold text-[var(--success)] hover:underline disabled:opacity-40"
-	                              onClick={() => setPendingCompleteTransaction(transaction)}
-	                              disabled={transaction.is_locked || transaction.status === "cancelled" || updateTransaction.isPending}
-	                            >
-	                              Marquer complet
-	                            </button>
-	                          </div>
-	                        )}
-	                      </td>
+                      <td className="px-5 py-4">
+                        <StatusBadge label={status.label} tone={status.tone} />
+                      </td>
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                            hasJustificatif ? "bg-[#EAF8EE] text-[#0F7A3B]" : "bg-[#FFEDEE] text-[#A83C3C]"
+                          }`}
+                        >
+                          {hasJustificatif ? "Fait" : "Non fait"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <label
+                            className={`soft-focus rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+                              transaction.is_locked
+                                ? "border-[var(--line)] bg-[var(--surface-soft)] text-[var(--muted)]"
+                                : "cursor-pointer border-[#D6DCE8] bg-white text-[var(--text)] hover:bg-[var(--surface-soft)]"
+                            }`}
+                          >
+                            {uploadingTransactionId === transaction.id ? "Upload..." : "Ajouter justificatif"}
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,application/pdf,image/jpeg,image/png,image/webp,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                              className="hidden"
+                              disabled={transaction.is_locked || uploadJustificatif.isPending}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0] ?? null;
+                                void handleUploadJustificatif(transaction, file);
+                                event.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="soft-focus rounded-lg border border-[#A7C3F0] bg-[#EEF5FF] px-2.5 py-1 text-xs font-semibold text-[#1F5EA8] hover:bg-[#E4EEFF]"
+                            onClick={() => setDetailTransaction(transaction)}
+                          >
+                            Voir plus
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--line)] px-4 py-3">
+            <p className="text-xs text-[var(--muted)]">
+              {Math.min((page - 1) * pageSize + 1, filteredTransactions.length)}–{Math.min(page * pageSize, filteredTransactions.length)} sur {filteredTransactions.length}
+            </p>
+            <div className="ml-auto flex items-center gap-2">
+              <button type="button" className="soft-focus rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>Précédent</button>
+              <span className="text-xs text-[var(--muted)]">{page}/{totalPages}</span>
+              <button type="button" className="soft-focus rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={page >= totalPages} onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}>Suivant</button>
+            </div>
+          </div>
         </section>
       )}
+
+      <LiquidGlassModal
+        open={Boolean(detailTransaction)}
+        onClose={() => setDetailTransaction(null)}
+        title={detailTransaction ? `Transaction ${detailTransaction.reference}` : "Détail transaction"}
+        subtitle="Informations détaillées et actions"
+        size="lg"
+        footer={
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold" onClick={() => setDetailTransaction(null)}>
+              Fermer
+            </button>
+            {detailTransaction ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {(() => {
+                  const isFarmerAdvance = detailTransaction.source_type === "farmer_advance";
+                  const canEditOrCancel = !isFarmerAdvance && !detailTransaction.is_locked && detailTransaction.status !== "cancelled";
+                  return (
+                    <>
+                      <button
+                        type="button"
+                        className="soft-focus rounded-lg border border-[var(--line)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--text)] hover:bg-[var(--surface-soft)] disabled:opacity-40"
+                        onClick={() => {
+                          openEditForm(detailTransaction);
+                          setDetailTransaction(null);
+                        }}
+                        disabled={!canEditOrCancel}
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        className="soft-focus rounded-lg border border-[#E0A5A5] bg-[#FFF0F0] px-3 py-1.5 text-xs font-semibold text-[#A83C3C] hover:bg-[#FFE7E7] disabled:opacity-40"
+                        onClick={() => {
+                          setPendingCancelTransaction(detailTransaction);
+                          setDetailTransaction(null);
+                        }}
+                        disabled={!canEditOrCancel || cancelTransaction.isPending}
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        className="soft-focus rounded-lg border border-[#9DD3AF] bg-[#EFFAF2] px-3 py-1.5 text-xs font-semibold text-[#0F7A3B] hover:bg-[#E5F6EB] disabled:opacity-40"
+                        onClick={() => {
+                          setPendingCompleteTransaction(detailTransaction);
+                          setDetailTransaction(null);
+                        }}
+                        disabled={detailTransaction.is_locked || detailTransaction.status === "cancelled" || updateTransaction.isPending}
+                      >
+                        Marquer complet
+                      </button>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
+          </div>
+        }
+      >
+        {detailTransaction ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailItem label="Référence" value={detailTransaction.reference} />
+              <DetailItem label="Date" value={formatDate(detailTransaction.transaction_date)} />
+              <DetailItem label="Type" value={typeBadge[detailTransaction.type]?.label ?? detailTransaction.type} />
+              <DetailItem label="Statut" value={statusBadge[detailTransaction.status]?.label ?? detailTransaction.status} />
+              <DetailItem label="Catégorie" value={detailTransaction.category} />
+              <DetailItem label="Source" value={sourceLabel(detailTransaction.source_type)} />
+              <DetailItem label="Montant" value={formatAmount(detailTransaction.amount_fcfa)} />
+              <DetailItem label="Producteur lié" value={detailTransaction.farmer_name || "—"} />
+              <DetailItem label="Libellé" value={detailTransaction.label} />
+              <DetailItem label="Réf. externe" value={detailTransaction.receipt_reference || "—"} />
+            </div>
+            <DetailItem label="Note" value={detailTransaction.note?.trim() || "—"} />
+
+            <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-3">
+              <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Justificatif</p>
+              {detailTransaction.justificatif_file ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex rounded-full bg-[#EAF8EE] px-2 py-0.5 text-[11px] font-semibold text-[#0F7A3B]">Joint</span>
+                  <p className="text-xs text-[var(--text)]">{detailTransaction.justificatif_file.filename}</p>
+                  <a
+                    className="soft-focus rounded-lg border border-[#A7C3F0] bg-[#EEF5FF] px-2.5 py-1 text-xs font-semibold text-[#1F5EA8] hover:bg-[#E4EEFF]"
+                    href={detailTransaction.justificatif_file.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Voir
+                  </a>
+                  <a
+                    className="soft-focus rounded-lg border border-[#A7C3F0] bg-[#EEF5FF] px-2.5 py-1 text-xs font-semibold text-[#1F5EA8] hover:bg-[#E4EEFF]"
+                    href={detailTransaction.justificatif_file.file_url}
+                    download={detailTransaction.justificatif_file.filename}
+                  >
+                    Télécharger
+                  </a>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-[var(--muted)]">{detailTransaction.justificatif_status || "Aucun justificatif."}</p>
+              )}
+            </div>
+
+            {detailTransaction.source_type === "farmer_advance" && detailTransaction.linked_advance_devis_file ? (
+              <div className="rounded-xl border border-[#D8E4FA] bg-[#F7FAFF] p-3">
+                <p className="text-xs uppercase tracking-wide text-[#466B9F]">Devis Avance Producteur</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <a
+                    className="soft-focus rounded-lg border border-[#C8D7F6] bg-[#F4F8FF] px-2.5 py-1 text-xs font-semibold text-[#355E9C] hover:bg-[#EAF2FF]"
+                    href={detailTransaction.linked_advance_devis_file.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Voir devis
+                  </a>
+                  <a
+                    className="soft-focus rounded-lg border border-[#C8D7F6] bg-[#F4F8FF] px-2.5 py-1 text-xs font-semibold text-[#355E9C] hover:bg-[#EAF2FF]"
+                    href={detailTransaction.linked_advance_devis_file.file_url}
+                    download={detailTransaction.linked_advance_devis_file.filename}
+                  >
+                    Télécharger devis
+                  </a>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </LiquidGlassModal>
 
       <LiquidGlassModal
         open={formOpen}
@@ -515,7 +698,7 @@ export default function TreasuryPage() {
               Annuler
             </button>
             <button type="submit" form="treasury-form" className="soft-focus wf-btn-primary px-4 py-2 text-sm font-semibold" disabled={formState.isSubmitting}>
-              {formState.isSubmitting ? "Enregistrement..." : "Enregistrer"}
+              {formState.isSubmitting || uploadJustificatif.isPending ? "Enregistrement..." : "Enregistrer"}
             </button>
           </div>
         }
@@ -575,7 +758,7 @@ export default function TreasuryPage() {
             <input {...register("label", { required: "Libellé requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm" placeholder="Transport vers entrepôt" />
           </label>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-1">
             <label className="block text-sm font-medium text-[var(--text)]">
               Statut
               <select {...register("status", { required: "Statut requis." })} className="wf-input mt-2 h-11 w-full px-3 text-sm">
@@ -584,11 +767,6 @@ export default function TreasuryPage() {
                 <option value="enregistre_complet">Enregistré complet</option>
               </select>
             </label>
-
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Référence reçu/facture (optionnel)
-              <input {...register("receipt_reference")} className="wf-input mt-2 h-11 w-full px-3 text-sm" placeholder="INV-2026-001" />
-            </label>
           </div>
 
           <label className="block text-sm font-medium text-[var(--text)]">
@@ -596,9 +774,26 @@ export default function TreasuryPage() {
             <textarea {...register("note")} className="wf-input mt-2 min-h-[96px] w-full px-3 py-2 text-sm" placeholder="Commentaire optionnel..." />
           </label>
 
+          {!editingTransaction ? (
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Justificatif (optionnel, PDF/JPG/JPEG/PNG/WEBP/XLS/XLSX)
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,application/pdf,image/jpeg,image/png,image/webp,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+                onChange={(event) => setSelectedCreateJustificatif(event.target.files?.[0] ?? null)}
+              />
+            </label>
+          ) : null}
+
           {formError && (
             <p className="rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">
               {formError}
+            </p>
+          )}
+          {createUploadWarning && (
+            <p className="rounded-lg border border-[#F2D7A5] bg-[#FFF8EA] px-3 py-2 text-xs text-[#8A5B00]">
+              {createUploadWarning}
             </p>
           )}
         </form>
@@ -619,7 +814,7 @@ export default function TreasuryPage() {
       <ConfirmActionModal
         open={Boolean(pendingCompleteTransaction)}
         title="Marquer enregistrement complet"
-        message="Cette action verrouille la transaction. Vérifiez qu'un justificatif ou une référence de reçu/facture est présent."
+        message="Cette action verrouille la transaction. Vérifiez qu'un justificatif ou une référence externe est présent."
         confirmLabel="Oui, marquer complet"
         tone="primary"
         loading={updateTransaction.isPending}
@@ -629,5 +824,14 @@ export default function TreasuryPage() {
         }}
       />
     </main>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2.5">
+      <p className="text-[11px] uppercase tracking-wide text-[var(--muted)]">{label}</p>
+      <p className="mt-1 text-sm text-[var(--text)]">{value}</p>
+    </div>
   );
 }

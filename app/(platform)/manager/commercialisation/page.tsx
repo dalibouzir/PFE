@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
 import { GlassViewToggle, type DataViewMode } from "@/components/ui/GlassViewToggle";
@@ -10,6 +10,7 @@ import { TableToolbar } from "@/components/ui/table/TableToolbar";
 import { useProducts } from "@/hooks/useProducts";
 import { useStocks } from "@/hooks/useStocks";
 import {
+  fetchCommercialOrdersForExport,
   useCatalogProducts,
   useCommercialOrderStats,
   useCommercialOrders,
@@ -96,9 +97,22 @@ function statusClass(status: CommercialOrderStatus) {
   }
 }
 
+function encodeSourceBucket(productId: string, grade: string) {
+  return `${productId}::${grade || "Non spécifié"}`;
+}
+
+function decodeSourceBucket(value: string): { productId: string; grade: string } {
+  const [productId, ...gradeParts] = value.split("::");
+  return {
+    productId: productId || "",
+    grade: gradeParts.join("::") || "Non spécifié",
+  };
+}
+
 export default function CommercialisationPage() {
   type CatalogFormState = {
     source_product_id: string;
+    source_grade: string;
     name: string;
     category: string;
     sale_unit: "kg" | "ton";
@@ -112,6 +126,15 @@ export default function CommercialisationPage() {
   const [tab, setTab] = useState<"catalog" | "orders" | "stats">("catalog");
   const [catalogViewMode, setCatalogViewMode] = useState<DataViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<"all" | CommercialOrderStatus>("all");
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersPageSize, setOrdersPageSize] = useState(20);
+  const [orderCategoryFilter, setOrderCategoryFilter] = useState("all");
+  const [orderProductFilter, setOrderProductFilter] = useState("all");
+  const [orderClientFilter, setOrderClientFilter] = useState("");
+  const [orderDateFrom, setOrderDateFrom] = useState("");
+  const [orderDateTo, setOrderDateTo] = useState("");
+  const [orderSortBy, setOrderSortBy] = useState<"date" | "total" | "client" | "status">("date");
+  const [isExportingOrders, setIsExportingOrders] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [pendingPaidOrder, setPendingPaidOrder] = useState<CommercialOrder | null>(null);
   const [pendingDeleteCatalog, setPendingDeleteCatalog] = useState<CatalogProduct | null>(null);
@@ -119,6 +142,7 @@ export default function CommercialisationPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formState, setFormState] = useState<CatalogFormState>({
     source_product_id: "",
+    source_grade: "Non spécifié",
     name: "",
     category: "Fruits",
     sale_unit: "kg",
@@ -128,31 +152,55 @@ export default function CommercialisationPage() {
     allocated_quantity: "",
     description: "",
   });
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogCategoryFilter, setCatalogCategoryFilter] = useState("all");
+  const [catalogStatusFilter, setCatalogStatusFilter] = useState<"all" | "active" | "hidden">("all");
+  const orderTableControls = useTableControls([], "desc");
 
   const productsQuery = useProducts();
   const stocksQuery = useStocks();
   const catalogQuery = useCatalogProducts();
-  const ordersQuery = useCommercialOrders({ status: statusFilter });
+  const ordersQuery = useCommercialOrders({
+    status: statusFilter,
+    search: orderTableControls.search,
+    category: orderCategoryFilter !== "all" ? orderCategoryFilter : undefined,
+    product_id: orderProductFilter !== "all" ? orderProductFilter : undefined,
+    date_from: orderDateFrom || undefined,
+    date_to: orderDateTo || undefined,
+    client: orderClientFilter.trim() || undefined,
+    sort_by: orderSortBy,
+    sort_order: orderTableControls.sortOrder,
+    page: ordersPage,
+    page_size: ordersPageSize,
+  });
   const statsQuery = useCommercialOrderStats();
   const products = productsQuery.data ?? [];
   const stocks = stocksQuery.data ?? [];
   const catalog = catalogQuery.data ?? [];
-  const orders = ordersQuery.data ?? [];
+  const orders = ordersQuery.data?.items ?? [];
+  const ordersPagination = ordersQuery.data;
   const stats = statsQuery.data;
   const createCatalogProduct = useCreateCatalogProduct();
   const updateCatalogProduct = useUpdateCatalogProduct();
   const deleteCatalogProduct = useDeleteCatalogProduct();
   const setCatalogProductStatus = useSetCatalogProductStatus();
   const updateOrderStatus = useUpdateCommercialOrderStatus();
-  const orderTableControls = useTableControls([], "desc");
   const requiredLoading =
     productsQuery.isLoading || stocksQuery.isLoading || catalogQuery.isLoading || ordersQuery.isLoading || statsQuery.isLoading;
   const requiredError =
     productsQuery.isError || stocksQuery.isError || catalogQuery.isError || ordersQuery.isError || statsQuery.isError;
 
   const visibleCatalog = useMemo(() => {
-    return catalog.slice().sort((a, b) => a.name.localeCompare(b.name, "fr"));
-  }, [catalog]);
+    const q = catalogSearch.trim().toLowerCase();
+    return catalog
+      .filter((item) => {
+        const byCategory = catalogCategoryFilter === "all" || item.category === catalogCategoryFilter;
+        const byStatus = catalogStatusFilter === "all" || item.status === catalogStatusFilter;
+        const bySearch = !q || `${item.name} ${item.category} ${item.description ?? ""}`.toLowerCase().includes(q);
+        return byCategory && byStatus && bySearch;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  }, [catalog, catalogSearch, catalogCategoryFilter, catalogStatusFilter]);
 
   const availableSourceProducts = useMemo(() => {
     const productsById = new Map(products.map((product) => [product.id, product]));
@@ -172,32 +220,50 @@ export default function CommercialisationPage() {
 
   const selectedSourceStock = useMemo(() => {
     if (!formState.source_product_id) return null;
-    return availableSourceProducts.find((item) => item.product.id === formState.source_product_id)?.stock ?? null;
-  }, [availableSourceProducts, formState.source_product_id]);
+    return (
+      availableSourceProducts.find(
+        (item) =>
+          item.product.id === formState.source_product_id &&
+          (item.stock.grade || "Non spécifié") === (formState.source_grade || "Non spécifié"),
+      )?.stock ?? null
+    );
+  }, [availableSourceProducts, formState.source_grade, formState.source_product_id]);
 
   const lowStockCount = catalog.filter((item) => item.low_stock).length;
   const commandToHandle = (stats?.received ?? 0) + (stats?.confirmed ?? 0);
-  const visibleOrders = useMemo(() => {
-    const q = orderTableControls.search.trim().toLowerCase();
-    const searched = orders.filter((order) => {
-      if (!q) return true;
-      const lines = order.lines.map((line) => `${line.product_name} ${line.quantity} ${line.unit}`.toLowerCase()).join(" ");
-      return (
-        order.order_number.toLowerCase().includes(q) ||
-        order.customer_name.toLowerCase().includes(q) ||
-        (order.customer_phone ?? "").toLowerCase().includes(q) ||
-        lines.includes(q)
-      );
-    });
-    const sorted = searched.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
-    return orderTableControls.sortOrder === "asc" ? sorted : sorted.reverse();
-  }, [orderTableControls.search, orderTableControls.sortOrder, orders]);
+  const visibleOrders = orders;
+  const orderCategories = useMemo(() => {
+    const values = new Set(catalog.map((item) => item.category.trim()).filter(Boolean));
+    return Array.from(values).sort((a, b) => a.localeCompare(b, "fr"));
+  }, [catalog]);
+  const catalogCategories = useMemo(() => {
+    const values = new Set(catalog.map((item) => item.category.trim()).filter(Boolean));
+    return Array.from(values).sort((a, b) => a.localeCompare(b, "fr"));
+  }, [catalog]);
+  const totalOrders = ordersPagination?.total ?? visibleOrders.length;
+  const totalPages = Math.max(ordersPagination?.total_pages ?? 1, 1);
+
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [
+    statusFilter,
+    orderCategoryFilter,
+    orderProductFilter,
+    orderClientFilter,
+    orderDateFrom,
+    orderDateTo,
+    orderSortBy,
+    orderTableControls.search,
+    orderTableControls.sortOrder,
+    ordersPageSize,
+  ]);
 
   function openCreateModal() {
     setEditingProduct(null);
       setFormError(null);
       setFormState({
       source_product_id: availableSourceProducts[0]?.product.id ?? "",
+      source_grade: availableSourceProducts[0]?.stock.grade ?? "Non spécifié",
       name: "",
       category: "Fruits",
       sale_unit: "kg",
@@ -215,6 +281,7 @@ export default function CommercialisationPage() {
     setFormError(null);
     setFormState({
       source_product_id: item.source_product_id ?? "",
+      source_grade: item.source_grade ?? "Non spécifié",
       name: item.name,
       category: item.category,
       sale_unit: item.sale_unit,
@@ -233,6 +300,7 @@ export default function CommercialisationPage() {
     try {
       const payload = {
         source_product_id: formState.source_product_id,
+        source_grade: formState.source_grade || "Non spécifié",
         name: formState.name.trim(),
         category: formState.category.trim(),
         sale_unit: formState.sale_unit,
@@ -252,7 +320,7 @@ export default function CommercialisationPage() {
         setFormError("Quantité allouée invalide.");
         return;
       }
-      if (payload.allocated_quantity > selectedSource.stock.available_stock) {
+      if (payload.allocated_quantity > selectedSource.stock.available_stock || selectedSource.stock.grade !== payload.source_grade) {
         setFormError("Quantité supérieure au stock disponible.");
         return;
       }
@@ -268,6 +336,7 @@ export default function CommercialisationPage() {
             cost_price_fcfa: payload.cost_price_fcfa,
             min_order_qty: payload.min_order_qty,
             description: payload.description,
+            source_grade: payload.source_grade,
           },
         });
       } else {
@@ -326,6 +395,43 @@ export default function CommercialisationPage() {
     { key: "status", header: "Statut", format: (_, row) => ORDER_STATUS_LABEL[row.status] },
   ];
 
+  async function runExport(
+    format: "csv" | "excel" | "pdf",
+  ) {
+    try {
+      setIsExportingOrders(true);
+      const allFiltered = await fetchCommercialOrdersForExport({
+        status: statusFilter,
+        search: orderTableControls.search,
+        category: orderCategoryFilter !== "all" ? orderCategoryFilter : undefined,
+        product_id: orderProductFilter !== "all" ? orderProductFilter : undefined,
+        date_from: orderDateFrom || undefined,
+        date_to: orderDateTo || undefined,
+        client: orderClientFilter.trim() || undefined,
+        sort_by: orderSortBy,
+        sort_order: orderTableControls.sortOrder,
+      });
+      const payload = { filename: "commandes", title: "Commandes", columns: orderExportColumns, rows: allFiltered };
+      if (format === "csv") exportRowsToCsv(payload);
+      if (format === "excel") exportRowsToExcel(payload);
+      if (format === "pdf") exportRowsToPdf(payload);
+    } finally {
+      setIsExportingOrders(false);
+    }
+  }
+
+  function resetOrderFilters() {
+    setStatusFilter("all");
+    setOrderCategoryFilter("all");
+    setOrderProductFilter("all");
+    setOrderClientFilter("");
+    setOrderDateFrom("");
+    setOrderDateTo("");
+    setOrderSortBy("date");
+    orderTableControls.setSearch("");
+    orderTableControls.setSortOrder("desc");
+  }
+
   if (requiredLoading) {
     return (
       <main className="relative min-h-[60vh]">
@@ -374,13 +480,37 @@ export default function CommercialisationPage() {
 
       {tab === "catalog" && (
         <>
-          <section className="mb-4 flex items-center justify-between gap-3">
-            <button type="button" onClick={openCreateModal} className="soft-focus rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--primary-hover)]">
-              + Nouveau produit catalogue
-            </button>
-            <div className="flex items-center gap-3">
+          <section className="premium-card mb-4 rounded-2xl p-4">
+            <div className="mb-3 grid gap-2 md:grid-cols-3 xl:grid-cols-5">
+              <input
+                value={catalogSearch}
+                onChange={(event) => setCatalogSearch(event.target.value)}
+                className="wf-input h-10 w-full px-3 text-sm xl:col-span-2"
+                placeholder="Rechercher produit catalogue..."
+              />
+              <select value={catalogCategoryFilter} onChange={(event) => setCatalogCategoryFilter(event.target.value)} className="wf-input h-10 w-full px-3 text-sm">
+                <option value="all">Toutes catégories</option>
+                {catalogCategories.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+              <select value={catalogStatusFilter} onChange={(event) => setCatalogStatusFilter(event.target.value as "all" | "active" | "hidden")} className="wf-input h-10 w-full px-3 text-sm">
+                <option value="all">Tous statuts</option>
+                <option value="active">Actif</option>
+                <option value="hidden">Masqué</option>
+              </select>
+              <button type="button" onClick={openCreateModal} className="soft-focus rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--primary-hover)]">
+                + Nouveau produit
+              </button>
+            </div>
+            <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-[var(--muted)]">Ces produits sont visibles dans l&apos;app consommateur.</p>
-              <GlassViewToggle value={catalogViewMode} onChange={setCatalogViewMode} className="shrink-0" />
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-[var(--surface-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
+                  {visibleCatalog.length} produit{visibleCatalog.length > 1 ? "s" : ""}
+                </span>
+                <GlassViewToggle value={catalogViewMode} onChange={setCatalogViewMode} className="shrink-0" />
+              </div>
             </div>
           </section>
 
@@ -552,6 +682,68 @@ export default function CommercialisationPage() {
 
           <section className="premium-card mt-4 overflow-hidden rounded-2xl">
             <div className="border-b border-[var(--line)] p-4">
+              <div className="mb-3 grid gap-2 md:grid-cols-2 xl:grid-cols-6">
+                <label className="text-xs font-semibold text-[var(--muted)]">
+                  Catégorie
+                  <select
+                    value={orderCategoryFilter}
+                    onChange={(event) => setOrderCategoryFilter(event.target.value)}
+                    className="wf-input mt-1 h-10 w-full px-3 text-sm"
+                  >
+                    <option value="all">Toutes catégories</option>
+                    {orderCategories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-[var(--muted)]">
+                  Produit
+                  <select
+                    value={orderProductFilter}
+                    onChange={(event) => setOrderProductFilter(event.target.value)}
+                    className="wf-input mt-1 h-10 w-full px-3 text-sm"
+                  >
+                    <option value="all">Tous produits</option>
+                    {catalog.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-[var(--muted)]">
+                  Client
+                  <input
+                    value={orderClientFilter}
+                    onChange={(event) => setOrderClientFilter(event.target.value)}
+                    className="wf-input mt-1 h-10 w-full px-3 text-sm"
+                    placeholder="Nom / téléphone / email"
+                  />
+                </label>
+                <label className="text-xs font-semibold text-[var(--muted)]">
+                  Date de
+                  <input type="date" value={orderDateFrom} onChange={(event) => setOrderDateFrom(event.target.value)} className="wf-input mt-1 h-10 w-full px-3 text-sm" />
+                </label>
+                <label className="text-xs font-semibold text-[var(--muted)]">
+                  Date à
+                  <input type="date" value={orderDateTo} onChange={(event) => setOrderDateTo(event.target.value)} className="wf-input mt-1 h-10 w-full px-3 text-sm" />
+                </label>
+                <label className="text-xs font-semibold text-[var(--muted)]">
+                  Tri
+                  <select
+                    value={orderSortBy}
+                    onChange={(event) => setOrderSortBy(event.target.value as "date" | "total" | "client" | "status")}
+                    className="wf-input mt-1 h-10 w-full px-3 text-sm"
+                  >
+                    <option value="date">Date</option>
+                    <option value="total">Total</option>
+                    <option value="client">Client</option>
+                    <option value="status">Statut</option>
+                  </select>
+                </label>
+              </div>
               <TableToolbar
                 search={orderTableControls.search}
                 onSearchChange={orderTableControls.setSearch}
@@ -561,13 +753,34 @@ export default function CommercialisationPage() {
                 sortAscLabel="Date asc"
                 sortDescLabel="Date desc"
                 rightActions={
-                  <ExportActions
-                    onCsv={() => exportRowsToCsv({ filename: "commandes", title: "Commandes", columns: orderExportColumns, rows: visibleOrders })}
-                    onExcel={() => exportRowsToExcel({ filename: "commandes", title: "Commandes", columns: orderExportColumns, rows: visibleOrders })}
-                    onPdf={() => exportRowsToPdf({ filename: "commandes", title: "Commandes", columns: orderExportColumns, rows: visibleOrders })}
-                  />
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={ordersPageSize}
+                      onChange={(event) => setOrdersPageSize(Number(event.target.value))}
+                      className="wf-input h-10 w-[110px] px-2 text-xs"
+                    >
+                      <option value={10}>10 / page</option>
+                      <option value={20}>20 / page</option>
+                      <option value={50}>50 / page</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={resetOrderFilters}
+                      className="soft-focus rounded-xl border border-[var(--line)] px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--surface-soft)]"
+                    >
+                      Réinitialiser filtres
+                    </button>
+                    <ExportActions
+                      onCsv={() => void runExport("csv")}
+                      onExcel={() => void runExport("excel")}
+                      onPdf={() => void runExport("pdf")}
+                    />
+                  </div>
                 }
               />
+              <p className="mt-2 text-xs text-[var(--muted)]">
+                {isExportingOrders ? "Export en cours..." : "Exporte toutes les commandes filtrées."}
+              </p>
             </div>
             <div className="thin-scrollbar overflow-x-auto">
               <table className="wf-table min-w-full text-sm">
@@ -625,12 +838,35 @@ export default function CommercialisationPage() {
                   {visibleOrders.length === 0 && (
                     <tr>
                       <td className="px-4 py-5 text-center text-sm text-[var(--muted)]" colSpan={8}>
-                        Aucune commande pour ce filtre.
+                        Aucune commande ne correspond aux filtres sélectionnés.
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] px-4 py-3">
+              <p className="text-xs text-[var(--muted)]">
+                Page {Math.min(ordersPage, totalPages)} / {totalPages} · {totalOrders} commande(s)
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="soft-focus rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                  disabled={ordersPage <= 1}
+                  onClick={() => setOrdersPage((prev) => Math.max(prev - 1, 1))}
+                >
+                  Précédent
+                </button>
+                <button
+                  type="button"
+                  className="soft-focus rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                  disabled={ordersPage >= totalPages}
+                  onClick={() => setOrdersPage((prev) => Math.min(prev + 1, totalPages))}
+                >
+                  Suivant
+                </button>
+              </div>
             </div>
           </section>
         </>
@@ -693,22 +929,48 @@ export default function CommercialisationPage() {
               <label className="text-sm font-medium text-[var(--text)]">
                 Produit source (stock)
                 <select
-                  value={formState.source_product_id}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, source_product_id: event.target.value }))}
+                  value={encodeSourceBucket(formState.source_product_id, formState.source_grade)}
+                  onChange={(event) => {
+                    const decoded = decodeSourceBucket(event.target.value);
+                    setFormState((prev) => ({ ...prev, source_product_id: decoded.productId, source_grade: decoded.grade }));
+                  }}
                   disabled={Boolean(editingProduct)}
                   className="wf-input mt-1 h-11 w-full px-3"
                   required
                 >
                   <option value="">Selectionner</option>
                   {availableSourceProducts.map(({ product, stock }) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name} — {stock.available_stock.toFixed(2)} {stock.unit} disponible
+                    <option key={`${product.id}-${stock.grade}`} value={encodeSourceBucket(product.id, stock.grade || "Non spécifié")}>
+                      {product.name} · Grade {stock.grade || "Non spécifié"} — {stock.available_stock.toFixed(2)} {stock.unit} disponible
                     </option>
                   ))}
                 </select>
                 {availableSourceProducts.length === 0 ? (
                   <p className="mt-1 text-xs text-[var(--muted)]">Aucun produit disponible en stock.</p>
                 ) : null}
+              </label>
+
+              <label className="text-sm font-medium text-[var(--text)]">
+                Grade source
+                <select
+                  value={formState.source_grade}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, source_grade: event.target.value }))}
+                  disabled={Boolean(editingProduct)}
+                  className="wf-input mt-1 h-11 w-full px-3"
+                  required
+                >
+                  {Array.from(
+                    new Set(
+                      availableSourceProducts
+                        .filter((item) => item.product.id === formState.source_product_id)
+                        .map((item) => item.stock.grade || "Non spécifié"),
+                    ),
+                  ).map((grade) => (
+                    <option key={grade} value={grade}>
+                      {grade}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label className="text-sm font-medium text-[var(--text)]">

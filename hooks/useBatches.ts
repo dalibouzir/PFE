@@ -9,6 +9,7 @@ import type {
   BatchMaterialBalance,
   BatchPreHarvestStepStatusesUpdate,
   BatchReferencePreview,
+  BatchStartPostHarvestPayload,
   BatchStatusUpdate,
   BatchUpdate,
 } from "@/lib/api/types";
@@ -140,11 +141,16 @@ export function useBatchReferencePreview(productId?: string | null) {
 export function useStartPostHarvest() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiFetch<Batch>(endpoints.batches.startPostHarvest(id), { method: "POST" }),
+    mutationFn: ({ id, payload }: { id: string; payload?: BatchStartPostHarvestPayload | null }) =>
+      apiFetch<Batch>(
+        payload ? endpoints.batches.startPostHarvestWithStock(id) : endpoints.batches.startPostHarvest(id),
+        payload ? { method: "POST", body: payload } : { method: "POST" },
+      ),
     onSuccess: (_batch, id) => {
       queryClient.invalidateQueries({ queryKey: ["batches"] });
       queryClient.invalidateQueries({ queryKey: ["batch-material-balance", id] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
     },
   });
 }

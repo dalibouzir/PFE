@@ -118,6 +118,10 @@ export default function InputsPage() {
 
   const [productId, setProductId] = useState<string>("Tous");
   const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [memberFilterId, setMemberFilterId] = useState("Tous");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [viewMode, setViewMode] = useState<DataViewMode>("table");
   const [formOpen, setFormOpen] = useState(false);
   const [statusEditingId, setStatusEditingId] = useState<string | null>(null);
@@ -162,11 +166,14 @@ export default function InputsPage() {
 
   const memberLookup = useMemo(() => new Map(members.map((m) => [m.id, m.full_name])), [members]);
   const productLookup = useMemo(() => new Map(products.map((p) => [p.id, p.name])), [products]);
+  const batchLookup = useMemo(() => new Map(batches.map((batch) => [batch.id, batch])), [batches]);
 
   const filtered = useMemo(() => {
     return inputs.filter((item) => {
       const byProduct = productId === "Tous" || item.product_id === productId;
       const byDate = fromDate ? item.date >= fromDate : true;
+      const byDateTo = toDate ? item.date <= toDate : true;
+      const byMember = memberFilterId === "Tous" || item.member_id === memberFilterId;
       const byStatus = tableControls.filters.status === "all" || item.status === tableControls.filters.status;
       const q = tableControls.search.trim().toLowerCase();
       const memberName = (memberLookup.get(item.member_id) ?? "").toLowerCase();
@@ -178,14 +185,22 @@ export default function InputsPage() {
         item.date.toLowerCase().includes(q) ||
         (item.bl_number ?? "").toLowerCase().includes(q) ||
         item.grade.toLowerCase().includes(q);
-      return byProduct && byDate && byStatus && bySearch;
+      return byProduct && byDate && byDateTo && byMember && byStatus && bySearch;
     });
-  }, [fromDate, inputs, memberLookup, productId, productLookup, tableControls.filters.status, tableControls.search]);
+  }, [fromDate, toDate, memberFilterId, inputs, memberLookup, productId, productLookup, tableControls.filters.status, tableControls.search]);
 
   const sortedFiltered = useMemo(() => {
     const sorted = filtered.slice().sort((a, b) => a.date.localeCompare(b.date));
     return tableControls.sortOrder === "asc" ? sorted : sorted.reverse();
   }, [filtered, tableControls.sortOrder]);
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return sortedFiltered.slice(start, start + pageSize);
+  }, [page, pageSize, sortedFiltered]);
+  const totalPages = Math.max(Math.ceil(sortedFiltered.length / pageSize), 1);
+  useEffect(() => {
+    setPage(1);
+  }, [productId, fromDate, toDate, memberFilterId, tableControls.search, tableControls.filters.status, tableControls.sortOrder, pageSize]);
 
   const totalKg = filtered.reduce((sum, item) => sum + item.quantity, 0);
   const pendingCount = filtered.filter((item) => item.status !== "validated").length;
@@ -400,6 +415,8 @@ export default function InputsPage() {
 
   const exportColumns: ExportColumn<Input>[] = [
     { key: "date", header: "Date" },
+    { key: "collecte_reference", header: "Réf. Collecte", format: (_, row) => row.collecte_reference || "Référence historique" },
+    { key: "batch_id", header: "Réf. Pré-récolte", format: (_, row) => (row.batch_id ? (batchLookup.get(row.batch_id)?.preharvest_reference || batchLookup.get(row.batch_id)?.code || "Référence historique") : "—") },
     { key: "member_id", header: "Producteur", format: (_, row) => memberLookup.get(row.member_id) ?? row.member_id },
     { key: "product_id", header: "Produit", format: (_, row) => productLookup.get(row.product_id) ?? row.product_id },
     { key: "quantity", header: "Quantite (kg)", format: (_, row) => row.quantity.toLocaleString("fr-FR") },
@@ -446,7 +463,7 @@ export default function InputsPage() {
       </section>
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
-        <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto_auto]">
+        <div className="grid gap-3 lg:grid-cols-3 xl:grid-cols-5">
           <select value={productId} onChange={(event) => setProductId(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm">
             <option value="Tous">Tous produits</option>
             {products.map((item) => (
@@ -454,8 +471,14 @@ export default function InputsPage() {
             ))}
           </select>
           <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm" />
+          <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm" />
+          <select value={memberFilterId} onChange={(event) => setMemberFilterId(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm">
+            <option value="Tous">Tous producteurs</option>
+            {members.map((item) => (
+              <option key={item.id} value={item.id}>{item.full_name}</option>
+            ))}
+          </select>
           <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2.5 text-sm text-[var(--muted)]">{filtered.length} enregistrements</div>
-          <button type="button" onClick={openCreateForm} className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold">Nouvelle collecte</button>
         </div>
 
         <div className="mt-3">
@@ -470,14 +493,28 @@ export default function InputsPage() {
             sortAscLabel="Date asc"
             sortDescLabel="Date desc"
             rightActions={
-              <ExportActions
-                onCsv={() => exportRowsToCsv({ filename: "collectes", title: "Collectes", columns: exportColumns, rows: sortedFiltered })}
-                onExcel={() => exportRowsToExcel({ filename: "collectes", title: "Collectes", columns: exportColumns, rows: sortedFiltered })}
-                onPdf={() => exportRowsToPdf({ filename: "collectes", title: "Collectes", columns: exportColumns, rows: sortedFiltered })}
-              />
+              <div className="flex items-center gap-2">
+                <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="wf-input h-10 w-[110px] px-2 text-xs">
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                </select>
+                <ExportActions
+                  onCsv={() => exportRowsToCsv({ filename: "collectes", title: "Collectes", columns: exportColumns, rows: sortedFiltered })}
+                  onExcel={() => exportRowsToExcel({ filename: "collectes", title: "Collectes", columns: exportColumns, rows: sortedFiltered })}
+                  onPdf={() => exportRowsToPdf({ filename: "collectes", title: "Collectes", columns: exportColumns, rows: sortedFiltered })}
+                />
+                <button type="button" onClick={openCreateForm} className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold">Nouvelle collecte</button>
+              </div>
             }
           />
         </div>
+        <p className="mt-3 text-xs text-[var(--muted)]">
+          Exporte toutes les lignes filtrées.
+        </p>
+        <p className="text-xs text-[var(--muted)]">
+          Le dernier fichier importé est lié à l&apos;enregistrement.
+        </p>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <div className="grid grow gap-3 sm:grid-cols-3">
@@ -507,7 +544,7 @@ export default function InputsPage() {
           <input
             ref={justificatifPickerRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,application/pdf,image/jpeg,image/png,image/webp,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="hidden"
             onChange={(event) => {
               void handleJustificatifPicked(event.target.files?.[0] ?? null);
@@ -518,6 +555,8 @@ export default function InputsPage() {
               <thead>
                 <tr>
                   <th className="px-5 py-3.5">Date</th>
+                  <th className="px-5 py-3.5">Réf. Collecte</th>
+                  <th className="px-5 py-3.5">Réf. Pré-récolte</th>
                   <th className="px-5 py-3.5">Agriculteur</th>
                   <th className="px-5 py-3.5">Produit</th>
                   <th className="px-5 py-3.5">Quantite</th>
@@ -529,9 +568,15 @@ export default function InputsPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedFiltered.map((item) => (
+                {pagedRows.map((item) => (
                   <tr key={item.id}>
                     <td className="px-5 py-4">{item.date}</td>
+                    <td className="px-5 py-4 font-semibold text-[var(--text)]">{item.collecte_reference || "Référence historique"}</td>
+                    <td className="px-5 py-4">
+                      {item.batch_id
+                        ? (batchLookup.get(item.batch_id)?.preharvest_reference || batchLookup.get(item.batch_id)?.code || "Référence historique")
+                        : "—"}
+                    </td>
                     <td className="px-5 py-4 font-medium text-[var(--text)]">{memberLookup.get(item.member_id) ?? item.member_id.slice(0, 8)}</td>
                     <td className="px-5 py-4">{productLookup.get(item.product_id) ?? item.product_id.slice(0, 8)}</td>
                     <td className="px-5 py-4">{item.quantity.toLocaleString("fr-FR")} kg</td>
@@ -563,25 +608,46 @@ export default function InputsPage() {
                     </td>
                     <td className="px-5 py-4 text-xs">
                       {item.justificatif_file ? (
-                        <a className="font-semibold text-[var(--primary)] hover:underline" href={resolveUploadUrl(item.justificatif_file.file_url)} target="_blank" rel="noreferrer">
-                          {item.justificatif_file.filename}
-                        </a>
+                        <p className="text-[var(--text)]">{item.justificatif_file.filename}</p>
                       ) : (
                         <span className="text-[var(--muted)]">Absent</span>
                       )}
                     </td>
                     <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {item.justificatif_file ? (
+                          <>
+                            <a
+                              className="soft-focus rounded-lg border border-[#A7C3F0] bg-[#EEF5FF] px-2.5 py-1 text-xs font-semibold text-[#1F5EA8] hover:bg-[#E4EEFF]"
+                              href={resolveUploadUrl(item.justificatif_file.file_url)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Voir
+                            </a>
+                            <a
+                              className="soft-focus rounded-lg border border-[#A7C3F0] bg-[#EEF5FF] px-2.5 py-1 text-xs font-semibold text-[#1F5EA8] hover:bg-[#E4EEFF]"
+                              href={resolveUploadUrl(item.justificatif_file.file_url)}
+                              download={item.justificatif_file.filename}
+                            >
+                              Télécharger
+                            </a>
+                          </>
+                        ) : null}
                         <button
-                          className="text-xs font-semibold text-[var(--primary)] hover:underline disabled:opacity-60"
+                          className="soft-focus rounded-lg border border-[var(--line)] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--text)] hover:bg-[var(--surface-soft)] disabled:opacity-60"
                           onClick={() => openJustificatifPicker(item.id)}
                           disabled={uploadJustificatif.isPending && uploadingItemId === item.id}
-                          title={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
-                          aria-label={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
+                          title={item.justificatif_file ? "Remplacer justificatif" : "Ajouter justificatif"}
+                          aria-label={item.justificatif_file ? "Remplacer justificatif" : "Ajouter justificatif"}
                         >
-                          Uploader
+                          {uploadJustificatif.isPending && uploadingItemId === item.id
+                            ? "Upload..."
+                            : item.justificatif_file
+                              ? "Remplacer"
+                              : "Ajouter justificatif"}
                         </button>
-                        <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => setPendingDeleteItem(item)}>Supprimer</button>
+                        <button className="soft-focus rounded-lg border border-[#E0A5A5] bg-[#FFF0F0] px-2.5 py-1 text-xs font-semibold text-[#A83C3C] hover:bg-[#FFE7E7]" onClick={() => setPendingDeleteItem(item)}>Supprimer</button>
                       </div>
                     </td>
                   </tr>
@@ -589,13 +655,23 @@ export default function InputsPage() {
               </tbody>
             </table>
           </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--line)] px-4 py-3">
+            <p className="text-xs text-[var(--muted)]">
+              {Math.min((page - 1) * pageSize + 1, sortedFiltered.length)}–{Math.min(page * pageSize, sortedFiltered.length)} sur {sortedFiltered.length}
+            </p>
+            <div className="ml-auto flex items-center gap-2">
+              <button type="button" className="soft-focus rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>Précédent</button>
+              <span className="text-xs text-[var(--muted)]">{page}/{totalPages}</span>
+              <button type="button" className="soft-focus rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={page >= totalPages} onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}>Suivant</button>
+            </div>
+          </div>
         </section>
       ) : (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <input
             ref={justificatifPickerRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,application/pdf,image/jpeg,image/png,image/webp,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="hidden"
             onChange={(event) => {
               void handleJustificatifPicked(event.target.files?.[0] ?? null);
@@ -645,17 +721,42 @@ export default function InputsPage() {
 
               <p className="mt-3 text-xs text-[var(--muted)]">Grade {item.grade}</p>
               <p className="mt-1 text-xs text-[var(--muted)]">BL: {item.bl_number || "—"}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Réf. Collecte: {item.collecte_reference || "Référence historique"}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Réf. Pré-récolte: {item.batch_id ? (batchLookup.get(item.batch_id)?.preharvest_reference || batchLookup.get(item.batch_id)?.code || "Référence historique") : "—"}</p>
               <p className="mt-1 text-xs text-[var(--muted)]">Justificatif: {item.justificatif_file ? item.justificatif_file.filename : "Absent"}</p>
 
               <div className="mt-3 flex items-center gap-2">
+                {item.justificatif_file ? (
+                  <>
+                    <a
+                      className="text-xs font-semibold text-[var(--primary)] hover:underline"
+                      href={resolveUploadUrl(item.justificatif_file.file_url)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Voir
+                    </a>
+                    <a
+                      className="text-xs font-semibold text-[var(--primary)] hover:underline"
+                      href={resolveUploadUrl(item.justificatif_file.file_url)}
+                      download={item.justificatif_file.filename}
+                    >
+                      Télécharger
+                    </a>
+                  </>
+                ) : null}
                 <button
-                  className="text-xs font-semibold text-[var(--primary)] hover:underline disabled:opacity-60"
+                  className="text-xs font-semibold text-[var(--text)] hover:underline disabled:opacity-60"
                   onClick={() => openJustificatifPicker(item.id)}
                   disabled={uploadJustificatif.isPending && uploadingItemId === item.id}
-                  title={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
-                  aria-label={item.justificatif_file ? "Remplacer justificatif" : "Téléverser justificatif"}
+                  title={item.justificatif_file ? "Remplacer justificatif" : "Ajouter justificatif"}
+                  aria-label={item.justificatif_file ? "Remplacer justificatif" : "Ajouter justificatif"}
                 >
-                  Uploader
+                  {uploadJustificatif.isPending && uploadingItemId === item.id
+                    ? "Upload..."
+                    : item.justificatif_file
+                      ? "Remplacer"
+                      : "Ajouter justificatif"}
                 </button>
                 <button className="text-xs font-semibold text-[var(--danger)] hover:underline" onClick={() => setPendingDeleteItem(item)}>Supprimer</button>
               </div>
@@ -768,10 +869,10 @@ export default function InputsPage() {
           </label>
 
           <label className="block text-sm font-medium text-[var(--text)] sm:col-span-2">
-            Justificatif (PDF/JPG/JPEG/PNG/WEBP)
+            Justificatif (PDF/JPG/JPEG/PNG/WEBP/XLS/XLSX)
             <input
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,application/pdf,image/jpeg,image/png,image/webp,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="wf-input mt-2 h-11 w-full px-3 text-sm"
               onChange={(event) => setSelectedJustificatif(event.target.files?.[0] ?? null)}
             />

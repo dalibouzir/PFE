@@ -19,8 +19,10 @@ ALLOWED_UPLOAD_MIME_TYPES = {
     "image/jpg",
     "image/png",
     "image/webp",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
-ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".xls", ".xlsx"}
 
 
 def _uploads_root() -> Path:
@@ -76,7 +78,7 @@ def _save_entity_file(
 
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
-        raise ValidationError("Format non supporté. Autorisés: PDF, JPG, JPEG, PNG, WEBP.")
+        raise ValidationError("Format non supporté. Autorisés: PDF, JPG, JPEG, PNG, WEBP, XLS, XLSX.")
 
     content_type = (file.content_type or "").lower()
     if content_type not in ALLOWED_UPLOAD_MIME_TYPES:

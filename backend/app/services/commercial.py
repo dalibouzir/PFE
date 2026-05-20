@@ -42,7 +42,13 @@ from app.services.helpers import (
     to_kg,
 )
 from app.services.rag_reindex_hooks import reindex_commercial_if_needed
-from app.services.stocks import apply_reserved_stock_delta, available_stock_kg
+from app.services.stocks import (
+    apply_reserved_stock_delta,
+    apply_total_stock_delta,
+    available_stock_kg,
+    get_stock_by_product,
+    normalize_stock_grade,
+)
 from app.utils.exceptions import NotFoundError, ValidationError
 
 ORDER_TRANSITIONS: dict[CommercialOrderStatus, set[CommercialOrderStatus]] = {
@@ -54,6 +60,30 @@ ORDER_TRANSITIONS: dict[CommercialOrderStatus, set[CommercialOrderStatus]] = {
     CommercialOrderStatus.PAID: set(),
     CommercialOrderStatus.REFUSED: set(),
 }
+GRADE_MARKER_PREFIX = "[GRADE:"
+
+
+def _attach_grade_marker(description: str | None, grade: str) -> str:
+    clean = (description or "").strip()
+    marker = f"{GRADE_MARKER_PREFIX}{normalize_stock_grade(grade)}]"
+    if not clean:
+        return marker
+    if marker in clean:
+        return clean
+    return f"{clean}\n{marker}"
+
+
+def _extract_grade_marker(description: str | None) -> str:
+    text = (description or "").strip()
+    if not text:
+        return "Non spécifié"
+    start = text.rfind(GRADE_MARKER_PREFIX)
+    if start < 0:
+        return "Non spécifié"
+    end = text.find("]", start)
+    if end < 0:
+        return "Non spécifié"
+    return normalize_stock_grade(text[start + len(GRADE_MARKER_PREFIX) : end])
 
 
 def _catalog_available_kg(item: CommercialCatalogProduct) -> float:
@@ -81,6 +111,7 @@ def _serialize_catalog(item: CommercialCatalogProduct) -> CatalogProductRead:
         cooperative_id=item.cooperative_id,
         source_product_id=item.source_product_id,
         source_product_name=source_name,
+        source_grade=_extract_grade_marker(item.description),
         name=item.name,
         description=item.description,
         category=item.category,
@@ -182,6 +213,7 @@ def _record_catalog_stock_movement(
     catalog_product_id,
     actor_name: str,
     movement_type: str,
+    grade: str,
     action_type: str,
     source: str,
     quantity_kg: float,
@@ -192,9 +224,24 @@ def _record_catalog_stock_movement(
     if existing is not None:
         return existing
 
+    movement_token = "IN" if movement_type.strip().lower() == "in" else "OUT"
+    prefix = f"MVT-{movement_token}-{date.today().year}-"
+    rows = db.scalars(
+        select(StockMovement.movement_reference).where(func.lower(StockMovement.movement_reference).like(f"{prefix.lower()}%"))
+    ).all()
+    max_increment = 0
+    for ref in rows:
+        if not ref:
+            continue
+        suffix = ref[len(prefix) :]
+        if suffix.isdigit():
+            max_increment = max(max_increment, int(suffix))
+    movement_reference = f"{prefix}{max_increment + 1:03d}"
+
     movement = StockMovement(
         cooperative_id=cooperative_id,
         product_id=product_id,
+        grade=normalize_stock_grade(grade),
         batch_id=None,
         input_id=None,
         process_step_id=None,
@@ -204,6 +251,7 @@ def _record_catalog_stock_movement(
         source=source,
         quantity_kg=round_metric(abs(quantity_kg)),
         movement_date=date.today(),
+        movement_reference=movement_reference,
         idempotency_key=key,
         notes=f"{notes} | manager:{actor_name}",
     )
@@ -225,6 +273,7 @@ def list_catalog_products(db: Session, manager: User) -> list[CatalogProductRead
 def create_catalog_product(db: Session, manager: User, payload) -> CatalogProductRead:
     cooperative_id = get_manager_cooperative_id(manager)
     source_product = _require_source_product(db, cooperative_id, payload.source_product_id)
+    selected_grade = normalize_stock_grade(payload.source_grade)
 
     duplicate = db.scalar(
         select(CommercialCatalogProduct).where(
@@ -238,22 +287,26 @@ def create_catalog_product(db: Session, manager: User, payload) -> CatalogProduc
     sale_unit = normalize_mass_unit(payload.sale_unit or source_product.unit)
     allocated_kg = to_kg(payload.allocated_quantity, sale_unit)
 
-    source_stock = db.scalar(
-        select(Stock).where(Stock.cooperative_id == cooperative_id, Stock.product_id == source_product.id)
-    )
+    source_stock = get_stock_by_product(db, cooperative_id, source_product.id, selected_grade)
     if source_stock is None:
-        raise ValidationError("Aucun stock principal disponible pour ce produit source.")
-
+        raise ValidationError("Aucun bucket de stock disponible pour le produit/grade source.")
     if allocated_kg > available_stock_kg(source_stock):
         raise ValidationError("Quantite allouee superieure au stock principal disponible.")
 
-    apply_reserved_stock_delta(db, cooperative_id, source_product, allocated_kg, create_if_missing=False)
+    apply_reserved_stock_delta(
+        db,
+        cooperative_id,
+        source_product,
+        allocated_kg,
+        create_if_missing=False,
+        grade=selected_grade,
+    )
 
     item = CommercialCatalogProduct(
         cooperative_id=cooperative_id,
         source_product_id=source_product.id,
         name=payload.name.strip(),
-        description=payload.description.strip() if payload.description else None,
+        description=_attach_grade_marker(payload.description.strip() if payload.description else None, selected_grade),
         category=payload.category.strip(),
         sale_unit=sale_unit,
         icon=payload.icon.strip() if payload.icon else None,
@@ -273,6 +326,7 @@ def create_catalog_product(db: Session, manager: User, payload) -> CatalogProduc
         catalog_product_id=item.id,
         actor_name=_catalog_actor_label(manager),
         movement_type="out",
+        grade=selected_grade,
         action_type="commercial_catalog_allocation",
         source="commercial_catalog",
         quantity_kg=allocated_kg,
@@ -302,7 +356,11 @@ def update_catalog_product(db: Session, manager: User, catalog_product_id, paylo
         item.name = name
 
     if "description" in data:
-        item.description = data["description"].strip() if data["description"] else None
+        next_grade = normalize_stock_grade(data.get("source_grade") or _extract_grade_marker(item.description))
+        raw_description = data["description"].strip() if data["description"] else None
+        item.description = _attach_grade_marker(raw_description, next_grade)
+    elif "source_grade" in data and data["source_grade"] is not None:
+        item.description = _attach_grade_marker(item.description, data["source_grade"])
     if "category" in data and data["category"] is not None:
         item.category = data["category"].strip()
     if "sale_unit" in data and data["sale_unit"] is not None:
@@ -346,6 +404,7 @@ def delete_catalog_product(db: Session, manager: User, catalog_product_id) -> Ca
         raise ValidationError("Suppression impossible: une partie du stock est reservee.")
 
     source_product = item.source_product
+    source_grade = _extract_grade_marker(item.description)
     restock_kg = round_metric(max(item.total_stock_kg, 0.0))
     if source_product is not None and restock_kg > 0:
         apply_reserved_stock_delta(
@@ -354,6 +413,7 @@ def delete_catalog_product(db: Session, manager: User, catalog_product_id) -> Ca
             source_product,
             -restock_kg,
             create_if_missing=True,
+            grade=source_grade,
         )
         _record_catalog_stock_movement(
             db,
@@ -362,6 +422,7 @@ def delete_catalog_product(db: Session, manager: User, catalog_product_id) -> Ca
             catalog_product_id=item.id,
             actor_name=_catalog_actor_label(manager),
             movement_type="in",
+            grade=source_grade,
             action_type="commercial_catalog_release",
             source="commercial_catalog",
             quantity_kg=restock_kg,
@@ -410,6 +471,9 @@ def intake_order(db: Session, manager: User, payload) -> CommercialOrderRead:
     subtotal = 0.0
     for line in payload.lines:
         catalog = catalog_by_id[line.catalog_product_id]
+        catalog_grade = _extract_grade_marker(catalog.description)
+        if line.grade and normalize_stock_grade(line.grade) != catalog_grade:
+            raise ValidationError(f"Le grade sélectionné ne correspond pas au produit catalogue '{catalog.name}'.")
         if catalog.status != CommercialCatalogStatus.ACTIVE:
             raise ValidationError(f"Le produit '{catalog.name}' est masque et ne peut pas etre commande.")
         if line.quantity < catalog.min_order_qty:
@@ -481,6 +545,7 @@ def _serialize_order(order: CommercialOrder) -> CommercialOrderRead:
             CommercialOrderLineRead(
                 id=line.id,
                 catalog_product_id=line.catalog_product_id,
+                grade=_extract_grade_marker(line.catalog_product.description if line.catalog_product is not None else None),
                 product_name=line.product_name_snapshot,
                 unit=line.unit_snapshot,
                 quantity=round_metric(line.quantity),
@@ -494,8 +559,18 @@ def _serialize_order(order: CommercialOrder) -> CommercialOrderRead:
     )
 
 
-def list_orders(db: Session, manager: User, status: str | None = None, search: str | None = None) -> list[CommercialOrderRead]:
-    cooperative_id = get_manager_cooperative_id(manager)
+def _build_orders_stmt(
+    *,
+    cooperative_id,
+    status: str | None = None,
+    search: str | None = None,
+    category: str | None = None,
+    product: str | None = None,
+    product_id=None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    client: str | None = None,
+):
     stmt = (
         select(CommercialOrder)
         .options(selectinload(CommercialOrder.lines))
@@ -516,8 +591,104 @@ def list_orders(db: Session, manager: User, status: str | None = None, search: s
             )
         )
 
+    if date_from:
+        stmt = stmt.where(func.date(CommercialOrder.created_at) >= date_from)
+    if date_to:
+        stmt = stmt.where(func.date(CommercialOrder.created_at) <= date_to)
+
+    if client and client.strip():
+        client_needle = f"%{client.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(CommercialOrder.customer_name).like(client_needle),
+                func.lower(func.coalesce(CommercialOrder.customer_phone, "")).like(client_needle),
+                func.lower(func.coalesce(CommercialOrder.customer_email, "")).like(client_needle),
+            )
+        )
+
+    if category and category.strip():
+        category_needle = f"%{category.strip().lower()}%"
+        stmt = stmt.where(
+            CommercialOrder.lines.any(
+                CommercialOrderLine.catalog_product.has(
+                    func.lower(CommercialCatalogProduct.category).like(category_needle)
+                )
+            )
+        )
+
+    if product_id:
+        stmt = stmt.where(
+            CommercialOrder.lines.any(CommercialOrderLine.catalog_product_id == product_id)
+        )
+    elif product and product.strip():
+        product_needle = f"%{product.strip().lower()}%"
+        stmt = stmt.where(
+            CommercialOrder.lines.any(
+                or_(
+                    func.lower(CommercialOrderLine.product_name_snapshot).like(product_needle),
+                    CommercialOrderLine.catalog_product.has(
+                        func.lower(CommercialCatalogProduct.name).like(product_needle)
+                    ),
+                )
+            )
+        )
+
+    return stmt
+
+
+def list_orders(db: Session, manager: User, status: str | None = None, search: str | None = None) -> list[CommercialOrderRead]:
+    cooperative_id = get_manager_cooperative_id(manager)
+    stmt = _build_orders_stmt(cooperative_id=cooperative_id, status=status, search=search)
     rows = db.scalars(stmt.order_by(CommercialOrder.created_at.desc())).all()
     return [_serialize_order(order) for order in rows]
+
+
+def list_orders_paginated(
+    db: Session,
+    manager: User,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+    status: str | None = None,
+    search: str | None = None,
+    category: str | None = None,
+    product: str | None = None,
+    product_id=None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    client: str | None = None,
+    sort_by: str = "date",
+    sort_order: str = "desc",
+) -> tuple[list[CommercialOrderRead], int]:
+    cooperative_id = get_manager_cooperative_id(manager)
+    base_stmt = _build_orders_stmt(
+        cooperative_id=cooperative_id,
+        status=status,
+        search=search,
+        category=category,
+        product=product,
+        product_id=product_id,
+        date_from=date_from,
+        date_to=date_to,
+        client=client,
+    )
+    total = db.scalar(select(func.count()).select_from(base_stmt.order_by(None).subquery())) or 0
+
+    order_direction_desc = sort_order.lower() != "asc"
+    sort_key = sort_by.lower()
+    if sort_key == "total":
+        sort_col = CommercialOrder.total_amount_fcfa
+    elif sort_key == "client":
+        sort_col = CommercialOrder.customer_name
+    elif sort_key == "status":
+        sort_col = CommercialOrder.status
+    else:
+        sort_col = CommercialOrder.created_at
+
+    order_by_clause = sort_col.desc() if order_direction_desc else sort_col.asc()
+    offset = (page - 1) * page_size
+    rows = db.scalars(base_stmt.order_by(order_by_clause, CommercialOrder.created_at.desc()).offset(offset).limit(page_size)).all()
+    return ([_serialize_order(order) for order in rows], int(total))
 
 
 def order_stats(db: Session, manager: User) -> CommercialOrderStats:
@@ -577,7 +748,7 @@ def _release_for_order(order: CommercialOrder):
         catalog.reserved_stock_kg = round_metric(max(catalog.reserved_stock_kg - line.quantity_kg, 0.0))
 
 
-def _deduct_on_delivery(order: CommercialOrder):
+def _deduct_on_delivery(db: Session, order: CommercialOrder):
     for line in order.lines:
         catalog = line.catalog_product
         if catalog is None:
@@ -588,6 +759,31 @@ def _deduct_on_delivery(order: CommercialOrder):
             raise ValidationError(f"Stock total insuffisant pour '{line.product_name_snapshot}'.")
         catalog.reserved_stock_kg = round_metric(catalog.reserved_stock_kg - line.quantity_kg)
         catalog.total_stock_kg = round_metric(catalog.total_stock_kg - line.quantity_kg)
+        if catalog.source_product_id is not None:
+            source_product = db.scalar(
+                select(Product).where(
+                    Product.id == catalog.source_product_id,
+                    Product.cooperative_id == order.cooperative_id,
+                )
+            )
+            if source_product is not None:
+                source_grade = _extract_grade_marker(catalog.description)
+                apply_reserved_stock_delta(
+                    db,
+                    order.cooperative_id,
+                    source_product,
+                    -line.quantity_kg,
+                    create_if_missing=False,
+                    grade=source_grade,
+                )
+                apply_total_stock_delta(
+                    db,
+                    order.cooperative_id,
+                    source_product,
+                    -line.quantity_kg,
+                    create_if_missing=False,
+                    grade=source_grade,
+                )
 
 
 def _create_invoice_for_order(db: Session, order: CommercialOrder) -> CommercialInvoice:
@@ -721,7 +917,7 @@ def update_order_status(db: Session, manager: User, order_id, payload) -> Commer
     elif next_status == CommercialOrderStatus.READY:
         order.ready_at = order.ready_at or current_utc()
     elif next_status == CommercialOrderStatus.DELIVERED:
-        _deduct_on_delivery(order)
+        _deduct_on_delivery(db, order)
         order.delivered_at = order.delivered_at or current_utc()
         _create_invoice_for_order(db, order)
     elif next_status == CommercialOrderStatus.PAID:

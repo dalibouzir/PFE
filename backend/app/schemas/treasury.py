@@ -52,6 +52,8 @@ class TreasuryTransactionRead(BaseModel):
     justificatif_file: Optional[UploadedFileRead]
     source_type: str
     source_id: Optional[UUID]
+    linked_farmer_advance_id: Optional[UUID] = None
+    linked_advance_devis_file: Optional[UploadedFileRead] = None
     farmer_id: Optional[UUID]
     farmer_name: Optional[str]
     created_at: datetime

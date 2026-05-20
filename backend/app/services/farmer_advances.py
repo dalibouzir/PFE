@@ -138,6 +138,10 @@ def _serialize_advance(db: Session, advance: FarmerAdvance) -> FarmerAdvanceRead
     else:
         return_status = "Produit reçu"
 
+    linked_treasury_transaction = None
+    if advance.treasury_transaction is not None:
+        linked_treasury_transaction = treasury_service.serialize_treasury_transaction(advance.treasury_transaction)
+
     return FarmerAdvanceRead(
         id=advance.id,
         cooperative_id=advance.cooperative_id,
@@ -152,6 +156,7 @@ def _serialize_advance(db: Session, advance: FarmerAdvance) -> FarmerAdvanceRead
         status=advance.status.value,
         source_type=advance.source_type,
         treasury_transaction_id=advance.treasury_transaction_id,
+        linked_treasury_transaction=linked_treasury_transaction,
         batch_code=batch.code if batch is not None else None,
         parcel_name=parcel_name,
         product_name=product_name,

@@ -25,6 +25,8 @@ from app.models.treasury_transaction import TreasuryTransaction
 from app.models.uploaded_file import UploadedFile
 from app.models.user import User
 
+POST_HARVEST_STAGES = {"cleaning", "drying", "sorting", "packaging"}
+
 
 class SQLTools:
     """Controlled SQL tool execution for grounded response generation."""
@@ -99,6 +101,59 @@ class SQLTools:
                     "table": "stocks",
                     "label": "Stocks courants par produit",
                     "record_count": len(items),
+                    "related_product": product,
+                }
+            ],
+            "warnings": ["NO_SQL_DATA"] if not items else [],
+        }
+
+    def get_available_postharvest_lots(self, product: str | None = None) -> dict[str, Any]:
+        """List available post-harvest lots (simple listing, not ranking)."""
+        stmt = (
+            select(
+                Batch.id,
+                Batch.code,
+                Product.name,
+                Batch.initial_qty,
+                Batch.current_qty,
+                Batch.status,
+                Batch.postharvest_started_at,
+                Batch.unit,
+            )
+            .join(Product, Product.id == Batch.product_id)
+            .where(Batch.cooperative_id == self.cooperative_id)
+            .where(Batch.postharvest_started_at.isnot(None))
+            .order_by(Batch.postharvest_started_at.desc())
+        )
+        rows = self.db.execute(stmt).all()
+        items = []
+        for batch_id, code, product_name, initial_qty, current_qty, status, started_at, unit in rows:
+            if product and _canonical_product_name(product_name) != _canonical_product_name(product):
+                continue
+            initial = float(initial_qty or 0.0)
+            current = float(current_qty or 0.0)
+            items.append(
+                {
+                    "batch_id": str(batch_id),
+                    "batch_ref": str(code),
+                    "product": str(product_name),
+                    "initial_qty": initial,
+                    "current_qty": current,
+                    "loss_qty": initial - current,
+                    "status": str(status.value if hasattr(status, "value") else status),
+                    "started_at": str(started_at) if started_at else None,
+                    "unit": str(unit or "kg"),
+                }
+            )
+        return {
+            "items": items,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "batches",
+                    "label": "Lots disponibles en post-récolte",
+                    "record_count": len(items),
+                    "filter": "postharvest_started_at IS NOT NULL",
                     "related_product": product,
                 }
             ],
@@ -400,6 +455,203 @@ class SQLTools:
                 }
             ],
             "warnings": ["NO_SQL_DATA"] if not items else [],
+        }
+
+    def get_postharvest_process_step_losses(
+        self,
+        batch_ref: str | None = None,
+        stage: str | None = None,
+        product: str | None = None,
+        date_range: list[str] | None = None,
+    ) -> dict[str, Any]:
+        base = self.get_process_step_losses(
+            batch_ref=batch_ref,
+            stage=None,
+            product=product,
+            date_range=date_range,
+        )
+        rows = base.get("items", []) or []
+        wanted_stage = _canonical_stage_name(stage) if stage else None
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            canonical_stage = _canonical_stage_name(row.get("stage"))
+            if canonical_stage not in POST_HARVEST_STAGES:
+                continue
+            if wanted_stage and canonical_stage != wanted_stage:
+                continue
+            enriched = dict(row)
+            enriched["stage"] = _stage_display_label(canonical_stage)
+            enriched["stage_canonical"] = canonical_stage
+            items.append(enriched)
+        return {
+            "items": items,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "process_steps",
+                    "label": "Pertes post-récolte par étape",
+                    "record_count": len(items),
+                    "related_batch": batch_ref,
+                    "related_stage": stage,
+                    "related_product": product,
+                }
+            ],
+            "warnings": ["NO_SQL_DATA"] if not items else [],
+        }
+
+    def get_postharvest_material_balance(self, batch_ref: str | None = None, product: str | None = None) -> dict[str, Any]:
+        stmt = (
+            select(
+                Batch.id,
+                Batch.code,
+                Product.name,
+                ProcessStep.type,
+                ProcessStep.qty_in,
+                ProcessStep.qty_out,
+                ProcessStep.date,
+                ProcessStep.sequence_order,
+            )
+            .join(ProcessStep, ProcessStep.batch_id == Batch.id)
+            .join(Product, Product.id == Batch.product_id)
+            .where(Batch.cooperative_id == self.cooperative_id)
+            .order_by(Batch.code.asc(), ProcessStep.date.asc(), ProcessStep.sequence_order.asc())
+        )
+        rows = self.db.execute(stmt).all()
+        grouped: dict[str, dict[str, Any]] = {}
+        for batch_id, code, product_name, step_type, qty_in, qty_out, step_date, seq in rows:
+            ref = str(code or "")
+            if not ref:
+                continue
+            if batch_ref and ref.strip().lower() != str(batch_ref).strip().lower():
+                continue
+            if product and _canonical_product_name(product_name) != _canonical_product_name(product):
+                continue
+            canonical_stage = _canonical_stage_name(step_type)
+            if canonical_stage not in POST_HARVEST_STAGES:
+                continue
+            entry = grouped.setdefault(
+                ref,
+                {
+                    "batch_id": str(batch_id),
+                    "batch_ref": ref,
+                    "product": str(product_name or ""),
+                    "steps": [],
+                },
+            )
+            entry["steps"].append(
+                {
+                    "stage_canonical": canonical_stage,
+                    "stage": _stage_display_label(canonical_stage),
+                    "qty_in": float(qty_in or 0.0),
+                    "qty_out": float(qty_out or 0.0),
+                    "date": str(step_date),
+                    "sequence_order": int(seq or 0),
+                }
+            )
+
+        items: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        for ref, entry in grouped.items():
+            steps = entry.get("steps", [])
+            if not steps:
+                continue
+            steps = sorted(steps, key=lambda s: (str(s.get("date") or ""), int(s.get("sequence_order") or 0)))
+            input_qty = float(steps[0].get("qty_in", 0.0) or 0.0)
+            output_qty = float(steps[-1].get("qty_out", 0.0) or 0.0)
+            if input_qty <= 0:
+                items.append(
+                    {
+                        "batch_id": entry["batch_id"],
+                        "batch_ref": ref,
+                        "product": entry["product"],
+                        "input_quantity": None,
+                        "output_quantity": None,
+                        "loss_percentage": None,
+                        "efficiency_percentage": None,
+                        "is_consistent": False,
+                        "consistency_issue": "MATERIAL_BALANCE_INPUT_MISSING",
+                    }
+                )
+                warnings.append("MATERIAL_BALANCE_INPUT_MISSING")
+                continue
+            if output_qty > input_qty:
+                items.append(
+                    {
+                        "batch_id": entry["batch_id"],
+                        "batch_ref": ref,
+                        "product": entry["product"],
+                        "input_quantity": input_qty,
+                        "output_quantity": output_qty,
+                        "loss_percentage": None,
+                        "efficiency_percentage": None,
+                        "is_consistent": False,
+                        "consistency_issue": "MATERIAL_BALANCE_OUTPUT_EXCEEDS_INPUT",
+                    }
+                )
+                warnings.append("MATERIAL_BALANCE_OUTPUT_EXCEEDS_INPUT")
+                continue
+            loss_pct = ((input_qty - output_qty) / input_qty) * 100.0
+            items.append(
+                {
+                    "batch_id": entry["batch_id"],
+                    "batch_ref": ref,
+                    "product": entry["product"],
+                    "input_quantity": input_qty,
+                    "output_quantity": output_qty,
+                    "loss_percentage": loss_pct,
+                    "efficiency_percentage": (output_qty / input_qty) * 100.0,
+                    "is_consistent": True,
+                    "consistency_issue": None,
+                }
+            )
+        if not items:
+            warnings.append("NO_SQL_DATA")
+        return {
+            "items": items,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "batches,process_steps",
+                    "label": "Bilan matière post-récolte",
+                    "record_count": len(items),
+                    "related_batch": batch_ref,
+                    "related_product": product,
+                }
+            ],
+            "warnings": sorted(set(warnings)),
+        }
+
+    def get_postharvest_batch_summary(self, batch_ref: str | None = None, product: str | None = None) -> dict[str, Any]:
+        balance = self.get_postharvest_material_balance(batch_ref=batch_ref, product=product)
+        items: list[dict[str, Any]] = []
+        for row in balance.get("items", []) or []:
+            items.append(
+                {
+                    "batch_id": row.get("batch_id"),
+                    "batch_ref": row.get("batch_ref"),
+                    "product": row.get("product"),
+                    "initial_qty": row.get("input_quantity"),
+                    "current_qty": row.get("output_quantity"),
+                    "loss_pct": row.get("loss_percentage"),
+                    "efficiency_pct": row.get("efficiency_percentage"),
+                    "lot_domain": "POST_HARVEST_BATCH",
+                    "is_consistent": bool(row.get("is_consistent")),
+                    "consistency_issue": row.get("consistency_issue"),
+                }
+            )
+        return {
+            "items": items,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "batches,process_steps",
+                    "label": "Résumé lots post-récolte",
+                    "record_count": len(items),
+                    "related_batch": batch_ref,
+                    "related_product": product,
+                }
+            ],
+            "warnings": balance.get("warnings", []),
         }
 
     def get_material_balance(self, batch_ref: str | None = None, product: str | None = None) -> dict[str, Any]:
@@ -1199,15 +1451,20 @@ class SQLTools:
             stmt = stmt.where(func.lower(Product.name).in_(aliases))
         stmt = _apply_step_date_range(stmt, date_range)
         rows = self.db.execute(stmt).all()
-        items = [
-            {
-                "stage": str(stage),
-                "avg_efficiency_pct": float(eff or 0.0),
-                "avg_loss_pct": float(loss or 0.0),
-                "record_count": int(count or 0),
-            }
-            for stage, eff, loss, count in rows
-        ]
+        items = []
+        for stage, eff, loss, count in rows:
+            canonical_stage = _canonical_stage_name(stage)
+            if canonical_stage not in POST_HARVEST_STAGES:
+                continue
+            items.append(
+                {
+                    "stage": _stage_display_label(canonical_stage),
+                    "stage_canonical": canonical_stage,
+                    "avg_efficiency_pct": float(eff or 0.0),
+                    "avg_loss_pct": float(loss or 0.0),
+                    "record_count": int(count or 0),
+                }
+            )
         return {
             "items": items,
             "sources": [
@@ -1465,3 +1722,14 @@ def _canonical_stage_name(value: Any) -> str:
         "stockage": "storage",
     }
     return aliases.get(normalized, normalized)
+
+
+def _stage_display_label(canonical_stage: str) -> str:
+    labels = {
+        "cleaning": "Nettoyage",
+        "drying": "Séchage",
+        "sorting": "Tri",
+        "packaging": "Emballage / Conditionnement",
+        "storage": "Stockage",
+    }
+    return labels.get(str(canonical_stage or "").strip().lower(), str(canonical_stage or ""))

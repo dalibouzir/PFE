@@ -171,6 +171,24 @@ class AgentOrchestrator:
             compose_started_at = time.perf_counter()
             answer, response_blocks, evidence_metadata = compose_answer(evidence_pack, evidence_verification)
             compose_ms = int((time.perf_counter() - compose_started_at) * 1000)
+            if str(answer or "").strip() == "Donnée non disponible pour cette requête précise.":
+                sql_result = _find_agent(agent_results, "SQLAnalyticsAgent")
+                if sql_result and "Je n’ai pas trouvé de lot avec la référence" in str(sql_result.answer_part or ""):
+                    lot_match = re.search(r"référence\s+([A-Za-z0-9\-_]+)\.?$", str(sql_result.answer_part))
+                    if lot_match:
+                        lot = lot_match.group(1).upper()
+                        answer = f"Je n’ai pas trouvé de lot avec la référence {lot}."
+                    else:
+                        answer = str(sql_result.answer_part)
+            sql_result = _find_agent(agent_results, "SQLAnalyticsAgent")
+            normalized_message = (message or "").lower()
+            if (
+                sql_result
+                and ("étape" in normalized_message or "etape" in normalized_message)
+                and ("plus de pertes" in normalized_message or "cause le plus" in normalized_message)
+                and str(sql_result.answer_part or "").strip()
+            ):
+                answer = str(sql_result.answer_part)
 
             # Keep the previous text builder as a fallback guard if composition returns an empty body.
             if not str(answer or "").strip():

@@ -1,7 +1,7 @@
 from datetime import date
 import unicodedata
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.batch import Batch
@@ -12,11 +12,27 @@ from app.models.product import Product
 from app.models.stock_movement import StockMovement
 from app.models.user import User
 from app.services import analytics
-from app.services.batches import refresh_batch_current_qty, require_batch, sync_batch_status_from_steps
+from app.services.batches import _read_postharvest_stock_meta, refresh_batch_current_qty, require_batch, sync_batch_status_from_steps
 from app.services.helpers import get_manager_cooperative_id, normalize_mass_unit, round_metric, to_kg
 from app.services.rag_reindex_hooks import reindex_process_step_if_needed, reindex_recommendation_if_needed
 from app.utils.exceptions import NotFoundError, ValidationError
-from app.services.stocks import apply_total_stock_delta
+from app.services.stocks import apply_reserved_stock_delta, apply_total_stock_delta, normalize_stock_grade
+
+
+def _generate_movement_reference(db: Session, *, movement_kind: str, year: int) -> str:
+    token = movement_kind.upper()
+    prefix = f"MVT-{token}-{year}-"
+    rows = db.scalars(
+        select(StockMovement.movement_reference).where(func.lower(StockMovement.movement_reference).like(f"{prefix.lower()}%"))
+    ).all()
+    max_increment = 0
+    for ref in rows:
+        if not ref:
+            continue
+        suffix = ref[len(prefix) :]
+        if suffix.isdigit():
+            max_increment = max(max_increment, int(suffix))
+    return f"{prefix}{max_increment + 1:03d}"
 
 
 def _require_step(db: Session, manager: User, step_id):
@@ -134,7 +150,37 @@ def _apply_step_stock_effect(db: Session, batch: Batch, step: ProcessStep, delta
     product = db.scalar(select(Product).where(Product.id == batch.product_id, Product.cooperative_id == batch.cooperative_id))
     if product is None:
         raise ValidationError("Batch product not found while applying stock movement.")
-    apply_total_stock_delta(db, batch.cooperative_id, product, -float(delta_loss_kg), create_if_missing=True)
+    stock_meta = _read_postharvest_stock_meta(batch)
+    selected_grade = normalize_stock_grade(str(stock_meta.get("grade"))) if stock_meta is not None else None
+    # For post-harvest-selected buckets, release/consume reservation first on stock-out
+    # so `total_stock_kg >= reserved_in_lots_kg` remains valid at all times.
+    stock_delta = -float(delta_loss_kg)
+    if selected_grade is not None and stock_delta < 0:
+        apply_reserved_stock_delta(
+            db,
+            batch.cooperative_id,
+            product,
+            stock_delta,
+            create_if_missing=False,
+            grade=selected_grade,
+        )
+    apply_total_stock_delta(
+        db,
+        batch.cooperative_id,
+        product,
+        stock_delta,
+        create_if_missing=True,
+        grade=selected_grade,
+    )
+    if selected_grade is not None and stock_delta > 0:
+        apply_reserved_stock_delta(
+            db,
+            batch.cooperative_id,
+            product,
+            stock_delta,
+            create_if_missing=False,
+            grade=selected_grade,
+        )
     movement_key = f"step:{step.id}:loss"
     existing = db.scalar(select(StockMovement).where(StockMovement.idempotency_key == movement_key))
     if existing is not None:
@@ -143,11 +189,20 @@ def _apply_step_stock_effect(db: Session, batch: Batch, step: ProcessStep, delta
         existing.action_type = step.type
         existing.notes = step.notes
         existing.process_step_id = step.id
+        if selected_grade is not None:
+            existing.grade = selected_grade
+        if not existing.movement_reference:
+            existing.movement_reference = _generate_movement_reference(
+                db,
+                movement_kind="LOSS",
+                year=step.date.year,
+            )
         return
     db.add(
         StockMovement(
             cooperative_id=batch.cooperative_id,
             product_id=batch.product_id,
+            grade=(selected_grade or "Non spécifié"),
             batch_id=batch.id,
             process_step_id=step.id,
             movement_type="out",
@@ -155,6 +210,7 @@ def _apply_step_stock_effect(db: Session, batch: Batch, step: ProcessStep, delta
             source="post_harvest_step",
             quantity_kg=abs(round_metric(step.normalized_loss_value)),
             movement_date=step.date,
+            movement_reference=_generate_movement_reference(db, movement_kind="LOSS", year=step.date.year),
             idempotency_key=movement_key,
             notes=step.notes,
         )
@@ -184,6 +240,8 @@ def create_process_step(db: Session, manager: User, payload) -> ProcessStep:
         raise ValidationError("Cannot execute steps for a completed or archived batch.")
     if (batch.member_id is not None or batch.parcel_id is not None) and (batch.preharvest_completed_at is None or batch.confirmed_weight_kg is None):
         raise ValidationError("Post-harvest is locked until pre-harvest completion with confirmed weight.")
+    if (batch.member_id is not None or batch.parcel_id is not None) and batch.postharvest_started_at is None:
+        raise ValidationError("Démarrez Post-récolte avant d'exécuter des étapes.")
 
     plan = _ordered_plan(batch)
     executed = _sorted_steps(batch)
@@ -234,7 +292,6 @@ def create_process_step(db: Session, manager: User, payload) -> ProcessStep:
         _apply_step_stock_effect(db, batch, step, normalized_loss_kg)
 
     batch.process_steps.append(step)
-    batch.postharvest_started_at = batch.postharvest_started_at or current_utc()
     refresh_batch_current_qty(batch)
     sync_batch_status_from_steps(db, batch)
 
@@ -421,4 +478,22 @@ def delete_process_step(db: Session, manager: User, step_id):
     if step.normalized_loss_value > 0:
         product = db.scalar(select(Product).where(Product.id == batch.product_id, Product.cooperative_id == batch.cooperative_id))
         if product is not None:
-            apply_total_stock_delta(db, batch.cooperative_id, product, float(step.normalized_loss_value), create_if_missing=True)
+            stock_meta = _read_postharvest_stock_meta(batch)
+            selected_grade = normalize_stock_grade(str(stock_meta.get("grade"))) if stock_meta is not None else None
+            apply_total_stock_delta(
+                db,
+                batch.cooperative_id,
+                product,
+                float(step.normalized_loss_value),
+                create_if_missing=True,
+                grade=selected_grade,
+            )
+            if selected_grade is not None:
+                apply_reserved_stock_delta(
+                    db,
+                    batch.cooperative_id,
+                    product,
+                    float(step.normalized_loss_value),
+                    create_if_missing=False,
+                    grade=selected_grade,
+                )

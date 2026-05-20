@@ -117,6 +117,7 @@ export const endpoints = {
   stockMovements: {
     list: "/stock-movements",
     detail: (id: string) => `/stock-movements/${id}`,
+    manualAdjustment: "/stock-movements/manual-adjustment",
   },
   batches: {
     list: "/batches",
@@ -130,6 +131,7 @@ export const endpoints = {
     updatePreHarvestStepStatuses: (id: string) => `/batches/${id}/preharvest-step-statuses`,
     completePreHarvest: (id: string) => `/batches/${id}/complete-preharvest`,
     startPostHarvest: (id: string) => `/batches/${id}/start-postharvest`,
+    startPostHarvestWithStock: (id: string) => `/batches/${id}/start-postharvest-with-stock`,
     completePostHarvest: (id: string) => `/batches/${id}/complete-postharvest`,
     materialBalance: (id: string) => `/batches/${id}/material-balance`,
     delete: (id: string) => `/batches/${id}`,

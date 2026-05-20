@@ -53,6 +53,9 @@ class BatchRead(ORMModel):
     member_id: Optional[UUID]
     parcel_id: Optional[UUID]
     code: str
+    preharvest_reference: str
+    collecte_reference: Optional[str] = None
+    postharvest_reference: Optional[str] = None
     creation_date: date
     unit: str
     ordered_process_steps: List[str]
@@ -101,6 +104,12 @@ class BatchApproveChargeResponse(BaseModel):
 class BatchCompletePreHarvestRequest(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=1000)
     collecte_date: Optional[date] = None
+
+
+class BatchStartPostHarvestRequest(BaseModel):
+    product_id: UUID
+    grade: str = Field(min_length=1, max_length=40)
+    quantity_kg: float = Field(gt=0)
 
 
 class BatchMaterialBalanceStageRead(BaseModel):

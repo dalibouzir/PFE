@@ -56,6 +56,7 @@ class Settings(BaseSettings):
 
     llm_provider: str = "openrouter"
     llm_model: str = "openai/gpt-4o-mini"
+    groq_model: str = "llama-3.3-70b-versatile"
     llm_timeout_seconds: float = 30.0
     llm_max_tokens: int = 280
     openrouter_api_key: str = ""

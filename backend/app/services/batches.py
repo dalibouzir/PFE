@@ -1,4 +1,5 @@
 from datetime import date
+import json
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -20,11 +21,45 @@ from app.services import analytics as analytics_service
 from app.services import farmer_advances as farmer_advance_service
 from app.services.helpers import from_kg, get_manager_cooperative_id, normalize_mass_unit, normalize_product_code, round_metric, to_kg
 from app.services.rag_reindex_hooks import reindex_batch_if_needed
-from app.services.stocks import apply_processed_output_delta, release_reserved_stock_for_lot, reserve_stock_for_lot
+from app.services.stocks import (
+    apply_processed_output_delta,
+    apply_reserved_stock_delta,
+    available_stock_kg,
+    get_stock_by_product,
+    normalize_stock_grade,
+    release_reserved_stock_for_lot,
+    reserve_stock_for_lot,
+)
 from app.utils.exceptions import ConflictError, NotFoundError, ValidationError
 
 ALLOWED_PREHARVEST_STEP_STATUSES = {"todo", "in_progress", "done"}
 LINKED_COLLECTE_SOURCES = {"lot_linked_collecte", "pre_harvest_confirmed_weight"}
+POSTHARVEST_STOCK_NOTE_PREFIX = "POSTHARVEST_STOCK:"
+
+
+def _read_postharvest_stock_meta(batch: Batch) -> dict | None:
+    note = (batch.status_note or "").strip()
+    if not note.startswith(POSTHARVEST_STOCK_NOTE_PREFIX):
+        return None
+    payload = note[len(POSTHARVEST_STOCK_NOTE_PREFIX) :].strip()
+    if not payload:
+        return None
+    try:
+        parsed = json.loads(payload)
+    except Exception:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return parsed
+
+
+def _write_postharvest_stock_meta(batch: Batch, *, product_id, grade: str, allocated_qty_kg: float):
+    meta = {
+        "product_id": str(product_id),
+        "grade": normalize_stock_grade(grade),
+        "allocated_qty_kg": round_metric(float(allocated_qty_kg)),
+    }
+    batch.status_note = f"{POSTHARVEST_STOCK_NOTE_PREFIX}{json.dumps(meta, ensure_ascii=False)}"
 
 
 def _postharvest_status(batch: Batch) -> str:
@@ -70,6 +105,28 @@ def _generate_lot_reference(db: Session, product_name: str) -> str:
         if suffix.isdigit():
             max_increment = max(max_increment, int(suffix))
     return f"{prefix}{max_increment + 1:03d}"
+
+
+def _generate_postharvest_reference(db: Session, product_name: str, *, year: int) -> str:
+    product_code = normalize_product_code(product_name)
+    prefix = f"POST-{product_code}-{year}-"
+    rows = db.scalars(select(Batch.postharvest_reference).where(func.lower(Batch.postharvest_reference).like(f"{prefix.lower()}%"))).all()
+    max_increment = 0
+    for ref in rows:
+        if not ref:
+            continue
+        suffix = ref[len(prefix) :]
+        if suffix.isdigit():
+            max_increment = max(max_increment, int(suffix))
+    return f"{prefix}{max_increment + 1:03d}"
+
+
+def _fallback_collecte_reference(input_row: Input | None) -> str | None:
+    if input_row is None:
+        return None
+    if input_row.collecte_reference and input_row.collecte_reference.strip():
+        return input_row.collecte_reference.strip()
+    return f"COL-HIST-{str(input_row.id)[:8].upper()}"
 
 
 def _compute_estimated_qty_kg(payload, unit: str) -> tuple[float, float | None, str | None]:
@@ -119,6 +176,11 @@ def serialize_batch(batch: Batch) -> BatchRead:
         collecte = None
         stock_in_exists = False
 
+    postharvest_status = _postharvest_status(batch)
+    status_note = batch.status_note
+    if postharvest_status == "ready_post_recolte" and (collecte is not None or stock_in_exists):
+        status_note = "Collecté · En attente Post-récolte"
+
     return BatchRead(
         id=batch.id,
         cooperative_id=batch.cooperative_id,
@@ -126,6 +188,9 @@ def serialize_batch(batch: Batch) -> BatchRead:
         member_id=batch.member_id,
         parcel_id=batch.parcel_id,
         code=batch.code,
+        preharvest_reference=batch.code,
+        collecte_reference=_fallback_collecte_reference(collecte),
+        postharvest_reference=batch.postharvest_reference,
         creation_date=batch.creation_date,
         unit=unit,
         ordered_process_steps=batch.ordered_process_steps or [],
@@ -147,8 +212,8 @@ def serialize_batch(batch: Batch) -> BatchRead:
         collecte_created=collecte is not None,
         stock_in_created=stock_in_exists,
         postharvest_started_at=batch.postharvest_started_at,
-        postharvest_status=_postharvest_status(batch),
-        status_note=batch.status_note,
+        postharvest_status=postharvest_status,
+        status_note=status_note,
         initial_qty_display=initial_display,
         current_qty_display=current_display,
         status=batch.status.value,
@@ -470,6 +535,19 @@ def transition_batch_status(db: Session, batch: Batch, next_status: BatchStatus)
         if product is not None:
             if batch.member_id is None and batch.parcel_id is None and batch.status in (BatchStatus.CREATED, BatchStatus.IN_PROGRESS):
                 release_reserved_stock_for_lot(db, batch.cooperative_id, product, batch.initial_qty)
+            meta = _read_postharvest_stock_meta(batch)
+            if meta is not None:
+                grade = normalize_stock_grade(str(meta.get("grade") or "Non spécifié"))
+                remaining = max(float(batch.current_qty or 0.0), 0.0)
+                if remaining > 0:
+                    apply_reserved_stock_delta(
+                        db,
+                        batch.cooperative_id,
+                        product,
+                        -remaining,
+                        create_if_missing=False,
+                        grade=grade,
+                    )
             apply_processed_output_delta(db, batch.cooperative_id, product, batch.current_qty)
     batch.status = next_status
     return batch
@@ -490,15 +568,67 @@ def sync_batch_status_from_steps(db: Session, batch: Batch):
     return batch
 
 
-def start_postharvest(db: Session, manager: User, batch_id):
+def start_postharvest(db: Session, manager: User, batch_id, payload=None):
     batch = require_batch(db, manager, batch_id, with_steps=True)
     if batch.status in (BatchStatus.COMPLETED, BatchStatus.ARCHIVED):
         raise ValidationError("Cannot start post-harvest on a completed/archived lot.")
+    if payload is not None:
+        selected_product_id = payload.product_id
+        selected_grade = normalize_stock_grade(payload.grade)
+        requested_qty_kg = round_metric(float(payload.quantity_kg))
+    else:
+        selected_product_id = batch.product_id
+        selected_grade = None
+        requested_qty_kg = None
+
     if batch.member_id is not None or batch.parcel_id is not None:
         if batch.preharvest_completed_at is None or batch.confirmed_weight_kg is None:
             raise ValidationError("Lot is not ready for post-harvest. Complete pre-harvest and linked collecte first.")
+        linked_collecte = db.scalar(
+            select(Input).where(
+                Input.cooperative_id == batch.cooperative_id,
+                Input.batch_id == batch.id,
+                Input.source_type.in_(tuple(LINKED_COLLECTE_SOURCES)),
+            )
+            .order_by(Input.created_at.desc())
+        )
+        if linked_collecte is None:
+            raise ValidationError("Lot is not ready for post-harvest. Create linked collecte first.")
+        if payload is None:
+            selected_grade = normalize_stock_grade(getattr(linked_collecte, "grade", None))
+            requested_qty_kg = round_metric(float(batch.confirmed_weight_kg or linked_collecte.quantity or 0.0))
+
+    if requested_qty_kg is not None and selected_grade is not None:
+        if selected_product_id != batch.product_id:
+            raise ValidationError("Le produit sélectionné doit correspondre au produit du lot.")
+        stock_bucket = get_stock_by_product(db, batch.cooperative_id, selected_product_id, selected_grade)
+        if stock_bucket is None:
+            raise ValidationError("Bucket de stock introuvable pour le produit/grade sélectionné.")
+        available_kg = available_stock_kg(stock_bucket)
+        if requested_qty_kg > available_kg:
+            raise ValidationError("Quantité demandée supérieure au stock disponible pour ce grade.")
+        apply_reserved_stock_delta(
+            db,
+            batch.cooperative_id,
+            batch.product,
+            requested_qty_kg,
+            create_if_missing=False,
+            grade=selected_grade,
+        )
+        batch.confirmed_weight_kg = requested_qty_kg
+        batch.current_qty = requested_qty_kg
+        _write_postharvest_stock_meta(
+            batch,
+            product_id=batch.product_id,
+            grade=selected_grade,
+            allocated_qty_kg=requested_qty_kg,
+        )
     if batch.postharvest_started_at is None:
         batch.postharvest_started_at = current_utc()
+    if not (batch.postharvest_reference or "").strip():
+        product_name = batch.product.name if batch.product is not None else "PROD"
+        year = batch.postharvest_started_at.year if batch.postharvest_started_at is not None else date.today().year
+        batch.postharvest_reference = _generate_postharvest_reference(db, product_name, year=year)
     if batch.status == BatchStatus.CREATED:
         batch.status = BatchStatus.IN_PROGRESS
     db.commit()

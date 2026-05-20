@@ -69,6 +69,71 @@ class SQLAnalyticsAgent(BaseAgent):
         asks_stage_comparison = "compare" in normalized and any(token in normalized for token in ("sechage", "drying")) and any(
             token in normalized for token in ("tri", "sorting")
         )
+        postharvest_loss_ranking_intent = _is_postharvest_loss_ranking_intent(normalized)
+        postharvest_listing_intent = any(
+            token in normalized
+            for token in (
+                "quels sont les lots",
+                "quel les lots",
+                "list lots",
+                "liste lots",
+                "liste les lots",
+                "lots disponibles",
+                "lots enregistres",
+                "lots enregistrés",
+                "available lots",
+                "lots post-recolte",
+                "lots post-récolte",
+                "lots post harvest",
+                "lots postharvest",
+            )
+        ) and any(
+            token in normalized
+            for token in ("lot", "lots", "batch", "batches", "disponible", "disponibles", "available", "enregistre", "enregistrés")
+        )
+        postharvest_analytics_intent = postharvest_loss_ranking_intent or any(
+            token in normalized
+            for token in (
+                "perte",
+                "loss",
+                "efficacite",
+                "efficacité",
+                "efficiency",
+                "rendement",
+                "bilan matiere",
+                "bilan matière",
+                "material balance",
+                "sechage",
+                "séchage",
+                "nettoyage",
+                "tri",
+                "emballage",
+                "conditionnement",
+            )
+        )
+        preharvest_lot_intent = any(
+            token in normalized
+            for token in (
+                "pre-recolte",
+                "pré-récolte",
+                "pre recolte",
+                "pre-harvest",
+                "quantite estimee",
+                "quantité estimée",
+                "charge estimee",
+                "charge estimée",
+                "dates prevues",
+                "dates prévues",
+                "dates reelles",
+                "dates réelles",
+                "parcelle",
+                "culture",
+                "etapes pre-recolte",
+                "étapes pré-récolte",
+                "lifecycle",
+            )
+        )
+        mixed_pre_post_intent = preharvest_lot_intent and postharvest_analytics_intent
         warnings: list[str] = []
         payload: dict[str, Any] = {}
         payload["module_capabilities"] = self.sql_tools.get_module_capabilities()
@@ -250,9 +315,13 @@ class SQLAnalyticsAgent(BaseAgent):
             sources.extend(finance.get("sources", []))
             warnings.extend(finance.get("warnings", []))
 
+        has_bl_token = _has_word(normalized, "bl") or ("input_reference_bl" in normalized)
         phase3_collecte_traceability_intent = (
-            any(token in normalized for token in ("collecte", "collectes", "input", "bl", "input_reference_bl"))
-            and any(token in normalized for token in ("traceabil", "bl", "justificatif", "linked lot", "lot lie", "lot lié", "stock impact policy", "validation duplique"))
+            (any(token in normalized for token in ("collecte", "collectes", "input")) or has_bl_token)
+            and (
+                any(token in normalized for token in ("traceabil", "justificatif", "linked lot", "lot lie", "lot lié", "stock impact policy", "validation duplique"))
+                or has_bl_token
+            )
         )
         if any(token in normalized for token in ("collecte", "collectes", "input")) and any(
             token in normalized for token in ("bl", "justificatif", "lot", "producteur", "produit", "fichier", "statut")
@@ -358,6 +427,14 @@ class SQLAnalyticsAgent(BaseAgent):
             # Keep uploaded-files route focused on explicit evidence/file prompts.
             phase3_file_evidence_intent = False
 
+        explicit_traceability_request = any(token in normalized for token in ("collecte", "justificatif", "input_reference_bl", "producteur", "facture", "tresorerie", "trésorerie"))
+        if postharvest_loss_ranking_intent and not explicit_traceability_request:
+            phase3_collecte_traceability_intent = False
+            phase3_file_evidence_intent = False
+            phase3_advance_intent = False
+            phase3_treasury_intent = False
+            phase3_commercial_link_intent = False
+
         if phase3_collecte_traceability_intent:
             collecte = self.sql_tools.get_collecte_traceability()
             payload["collecte_traceability"] = collecte.get("items", [])
@@ -389,8 +466,19 @@ class SQLAnalyticsAgent(BaseAgent):
             sources.extend(links.get("sources", []))
             warnings.extend(links.get("warnings", []))
 
-        if (batch_ref or any(token in normalized for token in ("lot", "batch"))) and not reset_lot_context:
-            batch = self.sql_tools.get_batch_summary(batch_ref=batch_ref)
+        # Handle post-harvest lot listing intent (separate from ranking/loss queries)
+        if postharvest_listing_intent and not batch_ref and not postharvest_loss_ranking_intent:
+            available_lots = self.sql_tools.get_available_postharvest_lots(product=product)
+            payload["available_postharvest_lots"] = available_lots.get("items", [])
+            sources.extend(available_lots.get("sources", []))
+            warnings.extend(available_lots.get("warnings", []))
+
+        if (batch_ref or any(token in normalized for token in ("lot", "batch"))) and not reset_lot_context and (not preharvest_lot_intent or mixed_pre_post_intent):
+            batch = (
+                self.sql_tools.get_postharvest_batch_summary(batch_ref=batch_ref, product=product)
+                if postharvest_analytics_intent
+                else self.sql_tools.get_batch_summary(batch_ref=batch_ref)
+            )
             payload["batch_summary"] = batch.get("items", [])
             sources.extend(batch.get("sources", []))
             warnings.extend(batch.get("warnings", []))
@@ -419,11 +507,25 @@ class SQLAnalyticsAgent(BaseAgent):
             )
             if asks_top_loss:
                 high_risk_lots = self.sql_tools.get_high_risk_lots()
-                payload["high_risk_lots"] = high_risk_lots.get("items", [])
+                if postharvest_analytics_intent:
+                    payload["high_risk_lots"] = [
+                        row for row in (payload.get("batch_summary") or []) if bool(row.get("is_consistent")) and row.get("loss_pct") is not None
+                    ]
+                    payload["high_risk_lots"] = sorted(
+                        payload["high_risk_lots"],
+                        key=lambda item: float(item.get("loss_pct", 0.0) or 0.0),
+                        reverse=True,
+                    )[:10]
+                else:
+                    payload["high_risk_lots"] = high_risk_lots.get("items", [])
                 sources.extend(high_risk_lots.get("sources", []))
                 warnings.extend(high_risk_lots.get("warnings", []))
                 # Anchor "worst-loss lot" on process-step losses when available.
-                loss_rows = self.sql_tools.get_process_step_losses(batch_ref=None, stage=None, product=product, date_range=effective_date_range).get("items", [])
+                loss_rows = (
+                    self.sql_tools.get_postharvest_process_step_losses(batch_ref=None, stage=None, product=product, date_range=effective_date_range).get("items", [])
+                    if postharvest_analytics_intent
+                    else self.sql_tools.get_process_step_losses(batch_ref=None, stage=None, product=product, date_range=effective_date_range).get("items", [])
+                )
                 by_batch: dict[str, dict[str, Any]] = {}
                 for row in loss_rows:
                     key = str(row.get("batch_ref") or "").strip()
@@ -446,12 +548,21 @@ class SQLAnalyticsAgent(BaseAgent):
                         reverse=True,
                     )[:5]
 
-        if any(token in normalized for token in ("perte", "loss", "efficacit", "efficiency", "sechage", "tri", "drying", "sorting", "emballage", "packaging")):
-            losses = self.sql_tools.get_process_step_losses(
-                batch_ref=batch_ref,
-                stage=stage,
-                product=product,
-                date_range=effective_date_range,
+        if any(token in normalized for token in ("perte", "loss", "efficacit", "efficiency", "sechage", "tri", "drying", "sorting", "emballage", "packaging")) and (not preharvest_lot_intent or mixed_pre_post_intent):
+            losses = (
+                self.sql_tools.get_postharvest_process_step_losses(
+                    batch_ref=batch_ref,
+                    stage=stage,
+                    product=product,
+                    date_range=effective_date_range,
+                )
+                if postharvest_analytics_intent
+                else self.sql_tools.get_process_step_losses(
+                    batch_ref=batch_ref,
+                    stage=stage,
+                    product=product,
+                    date_range=effective_date_range,
+                )
             )
             payload["process_step_losses"] = losses.get("items", [])
             sources.extend(losses.get("sources", []))
@@ -463,9 +574,15 @@ class SQLAnalyticsAgent(BaseAgent):
             warnings.extend(stage_eff.get("warnings", []))
             if any(token in normalized for token in ("efficacite faible", "faible efficacite")):
                 if not payload.get("low_efficiency_lots"):
-                    batch_all = self.sql_tools.get_batch_summary(batch_ref=None)
+                    batch_all = (
+                        self.sql_tools.get_postharvest_batch_summary(batch_ref=None, product=product)
+                        if postharvest_analytics_intent
+                        else self.sql_tools.get_batch_summary(batch_ref=None)
+                    )
                     payload["low_efficiency_lots"] = [
-                        row for row in (batch_all.get("items", []) or []) if float(row.get("efficiency_pct", 0.0) or 0.0) < 85.0
+                        row
+                        for row in (batch_all.get("items", []) or [])
+                        if row.get("efficiency_pct") is not None and float(row.get("efficiency_pct", 0.0) or 0.0) < 85.0
                     ]
                     sources.extend(batch_all.get("sources", []))
                     warnings.extend(batch_all.get("warnings", []))
@@ -484,8 +601,12 @@ class SQLAnalyticsAgent(BaseAgent):
                     comparison_rows.append({"stage": "sorting", "stage_label": "Tri", "avg_loss_pct": float(sorting.get("avg_loss_pct", 0.0) or 0.0)})
                 payload["stage_loss_comparison"] = comparison_rows
 
-        if "bilan" in normalized or "material balance" in normalized or "matiere" in normalized:
-            balance = self.sql_tools.get_material_balance(batch_ref=batch_ref, product=product)
+        if ("bilan" in normalized or "material balance" in normalized or "matiere" in normalized) and (not preharvest_lot_intent or mixed_pre_post_intent):
+            balance = (
+                self.sql_tools.get_postharvest_material_balance(batch_ref=batch_ref, product=product)
+                if postharvest_analytics_intent
+                else self.sql_tools.get_material_balance(batch_ref=batch_ref, product=product)
+            )
             payload["material_balance"] = balance.get("items", [])
             sources.extend(balance.get("sources", []))
             warnings.extend(balance.get("warnings", []))
@@ -508,6 +629,18 @@ class SQLAnalyticsAgent(BaseAgent):
             payload["low_stock_alerts"] = low_stock.get("items", [])
             sources.extend(low_stock.get("sources", []))
             warnings.extend(low_stock.get("warnings", []))
+
+        if preharvest_lot_intent and not mixed_pre_post_intent:
+            payload["lot_domain"] = "PRE_HARVEST_LOT"
+            payload.pop("batch_summary", None)
+            payload.pop("process_step_losses", None)
+            payload.pop("material_balance", None)
+            payload.pop("stage_efficiency_summary", None)
+            payload.pop("high_risk_lots", None)
+            payload.pop("top_loss_batches", None)
+            payload.pop("low_efficiency_lots", None)
+        elif postharvest_analytics_intent:
+            payload["lot_domain"] = "POST_HARVEST_BATCH"
 
         module_specific = module in {"members", "member_value", "collections", "stocks", "invoices", "commercial", "finance", "pre_harvest"}
         operational_keys = [key for key in payload.keys() if key not in {"module_capabilities", "detected_module", "query_text", "requested_batch_ref"}]
@@ -604,11 +737,41 @@ def _detect_deterministic_operation(normalized: str) -> str | None:
     return None
 
 
+def _is_postharvest_loss_ranking_intent(normalized: str) -> bool:
+    txt = str(normalized or "")
+    entity_terms = bool(re.search(r"\b(lot|lots|batch|batches)\b", txt))
+    rank_terms = bool(re.search(r"\b(top|classement|classe|ranking|critiques?|prioris|pire|pires|plus elev|plus eleve|plus fortes?|plus hauts?|plus\s+penalis\w*)\b", txt))
+    metric_terms = bool(
+        re.search(r"\b(perte|pertes|loss|efficacite|efficacité|efficiency|rendement|matiere|matière|material balance|bilan matiere|bilan matière)\b", txt)
+        or re.search(r"\b(ecarts?|écarts?|gap|difference)\b.*\b(entree|entrée|input)\b.*\b(sortie|output)\b", txt)
+    )
+    patterns = (
+        r"\b(top|classement|ranking)\b.*\b(lot|lots|batch|batches)\b.*\b(perte|loss|efficacite|efficacité|efficiency)\b",
+        r"\b(pertes?\s+les?\s+plus|highest\s+loss|worst\s+loss)\b",
+        r"\b(lots?\s+critiques?|critical\s+post-?harvest\s+batches)\b",
+        r"\b(pire\s+efficacite|pire\s+efficacité|lowest\s+efficiency)\b",
+        r"\b(ecarts?|écarts?|gap|difference)\b.*\b(entree|entrée|input)\b.*\b(sortie|output)\b",
+        r"\b(bilan\s+matiere|bilan\s+matière|material\s+balance)\b.*\b(lot|batch)\b",
+        r"\b(loss|efficiency)\s+ranking\b",
+        r"\b(rendement\s+le\s+plus\s+faible|plus\s+mauvais\s+rendement|lowest\s+yield)\b",
+        r"\b(performance\s+post-?recolte|performance\s+post-?harvest)\b.*\b(lot|batch)\b",
+    )
+    return (
+        any(re.search(p, txt) for p in patterns)
+        or (entity_terms and rank_terms and re.search(r"\bpost-?recolte|post-?harvest\b", txt))
+        or (entity_terms and metric_terms and (rank_terms or "par lot" in txt or "par batch" in txt))
+    )
+
+
 def _normalize_text(value: str) -> str:
     raw = str(value or "").lower()
     raw = unicodedata.normalize("NFKD", raw)
     raw = "".join(ch for ch in raw if not unicodedata.combining(ch))
     return " ".join(raw.split())
+
+
+def _has_word(text: str, word: str) -> bool:
+    return bool(re.search(rf"\\b{re.escape(word)}\\b", text))
 
 
 def _contains_stock_keyword(normalized: str) -> bool:
@@ -981,6 +1144,29 @@ def _build_sql_answer(payload: dict[str, Any]) -> str:
             )
         if len(items) > 8:
             lines.append("- …")
+        return "\n".join(lines)
+
+    if payload.get("available_postharvest_lots"):
+        items = payload["available_postharvest_lots"]
+        if len(items) == 0:
+            return "Aucun lot en post-récolte n'a été trouvé pour cette coopérative."
+        elif len(items) == 1:
+            item = items[0]
+            return (
+                f"Un lot post-récolte est disponible: {_display_batch_ref(item.get('batch_ref'))} "
+                f"({item.get('product')}) avec {float(item.get('initial_qty', 0.0)):.1f} kg initial, "
+                f"{float(item.get('current_qty', 0.0)):.1f} kg actuel."
+            )
+        lines = [f"Lots post-récolte disponibles ({len(items)}):"]
+        for item in items[:15]:
+            perte = float(item.get('loss_qty', 0.0))
+            lines.append(
+                f"- {_display_batch_ref(item.get('batch_ref'))}: {item.get('product')} | "
+                f"{float(item.get('initial_qty', 0.0)):.1f} kg initial → {float(item.get('current_qty', 0.0)):.1f} kg | "
+                f"perte {perte:.1f} kg | statut {item.get('status')}"
+            )
+        if len(items) > 15:
+            lines.append(f"- … et {len(items) - 15} autres lot(s)")
         return "\n".join(lines)
 
     if payload.get("invoices_summary") is not None:

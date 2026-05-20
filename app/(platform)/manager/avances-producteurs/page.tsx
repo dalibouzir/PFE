@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ConfirmActionModal } from "@/components/ui/ConfirmActionModal";
 import { ContentAreaLoader } from "@/components/ui/ContentAreaLoader";
@@ -78,12 +78,19 @@ export default function FarmerAdvancesPage() {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortByField>("last_modified");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [selectedFarmerFilter, setSelectedFarmerFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [selectedFarmer, setSelectedFarmer] = useState<FarmerAdvanceSummaryRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingAdvance, setEditingAdvance] = useState<FarmerAdvance | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [selectedDevisFile, setSelectedDevisFile] = useState<File | null>(null);
+  const [uploadingAdvanceId, setUploadingAdvanceId] = useState<string | null>(null);
   const [pendingCancelAdvance, setPendingCancelAdvance] = useState<FarmerAdvance | null>(null);
+  const devisPickerRef = useRef<HTMLInputElement | null>(null);
   const tableControls = useTableControls([], "desc");
 
   const summaryQuery = useFarmerAdvanceSummary({
@@ -131,9 +138,20 @@ export default function FarmerAdvancesPage() {
   const summaryErrorMessage = summaryQuery.error instanceof Error ? summaryQuery.error.message : "Erreur de chargement.";
   const visibleRows = rows.filter((row) => {
     const q = tableControls.search.trim().toLowerCase();
-    if (!q) return true;
-    return row.farmer_name.toLowerCase().includes(q);
+    const byText = !q || row.farmer_name.toLowerCase().includes(q);
+    const byFarmer = selectedFarmerFilter === "all" || row.farmer_id === selectedFarmerFilter;
+    const byFrom = fromDate ? row.last_modified.slice(0, 10) >= fromDate : true;
+    const byTo = toDate ? row.last_modified.slice(0, 10) <= toDate : true;
+    return byText && byFarmer && byFrom && byTo;
   });
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return visibleRows.slice(start, start + pageSize);
+  }, [page, pageSize, visibleRows]);
+  const totalPages = Math.max(Math.ceil(visibleRows.length / pageSize), 1);
+  useEffect(() => {
+    setPage(1);
+  }, [tableControls.search, selectedFarmerFilter, fromDate, toDate, sortBy, sortOrder, pageSize]);
 
   const openCreateForm = () => {
     setEditingAdvance(null);
@@ -215,6 +233,24 @@ export default function FarmerAdvancesPage() {
     }
   };
 
+  const openDevisPicker = (advanceId: string) => {
+    setUploadingAdvanceId(advanceId);
+    devisPickerRef.current?.click();
+  };
+
+  const handleDevisPicked = async (file: File | null) => {
+    if (!file || !uploadingAdvanceId) return;
+    try {
+      await uploadDevis.mutateAsync({ id: uploadingAdvanceId, file });
+      setFormError(null);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Upload devis échoué.");
+    } finally {
+      setUploadingAdvanceId(null);
+      if (devisPickerRef.current) devisPickerRef.current.value = "";
+    }
+  };
+
   const exportColumns: ExportColumn<FarmerAdvanceSummaryRow>[] = [
     { key: "farmer_name", header: "Producteur" },
     { key: "total_collected_quantity", header: "Quantité collectée totale (kg)", format: (_, row) => row.total_collected_quantity.toLocaleString("fr-FR") },
@@ -270,6 +306,24 @@ export default function FarmerAdvancesPage() {
       </section>
 
       <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
+        <div className="mb-3 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <select value={selectedFarmerFilter} onChange={(event) => setSelectedFarmerFilter(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm">
+            <option value="all">Tous producteurs</option>
+            {rows.map((row) => (
+              <option key={row.farmer_id} value={row.farmer_id}>{row.farmer_name}</option>
+            ))}
+          </select>
+          <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm" />
+          <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm" />
+          <select value={sortBy} onChange={(event) => setSortBy(event.target.value as SortByField)} className="soft-focus wf-input px-3 py-2.5 text-sm">
+            <option value="last_modified">Dernière modification</option>
+            <option value="total_amount">Montant total donné</option>
+          </select>
+          <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as SortOrder)} className="soft-focus wf-input px-3 py-2.5 text-sm">
+            <option value="desc">desc</option>
+            <option value="asc">asc</option>
+          </select>
+        </div>
         <TableToolbar
           search={tableControls.search}
           onSearchChange={(value) => {
@@ -285,26 +339,24 @@ export default function FarmerAdvancesPage() {
           sortAscLabel="Tri asc"
           sortDescLabel="Tri desc"
           rightActions={
-            <ExportActions
-              onCsv={() => exportRowsToCsv({ filename: "avances-producteurs", title: "Avances Producteurs", columns: exportColumns, rows: visibleRows })}
-              onExcel={() => exportRowsToExcel({ filename: "avances-producteurs", title: "Avances Producteurs", columns: exportColumns, rows: visibleRows })}
-              onPdf={() => exportRowsToPdf({ filename: "avances-producteurs", title: "Avances Producteurs", columns: exportColumns, rows: visibleRows })}
-            />
+            <div className="flex items-center gap-2">
+              <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="wf-input h-10 w-[110px] px-2 text-xs">
+                <option value={10}>10 / page</option>
+                <option value={20}>20 / page</option>
+                <option value={50}>50 / page</option>
+              </select>
+              <ExportActions
+                onCsv={() => exportRowsToCsv({ filename: "avances-producteurs", title: "Avances Producteurs", columns: exportColumns, rows: visibleRows })}
+                onExcel={() => exportRowsToExcel({ filename: "avances-producteurs", title: "Avances Producteurs", columns: exportColumns, rows: visibleRows })}
+                onPdf={() => exportRowsToPdf({ filename: "avances-producteurs", title: "Avances Producteurs", columns: exportColumns, rows: visibleRows })}
+              />
+              <button type="button" onClick={openCreateForm} className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold">
+                + Nouvelle avance
+              </button>
+            </div>
           }
         />
-        <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
-          <select value={sortBy} onChange={(event) => setSortBy(event.target.value as SortByField)} className="soft-focus wf-input px-3 py-2.5 text-sm">
-            <option value="last_modified">Dernière modification</option>
-            <option value="total_amount">Montant total donné</option>
-          </select>
-          <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as SortOrder)} className="soft-focus wf-input px-3 py-2.5 text-sm">
-            <option value="desc">desc</option>
-            <option value="asc">asc</option>
-          </select>
-          <button type="button" onClick={openCreateForm} className="soft-focus wf-btn-primary px-4 py-2.5 text-sm font-semibold">
-            + Nouvelle avance
-          </button>
-        </div>
+        <p className="mt-2 text-xs text-[var(--muted)]">Exporte toutes les lignes filtrées.</p>
       </section>
 
       {summaryQuery.isLoading ? (
@@ -340,7 +392,7 @@ export default function FarmerAdvancesPage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map((row) => (
+                {pagedRows.map((row) => (
                   <tr key={row.farmer_id}>
                     <td className="px-5 py-4 font-medium text-[var(--text)]">{row.farmer_name}</td>
                     <td className="px-5 py-4">{formatQuantity(row.total_collected_quantity)}</td>
@@ -348,14 +400,27 @@ export default function FarmerAdvancesPage() {
                     <td className="px-5 py-4">{formatCost(row.cost_per_kg)}</td>
                     <td className="px-5 py-4">{formatDateTime(row.last_modified)}</td>
                     <td className="px-5 py-4">
-                      <button className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => setSelectedFarmer(row)}>
-                        Voir détails
+                      <button
+                        className="soft-focus rounded-lg border border-[#A7C3F0] bg-[#EEF5FF] px-2.5 py-1 text-xs font-semibold text-[#1F5EA8] hover:bg-[#E4EEFF]"
+                        onClick={() => setSelectedFarmer(row)}
+                      >
+                        Voir détails & devis
                       </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--line)] px-4 py-3">
+            <p className="text-xs text-[var(--muted)]">
+              {Math.min((page - 1) * pageSize + 1, visibleRows.length)}–{Math.min(page * pageSize, visibleRows.length)} sur {visibleRows.length}
+            </p>
+            <div className="ml-auto flex items-center gap-2">
+              <button type="button" className="soft-focus rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>Précédent</button>
+              <span className="text-xs text-[var(--muted)]">{page}/{totalPages}</span>
+              <button type="button" className="soft-focus rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={page >= totalPages} onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}>Suivant</button>
+            </div>
           </div>
         </section>
       )}
@@ -383,6 +448,15 @@ export default function FarmerAdvancesPage() {
           <p className="text-sm text-[var(--danger)]">{detailQuery.error instanceof Error ? detailQuery.error.message : "Erreur de chargement du détail."}</p>
         ) : detailQuery.data ? (
           <div className="space-y-4">
+            <input
+              ref={devisPickerRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,application/pdf,image/jpeg,image/png,image/webp,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={(event) => {
+                void handleDevisPicked(event.target.files?.[0] ?? null);
+              }}
+            />
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
                 <p className="text-xs text-[var(--muted)]">Producteur</p>
@@ -405,6 +479,9 @@ export default function FarmerAdvancesPage() {
                 <p className="text-sm font-semibold text-[var(--text)]">{formatDateTime(detailQuery.data.summary.last_modified)}</p>
               </div>
             </div>
+            <p className="text-xs text-[var(--muted)]">
+              Le dernier fichier importé est lié à l&apos;enregistrement.
+            </p>
 
             {detailQuery.data.advances.length === 0 ? (
               <p className="text-sm text-[var(--muted)]">Aucune avance enregistrée pour ce producteur.</p>
@@ -420,6 +497,7 @@ export default function FarmerAdvancesPage() {
                       <th className="px-4 py-3">Parcelle</th>
                       <th className="px-4 py-3">Retour produit</th>
                       <th className="px-4 py-3">Devis</th>
+                      <th className="px-4 py-3">Trésorerie liée</th>
                       <th className="px-4 py-3">Note</th>
                       <th className="px-4 py-3">Créé le / Modifié le</th>
                       <th className="px-4 py-3">Statut</th>
@@ -456,11 +534,47 @@ export default function FarmerAdvancesPage() {
                           </td>
                           <td className="px-4 py-3 text-xs">
                             {advance.devis_file ? (
-                              <a className="font-semibold text-[var(--primary)] hover:underline" href={advance.devis_file.file_url} target="_blank" rel="noreferrer">
-                                {advance.devis_file.filename}
-                              </a>
+                              <div className="space-y-1">
+                                <span className="inline-flex rounded-full bg-[#EAF8EE] px-2 py-0.5 text-[11px] font-semibold text-[#0F7A3B]">
+                                  Devis joint
+                                </span>
+                                <p className="text-[var(--text)]">{advance.devis_file.filename}</p>
+                              </div>
                             ) : (
-                              <span className="text-[var(--muted)]">Absent</span>
+                              <span className="inline-flex rounded-full bg-[#FFEDEE] px-2 py-0.5 text-[11px] font-semibold text-[#A83C3C]">
+                                Devis manquant
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            {advance.linked_treasury_transaction ? (
+                              <div className="space-y-1">
+                                <p className="font-semibold text-[var(--text)]">{advance.linked_treasury_transaction.reference}</p>
+                                <p className="text-[var(--muted)]">Statut: {advance.linked_treasury_transaction.status}</p>
+                                {advance.linked_treasury_transaction.justificatif_file ? (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <a
+                                      className="soft-focus rounded-lg border border-[#A7C3F0] bg-[#EEF5FF] px-2.5 py-1 text-xs font-semibold text-[#1F5EA8] hover:bg-[#E4EEFF]"
+                                      href={advance.linked_treasury_transaction.justificatif_file.file_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      Voir justificatif Trésorerie
+                                    </a>
+                                    <a
+                                      className="soft-focus rounded-lg border border-[#A7C3F0] bg-[#EEF5FF] px-2.5 py-1 text-xs font-semibold text-[#1F5EA8] hover:bg-[#E4EEFF]"
+                                      href={advance.linked_treasury_transaction.justificatif_file.file_url}
+                                      download={advance.linked_treasury_transaction.justificatif_file.filename}
+                                    >
+                                      Télécharger justificatif Trésorerie
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <span className="text-[var(--muted)]">Aucun justificatif Trésorerie</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[var(--muted)]">Aucune transaction liée</span>
                             )}
                           </td>
                           <td className="px-4 py-3">{advance.note?.trim() ? advance.note : "—"}</td>
@@ -472,9 +586,39 @@ export default function FarmerAdvancesPage() {
                             <StatusBadge label={status.label} tone={status.tone} />
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <button className="text-xs font-semibold text-[var(--primary)] hover:underline" onClick={() => openEditForm(advance)} disabled={advance.status === "cancelled"}>
                                 Modifier
+                              </button>
+                              {advance.devis_file ? (
+                                <>
+                                  <a
+                                    className="soft-focus rounded-lg border border-[#A7C3F0] bg-[#EEF5FF] px-2.5 py-1 text-xs font-semibold text-[#1F5EA8] hover:bg-[#E4EEFF]"
+                                    href={advance.devis_file.file_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Voir
+                                  </a>
+                                  <a
+                                    className="soft-focus rounded-lg border border-[#A7C3F0] bg-[#EEF5FF] px-2.5 py-1 text-xs font-semibold text-[#1F5EA8] hover:bg-[#E4EEFF]"
+                                    href={advance.devis_file.file_url}
+                                    download={advance.devis_file.filename}
+                                  >
+                                    Télécharger
+                                  </a>
+                                </>
+                              ) : null}
+                              <button
+                                className="soft-focus rounded-lg border border-[#D6DCE8] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--text)] hover:bg-[var(--surface-soft)] disabled:opacity-50"
+                                onClick={() => openDevisPicker(advance.id)}
+                                disabled={uploadDevis.isPending && uploadingAdvanceId === advance.id}
+                              >
+                                {uploadDevis.isPending && uploadingAdvanceId === advance.id
+                                  ? "Upload..."
+                                  : advance.devis_file
+                                    ? "Remplacer"
+                                    : "Ajouter devis"}
                               </button>
                               <button
                                 className="text-xs font-semibold text-[var(--danger)] hover:underline disabled:opacity-40"
@@ -603,10 +747,10 @@ export default function FarmerAdvancesPage() {
           </label>
 
           <label className="block text-sm font-medium text-[var(--text)]">
-            Devis (optionnel, PDF/JPG/JPEG/PNG/WEBP)
+            Devis (optionnel, PDF/JPG/JPEG/PNG/WEBP/XLS/XLSX)
             <input
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,application/pdf,image/jpeg,image/png,image/webp,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="wf-input mt-2 h-11 w-full px-3 text-sm"
               onChange={(event) => setSelectedDevisFile(event.target.files?.[0] ?? null)}
             />

@@ -192,6 +192,8 @@ export default function ParcellesCulturePage() {
   const [approveChargeDraft, setApproveChargeDraft] = useState("");
   const [pendingStopLot, setPendingStopLot] = useState(false);
   const [pendingDeleteLot, setPendingDeleteLot] = useState(false);
+  const [listPage, setListPage] = useState(1);
+  const [listPageSize, setListPageSize] = useState(10);
   const tableControls = useTableControls(
     [
       {
@@ -254,6 +256,14 @@ export default function ParcellesCulturePage() {
     const sorted = filtered.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     return tableControls.sortOrder === "asc" ? sorted : sorted.reverse();
   }, [preHarvestLots, productFilterId, tableControls.filters.state, tableControls.sortOrder]);
+  const pagedPreHarvestLots = useMemo(() => {
+    const start = (listPage - 1) * listPageSize;
+    return visiblePreHarvestLots.slice(start, start + listPageSize);
+  }, [visiblePreHarvestLots, listPage, listPageSize]);
+  const totalPages = Math.max(Math.ceil(visiblePreHarvestLots.length / listPageSize), 1);
+  useEffect(() => {
+    setListPage(1);
+  }, [search, productFilterId, tableControls.filters.state, tableControls.sortOrder, listPageSize]);
 
   const preHarvestProductFilterOptions = useMemo(() => {
     const ids = Array.from(new Set(preHarvestLots.map((lot) => lot.product_id)));
@@ -877,7 +887,7 @@ export default function ParcellesCulturePage() {
               <p className="text-xs text-[var(--muted)]">Aucun lot Pré-récolte disponible.</p>
             ) : (
               <div className="space-y-2">
-                {visiblePreHarvestLots.map((lot) => {
+                {pagedPreHarvestLots.map((lot) => {
                   const isActive = lot.id === selectedBatch?.id;
                   const farmerName = lot.member_id ? farmersById.get(lot.member_id)?.full_name ?? "-" : "-";
                   const productName = productsById.get(lot.product_id)?.name ?? "-";
@@ -1334,8 +1344,23 @@ export default function ParcellesCulturePage() {
                         ))}
                       </div>
                     )}
+              </div>
+              {visiblePreHarvestLots.length > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-[var(--muted)]">
+                    {Math.min((listPage - 1) * listPageSize + 1, visiblePreHarvestLots.length)}–{Math.min(listPage * listPageSize, visiblePreHarvestLots.length)} sur {visiblePreHarvestLots.length}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <select value={listPageSize} onChange={(event) => setListPageSize(Number(event.target.value))} className="wf-input h-8 w-[88px] px-2 text-xs">
+                      <option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
+                    </select>
+                    <button type="button" className="soft-focus rounded-lg border border-[var(--line)] px-2 py-1 text-xs font-semibold disabled:opacity-50" disabled={listPage <= 1} onClick={() => setListPage((prev) => Math.max(1, prev - 1))}>Précédent</button>
+                    <span className="text-xs text-[var(--muted)]">{listPage}/{totalPages}</span>
+                    <button type="button" className="soft-focus rounded-lg border border-[var(--line)] px-2 py-1 text-xs font-semibold disabled:opacity-50" disabled={listPage >= totalPages} onClick={() => setListPage((prev) => Math.min(totalPages, prev + 1))}>Suivant</button>
                   </div>
-                </article>
+                </div>
+              ) : null}
+            </article>
               ) : null}
 
               {selectedLotState === "ready_collecte" ? (

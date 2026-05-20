@@ -35,40 +35,46 @@ export function TableToolbar({
   rightActions,
 }: TableToolbarProps) {
   return (
-    <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_auto]">
-      <input
-        value={search}
-        onChange={(event) => onSearchChange(event.target.value)}
-        className="soft-focus wf-input px-3 py-2.5 text-sm"
-        placeholder={searchPlaceholder}
-      />
+    <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_auto]">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <input
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          className="soft-focus wf-input px-3 py-2.5 text-sm sm:col-span-2 xl:col-span-1"
+          placeholder={searchPlaceholder}
+        />
 
-      {filters.map((filter) => (
+        {filters.map((filter) => (
+          <select
+            key={filter.key}
+            value={filter.value}
+            onChange={(event) => onFilterChange?.(filter.key, event.target.value)}
+            className="soft-focus wf-input px-3 py-2.5 text-sm"
+            aria-label={filter.label}
+          >
+            {filter.options.map((option) => (
+              <option key={`${filter.key}-${option.value}`} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ))}
+
         <select
-          key={filter.key}
-          value={filter.value}
-          onChange={(event) => onFilterChange?.(filter.key, event.target.value)}
+          value={sortOrder}
+          onChange={(event) => onSortOrderChange(event.target.value as SortOrder)}
           className="soft-focus wf-input px-3 py-2.5 text-sm"
-          aria-label={filter.label}
         >
-          {filter.options.map((option) => (
-            <option key={`${filter.key}-${option.value}`} value={option.value}>
-              {option.label}
-            </option>
-          ))}
+          <option value="desc">{sortDescLabel}</option>
+          <option value="asc">{sortAscLabel}</option>
         </select>
-      ))}
+      </div>
 
-      <select
-        value={sortOrder}
-        onChange={(event) => onSortOrderChange(event.target.value as SortOrder)}
-        className="soft-focus wf-input px-3 py-2.5 text-sm"
-      >
-        <option value="desc">{sortDescLabel}</option>
-        <option value="asc">{sortAscLabel}</option>
-      </select>
-
-      {rightActions ? <div className="flex flex-wrap items-center gap-2">{rightActions}</div> : null}
+      {rightActions ? (
+        <div className="flex flex-wrap items-center justify-start gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] p-2 lg:justify-end">
+          {rightActions}
+        </div>
+      ) : null}
     </div>
   );
 }

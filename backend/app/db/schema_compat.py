@@ -22,12 +22,14 @@ BATCHES_ADDS = [
     "ADD COLUMN IF NOT EXISTS confirmed_weight_kg DOUBLE PRECISION",
     "ADD COLUMN IF NOT EXISTS preharvest_completed_at TIMESTAMPTZ",
     "ADD COLUMN IF NOT EXISTS postharvest_started_at TIMESTAMPTZ",
+    "ADD COLUMN IF NOT EXISTS postharvest_reference VARCHAR(80)",
     "ADD COLUMN IF NOT EXISTS status_note TEXT",
 ]
 
 INPUTS_ADDS = [
     "ADD COLUMN IF NOT EXISTS batch_id UUID",
     "ADD COLUMN IF NOT EXISTS source_type VARCHAR(64) DEFAULT 'manual_collecte' NOT NULL",
+    "ADD COLUMN IF NOT EXISTS collecte_reference VARCHAR(80)",
 ]
 
 FARMER_ADVANCES_ADDS = [
@@ -41,6 +43,15 @@ FARMER_ADVANCES_ADDS = [
 TREASURY_TRANSACTIONS_ADDS = [
     "ADD COLUMN IF NOT EXISTS justificatif_file_id UUID",
     "ADD COLUMN IF NOT EXISTS receipt_reference VARCHAR(120)",
+]
+
+STOCKS_ADDS = [
+    "ADD COLUMN IF NOT EXISTS grade VARCHAR(40) DEFAULT 'Non spécifié' NOT NULL",
+]
+
+STOCK_MOVEMENTS_ADDS = [
+    "ADD COLUMN IF NOT EXISTS movement_reference VARCHAR(80)",
+    "ADD COLUMN IF NOT EXISTS grade VARCHAR(40) DEFAULT 'Non spécifié' NOT NULL",
 ]
 
 
@@ -70,6 +81,12 @@ def ensure_runtime_schema_compat() -> None:
             if "treasury_transactions" in tables:
                 for ddl in TREASURY_TRANSACTIONS_ADDS:
                     conn.execute(text(f"ALTER TABLE treasury_transactions {ddl}"))
+            if "stock_movements" in tables:
+                for ddl in STOCK_MOVEMENTS_ADDS:
+                    conn.execute(text(f"ALTER TABLE stock_movements {ddl}"))
+            if "stocks" in tables:
+                for ddl in STOCKS_ADDS:
+                    conn.execute(text(f"ALTER TABLE stocks {ddl}"))
     except SQLAlchemyError as exc:
         # Keep API startup alive when DB is temporarily unreachable; endpoints that
         # require DB will still fail with explicit DB errors until connectivity returns.

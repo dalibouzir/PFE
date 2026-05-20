@@ -53,6 +53,7 @@ class InputRead(ORMModel):
     grade: str
     estimated_value: Optional[float]
     bl_number: Optional[str]
+    collecte_reference: Optional[str] = None
     status: str
     source_type: str
     created_at: datetime_type

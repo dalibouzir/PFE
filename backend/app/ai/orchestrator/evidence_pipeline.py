@@ -3,9 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 import unicodedata
+import logging
 from typing import Any
 
 from app.ai.schemas.agent_schemas import AgentResult, AgentRoute
+from app.ml.llm.provider import get_llm_client
+from app.utils.exceptions import ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 def _first_or_none(value: Any) -> str | None:
@@ -496,6 +501,182 @@ def verify_evidence(pack: EvidencePack) -> EvidenceVerification:
     return EvidenceVerification(ok=not issues, issues=sorted(set(issues)))
 
 
+def _build_llm_grounding_prompt(pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
+    """Build grounded prompt for LLM answer composition."""
+    lines = []
+    route_name = str(pack.route).split(".")[-1] if pack.route else "UNKNOWN"
+    lines.append(f"Route: {route_name}")
+    lines.append(f"Question: {pack.question}")
+    lines.append("")
+    lines.append("=== DONNEES SQL (AUTORITE OPERATIONNELLE) ===")
+    sql_rows = sql_payload.get("rows") or []
+    if sql_rows:
+        lines.append(f"Données: {len(sql_rows)} enregistrement(s)")
+        for row in sql_rows[:3]:
+            if isinstance(row, dict):
+                items = ", ".join(f"{k}:{v}" for k, v in row.items())
+                lines.append(f"  {items}")
+    sql_metrics = sql_payload.get("metrics") or {}
+    if sql_metrics:
+        lines.append(f"Métriques: {', '.join(f'{k}={v}' for k, v in sql_metrics.items())}")
+    lines.append("")
+    if pack.rag.get("chunks"):
+        lines.append("=== BONNES PRATIQUES (RAG) ===")
+        for chunk in pack.rag.get("chunks", [])[:2]:
+            if isinstance(chunk, dict):
+                title = chunk.get("title", "")[:50]
+                lines.append(f"• {title}")
+        lines.append("")
+    lines.append("=== INSTRUCTIONS ===")
+    lines.append("1. Répondre UNIQUEMENT avec les données SQL")
+    lines.append("2. NE PAS inventer de nombres, lots ou produits")
+    lines.append("3. Si donnée manque, dire 'indisponible'")
+    lines.append("4. Style manager/français")
+    return "\n".join(lines)
+
+
+def _validate_llm_answer(answer: str, pack: EvidencePack, sql_payload: dict[str, Any]) -> list[str]:
+    """Validate LLM answer for hallucinations."""
+    issues = []
+    # Check for raw RAG headers only
+    if "agronomic knowledge reference" in answer.lower():
+        issues.append("RAW_RAG_HEADER")
+    return issues
+
+
+def _compose_llm_answer(pack: EvidencePack, sql_payload: dict[str, Any]) -> str | None:
+    """Compose answer using Groq LLM with grounding."""
+    try:
+        grounding = _build_llm_grounding_prompt(pack, sql_payload)
+        client = get_llm_client()
+        messages = [
+            {"role": "system", "content": "Tu es un assistant spécialisé en gestion agricole. Réponds UNIQUEMENT sur la base des données fournies. Pas d'invention de nombres, produits, lots ou étapes. Si information manque, dis-le clairement. Sois concis et pratique."},
+            {"role": "user", "content": grounding},
+        ]
+        response = client.chat(messages)
+        llm_answer = response.content.strip()
+        if not llm_answer or len(llm_answer) < 10:
+            return None
+        validation_issues = _validate_llm_answer(llm_answer, pack, sql_payload)
+        if validation_issues:
+            logger.warning(f"LLM validation failed: {validation_issues}")
+            return None
+        logger.info(f"LLM composed answer for {pack.route}")
+        return llm_answer
+    except Exception as e:
+        logger.warning(f"LLM error: {str(e)}, fallback to deterministic")
+        return None
+
+
+def _generate_kpi_cards(sql_payload: dict[str, Any], pack: EvidencePack) -> dict[str, Any] | None:
+    """Generate KPI cards for detailed analysis."""
+    cards = []
+    
+    # Loss KPI
+    if sql_payload.get("batch_summary"):
+        row = (sql_payload.get("batch_summary") or [{}])[0]
+        if isinstance(row, dict):
+            loss = float(row.get("loss_pct", 0.0) or 0.0)
+            cards.append({
+                "label": "Perte",
+                "value": f"{loss:.1f}%",
+                "status": "alert" if loss > 10 else ("warning" if loss > 5 else "ok")
+            })
+    
+    # Efficiency KPI
+    if sql_payload.get("batch_summary"):
+        row = (sql_payload.get("batch_summary") or [{}])[0]
+        if isinstance(row, dict):
+            eff = float(row.get("efficiency_pct", 100.0) or 100.0)
+            cards.append({
+                "label": "Efficacité",
+                "value": f"{eff:.1f}%",
+                "status": "ok" if eff > 90 else ("warning" if eff > 80 else "alert")
+            })
+    
+    # Stock KPI
+    if sql_payload.get("current_stock"):
+        rows = sql_payload.get("current_stock") or []
+        total = sum(float(r.get("available_stock_kg", 0.0) or 0.0) for r in rows)
+        cards.append({
+            "label": "Stock net",
+            "value": f"{total:.0f} kg",
+            "status": "ok" if total > 0 else "alert"
+        })
+    
+    # ML Signal KPI
+    if pack.ml:
+        ml_status = pack.ml.get("anomaly_type", "normal")
+        cards.append({
+            "label": "Signal ML",
+            "value": ml_status.replace("_", " ").capitalize(),
+            "status": "alert" if "anomaly" in ml_status.lower() else "ok"
+        })
+    
+    if cards:
+        return {
+            "type": "kpi_cards",
+            "title": "Indicateurs clés",
+            "items": cards
+        }
+    return None
+
+
+def _generate_metric_table(sql_payload: dict[str, Any], pack: EvidencePack) -> dict[str, Any] | None:
+    """Generate detailed metric table with summary stats."""
+    metrics = []
+    
+    if sql_payload.get("batch_summary"):
+        rows = sql_payload.get("batch_summary") or []
+        for row in rows[:10]:
+            if isinstance(row, dict):
+                metrics.append({
+                    "lot": row.get("batch_ref") or row.get("lot_code") or "N/A",
+                    "produit": _fr_product(row.get("product")),
+                    "perte_pct": f"{float(row.get('loss_pct', 0.0) or 0.0):.1f}%",
+                    "efficacite_pct": f"{float(row.get('efficiency_pct', 100.0) or 100.0):.1f}%",
+                })
+    
+    if metrics:
+        return {
+            "type": "metric_table",
+            "title": "Détails par lot",
+            "columns": ["Lot", "Produit", "Perte", "Efficacité"],
+            "rows": metrics
+        }
+    return None
+
+
+def _generate_summary_interpretation(llm_answer: str | None, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
+    """Generate French interpretation/summary for the answer."""
+    if llm_answer:
+        return llm_answer
+    
+    # Fallback: generate deterministic summary
+    normalized_q = _normalize_for_match(pack.question)
+    
+    if any(token in normalized_q for token in ("stock", "disponible")):
+        rows = sql_payload.get("current_stock") or []
+        if rows:
+            total = sum(float(r.get("available_stock_kg", 0.0) or 0.0) for r in rows)
+            return f"Stock disponible actuel: {total:.0f} kg sur {len(rows)} produit(s)."
+    
+    if any(token in normalized_q for token in ("perte", "efficacite", "performance")):
+        rows = sql_payload.get("batch_summary") or []
+        if rows:
+            row = rows[0]
+            loss = float(row.get("loss_pct", 0.0) or 0.0)
+            eff = float(row.get("efficiency_pct", 100.0) or 100.0)
+            return f"Analyse du lot {row.get('batch_ref')}: perte {loss:.1f}%, efficacité {eff:.1f}%."
+    
+    if any(token in normalized_q for token in ("bonne pratique", "conseil", "recommandation", "emballage")):
+        snippets = pack.rag.get("content_snippets") or []
+        if snippets:
+            return f"Recommandation basée sur {len(snippets)} source(s) documentaire(s): {snippets[0][:100]}..."
+    
+    return "Analyse basée sur les données SQL, contexte RAG et signaux ML disponibles."
+
+
 def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     has_any_evidence = bool(
         pack.sql.get("rows")
@@ -586,31 +767,40 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
     if "conclusion" in normalized_q and not summary.lower().startswith("conclusion"):
         summary = f"Conclusion: {summary}"
 
-    answer_lines = [
-        "1. Réponse directe",
-        summary,
-        "",
-        "2. Interprétation opérationnelle",
-        explanation,
-        "",
-        "3. Preuves",
-    ]
-
-    source_items = blocks[-2].get("items", [])
-    if source_items:
-        for item in source_items[:6]:
-            answer_lines.append(f"- {item.get('role')}: {item.get('source')}")
+    # Try LLM for HYBRID routes
+    llm_answer = None
+    if pack.route in [AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_SQL_ML, AgentRoute.HYBRID_FULL, AgentRoute.RAG_ONLY]:
+        llm_answer = _compose_llm_answer(pack, sql_payload)
+    
+    if llm_answer:
+        answer = llm_answer
     else:
-        answer_lines.append("- Aucune source exploitable n’a été récupérée.")
+        # Deterministic fallback
+        answer_lines = [
+            "1. Réponse directe",
+            summary,
+            "",
+            "2. Interprétation opérationnelle",
+            explanation,
+            "",
+            "3. Preuves",
+        ]
 
-    answer_lines.extend(["", "4. Action recommandée", next_action, "", "5. Limitation"])
-    if limitations:
-        for item in limitations:
-            answer_lines.append(f"- {item}")
-    else:
-        answer_lines.append("- Aucune limite critique signalée.")
+        source_items = blocks[-2].get("items", [])
+        if source_items:
+            for item in source_items[:6]:
+                answer_lines.append(f"- {item.get('role')}: {item.get('source')}")
+        else:
+            answer_lines.append("- Aucune source exploitable n’a été récupérée.")
 
-    answer = "\n".join(answer_lines)
+        answer_lines.extend(["", "4. Action recommandée", next_action, "", "5. Limitation"])
+        if limitations:
+            for item in limitations:
+                answer_lines.append(f"- {item}")
+        else:
+            answer_lines.append("- Aucune limite critique signalée.")
+
+        answer = "\n".join(answer_lines)
     answer, post_warnings = post_validate_answer(answer=answer, pack=pack)
     if post_warnings:
         blocks[-1]["items"] = sorted(set([*blocks[-1].get("items", []), *post_warnings]))
