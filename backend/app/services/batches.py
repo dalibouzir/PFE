@@ -572,31 +572,11 @@ def start_postharvest(db: Session, manager: User, batch_id, payload=None):
     batch = require_batch(db, manager, batch_id, with_steps=True)
     if batch.status in (BatchStatus.COMPLETED, BatchStatus.ARCHIVED):
         raise ValidationError("Cannot start post-harvest on a completed/archived lot.")
-    if payload is not None:
-        selected_product_id = payload.product_id
-        selected_grade = normalize_stock_grade(payload.grade)
-        requested_qty_kg = round_metric(float(payload.quantity_kg))
-    else:
-        selected_product_id = batch.product_id
-        selected_grade = None
-        requested_qty_kg = None
-
-    if batch.member_id is not None or batch.parcel_id is not None:
-        if batch.preharvest_completed_at is None or batch.confirmed_weight_kg is None:
-            raise ValidationError("Lot is not ready for post-harvest. Complete pre-harvest and linked collecte first.")
-        linked_collecte = db.scalar(
-            select(Input).where(
-                Input.cooperative_id == batch.cooperative_id,
-                Input.batch_id == batch.id,
-                Input.source_type.in_(tuple(LINKED_COLLECTE_SOURCES)),
-            )
-            .order_by(Input.created_at.desc())
-        )
-        if linked_collecte is None:
-            raise ValidationError("Lot is not ready for post-harvest. Create linked collecte first.")
-        if payload is None:
-            selected_grade = normalize_stock_grade(getattr(linked_collecte, "grade", None))
-            requested_qty_kg = round_metric(float(batch.confirmed_weight_kg or linked_collecte.quantity or 0.0))
+    if payload is None:
+        raise ValidationError("Sélectionnez un grade de stock et une quantité pour démarrer la post-récolte.")
+    selected_product_id = payload.product_id
+    selected_grade = normalize_stock_grade(payload.grade)
+    requested_qty_kg = round_metric(float(payload.quantity_kg))
 
     if requested_qty_kg is not None and selected_grade is not None:
         if selected_product_id != batch.product_id:
@@ -605,16 +585,27 @@ def start_postharvest(db: Session, manager: User, batch_id, payload=None):
         if stock_bucket is None:
             raise ValidationError("Bucket de stock introuvable pour le produit/grade sélectionné.")
         available_kg = available_stock_kg(stock_bucket)
-        if requested_qty_kg > available_kg:
+        # Backward compatibility for free lots: creation historically reserved
+        # `initial_qty` before post-harvest is started. In the merged UI flow
+        # (create -> start), that reservation must be reused, not reserved twice.
+        legacy_reserved_credit_kg = 0.0
+        is_free_lot = batch.member_id is None and batch.parcel_id is None
+        has_postharvest_meta = _read_postharvest_stock_meta(batch) is not None
+        if is_free_lot and not has_postharvest_meta and batch.status == BatchStatus.CREATED:
+            legacy_reserved_credit_kg = round_metric(float(batch.initial_qty or 0.0))
+        effective_available_kg = round_metric(available_kg + legacy_reserved_credit_kg)
+        if requested_qty_kg > effective_available_kg:
             raise ValidationError("Quantité demandée supérieure au stock disponible pour ce grade.")
-        apply_reserved_stock_delta(
-            db,
-            batch.cooperative_id,
-            batch.product,
-            requested_qty_kg,
-            create_if_missing=False,
-            grade=selected_grade,
-        )
+        reserve_delta_kg = round_metric(requested_qty_kg - legacy_reserved_credit_kg)
+        if abs(reserve_delta_kg) > 1e-9:
+            apply_reserved_stock_delta(
+                db,
+                batch.cooperative_id,
+                batch.product,
+                reserve_delta_kg,
+                create_if_missing=False,
+                grade=selected_grade,
+            )
         batch.confirmed_weight_kg = requested_qty_kg
         batch.current_qty = requested_qty_kg
         _write_postharvest_stock_meta(

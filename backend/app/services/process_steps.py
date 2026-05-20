@@ -144,7 +144,23 @@ def _resolve_step_outcomes(
     return output_qty_kg, parsed_loss, parsed_unit, normalized_loss_kg
 
 
-def _apply_step_stock_effect(db: Session, batch: Batch, step: ProcessStep, delta_loss_kg: float):
+def _manager_marker(manager: User) -> str:
+    name = (manager.full_name or "").strip() or (manager.email or "").strip() or str(manager.id)
+    return f"manager:{name}"
+
+
+def _with_manager_note(notes: str | None, manager: User) -> str:
+    base = (notes or "").strip()
+    marker = _manager_marker(manager)
+    if not base:
+        return marker
+    lowered = base.lower()
+    if "manager:" in lowered:
+        return base
+    return f"{base} | {marker}"
+
+
+def _apply_step_stock_effect(db: Session, manager: User, batch: Batch, step: ProcessStep, delta_loss_kg: float):
     if abs(delta_loss_kg) < 1e-9:
         return
     product = db.scalar(select(Product).where(Product.id == batch.product_id, Product.cooperative_id == batch.cooperative_id))
@@ -152,42 +168,49 @@ def _apply_step_stock_effect(db: Session, batch: Batch, step: ProcessStep, delta
         raise ValidationError("Batch product not found while applying stock movement.")
     stock_meta = _read_postharvest_stock_meta(batch)
     selected_grade = normalize_stock_grade(str(stock_meta.get("grade"))) if stock_meta is not None else None
-    # For post-harvest-selected buckets, release/consume reservation first on stock-out
-    # so `total_stock_kg >= reserved_in_lots_kg` remains valid at all times.
-    stock_delta = -float(delta_loss_kg)
-    if selected_grade is not None and stock_delta < 0:
+    if selected_grade is None:
+        # Backward-compatibility path for legacy flows/tests where a lot can
+        # execute steps without explicit stock-grade allocation metadata.
+        apply_total_stock_delta(
+            db,
+            batch.cooperative_id,
+            product,
+            -float(delta_loss_kg),
+            create_if_missing=True,
+            grade=None,
+        )
+    else:
+        # Stock policy (post-récolte stock-driven):
+        # losses are real destroyed quantity, so they must reduce BOTH:
+        # - lot allocation (reserved stock)
+        # - global total stock
+        # This keeps available stock unchanged for the same lot progress step.
+        reserved_delta = -float(delta_loss_kg)
+        total_delta = -float(delta_loss_kg)
         apply_reserved_stock_delta(
             db,
             batch.cooperative_id,
             product,
-            stock_delta,
+            reserved_delta,
             create_if_missing=False,
             grade=selected_grade,
         )
-    apply_total_stock_delta(
-        db,
-        batch.cooperative_id,
-        product,
-        stock_delta,
-        create_if_missing=True,
-        grade=selected_grade,
-    )
-    if selected_grade is not None and stock_delta > 0:
-        apply_reserved_stock_delta(
+        apply_total_stock_delta(
             db,
             batch.cooperative_id,
             product,
-            stock_delta,
-            create_if_missing=False,
+            total_delta,
+            create_if_missing=True,
             grade=selected_grade,
         )
     movement_key = f"step:{step.id}:loss"
+    movement_notes = _with_manager_note(step.notes, manager)
     existing = db.scalar(select(StockMovement).where(StockMovement.idempotency_key == movement_key))
     if existing is not None:
         existing.quantity_kg = abs(round_metric(step.normalized_loss_value))
         existing.movement_date = step.date
         existing.action_type = step.type
-        existing.notes = step.notes
+        existing.notes = movement_notes
         existing.process_step_id = step.id
         if selected_grade is not None:
             existing.grade = selected_grade
@@ -212,7 +235,7 @@ def _apply_step_stock_effect(db: Session, batch: Batch, step: ProcessStep, delta
             movement_date=step.date,
             movement_reference=_generate_movement_reference(db, movement_kind="LOSS", year=step.date.year),
             idempotency_key=movement_key,
-            notes=step.notes,
+            notes=movement_notes,
         )
     )
 
@@ -289,7 +312,7 @@ def create_process_step(db: Session, manager: User, payload) -> ProcessStep:
     db.add(step)
     db.flush()
     if status_value == ProcessStepStatus.COMPLETED:
-        _apply_step_stock_effect(db, batch, step, normalized_loss_kg)
+        _apply_step_stock_effect(db, manager, batch, step, normalized_loss_kg)
 
     batch.process_steps.append(step)
     refresh_batch_current_qty(batch)
@@ -354,7 +377,7 @@ def update_process_step(db: Session, manager: User, step_id, payload) -> Process
     step.status = next_status
     step.executed_at = current_utc() if next_status == ProcessStepStatus.COMPLETED else None
     if next_status == ProcessStepStatus.COMPLETED:
-        _apply_step_stock_effect(db, batch, step, normalized_loss_kg - old_normalized_loss_kg)
+        _apply_step_stock_effect(db, manager, batch, step, normalized_loss_kg - old_normalized_loss_kg)
 
     refresh_batch_current_qty(batch)
     batch.postharvest_started_at = batch.postharvest_started_at or current_utc()
@@ -408,7 +431,7 @@ def complete_process_step(db: Session, manager: User, step_id, payload) -> Proce
         step.duration_minutes = patch["duration_minutes"]
     step.status = ProcessStepStatus.COMPLETED
     step.executed_at = current_utc()
-    _apply_step_stock_effect(db, batch, step, normalized_loss_kg - old_normalized_loss_kg)
+    _apply_step_stock_effect(db, manager, batch, step, normalized_loss_kg - old_normalized_loss_kg)
 
     refresh_batch_current_qty(batch)
     batch.postharvest_started_at = batch.postharvest_started_at or current_utc()
@@ -480,20 +503,30 @@ def delete_process_step(db: Session, manager: User, step_id):
         if product is not None:
             stock_meta = _read_postharvest_stock_meta(batch)
             selected_grade = normalize_stock_grade(str(stock_meta.get("grade"))) if stock_meta is not None else None
-            apply_total_stock_delta(
-                db,
-                batch.cooperative_id,
-                product,
-                float(step.normalized_loss_value),
-                create_if_missing=True,
-                grade=selected_grade,
-            )
-            if selected_grade is not None:
+            if selected_grade is None:
+                apply_total_stock_delta(
+                    db,
+                    batch.cooperative_id,
+                    product,
+                    float(step.normalized_loss_value),
+                    create_if_missing=True,
+                    grade=None,
+                )
+            else:
+                # Reverting a removed step restores both reserved and total stock.
                 apply_reserved_stock_delta(
                     db,
                     batch.cooperative_id,
                     product,
                     float(step.normalized_loss_value),
                     create_if_missing=False,
+                    grade=selected_grade,
+                )
+                apply_total_stock_delta(
+                    db,
+                    batch.cooperative_id,
+                    product,
+                    float(step.normalized_loss_value),
+                    create_if_missing=True,
                     grade=selected_grade,
                 )

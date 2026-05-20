@@ -13,6 +13,7 @@ export function LotHeroBanner({
   statusLabel,
   statusTone,
   onEditLot,
+  onDeleteLot,
 }: {
   lotCode: string;
   productName: string;
@@ -24,6 +25,7 @@ export function LotHeroBanner({
   statusLabel: string;
   statusTone: "success" | "warning" | "danger" | "info";
   onEditLot: () => void;
+  onDeleteLot: () => void;
 }) {
   return (
     <section
@@ -49,6 +51,13 @@ export function LotHeroBanner({
             className="soft-focus rounded-xl border border-[#A7C4D7] bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#17374A] hover:bg-white"
           >
             Modifier lot
+          </button>
+          <button
+            type="button"
+            onClick={onDeleteLot}
+            className="soft-focus rounded-xl border border-[#E5B8B8] bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#8A2F2F] hover:bg-white"
+          >
+            Supprimer lot
           </button>
         </div>
       </div>

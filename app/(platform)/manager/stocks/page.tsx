@@ -457,17 +457,24 @@ export default function StocksPage() {
                   </p>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs xl:grid-cols-3">
-                    <MetricPill label="Sortie vente" value={commercialOut} unit={item.unit} tone="neutral" />
+                    <MetricPill label="Sortie vente" value={commercialOut} unit={item.unit} tone="warning" />
                     <MetricPill label="Pertes" value={losses} unit={item.unit} tone="danger" hideZero />
                     <MetricPill label="Restant" value={remainingDisplay} unit={item.unit} tone={isCritical ? "danger" : "success"} />
+                    <MetricPill label="Alloué en lot" value={fromKg(item.total - item.available, item.unit)} unit={item.unit} tone="info" />
                   </div>
 
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                     {(["A", "B", "C"] as const).map((grade) => {
                       const row = item.rows.find((r) => (r.grade || "Non spécifié") === grade);
                       const gradeQty = fromKg(row?.available_stock_kg ?? 0, item.unit);
+                      const gradeTone =
+                        grade === "A"
+                          ? "border-[#CBE9D5] bg-[#ECFAF2] text-[#1E7A49]"
+                          : grade === "B"
+                            ? "border-[#D8E2F6] bg-[#EEF3FF] text-[#2F5FBD]"
+                            : "border-[#F1D9BF] bg-[#FFF5E8] text-[#A8651A]";
                       return (
-                        <div key={`${item.product_id}-grade-${grade}`} className="rounded-lg bg-[var(--surface-soft)] px-2 py-1.5 text-[var(--text)]">
+                        <div key={`${item.product_id}-grade-${grade}`} className={`rounded-lg border px-2 py-1.5 ${gradeTone}`}>
                           <p className="font-semibold">{gradeQty.toFixed(2)} {item.unit}</p>
                           <p>Grade {grade}</p>
                         </div>
@@ -506,13 +513,14 @@ export default function StocksPage() {
                   <th className="px-5 py-3.5">Sortie vente</th>
                   <th className="px-5 py-3.5">Pertes</th>
                   <th className="px-5 py-3.5">Restant</th>
+                  <th className="px-5 py-3.5">Alloué en lot</th>
                   <th className="px-5 py-3.5">Statut</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredByUrgency.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-5 py-4 text-center text-sm text-[var(--muted)]">
+                    <td colSpan={9} className="px-5 py-4 text-center text-sm text-[var(--muted)]">
                       Aucun stock enregistré à afficher pour ce filtre.
                     </td>
                   </tr>
@@ -524,6 +532,7 @@ export default function StocksPage() {
                     const commercialOut = fromKg(Math.max(commercialOutByProductKg.get(item.product_id) ?? 0, 0), item.unit);
                     const losses = fromKg(Math.max(lossesByProductKg.get(item.product_id) ?? 0, 0), item.unit);
                     const remainingDisplay = fromKg(remainingKg, item.unit);
+                    const allocatedDisplay = fromKg(item.total_stock_kg - item.available_stock_kg, item.unit);
                     return (
                       <tr key={`${item.product_id}-${item.grade}`}>
                         <td className="px-5 py-4 font-semibold text-[var(--text)]">{productLookup.get(item.product_id) ?? item.product_id.slice(0, 8)}</td>
@@ -533,6 +542,7 @@ export default function StocksPage() {
                         <td className="px-5 py-4 text-[var(--danger)]">{commercialOut.toFixed(2)} {item.unit}</td>
                         <td className="px-5 py-4 text-[var(--danger)]">{losses.toFixed(2)} {item.unit}</td>
                         <td className="px-5 py-4 font-medium">{remainingDisplay.toFixed(2)} {item.unit}</td>
+                        <td className="px-5 py-4">{allocatedDisplay.toFixed(2)} {item.unit}</td>
                         <td className="px-5 py-4">
                           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isCritical ? "bg-[#FFEDEE] text-[#A83C3C]" : "bg-[#EAF8EE] text-[#0F7A3B]"}`}>
                             {isCritical ? "Critique" : "Stable"}
@@ -851,7 +861,7 @@ function MetricPill({
   label: string;
   value: number;
   unit: string;
-  tone: "neutral" | "info" | "success" | "danger";
+  tone: "neutral" | "info" | "success" | "danger" | "warning";
   hideZero?: boolean;
 }) {
   const toneClass =
@@ -859,8 +869,10 @@ function MetricPill({
       ? "bg-[#FFEDEE] text-[var(--danger)]"
       : tone === "success"
         ? "bg-[#EAF8EE] text-[var(--success)]"
+        : tone === "warning"
+          ? "bg-[#FFF5E8] text-[#A8651A]"
         : tone === "info"
-          ? "bg-[#EEF5FF] text-[var(--text)]"
+          ? "bg-[#EEF5FF] text-[#1F5EA8]"
           : "bg-[var(--surface-soft)] text-[var(--text)]";
   return (
     <div className={`rounded-lg px-2 py-1.5 ${toneClass}`}>

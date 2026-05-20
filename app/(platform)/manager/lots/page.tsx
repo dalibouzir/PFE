@@ -22,6 +22,7 @@ import {
   useBatchReferencePreview,
   useBatches,
   useCreateBatch,
+  useDeleteBatch,
   useStartPostHarvest,
   useUpdateBatch,
 } from "@/hooks/useBatches";
@@ -190,6 +191,7 @@ export default function LotsPage() {
 
   const createBatch = useCreateBatch();
   const updateBatch = useUpdateBatch();
+  const deleteBatch = useDeleteBatch();
   const startPostHarvest = useStartPostHarvest();
   const createStep = useCreateProcessStep();
   const completeStep = useCompleteProcessStep();
@@ -213,6 +215,7 @@ export default function LotsPage() {
   const [postHarvestQuantity, setPostHarvestQuantity] = useState<string>("");
   const [postHarvestFormError, setPostHarvestFormError] = useState<string | null>(null);
   const [pendingDeleteStep, setPendingDeleteStep] = useState<ProcessStep | null>(null);
+  const [pendingDeleteBatch, setPendingDeleteBatch] = useState<Batch | null>(null);
   const tableControls = useTableControls([], "desc");
 
   const [plannedStepsDraft, setPlannedStepsDraft] = useState<string[]>(defaultSteps);
@@ -261,21 +264,7 @@ export default function LotsPage() {
   );
 
   const filteredBatches = useMemo(() => {
-    const base = [...batches]
-      .filter((item) =>
-        Boolean(
-          // Linked pre-harvest lots ready for post-harvest continuation.
-          (item.member_id &&
-            item.parcel_id &&
-            item.preharvest_completed_at &&
-            (item.collecte_created || item.stock_in_created) &&
-            item.confirmed_weight_kg &&
-            item.postharvest_status !== "not_ready_post_recolte") ||
-            // Free post-harvest lots (not linked to pre-harvest/collecte).
-            (!item.member_id && !item.parcel_id),
-        ),
-      )
-      .sort((a, b) => b.creation_date.localeCompare(a.creation_date));
+    const base = [...batches].filter((item) => item.status !== "archived").sort((a, b) => b.creation_date.localeCompare(a.creation_date));
     return base.filter((item) => {
       const productName = productLookup.get(item.product_id) ?? "";
       const text = `${item.code} ${item.product_id} ${productName}`.toLowerCase();
@@ -678,13 +667,7 @@ export default function LotsPage() {
 
   const selectedBatchCanStartPostHarvest = useMemo(() => {
     if (!selectedBatch) return false;
-    const isFreeLot = !selectedBatch.member_id && !selectedBatch.parcel_id;
-    if (!isFreeLot) {
-      if (selectedBatch.postharvest_status !== "ready_post_recolte") return false;
-      if (!(selectedBatch.collecte_created || selectedBatch.stock_in_created)) return false;
-    } else {
-      if (selectedBatch.postharvest_status === "in_post_recolte" || selectedBatch.postharvest_status === "post_recolte_completed") return false;
-    }
+    if (selectedBatch.postharvest_status === "in_post_recolte" || selectedBatch.postharvest_status === "post_recolte_completed") return false;
     return selectedBatchAvailableBuckets.length > 0;
   }, [selectedBatch, selectedBatchAvailableBuckets.length]);
 
@@ -1065,6 +1048,19 @@ export default function LotsPage() {
     }
   };
 
+  const handleDeleteBatch = async (batch: Batch) => {
+    try {
+      setFormError(null);
+      await deleteBatch.mutateAsync(batch.id);
+      const next = visibleBatches.find((item) => item.id !== batch.id) ?? null;
+      setSelectedBatchId(next?.id ?? null);
+      setPendingDeleteBatch(null);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible de supprimer le lot.");
+      setPendingDeleteBatch(null);
+    }
+  };
+
   const openPostHarvestModal = () => {
     if (!selectedBatch) return;
     if (!selectedBatchCanStartPostHarvest) {
@@ -1111,7 +1107,7 @@ export default function LotsPage() {
   const handleEnterStage = (row: ProcessTableRow) => {
     if (!row.isExecutable) return;
     if (!selectedBatch) return;
-    if (selectedBatch.postharvest_status === "ready_post_recolte") {
+    if (selectedBatch.postharvest_status !== "in_post_recolte") {
       setFormError("Démarrez d'abord la Post-récolte pour ce lot.");
       return;
     }
@@ -1162,7 +1158,7 @@ export default function LotsPage() {
               type="button"
               onClick={() => openCreateStep()}
               className="soft-focus wf-btn-secondary px-4 py-2 text-sm font-semibold"
-              disabled={!selectedBatch || selectedBatch.postharvest_status === "ready_post_recolte"}
+              disabled={!selectedBatch || selectedBatch.postharvest_status !== "in_post_recolte"}
             >
               + Compléter étape
             </button>
@@ -1248,6 +1244,7 @@ export default function LotsPage() {
               statusLabel={lotPostHarvestStatusLabel(selectedBatch)}
               statusTone={lotPostHarvestStatusTone(selectedBatch)}
               onEditLot={() => openEditLot(selectedBatch)}
+              onDeleteLot={() => setPendingDeleteBatch(selectedBatch)}
             />
             {forecastGap ? (
               <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "45ms" }}>
@@ -1838,6 +1835,24 @@ export default function LotsPage() {
           if (!pendingDeleteStep) return;
           void handleDeleteStep(pendingDeleteStep);
           setPendingDeleteStep(null);
+        }}
+      />
+      <ConfirmActionModal
+        open={Boolean(pendingDeleteBatch)}
+        title="Supprimer le lot"
+        message={
+          pendingDeleteBatch
+            ? `Cette action supprimera le lot ${pendingDeleteBatch.code}.`
+            : "Cette action supprimera ce lot."
+        }
+        confirmLabel={deleteBatch.isPending ? "Suppression..." : "Supprimer"}
+        onCancel={() => {
+          if (deleteBatch.isPending) return;
+          setPendingDeleteBatch(null);
+        }}
+        onConfirm={() => {
+          if (!pendingDeleteBatch) return;
+          void handleDeleteBatch(pendingDeleteBatch);
         }}
       />
     </main>
