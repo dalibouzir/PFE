@@ -223,6 +223,7 @@ export default function LotsPage() {
   const [stepTargetOrder, setStepTargetOrder] = useState<number | null>(null);
   const [listPage, setListPage] = useState(1);
   const [listPageSize, setListPageSize] = useState(10);
+  const [lotGrade, setLotGrade] = useState<string>("");
 
   const lotForm = useForm<BatchCreate>({
     defaultValues: {
@@ -655,12 +656,17 @@ export default function LotsPage() {
     return { delta, pct };
   }, [forecastQty, selectedBatch?.confirmed_weight_kg]);
 
-  const selectedProductStock = useMemo(() => {
-    if (!watchedProductId) return null;
-    return stocks.find((stock) => stock.product_id === watchedProductId) ?? null;
+  const lotGradeOptions = useMemo(() => {
+    if (!watchedProductId) return [];
+    return stocks
+      .filter((stock) => stock.product_id === watchedProductId && stock.available_stock_kg > 0)
+      .sort((a, b) => b.available_stock_kg - a.available_stock_kg);
   }, [stocks, watchedProductId]);
-
-  const availableStockKg = selectedProductStock?.available_stock_kg ?? 0;
+  const selectedLotGradeBucket = useMemo(
+    () => lotGradeOptions.find((item) => item.grade === lotGrade) ?? null,
+    [lotGradeOptions, lotGrade],
+  );
+  const availableStockKg = selectedLotGradeBucket?.available_stock_kg ?? 0;
   const availableStockDisplay = fromKg(availableStockKg, watchedLotUnit);
 
   const selectedBatchAvailableBuckets = useMemo(() => {
@@ -817,12 +823,16 @@ export default function LotsPage() {
     setPlannedStepsDraft(batch.ordered_process_steps?.length ? batch.ordered_process_steps : fallbackSteps);
     setStepToAdd("");
     setCustomStepInput("");
+    setLotGrade("");
     setFormError(null);
     setLotFormOpen(true);
   };
 
   const openCreateLot = () => {
     const firstProduct = productsInStock[0];
+    const firstGradeBucket = stocks
+      .filter((stock) => stock.product_id === firstProduct?.id && stock.available_stock_kg > 0)
+      .sort((a, b) => b.available_stock_kg - a.available_stock_kg)[0];
     setEditingBatch(null);
     lotForm.reset({
       product_id: firstProduct?.id ?? "",
@@ -834,9 +844,21 @@ export default function LotsPage() {
     setPlannedStepsDraft(defaultSteps);
     setStepToAdd("");
     setCustomStepInput("");
+    setLotGrade(firstGradeBucket?.grade ?? "");
     setFormError(null);
     setLotFormOpen(true);
   };
+
+  useEffect(() => {
+    if (editingBatch) return;
+    if (!lotGradeOptions.length) {
+      setLotGrade("");
+      return;
+    }
+    if (!lotGradeOptions.some((item) => item.grade === lotGrade)) {
+      setLotGrade(lotGradeOptions[0].grade);
+    }
+  }, [editingBatch, lotGradeOptions, lotGrade]);
 
   const expectedInputForOrder = (order: number): number => {
     if (!selectedBatch) return 0;
@@ -945,6 +967,10 @@ export default function LotsPage() {
           setFormError("Sélectionnez un produit actuellement disponible en stock.");
           return;
         }
+        if (!lotGrade) {
+          setFormError("Sélectionnez un grade disponible.");
+          return;
+        }
         const lotUnit = (values.unit || "kg") as MassUnit;
         const requestedQty = Number(values.initial_qty);
         const requestedQtyKg = toKg(requestedQty, lotUnit);
@@ -962,6 +988,14 @@ export default function LotsPage() {
         };
 
         const created = await createBatch.mutateAsync(payload);
+        await startPostHarvest.mutateAsync({
+          id: created.id,
+          payload: {
+            product_id: values.product_id,
+            grade: lotGrade,
+            quantity_kg: requestedQtyKg,
+          },
+        });
         setSelectedBatchId(created.id);
       }
       closeForms();
@@ -1564,6 +1598,25 @@ export default function LotsPage() {
               </select>
             </label>
 
+            <label className="block text-sm font-medium text-[var(--text)]">
+              Grade/qualité
+              <select
+                value={lotGrade}
+                onChange={(event) => setLotGrade(event.target.value)}
+                className="wf-input mt-2 h-11 w-full px-3 text-sm"
+                disabled={Boolean(editingBatch)}
+              >
+                <option value="" disabled>
+                  Sélectionner
+                </option>
+                {lotGradeOptions.map((entry) => (
+                  <option key={`${entry.product_id}-${entry.grade}`} value={entry.grade}>
+                    {entry.grade}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <label className="block text-sm font-medium text-[var(--text)] sm:col-span-2">
               Quantite demandee
               <input
@@ -1584,7 +1637,7 @@ export default function LotsPage() {
           ) : (
             <div className="rounded-xl border border-[#BDD6FB] bg-[#EEF5FF] px-3 py-2 text-xs text-[#2F80ED]">
               Stock disponible: {availableStockDisplay.toFixed(2)} {watchedLotUnit}
-              {selectedProductStock ? ` (=${availableStockKg.toFixed(2)} kg)` : ""}
+              {selectedLotGradeBucket ? ` (=${availableStockKg.toFixed(2)} kg)` : ""}
             </div>
           )}
           {!editingBatch && productsInStock.length === 0 ? (
