@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
 import type { ManualStockMovementCreate, StockMovement, StockMovementFilters } from "@/lib/api/types";
+import { scopePrefix, scopedQueryKey, useQueryScope } from "@/lib/query/scope";
 
 function buildStockMovementsPath(filters?: StockMovementFilters) {
   const query = new URLSearchParams();
@@ -24,15 +25,17 @@ function buildStockMovementsPath(filters?: StockMovementFilters) {
 }
 
 export function useStockMovements(filters?: StockMovementFilters) {
+  const scope = useQueryScope();
   return useQuery({
-    queryKey: ["stock-movements", filters ?? {}],
+    queryKey: scopedQueryKey("stock-movements", scope, filters ?? {}),
     queryFn: () => apiFetch<StockMovement[]>(buildStockMovementsPath(filters)),
   });
 }
 
 export function useStockMovementDetail(movementId: string | null) {
+  const scope = useQueryScope();
   return useQuery({
-    queryKey: ["stock-movements", "detail", movementId],
+    queryKey: scopedQueryKey(["stock-movements", "detail"], scope, movementId),
     enabled: Boolean(movementId),
     queryFn: () => apiFetch<StockMovement>(endpoints.stockMovements.detail(movementId as string)),
   });
@@ -40,13 +43,14 @@ export function useStockMovementDetail(movementId: string | null) {
 
 export function useCreateManualStockMovement() {
   const queryClient = useQueryClient();
+  const scope = useQueryScope();
   return useMutation({
     mutationFn: (payload: ManualStockMovementCreate) =>
       apiFetch<StockMovement>(endpoints.stockMovements.manualAdjustment, { method: "POST", body: payload }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
-      queryClient.invalidateQueries({ queryKey: ["stocks"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: scopePrefix("stock-movements", scope) });
+      queryClient.invalidateQueries({ queryKey: scopePrefix("stocks", scope) });
+      queryClient.invalidateQueries({ queryKey: scopePrefix("dashboard", scope) });
     },
   });
 }

@@ -1,0 +1,263 @@
+{
+  "generated_at": "2026-05-20T02:17:10.123821+00:00",
+  "cooperative_id": "4cbc6020-def9-4d24-bb75-9d40bc031466",
+  "rows": [
+    {
+      "id": "t01v01",
+      "class": "t01",
+      "question": "Classe les lots par taux de perte.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01v02",
+      "class": "t01",
+      "question": "Quels lots ont la pire efficacité ?",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01v03",
+      "class": "t01",
+      "question": "Donne les lots critiques selon le bilan matière.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01v04",
+      "class": "t01",
+      "question": "Où observe-t-on les plus gros écarts entrée/sortie ?",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01v05",
+      "class": "t01",
+      "question": "Top lots post-récolte par perte avec disponibilité ML.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01v06",
+      "class": "t01",
+      "question": "Classement perte par lot avec produit et efficacité.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01v07",
+      "class": "t01",
+      "question": "Montre les 5 lots les plus pénalisés en post-récolte.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01v08",
+      "class": "t01",
+      "question": "Perte la plus élevée par lot et signal ML disponible ou non.",
+      "route": "OUT_OF_SCOPE",
+      "score": "FAIL",
+      "reasons": [
+        "wrong_route:OUT_OF_SCOPE",
+        "missing_strict_toploss_table"
+      ]
+    },
+    {
+      "id": "t01v09",
+      "class": "t01",
+      "question": "Quels sont les pires lots en bilan matière ?",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01v10",
+      "class": "t01",
+      "question": "Ranking des lots selon perte et efficacité.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t05v01",
+      "class": "t05",
+      "question": "Pour les lots pré-récolte, donne les charges estimées et les dates.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t05v02",
+      "class": "t05",
+      "question": "Montre les étapes pré-récolte d’un lot avec quantité prévue.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t05v03",
+      "class": "t05",
+      "question": "Quel est le suivi pré-récolte sans calcul de perte ?",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t05v04",
+      "class": "t05",
+      "question": "Donne parcelle, culture, dates et charge estimée.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t05v05",
+      "class": "t05",
+      "question": "Résumé pré-récolte du lot.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t05v06",
+      "class": "t05",
+      "question": "Pré-récolte: quantité estimée, charge estimée, étapes et statut.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t05v07",
+      "class": "t05",
+      "question": "Lot pré-récolte: planification et dates réelles si disponibles.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t05v08",
+      "class": "t05",
+      "question": "Affiche seulement les infos estimées d’un lot pré-récolte.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t05v09",
+      "class": "t05",
+      "question": "Parcelle/culture et étapes pré-récolte du lot.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t05v10",
+      "class": "t05",
+      "question": "Suivi lifecycle pré-récolte d’un lot.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01x01",
+      "class": "t01_expanded",
+      "question": "Classe les lots post-récolte du plus mauvais au meilleur rendement.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01x02",
+      "class": "t01_expanded",
+      "question": "Quels batches ont le plus grand écart entre entrée et sortie ?",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01x03",
+      "class": "t01_expanded",
+      "question": "Montre les lots critiques selon le bilan matière.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01x04",
+      "class": "t01_expanded",
+      "question": "Où l’efficacité est-elle la plus faible par lot ?",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01x05",
+      "class": "t01_expanded",
+      "question": "Donne le classement des batches par perte matière.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01x06",
+      "class": "t01_expanded",
+      "question": "Quels lots doivent être priorisés à cause des pertes ?",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01x07",
+      "class": "t01_expanded",
+      "question": "Liste les lots post-récolte avec perte %, efficacité et statut ML.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01x08",
+      "class": "t01_expanded",
+      "question": "Quels lots ont le rendement le plus faible ?",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01x09",
+      "class": "t01_expanded",
+      "question": "Fais un tableau des pertes par batch avec disponibilité ML.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    },
+    {
+      "id": "t01x10",
+      "class": "t01_expanded",
+      "question": "Quels lots présentent les pertes matière les plus fortes ?",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": []
+    }
+  ],
+  "stats": {
+    "t01": {
+      "PASS": 9,
+      "FAIL": 1
+    },
+    "t01_expanded": {
+      "PASS": 10,
+      "FAIL": 0
+    },
+    "t05": {
+      "PASS": 10,
+      "FAIL": 0
+    }
+  }
+}

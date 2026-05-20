@@ -52,9 +52,11 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const url = `${getApiBaseUrl()}${path}`;
   const headers = new Headers(options.headers || {});
   const hasBody = options.body !== undefined && options.body !== null;
+  let requestTokenSnapshot: string | null = null;
 
   if (options.auth !== false) {
     const token = getStoredToken();
+    requestTokenSnapshot = token;
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
     }
@@ -100,6 +102,16 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     }
 
     throw new ApiError({ message, status: response.status, details });
+  }
+
+  if (options.auth !== false) {
+    const latestToken = getStoredToken();
+    if (requestTokenSnapshot !== latestToken) {
+      throw new ApiError({
+        message: "Stale session response ignored.",
+        status: 401,
+      });
+    }
   }
 
   if (response.status === 204) {

@@ -67,13 +67,13 @@ class ResponseVerifier:
             for res in results:
                 if res.agent_name == "RecommendationAgent":
                     recs = res.data.get("recommendations") or []
-                    if any(not (item.get("evidence") or []) for item in recs):
+                    if any(not _has_recommendation_evidence_refs(item) for item in recs):
                         warnings.append("RECOMMENDATION_WITHOUT_EVIDENCE")
                         break
         if has_recommendation_agent:
             rec_result = next((res for res in results if res.agent_name == "RecommendationAgent"), None)
             recs = (rec_result.data.get("recommendations") or []) if rec_result and isinstance(rec_result.data, dict) else []
-            if recs and all(not (item.get("evidence") or []) for item in recs if isinstance(item, dict)):
+            if recs and all(not _has_recommendation_evidence_refs(item) for item in recs if isinstance(item, dict)):
                 warnings.append("RECOMMENDATION_WITHOUT_EVIDENCE")
 
         lowered_answer = (answer or "").lower()
@@ -131,8 +131,8 @@ class ResponseVerifier:
         if route_missing_expected_source:
             warnings.append("MISSING_EXPECTED_ROUTE_EVIDENCE")
 
-        # Safety fallback should be reserved for true no-evidence situations.
-        missing_expected_source = not has_any_evidence
+        # Missing route-critical evidence should trigger strict fallback, not only total no-evidence.
+        missing_expected_source = route_missing_expected_source or not has_any_evidence
 
         grounded = not missing_expected_source and "NUMERIC_CLAIMS_NOT_GROUNDED" not in warnings
         return VerificationResult(
@@ -307,6 +307,18 @@ def _has_recommendation_evidence(results: list[AgentResult]) -> bool:
     if not rec_result or not isinstance(rec_result.data, dict):
         return False
     recs = rec_result.data.get("recommendations") or []
-    if isinstance(recs, list) and recs:
+    if isinstance(recs, list) and any(_has_recommendation_evidence_refs(rec) for rec in recs if isinstance(rec, dict)):
         return True
+    return False
+
+
+def _has_recommendation_evidence_refs(rec: dict) -> bool:
+    refs = rec.get("evidence_refs")
+    if not isinstance(refs, list) or not refs:
+        return False
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        if str(ref.get("type") or "").upper() in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
+            return True
     return False

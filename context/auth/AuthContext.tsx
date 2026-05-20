@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch, clearStoredToken, getStoredToken, setUnauthorizedHandler, storeToken } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
 import type { AuthUser, AuthUserUpdate, TokenResponse } from "@/lib/api/types";
@@ -26,25 +27,64 @@ export type AuthState = {
   error: string | null;
   login: (email: string, password: string) => Promise<AuthUser>;
   updateProfile: (payload: AuthUserUpdate) => Promise<AuthUser>;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const logout = useCallback(() => {
+  const clearClientAuthStorage = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const keyMatchers = [
+      "weefarm_token",
+      "token",
+      "session",
+      "auth",
+      "user",
+      "profile",
+      "role",
+      "cooperative",
+      "institution",
+    ];
+    const clearStore = (store: Storage) => {
+      const toDelete: string[] = [];
+      for (let i = 0; i < store.length; i += 1) {
+        const key = store.key(i);
+        if (!key) continue;
+        const lowered = key.toLowerCase();
+        if (keyMatchers.some((matcher) => lowered.includes(matcher))) {
+          toDelete.push(key);
+        }
+      }
+      toDelete.forEach((key) => store.removeItem(key));
+    };
+    clearStore(window.localStorage);
+    clearStore(window.sessionStorage);
+  }, []);
+
+  const resetScopeState = useCallback(async () => {
+    await queryClient.cancelQueries();
+    queryClient.clear();
     clearStoredToken();
+    clearClientAuthStorage();
     setToken(null);
     setUser(null);
     setError(null);
-    router.push("/login");
-  }, [router]);
+  }, [clearClientAuthStorage, queryClient]);
+
+  const logout = useCallback(async () => {
+    setLoading(true);
+    await resetScopeState();
+    router.replace("/login");
+    setLoading(false);
+  }, [resetScopeState, router]);
 
   const loadProfile = useCallback(async () => {
     const stored = getStoredToken();
@@ -57,16 +97,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profile = await apiFetch<AuthUser>(endpoints.auth.me);
       setUser(profile);
     } catch {
-      logout();
+      await resetScopeState();
     } finally {
       setLoading(false);
     }
-  }, [logout]);
+  }, [resetScopeState]);
 
   const login = useCallback(
     async (email: string, password: string) => {
       setError(null);
+      setLoading(true);
       try {
+        await resetScopeState();
         const tokenResponse = await apiFetch<TokenResponse>(endpoints.auth.login, {
           method: "POST",
           body: { email, password },
@@ -80,9 +122,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error("Login failed", error);
         throw mapLoginError(error);
+      } finally {
+        setLoading(false);
       }
     },
-    [],
+    [resetScopeState],
   );
 
   const updateProfile = useCallback(async (payload: AuthUserUpdate) => {
@@ -96,7 +140,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setUnauthorizedHandler(() => logout());
+    setUnauthorizedHandler(() => {
+      void logout();
+    });
     loadProfile();
     return () => setUnauthorizedHandler(null);
   }, [loadProfile, logout]);

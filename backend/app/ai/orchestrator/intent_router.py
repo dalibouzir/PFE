@@ -221,7 +221,7 @@ class IntentRouter:
         raw = str(query or "").strip()
         normalized = _normalize(raw)
         lowered = normalized.lower()
-        previous_module_hint = self._infer_previous_module_hint(previous_user_query, known_batch_refs=known_batch_refs)
+        previous_module_hint = _infer_previous_module_hint(previous_user_query, self.entity_extractor, known_batch_refs=known_batch_refs)
 
         entities = self.entity_extractor.extract(raw, language_hint=language_hint, known_batch_refs=known_batch_refs).as_dict()
         explicit_product_focus = re.search(r"\bproduit\s+([^,:;]+)", raw, re.IGNORECASE)
@@ -263,6 +263,14 @@ class IntentRouter:
                 "Unsafe/manipulative action request detected; refuse analytics/action execution.",
                 0.99,
             )
+        contract = _contract_route_decision(
+            lowered=lowered,
+            entities=entities,
+            previous_entities=previous_entities,
+            previous_module_hint=previous_module_hint,
+        )
+        if contract is not None:
+            return contract
         scope = str(entities.get("scope") or "global")
         module = str(entities.get("module") or "global")
         registry_module = self.module_registry.detect_module(lowered)
@@ -1173,31 +1181,215 @@ class IntentRouter:
             0.7,
         )
 
-    def _infer_previous_module_hint(self, previous_user_query: str | None, *, known_batch_refs: set[str] | None = None) -> str | None:
-        text = str(previous_user_query or "").strip()
-        if not text:
-            return None
-        extracted = self.entity_extractor.extract(text, known_batch_refs=known_batch_refs).as_dict()
-        module = str(extracted.get("module") or "").strip().lower()
-        scope = str(extracted.get("scope") or "").strip().lower()
-        lowered = _normalize(text).lower()
-        if module in {"members", "member_value"}:
-            return "members"
-        if module in {"collections"}:
-            return "inputs"
-        if module in {"material_balance"}:
-            return "material_balance"
-        if module in {"post_harvest"}:
-            if any(token in lowered for token in ("étape", "etape", "process", "séchage", "sechage", "tri", "emballage")):
-                return "process_steps"
-            return "post_harvest"
-        if scope in {"batch", "post_harvest"} and any(token in lowered for token in ("étape", "etape", "process", "séchage", "sechage", "tri", "emballage")):
-            return "process_steps"
-        if any(token in lowered for token in ("collecte", "collectée", "collectee", "livré", "livre", "quantité", "quantite", "input")):
-            return "inputs"
-        if any(token in lowered for token in ("membre", "membres", "top", "classement", "plus livré", "plus livre")):
-            return "members"
+
+def _contract_route_decision(
+    *,
+    lowered: str,
+    entities: dict,
+    previous_entities: dict,
+    previous_module_hint: str | None,
+) -> IntentRouteDecision | None:
+    has_batch = bool(entities.get("batch_ref"))
+    has_operational_anchor = has_batch or bool(entities.get("product")) or bool(entities.get("stage"))
+    asks_current_scope = any(
+        token in lowered
+        for token in ("dans nos données", "dans nos donnees", "selon nos données", "selon nos donnees", "notre coop", "cette coopérative", "cette cooperative")
+    )
+    asks_recommendation = any(
+        token in lowered
+        for token in (
+            "que faire",
+            "quelles actions",
+            "quelle action",
+            "actions à appliquer",
+            "actions a appliquer",
+            "plan d'action",
+            "plan d action",
+            "on fait quoi",
+            "actions prioritaires",
+            "action prioritaire",
+            "que recommandes",
+            "tu recommandes",
+            "conseilles quoi",
+            "conseille quoi",
+        )
+    )
+    if "recommand" in lowered and any(token in lowered for token in ("action", "actions", "priorit", "faire", "plan")):
+        asks_recommendation = True
+    asks_risk = any(token in lowered for token in ("risque", "risk", "anomal", "prediction", "prédiction", "probabil"))
+    asks_why = any(token in lowered for token in ("pourquoi", "cause", "explique", "why"))
+    asks_best_practice = any(
+        token in lowered
+        for token in (
+            "bonnes pratiques",
+            "meilleures pratiques",
+            "best practices",
+            "avant l'emballage",
+            "avant emballage",
+            "procedure",
+            "procédure",
+            "conseil",
+            "conseils",
+            "comment améliorer",
+            "comment ameliorer",
+            "comment réduire",
+            "comment reduire",
+        )
+    )
+    asks_loss = any(token in lowered for token in ("perte", "pertes", "loss", "efficacite", "efficacité", "efficac", "rendement", "penalis", "pénalis"))
+    asks_gap = bool(
+        re.search(r"\b(ecarts?|écarts?|gap|difference)\b.*\b(entree|entrée|input)\b.*\b(sortie|output)\b", lowered)
+        or re.search(r"\b(entree|entrée|input)\b.*\b(sortie|output)\b", lowered)
+        or "écart matière" in lowered
+        or "ecart matiere" in lowered
+    )
+    asks_available_lots = any(
+        token in lowered
+        for token in ("lots disponibles", "lots post-récolte", "lots post recolte", "post-harvest lots", "postharvest lots", "lots enregistres", "lots enregistrés")
+    )
+    asks_stock = "stock" in lowered or ("inventaire" in lowered)
+    asks_preharvest = any(token in lowered for token in ("pré-récolte", "pre-recolte", "pre-harvest", "parcelle", "parcelles", "lifecycle"))
+    asks_ranking = any(token in lowered for token in ("plus élev", "plus eleve", "plus grand", "top", "classement", "ranking", "worst", "pire", "moins"))
+
+    referential_followup = (bool(previous_entities) or bool(previous_module_hint)) and (
+        bool(FOLLOWUP_REFERENCE_PATTERN.search(lowered)) or any(
+        token in lowered for token in ("same product", "meme produit", "même produit", "ce lot", "celui-ci", "celui ci", "et pour le meme produit", "et pour le même produit")
+        )
+    )
+    if referential_followup:
+        safe_to_reuse = not (
+            (entities.get("product") and previous_entities.get("product") and entities.get("product") != previous_entities.get("product"))
+            or (entities.get("module") and previous_entities.get("module") and entities.get("module") != "global" and previous_entities.get("module") != "global" and entities.get("module") != previous_entities.get("module"))
+        )
+        entities["intent_family"] = "FOLLOW_UP"
+        if not safe_to_reuse:
+            return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Follow-up detected with context shift; avoid unsafe entity carry-over.", 0.84)
+        if asks_recommendation:
+            return _decision(
+                AgentRoute.HYBRID_FULL,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                "Follow-up recommendation request.",
+                0.88,
+            )
+        if asks_risk:
+            return _decision(
+                AgentRoute.HYBRID_SQL_ML,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent"],
+                "Follow-up risk request.",
+                0.87,
+            )
+        if asks_best_practice or asks_why:
+            return _decision(
+                AgentRoute.HYBRID_SQL_RAG,
+                entities,
+                ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
+                "Follow-up explanatory request.",
+                0.86,
+            )
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Follow-up operational request.", 0.85)
+
+    if asks_stock and not asks_best_practice and not asks_why and not asks_risk and not asks_recommendation:
+        entities["intent_family"] = "STOCK_CURRENT"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Current stock intent.", 0.93)
+
+    if asks_available_lots and not asks_loss and not asks_gap and not asks_risk:
+        entities["intent_family"] = "POSTHARVEST_AVAILABLE_LOTS"
+        entities["module"] = "post_harvest"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Available post-harvest lots intent.", 0.93)
+
+    if asks_gap and not asks_risk:
+        entities["intent_family"] = "INPUT_OUTPUT_GAP"
+        entities["module"] = "material_balance"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Input-output gap intent.", 0.92)
+
+    if asks_loss and asks_ranking and not asks_risk and not asks_recommendation and not asks_best_practice:
+        entities["intent_family"] = "LOSS_RANKING"
+        entities["module"] = "post_harvest"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Loss/efficiency ranking intent.", 0.92)
+
+    if asks_preharvest and not asks_risk and not asks_recommendation:
+        entities["intent_family"] = "PREHARVEST_STEPS"
+        entities["module"] = "pre_harvest"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Pre-harvest lifecycle intent.", 0.9)
+
+    if asks_best_practice and not asks_risk and not asks_recommendation and not asks_current_scope and not asks_loss and not asks_stock:
+        entities["intent_family"] = "BEST_PRACTICES"
+        return _decision(AgentRoute.RAG_ONLY, entities, ["RAGKnowledgeAgent"], "General best-practices intent.", 0.9)
+
+    if asks_risk:
+        entities["intent_family"] = "RISK_ANALYSIS"
+        return _decision(AgentRoute.HYBRID_SQL_ML, entities, ["SQLAnalyticsAgent", "MLLossAgent"], "Risk/anomaly intent.", 0.92)
+
+    if asks_recommendation:
+        entities["intent_family"] = "RECOMMENDATION"
+        if asks_current_scope or has_operational_anchor or asks_loss or asks_risk:
+            return _decision(
+                AgentRoute.HYBRID_FULL,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+                "Operational recommendation intent.",
+                0.9,
+            )
+        return _decision(
+            AgentRoute.RECOMMENDATION_ONLY,
+            entities,
+            ["RecommendationAgent"],
+            "Generic recommendation intent.",
+            0.82,
+        )
+
+    if asks_why and (has_batch or asks_loss):
+        entities["intent_family"] = "EXPLANATION_CAUSAL"
+        if asks_risk:
+            return _decision(
+                AgentRoute.HYBRID_SQL_ML,
+                entities,
+                ["SQLAnalyticsAgent", "MLLossAgent"],
+                "Causal explanation with explicit risk framing.",
+                0.88,
+            )
+        return _decision(
+            AgentRoute.HYBRID_SQL_RAG,
+            entities,
+            ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
+            "Causal explanation intent.",
+            0.88,
+        )
+
+    return None
+
+def _infer_previous_module_hint(
+    previous_user_query: str | None,
+    entity_extractor: EntityExtractor,
+    *,
+    known_batch_refs: set[str] | None = None,
+) -> str | None:
+    text = str(previous_user_query or "").strip()
+    if not text:
         return None
+    extracted = entity_extractor.extract(text, known_batch_refs=known_batch_refs).as_dict()
+    module = str(extracted.get("module") or "").strip().lower()
+    scope = str(extracted.get("scope") or "").strip().lower()
+    lowered = _normalize(text).lower()
+    if module in {"members", "member_value"}:
+        return "members"
+    if module in {"collections"}:
+        return "inputs"
+    if module in {"material_balance"}:
+        return "material_balance"
+    if module in {"post_harvest"}:
+        if any(token in lowered for token in ("étape", "etape", "process", "séchage", "sechage", "tri", "emballage")):
+            return "process_steps"
+        return "post_harvest"
+    if scope in {"batch", "post_harvest"} and any(token in lowered for token in ("étape", "etape", "process", "séchage", "sechage", "tri", "emballage")):
+        return "process_steps"
+    if any(token in lowered for token in ("collecte", "collectée", "collectee", "livré", "livre", "quantité", "quantite", "input")):
+        return "inputs"
+    if any(token in lowered for token in ("membre", "membres", "top", "classement", "plus livré", "plus livre")):
+        return "members"
+    return None
 
 
 def _decision(route: AgentRoute, entities: dict, agents: list[str], explanation: str, confidence: float) -> IntentRouteDecision:

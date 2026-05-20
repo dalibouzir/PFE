@@ -1,0 +1,39 @@
+# T01/T05 Variants Audit
+
+- Date: 2026-05-20T02:17:10.123821+00:00
+- t01 PASS/FAIL: 9/1
+- t01 expanded PASS/FAIL: 10/0
+- t05 PASS/FAIL: 10/0
+
+|id|class|route|score|reasons|
+|---|---|---|---|---|
+|t01v01|t01|SQL_ONLY|PASS||
+|t01v02|t01|SQL_ONLY|PASS||
+|t01v03|t01|SQL_ONLY|PASS||
+|t01v04|t01|SQL_ONLY|PASS||
+|t01v05|t01|SQL_ONLY|PASS||
+|t01v06|t01|SQL_ONLY|PASS||
+|t01v07|t01|SQL_ONLY|PASS||
+|t01v08|t01|OUT_OF_SCOPE|FAIL|wrong_route:OUT_OF_SCOPE,missing_strict_toploss_table|
+|t01v09|t01|SQL_ONLY|PASS||
+|t01v10|t01|SQL_ONLY|PASS||
+|t05v01|t05|SQL_ONLY|PASS||
+|t05v02|t05|SQL_ONLY|PASS||
+|t05v03|t05|SQL_ONLY|PASS||
+|t05v04|t05|SQL_ONLY|PASS||
+|t05v05|t05|SQL_ONLY|PASS||
+|t05v06|t05|SQL_ONLY|PASS||
+|t05v07|t05|SQL_ONLY|PASS||
+|t05v08|t05|SQL_ONLY|PASS||
+|t05v09|t05|SQL_ONLY|PASS||
+|t05v10|t05|SQL_ONLY|PASS||
+|t01x01|t01_expanded|SQL_ONLY|PASS||
+|t01x02|t01_expanded|SQL_ONLY|PASS||
+|t01x03|t01_expanded|SQL_ONLY|PASS||
+|t01x04|t01_expanded|SQL_ONLY|PASS||
+|t01x05|t01_expanded|SQL_ONLY|PASS||
+|t01x06|t01_expanded|SQL_ONLY|PASS||
+|t01x07|t01_expanded|SQL_ONLY|PASS||
+|t01x08|t01_expanded|SQL_ONLY|PASS||
+|t01x09|t01_expanded|SQL_ONLY|PASS||
+|t01x10|t01_expanded|SQL_ONLY|PASS||

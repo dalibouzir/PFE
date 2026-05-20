@@ -39,7 +39,7 @@ def test_recommendation_without_evidence_adds_warning():
                 agent_name="RecommendationAgent",
                 route=AgentRoute.RECOMMENDATION_ONLY,
                 answer_part="",
-                data={"recommendations": [{"title": "A", "evidence": []}]},
+                data={"recommendations": [{"title": "A", "evidence_refs": []}]},
                 sources=[],
                 confidence=0.6,
                 warnings=[],
@@ -61,7 +61,7 @@ def test_rag_route_without_rag_source_adds_warning():
     assert "MISSING_RAG_SOURCE" in result.warnings
 
 
-def test_evidence_present_does_not_trigger_missing_expected_source_fallback_flag():
+def test_hybrid_full_missing_route_evidence_triggers_missing_expected_source_flag():
     verifier = ResponseVerifier()
     result = verifier.verify(
         context=_context(AgentRoute.HYBRID_FULL),
@@ -80,4 +80,4 @@ def test_evidence_present_does_not_trigger_missing_expected_source_fallback_flag
             )
         ],
     )
-    assert result.missing_expected_source is False
+    assert result.missing_expected_source is True

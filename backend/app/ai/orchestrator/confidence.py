@@ -21,6 +21,7 @@ def compute_final_confidence(
     rag_evidence = _has_rag_evidence(agent_results)
     ml_evidence = _has_ml_evidence(agent_results)
     recommendation_evidence = _has_recommendation_evidence(agent_results)
+    partial_recommendation_evidence = _has_partial_recommendation_evidence(agent_results)
     evidence_count = sum([sql_evidence, rag_evidence, ml_evidence, recommendation_evidence])
 
     bonus = 0.0
@@ -44,6 +45,8 @@ def compute_final_confidence(
         penalty += 0.20
     if weak_ml_confidence:
         penalty += 0.08
+    if partial_recommendation_evidence:
+        penalty += 0.10
 
     final_score = max(0.0, min(1.0, base + bonus - penalty))
 
@@ -98,4 +101,28 @@ def _has_recommendation_evidence(agent_results: list[AgentResult]) -> bool:
     if not rec_result or not isinstance(rec_result.data, dict):
         return False
     recommendations = rec_result.data.get("recommendations") or []
-    return isinstance(recommendations, list) and len(recommendations) > 0
+    return isinstance(recommendations, list) and any(_rec_has_refs(item) for item in recommendations if isinstance(item, dict))
+
+
+def _has_partial_recommendation_evidence(agent_results: list[AgentResult]) -> bool:
+    rec_result = next((item for item in agent_results if item.agent_name == "RecommendationAgent"), None)
+    if not rec_result or not isinstance(rec_result.data, dict):
+        return False
+    recommendations = rec_result.data.get("recommendations") or []
+    if not isinstance(recommendations, list) or not recommendations:
+        return False
+    has_with_refs = any(_rec_has_refs(item) for item in recommendations if isinstance(item, dict))
+    has_without_refs = any(not _rec_has_refs(item) for item in recommendations if isinstance(item, dict))
+    return has_with_refs and has_without_refs
+
+
+def _rec_has_refs(item: dict) -> bool:
+    refs = item.get("evidence_refs") if isinstance(item, dict) else None
+    if not isinstance(refs, list) or not refs:
+        return False
+    return any(
+        isinstance(ref, dict)
+        and str(ref.get("type") or "").upper() in {"SQL", "RAG", "ML", "RULE"}
+        and str(ref.get("source_id") or "").strip()
+        for ref in refs
+    )

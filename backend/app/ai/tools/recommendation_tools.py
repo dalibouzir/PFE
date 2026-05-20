@@ -35,191 +35,197 @@ class RecommendationTools:
         recommendations: list[dict[str, Any]] = []
         stage = _pick_first(detected_entities.get("stage"))
         product = _pick_first(detected_entities.get("product"))
+        batch_ref = detected_entities.get("batch_ref")
+        sql_payload = (sql_results or {}).get("data") if isinstance(sql_results, dict) else {}
+        sql_sources = (sql_results or {}).get("sources") if isinstance(sql_results, dict) else []
+        rag_sources = rag_results or []
+        ml_payload = ml_results or {}
+        ml_sources = ml_payload.get("sources") or []
 
-        base_evidence = _collect_evidence(sql_results=sql_results, rag_results=rag_results, ml_results=ml_results)
-        snapshot = self._build_snapshot()
+        use_global_snapshot = _should_use_global_snapshot(query=query, detected_entities=detected_entities)
+        snapshot = self._build_snapshot() if use_global_snapshot else {}
+        scope_label = "GLOBAL_COOPERATIVE" if use_global_snapshot else "ACTIVE_QUERY"
 
-        # 1) Lots à risque élevé / faible efficacité
-        high_risk = snapshot.get("high_risk_lots", [])
-        if high_risk:
-            item = high_risk[0]
+        batch_rows = []
+        if isinstance(sql_payload, dict):
+            batch_rows = [row for row in (sql_payload.get("batch_summary") or []) if isinstance(row, dict)]
+        if batch_ref:
+            batch_rows = [row for row in batch_rows if str(row.get("batch_ref") or row.get("lot_code") or "").upper() == str(batch_ref).upper()] or batch_rows
+        if product:
+            batch_rows = [row for row in batch_rows if str(row.get("product") or "").lower() in _product_aliases(product)] or batch_rows
+        batch_rows = sorted(batch_rows, key=lambda row: float(row.get("loss_pct", 0.0) or 0.0), reverse=True)
+
+        if batch_rows:
+            top = batch_rows[0]
+            sql_ref = _sql_evidence_ref(
+                label="SQL lot performance",
+                short_fact=f"Lot {top.get('batch_ref') or top.get('lot_code')} perte {float(top.get('loss_pct', 0.0) or 0.0):.1f}% ; efficacité {float(top.get('efficiency_pct', 0.0) or 0.0):.1f}%",
+                table="batches",
+                batch_ref=top.get("batch_ref") or top.get("lot_code"),
+                product=top.get("product"),
+                metric_name="loss_pct",
+                metric_value=float(top.get("loss_pct", 0.0) or 0.0),
+            )
             recommendations.append(
-                {
-                    "title": "Traiter immédiatement le lot le plus risqué",
-                    "priority": "HIGH",
-                    "related_batch": item.get("batch_ref"),
-                    "related_product": item.get("product"),
-                    "related_stage": item.get("critical_stage"),
-                    "reason": (
-                        f"Perte élevée ({float(item.get('loss_pct', 0.0)):.1f}%) et efficacité faible "
-                        f"({float(item.get('efficiency_pct', 0.0)):.1f}%) sur le lot ciblé."
-                    ),
-                    "action": (
-                        f"Isoler le lot {item.get('batch_ref')}, renforcer le contrôle au "
-                        f"{_stage_label(item.get('critical_stage'))}, puis reclasser les intrants dégradés."
-                    ),
-                    "evidence": [
-                        *base_evidence,
-                        f"SQL: batches (lot {item.get('batch_ref')} perte {float(item.get('loss_pct', 0.0)):.1f}% ; efficacité {float(item.get('efficiency_pct', 0.0)):.1f}%)",
-                    ],
-                    "expected_impact": "Réduction rapide des pertes sur les lots critiques.",
-                    "confidence": 0.86,
-                }
+                _recommendation_item(
+                    rec_id="rec_sql_loss_priority",
+                    title="Traiter immédiatement le lot le plus risqué",
+                    action=f"Isoler le lot {top.get('batch_ref') or top.get('lot_code')} et renforcer le contrôle à l’étape critique.",
+                    reason="Perte/efficacité opérationnelle défavorable observée dans les données SQL.",
+                    priority="HIGH",
+                    confidence=0.84,
+                    related_batch=top.get("batch_ref") or top.get("lot_code"),
+                    related_product=top.get("product"),
+                    related_stage=top.get("critical_stage"),
+                    evidence_refs=[sql_ref, _rule_evidence_ref("RULE_LOSS_PRIORITY_FROM_SQL", sql_ref)],
+                    scope=scope_label,
+                )
             )
 
-        low_efficiency = snapshot.get("low_efficiency_lots", [])
-        if low_efficiency:
-            item = low_efficiency[0]
+        stage_rows = []
+        if isinstance(sql_payload, dict):
+            stage_rows = [row for row in (sql_payload.get("process_step_losses") or []) if isinstance(row, dict)]
+        if stage:
+            stage_rows = [row for row in stage_rows if str(row.get("stage") or "").lower() == str(stage).lower()] or stage_rows
+        if stage_rows:
+            top_stage = max(stage_rows, key=lambda row: float(row.get("loss_pct", 0.0) or 0.0))
+            stage_ref = _sql_evidence_ref(
+                label="SQL process loss",
+                short_fact=f"Étape {top_stage.get('stage')} perte {float(top_stage.get('loss_pct', 0.0) or 0.0):.1f}%",
+                table="process_steps",
+                batch_ref=top_stage.get("batch_ref"),
+                product=top_stage.get("product"),
+                metric_name="loss_pct",
+                metric_value=float(top_stage.get("loss_pct", 0.0) or 0.0),
+            )
             recommendations.append(
-                {
-                    "title": "Corriger les écarts de rendement des lots faibles",
-                    "priority": "HIGH" if float(item.get("efficiency_pct", 100.0) or 100.0) < 75.0 else "MEDIUM",
-                    "related_batch": item.get("batch_ref"),
-                    "related_product": item.get("product"),
-                    "related_stage": item.get("critical_stage"),
-                    "reason": f"Efficacité en dessous de la cible ({float(item.get('efficiency_pct', 0.0)):.1f}%).",
-                    "action": (
-                        f"Mettre en place un contrôle d’entrée/sortie au niveau du lot {item.get('batch_ref')} "
-                        "et ajuster le temps de traitement de l’étape critique."
-                    ),
-                    "evidence": [
-                        f"SQL: batches (lot {item.get('batch_ref')} efficacité {float(item.get('efficiency_pct', 0.0)):.1f}% ; perte {float(item.get('loss_pct', 0.0)):.1f}%)"
-                    ],
-                    "expected_impact": "Amélioration du rendement matière par lot.",
-                    "confidence": 0.8,
-                }
+                _recommendation_item(
+                    rec_id="rec_sql_stage_control",
+                    title="Sécuriser l’étape la plus pénalisante",
+                    action=f"Standardiser les contrôles de {_stage_label(top_stage.get('stage'))} avec traçabilité entrée/sortie.",
+                    reason="L’étape avec perte élevée doit être corrigée en priorité.",
+                    priority="HIGH" if float(top_stage.get("loss_pct", 0.0) or 0.0) >= 12.0 else "MEDIUM",
+                    confidence=0.78,
+                    related_batch=top_stage.get("batch_ref"),
+                    related_product=top_stage.get("product"),
+                    related_stage=top_stage.get("stage"),
+                    evidence_refs=[stage_ref, _rule_evidence_ref("RULE_STAGE_CONTROL_FROM_SQL", stage_ref)],
+                    scope=scope_label,
+                )
             )
 
-        # 2) Étapes process avec pertes élevées
-        stage_losses = snapshot.get("stage_losses", [])
-        if stage_losses:
-            top_stage = stage_losses[0]
+        stock_rows = []
+        if isinstance(sql_payload, dict):
+            stock_rows = [row for row in (sql_payload.get("current_stock") or []) if isinstance(row, dict)]
+        low_stock_rows = [row for row in stock_rows if bool(row.get("is_low"))]
+        if low_stock_rows:
+            stock = low_stock_rows[0]
+            stock_ref = _sql_evidence_ref(
+                label="SQL stock threshold",
+                short_fact=f"Produit {stock.get('product')} disponible {float(stock.get('available_stock_kg', 0.0) or 0.0):.1f} kg, seuil {float(stock.get('threshold_kg', 0.0) or 0.0):.1f} kg",
+                table="stocks",
+                product=stock.get("product"),
+                metric_name="available_stock_kg",
+                metric_value=float(stock.get("available_stock_kg", 0.0) or 0.0),
+            )
             recommendations.append(
-                {
-                    "title": "Sécuriser l’étape de process la plus coûteuse",
-                    "priority": "HIGH" if float(top_stage.get("avg_loss_pct", 0.0) or 0.0) >= 15.0 else "MEDIUM",
-                    "related_batch": top_stage.get("batch_ref"),
-                    "related_product": top_stage.get("product"),
-                    "related_stage": top_stage.get("stage"),
-                    "reason": (
-                        f"L’étape {_stage_label(top_stage.get('stage'))} concentre les pertes "
-                        f"({float(top_stage.get('avg_loss_pct', 0.0)):.1f}% en moyenne)."
-                    ),
-                    "action": (
-                        f"Standardiser les contrôles de {_stage_label(top_stage.get('stage'))} "
-                        "avec seuils humidité/tri et feuille de suivi par lot."
-                    ),
-                    "evidence": [
-                        f"SQL: process_steps (étape {top_stage.get('stage')} perte moyenne {float(top_stage.get('avg_loss_pct', 0.0)):.1f}%)"
-                    ],
-                    "expected_impact": "Réduction structurelle des pertes au poste critique.",
-                    "confidence": 0.78,
-                }
+                _recommendation_item(
+                    rec_id="rec_sql_stock_replenish",
+                    title="Prévenir les ruptures de stock",
+                    action=f"Lancer un réapprovisionnement ciblé sur {stock.get('product')} et réserver un stock de sécurité.",
+                    reason="Le stock net est sous le seuil opérationnel.",
+                    priority="MEDIUM",
+                    confidence=0.72,
+                    related_product=stock.get("product"),
+                    related_stage="stockage",
+                    evidence_refs=[stock_ref, _rule_evidence_ref("RULE_STOCK_GAP_FROM_SQL", stock_ref)],
+                    scope=scope_label,
+                )
             )
 
-        # 3) Niveaux de stocks critiques
-        low_stocks = snapshot.get("low_stocks", [])
-        if low_stocks:
-            stock = low_stocks[0]
+        ml_risk = str(ml_payload.get("risk_level") or "").upper()
+        ml_conf = float(ml_payload.get("confidence", 0.0) or 0.0)
+        if ml_risk in {"HIGH", "MEDIUM"} and ml_sources:
+            ml_source = ml_sources[0]
+            ml_ref = _ml_evidence_ref(
+                label="ML risk signal",
+                short_fact=f"Signal ML {ml_risk} sur lot {ml_payload.get('affected_batch') or 'N/A'}",
+                model=str(ml_source.get("model") or "ml_prediction_logs"),
+                ml_log_id=ml_source.get("result_id"),
+                batch_ref=ml_payload.get("affected_batch"),
+                metric_name="risk_level",
+                metric_value=ml_risk,
+            )
             recommendations.append(
-                {
-                    "title": "Prévenir les ruptures de stock opérationnelles",
-                    "priority": "MEDIUM",
-                    "related_batch": None,
-                    "related_product": stock.get("product"),
-                    "related_stage": "stockage",
-                    "reason": (
-                        f"Stock disponible faible pour {stock.get('product')} "
-                        f"({float(stock.get('available_kg', 0.0)):.1f} kg, seuil {float(stock.get('threshold_kg', 0.0)):.1f} kg)."
-                    ),
-                    "action": (
-                        f"Lancer un réapprovisionnement ciblé sur {stock.get('product')} "
-                        "et réserver un minimum de sécurité pour les lots en cours."
-                    ),
-                    "evidence": [
-                        f"SQL: stocks ({stock.get('product')} disponible {float(stock.get('available_kg', 0.0)):.1f} kg ; seuil {float(stock.get('threshold_kg', 0.0)):.1f} kg)"
-                    ],
-                    "expected_impact": "Réduction des interruptions et des arbitrages de dernière minute.",
-                    "confidence": 0.71,
-                }
+                _recommendation_item(
+                    rec_id="rec_ml_preventive_review",
+                    title="Exécuter une revue préventive pilotée par signal ML",
+                    action="Déclencher une revue lot-étape sous 24h et prioriser les contrôles des flux à risque.",
+                    reason=f"Le signal ML indique un risque {ml_risk}.",
+                    priority="HIGH" if ml_risk == "HIGH" else "MEDIUM",
+                    confidence=min(0.82, max(0.55, ml_conf)),
+                    related_batch=ml_payload.get("affected_batch"),
+                    related_product=product,
+                    related_stage=ml_payload.get("affected_stage"),
+                    evidence_refs=[ml_ref, _rule_evidence_ref("RULE_PREVENTIVE_REVIEW_FROM_ML", ml_ref)],
+                    scope=scope_label,
+                )
             )
 
-        # 4) Signaux ML (si disponibles)
-        ml_risk = (ml_results or {}).get("risk_level")
-        observed_loss = (ml_results or {}).get("observed_loss_pct")
-        ml_signals = snapshot.get("ml_signals", [])
-        if ml_risk in {"HIGH", "MEDIUM"} or ml_signals:
-            top_signal = ml_signals[0] if ml_signals else {}
-            signal_level = str(ml_risk or top_signal.get("risk_level") or "MEDIUM").upper()
+        if rag_sources:
+            rag_source = rag_sources[0]
+            rag_ref = _rag_evidence_ref(
+                label="RAG best-practice",
+                short_fact=f"Contexte pratique: {str(rag_source.get('title') or 'source documentaire')}",
+                title=rag_source.get("title"),
+                chunk_id=rag_source.get("chunk_id"),
+                source_id=rag_source.get("document_id"),
+            )
             recommendations.append(
-                {
-                    "title": "Exécuter un plan d’action préventif piloté par signal ML",
-                    "priority": "HIGH" if signal_level == "HIGH" else "MEDIUM",
-                    "related_batch": (ml_results or {}).get("affected_batch") or top_signal.get("batch_ref"),
-                    "related_product": product or top_signal.get("product"),
-                    "related_stage": (ml_results or {}).get("affected_stage") or top_signal.get("critical_stage"),
-                    "reason": (
-                        f"Le signal ML indique un risque {signal_level}"
-                        + (f" avec perte observée {float(observed_loss):.1f}%." if observed_loss is not None else ".")
-                    ),
-                    "action": "Déclencher une revue lot-étape sous 24h et prioriser les contrôles sur les flux à risque.",
-                    "evidence": [
-                        *base_evidence,
-                        *(
-                            [
-                                f"ML: ml_prediction_logs ({top_signal.get('batch_ref') or 'batch inconnu'} risque {top_signal.get('risk_level')})"
-                            ]
-                            if top_signal
-                            else []
-                        ),
-                    ],
-                    "expected_impact": "Réduction des pertes inattendues et anticipation des dérives.",
-                    "confidence": 0.74,
-                }
+                _recommendation_item(
+                    rec_id="rec_rag_practice",
+                    title="Appliquer les bonnes pratiques documentées",
+                    action="Appliquer la check-list de séchage/tri/emballage et tracer les écarts sur le prochain cycle.",
+                    reason="Le corpus documentaire fournit un protocole directement applicable.",
+                    priority="MEDIUM",
+                    confidence=0.66,
+                    related_product=product,
+                    related_stage=stage,
+                    evidence_refs=[rag_ref],
+                    scope=scope_label,
+                )
             )
 
-        # 5) Bonnes pratiques RAG
-        rag_practices = snapshot.get("rag_practices", [])
-        if rag_practices:
-            rag_item = rag_practices[0]
-            recommendations.append(
-                {
-                    "title": "Appliquer les bonnes pratiques documentées",
-                    "priority": "MEDIUM",
-                    "related_batch": None,
-                    "related_product": product,
-                    "related_stage": stage or rag_item.get("stage"),
-                    "reason": "Le corpus RAG fournit des pratiques directement applicables à la réduction des pertes.",
-                    "action": _build_rag_action(rag_item.get("snippet") or ""),
-                    "evidence": [f"RAG: {rag_item.get('title') or 'Source post-récolte'}"],
-                    "expected_impact": "Standardisation des opérations selon des pratiques validées.",
-                    "confidence": 0.68,
-                }
-            )
+        if use_global_snapshot and snapshot:
+            global_rows = snapshot.get("high_risk_lots", [])
+            if global_rows:
+                top = global_rows[0]
+                gref = _sql_evidence_ref(
+                    label="SQL global lot risk snapshot",
+                    short_fact=f"Global coop: lot {top.get('batch_ref')} perte {float(top.get('loss_pct', 0.0) or 0.0):.1f}%",
+                    table="batches",
+                    batch_ref=top.get("batch_ref"),
+                    product=top.get("product"),
+                    metric_name="loss_pct",
+                    metric_value=float(top.get("loss_pct", 0.0) or 0.0),
+                )
+                recommendations.append(
+                    _recommendation_item(
+                        rec_id="rec_global_coop_priority",
+                        title="Prioriser le lot critique au niveau coopérative",
+                        action=f"Prioriser une revue opérationnelle du lot {top.get('batch_ref')} à l’échelle coopérative.",
+                        reason="Synthèse globale coopérative demandée.",
+                        priority="HIGH",
+                        confidence=0.7,
+                        related_batch=top.get("batch_ref"),
+                        related_product=top.get("product"),
+                        evidence_refs=[gref, _rule_evidence_ref("RULE_GLOBAL_COOP_PRIORITY", gref)],
+                        scope="GLOBAL_COOPERATIVE",
+                    )
+                )
 
         recommendations = _dedupe_recommendations(recommendations)
-
-        if recommendations:
-            return recommendations[:5]
-
-        # Fallback grounded minimal action using available SQL footprint
-        if snapshot.get("batch_count", 0) > 0:
-            return [
-                {
-                    "title": "Mettre en place un suivi hebdomadaire des pertes",
-                    "priority": "MEDIUM",
-                    "related_batch": None,
-                    "related_product": product,
-                    "related_stage": stage,
-                    "reason": "Des lots actifs existent, mais les signaux détaillés restent limités.",
-                    "action": "Créer une revue hebdomadaire par lot (entrée/sortie/perte) avec seuil d’alerte à 12%.",
-                    "evidence": [f"SQL: batches ({int(snapshot.get('batch_count', 0))} lot(s) suivis)"],
-                    "expected_impact": "Amélioration progressive de la détection précoce des pertes.",
-                    "confidence": 0.6,
-                }
-            ]
-
-        return []
+        return recommendations[:5]
 
     def _build_snapshot(self) -> dict[str, Any]:
         if self.db is None or self.current_user is None:
@@ -447,6 +453,131 @@ def _collect_evidence(*, sql_results: dict[str, Any] | None, rag_results: list[d
         for source in ml_results.get("sources", [])[:1]:
             evidence.append(f"ML: {source.get('model')}")
     return evidence
+
+
+def _recommendation_item(
+    *,
+    rec_id: str,
+    title: str,
+    action: str,
+    reason: str,
+    priority: str,
+    confidence: float,
+    evidence_refs: list[dict[str, Any]],
+    scope: str,
+    related_batch: str | None = None,
+    related_product: str | None = None,
+    related_stage: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": rec_id,
+        "title": title,
+        "action": action,
+        "reason": reason,
+        "priority": str(priority or "MEDIUM").upper(),
+        "confidence": float(confidence),
+        "severity": str(priority or "MEDIUM").upper(),
+        "scope": scope,
+        "related_batch": related_batch,
+        "related_product": related_product,
+        "related_stage": related_stage,
+        "evidence_refs": [ref for ref in evidence_refs if isinstance(ref, dict)],
+    }
+
+
+def _sql_evidence_ref(
+    *,
+    label: str,
+    short_fact: str,
+    table: str,
+    batch_ref: str | None = None,
+    product: str | None = None,
+    metric_name: str | None = None,
+    metric_value: float | str | None = None,
+) -> dict[str, Any]:
+    source_id = f"sql:{table}:{batch_ref or product or metric_name or 'fact'}"
+    return {
+        "type": "SQL",
+        "source_id": source_id,
+        "label": label,
+        "short_fact": short_fact,
+        "table": table,
+        "batch_ref": batch_ref,
+        "metric_name": metric_name,
+        "metric_value": metric_value,
+    }
+
+
+def _rag_evidence_ref(
+    *,
+    label: str,
+    short_fact: str,
+    title: str | None,
+    chunk_id: str | None,
+    source_id: str | None,
+) -> dict[str, Any]:
+    return {
+        "type": "RAG",
+        "source_id": source_id or f"rag:{chunk_id or 'chunk'}",
+        "label": label,
+        "short_fact": short_fact,
+        "chunk_id": chunk_id,
+        "source_title": title,
+    }
+
+
+def _ml_evidence_ref(
+    *,
+    label: str,
+    short_fact: str,
+    model: str,
+    ml_log_id: str | None,
+    batch_ref: str | None,
+    metric_name: str | None = None,
+    metric_value: str | float | None = None,
+) -> dict[str, Any]:
+    return {
+        "type": "ML",
+        "source_id": f"ml:{ml_log_id or model}",
+        "label": label,
+        "short_fact": short_fact,
+        "ml_log_id": ml_log_id,
+        "batch_ref": batch_ref,
+        "metric_name": metric_name,
+        "metric_value": metric_value,
+    }
+
+
+def _rule_evidence_ref(rule_name: str, triggering_ref: dict[str, Any]) -> dict[str, Any]:
+    base_type = str(triggering_ref.get("type") or "SQL")
+    source_id = str(triggering_ref.get("source_id") or f"rule:{rule_name}")
+    return {
+        "type": "RULE",
+        "source_id": f"rule:{rule_name}",
+        "label": f"Rule {rule_name}",
+        "short_fact": f"Rule {rule_name} déclenchée à partir de {base_type}:{source_id}",
+        "rule_name": rule_name,
+        "triggered_by_type": base_type,
+        "triggered_by_source_id": source_id,
+    }
+
+
+def _should_use_global_snapshot(*, query: str, detected_entities: dict[str, Any]) -> bool:
+    lowered = str(query or "").lower()
+    has_specific_entity = bool(detected_entities.get("batch_ref") or detected_entities.get("product") or detected_entities.get("stage"))
+    asks_global = any(
+        token in lowered
+        for token in (
+            "coopérative",
+            "cooperative",
+            "global",
+            "ensemble de la coop",
+            "toute la coop",
+            "au niveau coop",
+            "vue globale",
+        )
+    )
+    return asks_global and not has_specific_entity
 
 
 def _pick_first(values):

@@ -209,11 +209,20 @@ def plan_answer(*, query: str, detected_entities: dict[str, Any], route: AgentRo
     required_sources: list[str] = []
     if route in {AgentRoute.SQL_ONLY, AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_SQL_ML, AgentRoute.HYBRID_FULL}:
         required_sources.append("SQL")
-    if route in {AgentRoute.RAG_ONLY, AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_RAG_RECOMMENDATION, AgentRoute.HYBRID_FULL}:
+    rag_required_by_intent = answer_type in {"explanation", "hybrid_analysis", "multi_intent_sql_rag"} or any(
+        token in lowered for token in ("bonnes pratiques", "best practices", "conseils", "procédure", "procedure", "pourquoi", "explique", "why")
+    )
+    if route in {AgentRoute.RAG_ONLY, AgentRoute.HYBRID_RAG_RECOMMENDATION}:
         required_sources.append("RAG")
-    if route in {AgentRoute.ML_ONLY, AgentRoute.HYBRID_SQL_ML, AgentRoute.HYBRID_FULL}:
+    elif route in {AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_FULL} and rag_required_by_intent:
+        required_sources.append("RAG")
+    if route in {AgentRoute.ML_ONLY, AgentRoute.HYBRID_SQL_ML}:
         required_sources.append("ML")
-    if route in {AgentRoute.RECOMMENDATION_ONLY, AgentRoute.HYBRID_RAG_RECOMMENDATION, AgentRoute.HYBRID_FULL}:
+    if route == AgentRoute.HYBRID_FULL and any(token in lowered for token in ("risque", "risk", "anomal", "prediction", "prédiction")):
+        required_sources.append("ML")
+    if route in {AgentRoute.RECOMMENDATION_ONLY, AgentRoute.HYBRID_RAG_RECOMMENDATION}:
+        required_sources.append("RECOMMENDATION")
+    if route == AgentRoute.HYBRID_FULL:
         required_sources.append("RECOMMENDATION")
 
     required_fields: list[str] = []
@@ -439,11 +448,13 @@ def verify_evidence(pack: EvidencePack) -> EvidenceVerification:
     required = set(pack.plan.required_sources)
     op = str(pack.plan.operation or "")
 
+    recommendation_actions = pack.recommendations.get("actions") or []
+    has_recommendation_refs = any(_has_recommendation_evidence_refs(item) for item in recommendation_actions if isinstance(item, dict))
     available = {
-        "SQL": bool(pack.sql.get("payload")),
+        "SQL": bool(pack.sql.get("rows") or pack.sql.get("metrics")),
         "RAG": bool(pack.rag.get("chunks")),
         "ML": bool(pack.ml),
-        "RECOMMENDATION": bool(pack.recommendations.get("actions") or pack.recommendations.get("insufficient_evidence")),
+        "RECOMMENDATION": bool(has_recommendation_refs),
     }
 
     for src in required:
@@ -527,11 +538,18 @@ def _build_llm_grounding_prompt(pack: EvidencePack, sql_payload: dict[str, Any])
                 title = chunk.get("title", "")[:50]
                 lines.append(f"• {title}")
         lines.append("")
+    rec_actions = [item for item in (pack.recommendations.get("actions") or []) if isinstance(item, dict)]
+    if rec_actions:
+        lines.append("=== RECOMMANDATIONS VERROUILLEES (NE PAS EN AJOUTER) ===")
+        for item in rec_actions[:5]:
+            lines.append(f"- {item.get('id')}: {item.get('title')} | action={item.get('action')} | priorité={item.get('priority')}")
+        lines.append("")
     lines.append("=== INSTRUCTIONS ===")
     lines.append("1. Répondre UNIQUEMENT avec les données SQL")
     lines.append("2. NE PAS inventer de nombres, lots ou produits")
     lines.append("3. Si donnée manque, dire 'indisponible'")
     lines.append("4. Style manager/français")
+    lines.append("5. Reprendre uniquement les recommandations verrouillées si présentes")
     return "\n".join(lines)
 
 
@@ -541,6 +559,11 @@ def _validate_llm_answer(answer: str, pack: EvidencePack, sql_payload: dict[str,
     # Check for raw RAG headers only
     if "agronomic knowledge reference" in answer.lower():
         issues.append("RAW_RAG_HEADER")
+    locked_count = len([item for item in (pack.recommendations.get("actions") or []) if isinstance(item, dict)])
+    if locked_count > 0:
+        bullets = [line for line in str(answer or "").splitlines() if line.strip().startswith("-")]
+        if len(bullets) > locked_count + 1:
+            issues.append("LLM_ADDED_EXTRA_RECOMMENDATIONS")
     return issues
 
 
@@ -678,6 +701,25 @@ def _generate_summary_interpretation(llm_answer: str | None, pack: EvidencePack,
 
 
 def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+    missing_required = [item for item in verification.issues if item.startswith("MISSING_") and item.endswith("_EVIDENCE")]
+    if missing_required:
+        message = _missing_evidence_message(pack.route, missing_required)
+        return (
+            message,
+            [
+                {"type": "summary", "title": "Résumé", "content": message},
+                {"type": "warnings", "title": "Avertissements", "items": [_warning_label(i) for i in missing_required]},
+            ],
+            {
+                "answer_type": pack.plan.answer_type,
+                "evidence_roles": _evidence_roles(pack),
+                "module_registry": pack.module_registry,
+                "required_evidence_types": list(pack.plan.required_sources),
+                "missing_evidence_types": sorted(set(item.replace("MISSING_", "").replace("_EVIDENCE", "") for item in missing_required)),
+                "found_evidence_types": _found_evidence_types(pack),
+                "confidence_reason": "missing_required_evidence",
+            },
+        )
     has_any_evidence = bool(
         pack.sql.get("rows")
         or pack.sql.get("metrics")
@@ -692,7 +734,15 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
                 {"type": "summary", "title": "Résumé", "content": "Donnée non disponible pour cette requête précise."},
                 {"type": "warnings", "title": "Avertissements", "items": [_warning_label("NO_VERIFIED_EVIDENCE")]},
             ],
-            {"answer_type": pack.plan.answer_type, "evidence_roles": _evidence_roles(pack), "module_registry": pack.module_registry},
+            {
+                "answer_type": pack.plan.answer_type,
+                "evidence_roles": _evidence_roles(pack),
+                "module_registry": pack.module_registry,
+                "required_evidence_types": list(pack.plan.required_sources),
+                "missing_evidence_types": sorted(set(item.replace("MISSING_", "").replace("_EVIDENCE", "") for item in verification.issues if item.startswith("MISSING_") and item.endswith("_EVIDENCE"))),
+                "found_evidence_types": _found_evidence_types(pack),
+                "confidence_reason": "no_verified_evidence",
+            },
         )
     if not verification.ok and pack.plan.operation != "generic":
         return (
@@ -810,9 +860,45 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
         "evidence_roles": _evidence_roles(pack),
         "module_registry": pack.module_registry,
         "answer_contract": pack.plan.answer_contract or {},
+        "required_evidence_types": list(pack.plan.required_sources),
+        "missing_evidence_types": sorted(
+            set(
+                item.replace("MISSING_", "").replace("_EVIDENCE", "")
+                for item in verification.issues
+                if item.startswith("MISSING_") and item.endswith("_EVIDENCE")
+            )
+        ),
+        "found_evidence_types": _found_evidence_types(pack),
+        "confidence_reason": "warnings_present" if verification.issues else "evidence_verified",
     }
 
     return answer, blocks, metadata
+
+
+def _found_evidence_types(pack: EvidencePack) -> list[str]:
+    found: list[str] = []
+    if pack.sql.get("rows") or pack.sql.get("metrics"):
+        found.append("SQL")
+    if pack.rag.get("chunks"):
+        found.append("RAG")
+    if pack.ml:
+        found.append("ML")
+    if any(_has_recommendation_evidence_refs(item) for item in (pack.recommendations.get("actions") or []) if isinstance(item, dict)):
+        found.append("RECOMMENDATION")
+    return found
+
+
+def _missing_evidence_message(route: AgentRoute, missing: list[str]) -> str:
+    missing_set = set(missing)
+    if route == AgentRoute.SQL_ONLY or "MISSING_SQL_EVIDENCE" in missing_set:
+        return "Donnée non disponible pour cette requête précise."
+    if route == AgentRoute.RAG_ONLY or "MISSING_RAG_EVIDENCE" in missing_set:
+        return "Le contexte documentaire disponible est insuffisant pour répondre précisément avec des bonnes pratiques fiables."
+    if route == AgentRoute.HYBRID_SQL_ML and "MISSING_ML_EVIDENCE" in missing_set:
+        return "Aucun signal ML exploitable n’est disponible actuellement; réponse limitée aux faits SQL."
+    if route in {AgentRoute.HYBRID_FULL, AgentRoute.RECOMMENDATION_ONLY, AgentRoute.HYBRID_RAG_RECOMMENDATION} and "MISSING_RECOMMENDATION_EVIDENCE" in missing_set:
+        return "Je ne peux pas générer de recommandations fiables sans données vérifiables."
+    return "Les preuves disponibles sont insuffisantes pour confirmer cette réponse."
 
 
 def _compose_next_action(*, pack: EvidencePack, recommendation_block: dict[str, Any] | None, sql_payload: dict[str, Any]) -> str:
@@ -2118,18 +2204,23 @@ def _compose_recommendation_block(*, pack: EvidencePack) -> dict[str, Any] | Non
     for action in actions[:5]:
         if not isinstance(action, dict):
             continue
-        ev = action.get("evidence") or []
+        refs = [ref for ref in (action.get("evidence_refs") or []) if isinstance(ref, dict)]
+        if not refs:
+            continue
         items.append(
             {
+                "id": action.get("id"),
                 "priority": str(action.get("priority") or "MEDIUM").upper(),
                 "title": str(action.get("title") or "Action recommandée"),
                 "action": str(action.get("action") or action.get("title") or ""),
                 "reason": str(action.get("reason") or ""),
-                "evidence": [str(item).split(":")[0] for item in ev if str(item).strip()],
-                "evidence_details": [str(item) for item in ev if str(item).strip()],
+                "evidence": [str(ref.get("type") or "").upper() for ref in refs if str(ref.get("type") or "").strip()],
+                "evidence_details": [str(ref.get("short_fact") or ref.get("label") or "") for ref in refs],
+                "evidence_refs": refs,
                 "affected_lot": action.get("related_batch"),
                 "affected_product": action.get("related_product"),
                 "affected_stage": action.get("related_stage"),
+                "scope": action.get("scope"),
             }
         )
     if not items:
@@ -2360,9 +2451,21 @@ def _evidence_roles(pack: EvidencePack) -> list[str]:
         roles.append("RAG_EXPLANATION")
     if pack.ml:
         roles.append("ML_SIGNAL")
-    if pack.recommendations.get("actions") or pack.recommendations.get("insufficient_evidence"):
+    if any(_has_recommendation_evidence_refs(item) for item in (pack.recommendations.get("actions") or []) if isinstance(item, dict)):
         roles.append("RECOMMENDATION_ACTIONS")
     return roles
+
+
+def _has_recommendation_evidence_refs(item: dict[str, Any]) -> bool:
+    refs = item.get("evidence_refs") if isinstance(item, dict) else None
+    if not isinstance(refs, list) or not refs:
+        return False
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        if str(ref.get("type") or "").upper() in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
+            return True
+    return False
 
 
 def _build_module_registry(*, sql_data: dict[str, Any], tables_used: set[str]) -> dict[str, dict[str, Any]]:

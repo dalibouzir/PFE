@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-05-20T11:00:41.660464+00:00",
+  "cooperative_id": "4cbc6020-def9-4d24-bb75-9d40bc031466",
+  "total_cases": 5,
+  "score_counts": {
+    "PASS": 5,
+    "FAIL": 0
+  },
+  "rows": [
+    {
+      "id": "t01",
+      "question": "Top pertes par lot, et pour chaque lot indique seulement : lot, produit, perte %, efficacité %, signal ML disponible ou indisponible.",
+      "route": "HYBRID_SQL_ML",
+      "score": "PASS",
+      "reasons": [],
+      "answer": "1. Résumé\nLot le plus pénalisé: DEMOFP-LOT-MANG-013 (23.6 %, efficacité 76.4 %).\n\n2. Tableau\nLot | Produit | Perte % | Efficacité % | Signal ML\n- DEMOFP-LOT-MANG-013 | Mangue | 23.6 % | 76.4 % | disponible\n- DEMOFP-LOT-MIL-009 | Mil | 23.2 % | 76.8 % | disponible\n- LOT-MANG-001 | Mangue | 23.2 % | 76.8 % | disponible\n- DEMOFP-LOT-MANG-003 | Mangue | 18.5 % | 81.5 % | disponible\n- DEMOFP-LOT-MANG-001 | Mangue | 14.4 % | 85.6 % | disponible\n- DEMOFP-LOT-MIL-007 | Mil | 10.8 % | 89.2 % | disponible\n- DEMOFP-LOT-MANG-002 | Mangue | 8.8 % | 91.2 % | disponible\n- DEMOFP-LOT-MIL-008 | Mil | 8.7 % | 91.3 % | disponible\n- DEMOFP-LOT-BISS-010 | Bissap | 5.9 % | 94.1 % | disponible\n- DEMOFP-LOT-ARAC-005 | Arachide | 4.9 % | 95.1 % | disponible\n\n3. Limites\n- Signal ML indisponible par lot quand aucune correspondance lot-specific n’est trouvée."
+    },
+    {
+      "id": "t02",
+      "question": "Compare LOT-BANA-001 et LOT-BISS-002 : perte, efficacité, signal ML et recommandation pour chaque lot.",
+      "route": "HYBRID_SQL_ML",
+      "score": "PASS",
+      "reasons": [],
+      "answer": "Donnée indisponible pour lot LOT-BISS-003."
+    },
+    {
+      "id": "t03",
+      "question": "Analyse uniquement le lot LOT-BANA-001 : perte SQL, efficacité, signal ML exact, et recommandation liée uniquement à ce lot.",
+      "route": "HYBRID_FULL",
+      "score": "PASS",
+      "reasons": [],
+      "answer": "Donnée indisponible pour lot LOT-BANA-001."
+    },
+    {
+      "id": "t04",
+      "question": "Selon nos données, où perd-on le plus : par lot ou par étape ?",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "answer": "1. Réponse directe\nLe lot LOT-MANG-007 présente une perte de 100.0% et une efficacité de 0.0%.\n\n2. Données clés\n- Données clés indisponibles.\n\n3. Interprétation\nAucune explication détaillée disponible.\n\nLimites\n- Donnée manquante pour compléter la réponse demandée."
+    },
+    {
+      "id": "t05",
+      "question": "Pour un lot pré-récolte, donne quantité estimée, charge estimée, dates et étapes.",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "answer": "1. Réponse directe\nSynthèse charges/dépenses: 10 transaction(s) trésorerie pour 5579998 FCFA, 24 charge(s) globales pour 797700 FCFA.\n\n2. Données clés\n- Données clés indisponibles.\n\n3. Interprétation\nAucune explication détaillée disponible.\n\nLimites\n- Donnée manquante pour compléter la réponse demandée."
+    }
+  ]
+}

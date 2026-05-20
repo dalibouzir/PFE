@@ -28,12 +28,28 @@ def test_catalog_order_invoice_payment_flow(db_session):
     assert product is not None
     assert stock is not None
     assert stock.total_stock_kg == 500.0
+    stock.grade = "A"
+    grade_b = Stock(
+        cooperative_id=stock.cooperative_id,
+        product_id=stock.product_id,
+        grade="B",
+        quantity=200.0,
+        total_stock_kg=200.0,
+        reserved_in_lots_kg=0.0,
+        processed_output_kg=0.0,
+        threshold=0.0,
+        unit=stock.unit,
+    )
+    db_session.add(grade_b)
+    db_session.commit()
+    db_session.refresh(stock)
 
     catalog = commercial_service.create_catalog_product(
         db_session,
         manager,
         CatalogProductCreate(
             source_product_id=product.id,
+            source_grade="A",
             name="Mangue Kent Premium",
             description="Produit premium",
             category="Fruits",
@@ -45,10 +61,14 @@ def test_catalog_order_invoice_payment_flow(db_session):
         ),
     )
 
-    stock = db_session.scalar(select(Stock).where(Stock.product_id == product.id))
+    stock = db_session.scalar(select(Stock).where(Stock.product_id == product.id, Stock.grade == "A"))
+    stock_b = db_session.scalar(select(Stock).where(Stock.product_id == product.id, Stock.grade == "B"))
     assert stock.total_stock_kg == 500.0
     assert stock.reserved_in_lots_kg == 100.0
     assert stock.quantity == 400.0
+    assert stock_b is not None
+    assert stock_b.total_stock_kg == 200.0
+    assert stock_b.reserved_in_lots_kg == 0.0
     allocation_movement = db_session.scalar(
         select(StockMovement).where(
             StockMovement.product_id == product.id,
@@ -58,6 +78,7 @@ def test_catalog_order_invoice_payment_flow(db_session):
         )
     )
     assert allocation_movement is not None
+    assert allocation_movement.grade == "A"
     assert allocation_movement.quantity_kg == 100.0
     assert allocation_movement.notes is not None
     assert "manager:" in allocation_movement.notes
@@ -123,6 +144,13 @@ def test_catalog_order_invoice_payment_flow(db_session):
     assert catalog_row is not None
     assert catalog_row.total_stock_kg == 80.0
     assert catalog_row.reserved_stock_kg == 0.0
+    stock_after_delivery = db_session.scalar(select(Stock).where(Stock.product_id == product.id, Stock.grade == "A"))
+    stock_b_after_delivery = db_session.scalar(select(Stock).where(Stock.product_id == product.id, Stock.grade == "B"))
+    assert stock_after_delivery is not None
+    assert stock_after_delivery.total_stock_kg == 480.0
+    assert stock_after_delivery.reserved_in_lots_kg == 80.0
+    assert stock_b_after_delivery is not None
+    assert stock_b_after_delivery.total_stock_kg == 200.0
 
     invoice = db_session.scalar(select(CommercialInvoice).where(CommercialInvoice.order_id == order.id))
     assert invoice is not None
@@ -181,6 +209,7 @@ def test_catalog_order_invoice_payment_flow(db_session):
         manager,
         CatalogProductCreate(
             source_product_id=product.id,
+            source_grade="A",
             name="Mangue Kent Secondaire",
             description="Produit secondaire",
             category="Fruits",

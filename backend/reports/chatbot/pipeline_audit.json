@@ -1,0 +1,189 @@
+{
+  "timestamp": "2026-05-20T12:43:21.171209",
+  "config": {
+    "llm_provider": "groq",
+    "groq_key_present": true,
+    "groq_model": "llama-3.3-70b-versatile",
+    "openrouter_key_present": true,
+    "rag_embedding_provider": "local",
+    "rag_embedding_model": "sentence-transformers/all-MiniLM-L6-v2"
+  },
+  "rag_status": {
+    "documents": 727,
+    "chunks": 699,
+    "chunks_with_embeddings": 699,
+    "coverage_percent": 100.0,
+    "last_indexed": "2026-05-19 15:20:04.482127+00:00",
+    "cooperatives_indexed": 1
+  },
+  "test_results": [
+    {
+      "index": 1,
+      "question": "Quel est le stock actuel par produit ?",
+      "status": "success",
+      "route": "AgentRoute.SQL_ONLY",
+      "agents_used": [
+        "SQLAnalyticsAgent"
+      ],
+      "confidence": 0.42000000000000004,
+      "answer_length": 49,
+      "response_blocks": 2,
+      "warnings": [
+        "Les données opérationnelles sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucune donnée opérationnelle exploitable n’a été trouvée pour cette recherche.",
+        "Une source attendue est présente mais sans données exploitables."
+      ],
+      "elapsed_ms": 9052,
+      "answer_preview": "Donnée non disponible pour cette requête précise.",
+      "llm_likely_used": true,
+      "groq_call_likely": false
+    },
+    {
+      "index": 2,
+      "question": "Quels lots ont les pertes les plus élevées ?",
+      "status": "success",
+      "route": "AgentRoute.SQL_ONLY",
+      "agents_used": [
+        "SQLAnalyticsAgent"
+      ],
+      "confidence": 0.94,
+      "answer_length": 291,
+      "response_blocks": 3,
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "elapsed_ms": 8949,
+      "answer_preview": "1. Résumé\nLot le plus pénalisé: LOT-MANG-001 (5.0 %, efficacité 0.0 %).\n\n2. Tableau\nLot | Produit | Perte % | Efficacité % | Signal ML\n- LOT-MANG-001 ",
+      "llm_likely_used": true,
+      "groq_call_likely": false
+    },
+    {
+      "index": 3,
+      "question": "Quels lots ont le plus grand écart entre entrée et sortie ?",
+      "status": "success",
+      "route": "AgentRoute.SQL_ONLY",
+      "agents_used": [
+        "SQLAnalyticsAgent"
+      ],
+      "confidence": 0.94,
+      "answer_length": 292,
+      "response_blocks": 3,
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "elapsed_ms": 8194,
+      "answer_preview": "1. Résumé\nLot le plus pénalisé: LOT-MANG-001 (5.0 %, efficacité 95.0 %).\n\n2. Tableau\nLot | Produit | Perte % | Efficacité % | Signal ML\n- LOT-MANG-001",
+      "llm_likely_used": true,
+      "groq_call_likely": false
+    },
+    {
+      "index": 4,
+      "question": "Quelles bonnes pratiques appliquer avant l'emballage ?",
+      "status": "success",
+      "route": "AgentRoute.HYBRID_SQL_RAG",
+      "agents_used": [
+        "SQLAnalyticsAgent",
+        "RAGKnowledgeAgent"
+      ],
+      "confidence": 0.6499999999999999,
+      "answer_length": 870,
+      "response_blocks": 4,
+      "warnings": [
+        "Les sources récupérées peuvent contenir des informations contradictoires.",
+        "Les données opérationnelles sont incomplètes.",
+        "Aucune donnée opérationnelle exploitable n’a été trouvée pour cette recherche.",
+        "Une source attendue est présente mais sans données exploitables.",
+        "Certaines sources utilisées sont faibles ou peu fiables."
+      ],
+      "elapsed_ms": 9681,
+      "answer_preview": "1. Ce que montrent les données\nAgronomic knowledge reference for Mil in West Africa, Senegal. Topic: storage after conditioning. Source: REF-KNOW-GENE",
+      "llm_likely_used": true,
+      "groq_call_likely": false
+    },
+    {
+      "index": 5,
+      "question": "Selon nos données et les bonnes pratiques, comment réduire les pertes au séchage ?",
+      "status": "success",
+      "route": "AgentRoute.HYBRID_SQL_RAG",
+      "agents_used": [
+        "SQLAnalyticsAgent",
+        "RAGKnowledgeAgent"
+      ],
+      "confidence": 0.6499999999999999,
+      "answer_length": 38,
+      "response_blocks": 2,
+      "warnings": [
+        "Les données opérationnelles sont incomplètes.",
+        "Aucune donnée opérationnelle exploitable n’a été trouvée pour cette recherche.",
+        "Une source attendue est présente mais sans données exploitables."
+      ],
+      "elapsed_ms": 8958,
+      "answer_preview": "Donnée indisponible pour stage drying.",
+      "llm_likely_used": true,
+      "groq_call_likely": false
+    },
+    {
+      "index": 6,
+      "question": "Analyse uniquement le lot LOT-MANG-001 : perte, efficacité, signal ML et recommandation liée.",
+      "status": "success",
+      "route": "AgentRoute.HYBRID_SQL_ML",
+      "agents_used": [
+        "SQLAnalyticsAgent",
+        "MLLossAgent"
+      ],
+      "confidence": 0.44499999999999995,
+      "answer_length": 671,
+      "response_blocks": 4,
+      "warnings": [
+        "Aucun signal ML exploitable n’a été trouvé pour cette réponse.",
+        "L’analyse ML n’est pas disponible avec les données actuelles.",
+        "Les signaux SQL et ML ne sont pas parfaitement alignés.",
+        "La confiance du modèle ML est limitée."
+      ],
+      "elapsed_ms": 8595,
+      "answer_preview": "1. Réponse directe\nPerte observée sur nettoyage du ce lot LOT-MANG-001: 5.0% (80.0 kg -> 76.0 kg).\n\n2. Données SQL\nce lot | Produit | Perte | Efficaci",
+      "llm_likely_used": true,
+      "groq_call_likely": false
+    },
+    {
+      "index": 7,
+      "question": "Quels lots ont les pertes les plus élevées ?",
+      "status": "success",
+      "route": "AgentRoute.SQL_ONLY",
+      "agents_used": [
+        "SQLAnalyticsAgent"
+      ],
+      "confidence": 0.94,
+      "answer_length": 291,
+      "response_blocks": 3,
+      "warnings": [
+        "La réponse signale une donnée manquante."
+      ],
+      "elapsed_ms": 8839,
+      "answer_preview": "1. Résumé\nLot le plus pénalisé: LOT-MANG-001 (5.0 %, efficacité 0.0 %).\n\n2. Tableau\nLot | Produit | Perte % | Efficacité % | Signal ML\n- LOT-MANG-001 ",
+      "llm_likely_used": true,
+      "groq_call_likely": false
+    },
+    {
+      "index": 8,
+      "question": "Et le premier, quelle action recommandes-tu ?",
+      "status": "success",
+      "route": "AgentRoute.RECOMMENDATION_ONLY",
+      "agents_used": [
+        "RecommendationAgent"
+      ],
+      "confidence": 0.8320000000000001,
+      "answer_length": 636,
+      "response_blocks": 4,
+      "warnings": [
+        "Une source attendue est présente mais sans données exploitables.",
+        "Certaines sources utilisées sont faibles ou peu fiables."
+      ],
+      "elapsed_ms": 1325,
+      "answer_preview": "1. Action prioritaire\n[HIGH] Isoler le lot LOT-MANG-002, renforcer le contrôle au séchage, puis reclasser les intrants dégradés. (cible: LOT-MANG-002 ",
+      "llm_likely_used": false,
+      "groq_call_likely": false
+    }
+  ]
+}

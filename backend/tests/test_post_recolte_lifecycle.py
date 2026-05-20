@@ -12,12 +12,13 @@ from app.models.parcel import Parcel
 from app.models.product import Product
 from app.models.stock_movement import StockMovement
 from app.models.user import User
-from app.schemas.batch import BatchCreate
+from app.schemas.batch import BatchCreate, BatchStartPostHarvestRequest
 from app.schemas.input import InputCreate
 from app.schemas.process_step import ProcessStepCompleteRequest, ProcessStepCreate
 from app.services import batches as batch_service
 from app.services import inputs as inputs_service
 from app.services import process_steps as process_step_service
+from app.services import stock_movements as stock_movement_service
 from app.utils.exceptions import NotFoundError, ValidationError
 
 
@@ -98,15 +99,89 @@ def test_ready_lot_exposes_ready_post_recolte_status(db_session):
 
 def test_start_post_recolte_updates_status(db_session):
     manager, _product, batch = _setup_ready_post_recolte_batch(db_session)
-    started = batch_service.start_postharvest(db_session, manager, batch.id)
+    started = batch_service.start_postharvest(
+        db_session,
+        manager,
+        batch.id,
+        payload=BatchStartPostHarvestRequest(product_id=batch.product_id, grade="A", quantity_kg=1000),
+    )
     assert started.postharvest_started_at is not None
+    assert started.postharvest_reference is not None
+    assert started.postharvest_reference.startswith("POST-MANG-")
     assert started.status.value == "in_progress"
     assert batch_service.serialize_batch(started).postharvest_status == "in_post_recolte"
 
 
+def test_cannot_execute_post_recolte_step_before_explicit_start(db_session):
+    manager, _product, batch = _setup_ready_post_recolte_batch(db_session)
+    with pytest.raises(ValidationError, match="Démarrez Post-récolte"):
+        process_step_service.create_process_step(
+            db_session,
+            manager,
+            ProcessStepCreate(
+                batch_id=batch.id,
+                type="nettoyage",
+                date=date.today(),
+                qty_out=990,
+                loss_unit="kg",
+            ),
+        )
+
+
+def test_post_recolte_loss_movement_has_reference_chain(db_session):
+    manager, _product, batch = _setup_ready_post_recolte_batch(db_session)
+    started = batch_service.start_postharvest(
+        db_session,
+        manager,
+        batch.id,
+        payload=BatchStartPostHarvestRequest(product_id=batch.product_id, grade="A", quantity_kg=1000),
+    )
+    step = process_step_service.create_process_step(
+        db_session,
+        manager,
+        ProcessStepCreate(
+            batch_id=batch.id,
+            type="nettoyage",
+            date=date.today(),
+            qty_out=980,
+            loss_unit="kg",
+            notes="Perte post-récolte",
+        ),
+    )
+    movement = db_session.scalar(
+        select(StockMovement).where(StockMovement.idempotency_key == f"step:{step.id}:loss")
+    )
+    assert movement is not None
+    assert movement.grade == "A"
+    assert movement.movement_reference is not None
+    assert movement.movement_reference.startswith("MVT-LOSS-")
+
+    detail = stock_movement_service.get_stock_movement_detail(db_session, manager, movement.id)
+    assert detail.postharvest_reference == started.postharvest_reference
+    assert detail.preharvest_reference == started.code
+    assert detail.process_step_type == step.type
+    assert detail.grade == "A"
+
+
+def test_start_post_recolte_rejects_quantity_above_selected_grade_available(db_session):
+    manager, _product, batch = _setup_ready_post_recolte_batch(db_session)
+    with pytest.raises(ValidationError, match="supérieure|superieure|supérieure au stock disponible|superieure au stock disponible"):
+        batch_service.start_postharvest(
+            db_session,
+            manager,
+            batch.id,
+            payload=BatchStartPostHarvestRequest(product_id=batch.product_id, grade="A", quantity_kg=1000.01),
+        )
+
+
 def test_complete_step_computes_loss_and_efficiency(db_session):
     manager, _product, batch = _setup_ready_post_recolte_batch(db_session)
-    batch_service.start_postharvest(db_session, manager, batch.id)
+    batch_service.start_postharvest(
+        db_session,
+        manager,
+        batch.id,
+        payload=BatchStartPostHarvestRequest(product_id=batch.product_id, grade="A", quantity_kg=1000),
+    )
     step = process_step_service.create_process_step(
         db_session,
         manager,
@@ -133,7 +208,12 @@ def test_complete_step_computes_loss_and_efficiency(db_session):
 
 def test_step_output_feeds_next_step_input(db_session):
     manager, _product, batch = _setup_ready_post_recolte_batch(db_session)
-    batch_service.start_postharvest(db_session, manager, batch.id)
+    batch_service.start_postharvest(
+        db_session,
+        manager,
+        batch.id,
+        payload=BatchStartPostHarvestRequest(product_id=batch.product_id, grade="A", quantity_kg=1000),
+    )
     step1 = process_step_service.create_process_step(
         db_session,
         manager,
@@ -163,7 +243,12 @@ def test_step_output_feeds_next_step_input(db_session):
 
 def test_complete_post_recolte_requires_all_steps_done(db_session):
     manager, _product, batch = _setup_ready_post_recolte_batch(db_session)
-    batch_service.start_postharvest(db_session, manager, batch.id)
+    batch_service.start_postharvest(
+        db_session,
+        manager,
+        batch.id,
+        payload=BatchStartPostHarvestRequest(product_id=batch.product_id, grade="A", quantity_kg=1000),
+    )
 
     with pytest.raises(ValidationError, match="required steps"):
         batch_service.complete_postharvest(db_session, manager, batch.id)
@@ -194,7 +279,12 @@ def test_complete_post_recolte_requires_all_steps_done(db_session):
 
 def test_reject_qty_out_greater_than_qty_in(db_session):
     manager, _product, batch = _setup_ready_post_recolte_batch(db_session)
-    batch_service.start_postharvest(db_session, manager, batch.id)
+    batch_service.start_postharvest(
+        db_session,
+        manager,
+        batch.id,
+        payload=BatchStartPostHarvestRequest(product_id=batch.product_id, grade="A", quantity_kg=1000),
+    )
     step = process_step_service.create_process_step(
         db_session,
         manager,
@@ -219,7 +309,12 @@ def test_reject_qty_out_greater_than_qty_in(db_session):
 
 def test_repeated_completion_does_not_duplicate_stock_movements(db_session):
     manager, _product, batch = _setup_ready_post_recolte_batch(db_session)
-    batch_service.start_postharvest(db_session, manager, batch.id)
+    batch_service.start_postharvest(
+        db_session,
+        manager,
+        batch.id,
+        payload=BatchStartPostHarvestRequest(product_id=batch.product_id, grade="A", quantity_kg=1000),
+    )
     step = process_step_service.create_process_step(
         db_session,
         manager,
@@ -246,7 +341,12 @@ def test_repeated_completion_does_not_duplicate_stock_movements(db_session):
 
 def test_material_balance_endpoint_totals(db_session):
     manager, _product, batch = _setup_ready_post_recolte_batch(db_session)
-    batch_service.start_postharvest(db_session, manager, batch.id)
+    batch_service.start_postharvest(
+        db_session,
+        manager,
+        batch.id,
+        payload=BatchStartPostHarvestRequest(product_id=batch.product_id, grade="A", quantity_kg=1000),
+    )
     process_step_service.create_process_step(
         db_session,
         manager,

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
+import { scopePrefix, scopedQueryKey, useQueryScope } from "@/lib/query/scope";
 import type {
   Cooperative,
   CooperativeUser,
@@ -20,91 +21,100 @@ import type {
 } from "@/lib/api/types";
 
 export function useInstitutions() {
+  const scope = useQueryScope();
   return useQuery({
-    queryKey: ["super-admin", "institutions"],
+    queryKey: scopedQueryKey(["super-admin", "institutions"], scope),
     queryFn: () => apiFetch<Institution[]>(endpoints.superAdmin.institutions),
   });
 }
 
 export function useCooperativesGlobal() {
+  const scope = useQueryScope();
   return useQuery({
-    queryKey: ["super-admin", "cooperatives"],
+    queryKey: scopedQueryKey(["super-admin", "cooperatives"], scope),
     queryFn: () => apiFetch<Cooperative[]>(endpoints.superAdmin.cooperatives),
   });
 }
 
 export function useHierarchyOverview() {
+  const scope = useQueryScope();
   return useQuery({
-    queryKey: ["super-admin", "hierarchy"],
+    queryKey: scopedQueryKey(["super-admin", "hierarchy"], scope),
     queryFn: () => apiFetch<HierarchyOverview>(endpoints.superAdmin.hierarchy),
   });
 }
 
 export function useSuperAdminOversightCooperatives() {
+  const scope = useQueryScope();
   return useQuery({
-    queryKey: ["super-admin", "oversight", "cooperatives"],
+    queryKey: scopedQueryKey(["super-admin", "oversight", "cooperatives"], scope),
     queryFn: () => apiFetch<CooperativeOversightResponse>(endpoints.superAdmin.oversightCooperatives),
   });
 }
 
 export function useCreateInstitution() {
   const queryClient = useQueryClient();
+  const scope = useQueryScope();
   return useMutation({
     mutationFn: (payload: InstitutionCreate) =>
       apiFetch<Institution>(endpoints.superAdmin.institutions, { method: "POST", body: payload }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "institutions"] });
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "hierarchy"] });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "institutions"], scope) });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "hierarchy"], scope) });
     },
   });
 }
 
 export function useUpdateInstitution() {
   const queryClient = useQueryClient();
+  const scope = useQueryScope();
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: InstitutionUpdate }) =>
       apiFetch<Institution>(endpoints.superAdmin.institution(id), { method: "PATCH", body: payload }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "institutions"] });
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "hierarchy"] });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "institutions"], scope) });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "hierarchy"], scope) });
     },
   });
 }
 
 export function useDeactivateInstitution() {
   const queryClient = useQueryClient();
+  const scope = useQueryScope();
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<Institution>(endpoints.superAdmin.deactivateInstitution(id), { method: "PATCH" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "institutions"] });
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "hierarchy"] });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "institutions"], scope) });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "hierarchy"], scope) });
     },
   });
 }
 
 export function useCreateCooperativeGlobal() {
   const queryClient = useQueryClient();
+  const scope = useQueryScope();
   return useMutation({
     mutationFn: (payload: CooperativeCreate) =>
       apiFetch<Cooperative>(endpoints.superAdmin.cooperatives, { method: "POST", body: payload }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "cooperatives"] });
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "hierarchy"] });
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "institutions"] });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "cooperatives"], scope) });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "hierarchy"], scope) });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "institutions"], scope) });
     },
   });
 }
 
 export function useUpdateCooperativeGlobal() {
   const queryClient = useQueryClient();
+  const scope = useQueryScope();
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: CooperativeUpdate }) =>
       apiFetch<Cooperative>(endpoints.superAdmin.cooperative(id), { method: "PATCH", body: payload }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "cooperatives"] });
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "hierarchy"] });
-      queryClient.invalidateQueries({ queryKey: ["super-admin", "institutions"] });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "cooperatives"], scope) });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "hierarchy"], scope) });
+      queryClient.invalidateQueries({ queryKey: scopePrefix(["super-admin", "institutions"], scope) });
     },
   });
 }

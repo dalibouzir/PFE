@@ -16,11 +16,14 @@ from app.models.treasury_transaction import TreasuryTransaction
 from app.models.user import User
 from app.schemas.batch import BatchCreate
 from app.schemas.process_step import ProcessStepCreate
+from app.schemas.treasury import TreasuryTransactionCreate
 from app.services import batches as batch_service
 from app.services import inputs as inputs_service
 from app.services import process_steps as process_step_service
+from app.services import treasury as treasury_service
 from app.schemas.input import InputCreate
 from app.utils.exceptions import ValidationError
+from app.services import stocks as stock_service
 
 
 def _manager(db_session):
@@ -349,6 +352,117 @@ def test_preharvest_step_statuses_update_does_not_change_stock(db_session):
     assert input_after == input_before
 
 
+def test_collecte_grade_creates_distinct_stock_buckets(db_session):
+    manager = _manager(db_session)
+    member, _parcel, product = _member_parcel_product(db_session, manager)
+
+    grade_a = inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            date=date.today(),
+            quantity=120,
+            grade="A",
+            status="pending",
+            source_type="manual",
+        ),
+    )
+    grade_b = inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            date=date.today(),
+            quantity=80,
+            grade="B",
+            status="pending",
+            source_type="manual",
+        ),
+    )
+
+    stock_a = stock_service.get_stock_by_product(db_session, manager.cooperative_id, product.id, "A")
+    stock_b = stock_service.get_stock_by_product(db_session, manager.cooperative_id, product.id, "B")
+    assert stock_a is not None
+    assert stock_b is not None
+    assert stock_a.total_stock_kg == pytest.approx(grade_a.quantity)
+    assert stock_b.total_stock_kg == pytest.approx(grade_b.quantity)
+
+
+def test_collecte_linked_movement_persists_input_grade(db_session):
+    manager = _manager(db_session)
+    member, parcel, product = _member_parcel_product(db_session, manager)
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            member_id=member.id,
+            parcel_id=parcel.id,
+            creation_date=date.today(),
+            initial_qty=1,
+            unit="kg",
+            process_steps=["tri"],
+            surface_ha=1,
+            expected_yield_kg_per_ha=1200,
+            expected_losses_kg=0,
+            estimated_charge_fcfa=1000,
+        ),
+    )
+    batch_service.complete_preharvest(db_session, manager, batch.id)
+    collecte = inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            batch_id=batch.id,
+            date=date.today(),
+            quantity=50,
+            grade="B",
+            status="pending",
+            source_type="manual",
+        ),
+    )
+
+    movement = db_session.scalar(
+        select(StockMovement).where(StockMovement.input_id == collecte.id)
+    )
+    assert movement is not None
+    assert movement.grade == "B"
+
+
+def test_legacy_non_specifie_grade_bucket_is_supported(db_session):
+    manager = _manager(db_session)
+    member, _parcel, product = _member_parcel_product(db_session, manager)
+    stock_before = stock_service.get_stock_by_product(
+        db_session, manager.cooperative_id, product.id, "Non spécifié"
+    )
+    before_total = float(stock_before.total_stock_kg if stock_before is not None else 0.0)
+    created = inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            date=date.today(),
+            quantity=33,
+            grade="Non spécifié",
+            status="pending",
+            source_type="manual",
+        ),
+    )
+
+    stock = stock_service.get_stock_by_product(
+        db_session, manager.cooperative_id, product.id, "Non spécifié"
+    )
+    assert stock is not None
+    assert stock.grade == "Non spécifié"
+    assert stock.total_stock_kg == pytest.approx(before_total + created.quantity)
+
+
 def test_complete_preharvest_requires_all_persisted_statuses_done_for_active_lot(db_session):
     manager = _manager(db_session)
     member, parcel, product = _member_parcel_product(db_session, manager)
@@ -415,9 +529,8 @@ def test_linked_collecte_creates_stock_in_and_updates_batch_weight(db_session):
             estimated_charge_fcfa=15000,
         ),
     )
-    stock_before = db_session.scalar(select(Stock).where(Stock.cooperative_id == manager.cooperative_id, Stock.product_id == product.id))
-    assert stock_before is not None
-    total_before = stock_before.total_stock_kg
+    stock_before = stock_service.get_stock_by_product(db_session, manager.cooperative_id, product.id, "A")
+    total_before = float(stock_before.total_stock_kg if stock_before is not None else 0.0)
 
     batch_service.complete_preharvest(db_session, manager, batch.id)
     created = inputs_service.record_input(
@@ -438,6 +551,8 @@ def test_linked_collecte_creates_stock_in_and_updates_batch_weight(db_session):
     assert created.batch_id == batch.id
     assert created.source_type == "lot_linked_collecte"
     assert created.status.value == "validated"
+    assert created.collecte_reference is not None
+    assert created.collecte_reference.startswith("COL-MANG-")
     batch_after = batch_service.require_batch(db_session, manager, batch.id, with_steps=True)
     assert batch_after.confirmed_weight_kg == pytest.approx(1200)
     assert batch_after.current_qty == pytest.approx(1200)
@@ -449,7 +564,9 @@ def test_linked_collecte_creates_stock_in_and_updates_batch_weight(db_session):
         select(StockMovement).where(StockMovement.batch_id == batch.id, StockMovement.movement_type == "in")
     ).all()
     assert len(movements) == 1
-    stock_after = db_session.scalar(select(Stock).where(Stock.id == stock_before.id))
+    assert movements[0].movement_reference is not None
+    assert movements[0].movement_reference.startswith("MVT-IN-")
+    stock_after = stock_service.get_stock_by_product(db_session, manager.cooperative_id, product.id, "A")
     assert stock_after is not None
     assert stock_after.total_stock_kg == pytest.approx(total_before + 1200)
 
@@ -504,6 +621,73 @@ def test_duplicate_linked_collecte_for_same_batch_is_rejected(db_session):
                 source_type="lot_linked_collecte",
             ),
         )
+
+
+def test_postharvest_step_requires_explicit_start(db_session):
+    manager = _manager(db_session)
+    member, parcel, product = _member_parcel_product(db_session, manager)
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            member_id=member.id,
+            parcel_id=parcel.id,
+            creation_date=date.today(),
+            initial_qty=1,
+            unit="kg",
+            process_steps=["sorting"],
+            surface_ha=2,
+            expected_yield_kg_per_ha=4000,
+            expected_losses_kg=500,
+            estimated_charge_fcfa=15000,
+        ),
+    )
+    batch_service.complete_preharvest(db_session, manager, batch.id)
+    inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            batch_id=batch.id,
+            date=date.today(),
+            quantity=920,
+            grade="A",
+            status="validated",
+            source_type="lot_linked_collecte",
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="Démarrez Post-récolte"):
+        process_step_service.create_process_step(
+            db_session,
+            manager,
+            ProcessStepCreate(
+                batch_id=batch.id,
+                type="sorting",
+                date=date.today(),
+                loss_value=10,
+                loss_unit="kg",
+            ),
+        )
+
+    started = batch_service.start_postharvest(db_session, manager, batch.id)
+    assert started.postharvest_started_at is not None
+    assert started.postharvest_reference is not None
+
+    step = process_step_service.create_process_step(
+        db_session,
+        manager,
+        ProcessStepCreate(
+            batch_id=batch.id,
+            type="sorting",
+            date=date.today(),
+            loss_value=10,
+            loss_unit="kg",
+        ),
+    )
+    assert step.sequence_order == 1
 
 
 def test_delete_linked_collecte_reopens_lot_for_collecte(db_session):
@@ -592,6 +776,7 @@ def test_delete_linked_collecte_blocked_when_postharvest_started(db_session):
             source_type="lot_linked_collecte",
         ),
     )
+    batch_service.start_postharvest(db_session, manager, batch.id)
 
     process_step_service.create_process_step(
         db_session,
@@ -614,9 +799,8 @@ def test_delete_linked_collecte_blocked_when_postharvest_started(db_session):
 def test_independent_collecte_without_batch_still_works(db_session):
     manager = _manager(db_session)
     member, _parcel, product = _member_parcel_product(db_session, manager)
-    stock_before = db_session.scalar(select(Stock).where(Stock.cooperative_id == manager.cooperative_id, Stock.product_id == product.id))
-    assert stock_before is not None
-    total_before = stock_before.total_stock_kg
+    stock_before = stock_service.get_stock_by_product(db_session, manager.cooperative_id, product.id, "B")
+    total_before = float(stock_before.total_stock_kg if stock_before is not None else 0.0)
 
     created = inputs_service.record_input(
         db_session,
@@ -633,7 +817,7 @@ def test_independent_collecte_without_batch_still_works(db_session):
         ),
     )
     assert created.batch_id is None
-    stock_after = db_session.scalar(select(Stock).where(Stock.id == stock_before.id))
+    stock_after = stock_service.get_stock_by_product(db_session, manager.cooperative_id, product.id, "B")
     assert stock_after is not None
     assert stock_after.total_stock_kg == pytest.approx(total_before + 350)
 
@@ -716,3 +900,67 @@ def test_stop_preharvest_rejected_once_execution_started(db_session):
 
     with pytest.raises(ValidationError, match="execution has started"):
         batch_service.stop_preharvest(db_session, manager, batch.id)
+
+
+def test_treasury_create_auto_generates_reference_without_manual_receipt_reference(db_session):
+    manager = _manager(db_session)
+    created = treasury_service.create_treasury_transaction(
+        db_session,
+        manager,
+        TreasuryTransactionCreate(
+            transaction_date=date.today(),
+            type="expense",
+            category="gestion",
+            label="Carburant",
+            amount_fcfa=18000,
+            note="Achat carburant",
+            source_type="manual",
+        ),
+    )
+    assert created.reference.startswith("TRS-")
+    assert created.receipt_reference is None
+
+
+def test_legacy_collecte_without_reference_keeps_batch_serialization_stable(db_session):
+    manager = _manager(db_session)
+    member, parcel, product = _member_parcel_product(db_session, manager)
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            member_id=member.id,
+            parcel_id=parcel.id,
+            creation_date=date.today(),
+            initial_qty=1,
+            unit="kg",
+            process_steps=["sorting"],
+            surface_ha=2,
+            expected_yield_kg_per_ha=4000,
+            expected_losses_kg=500,
+            estimated_charge_fcfa=15000,
+        ),
+    )
+    batch_service.complete_preharvest(db_session, manager, batch.id)
+    linked_collecte = inputs_service.record_input(
+        db_session,
+        manager,
+        InputCreate(
+            member_id=member.id,
+            product_id=product.id,
+            batch_id=batch.id,
+            date=date.today(),
+            quantity=950,
+            grade="A",
+            status="validated",
+            source_type="lot_linked_collecte",
+        ),
+    )
+
+    linked_collecte.collecte_reference = None
+    db_session.commit()
+    db_session.refresh(linked_collecte)
+
+    serialized = batch_service.serialize_batch(batch_service.require_batch(db_session, manager, batch.id, with_steps=True))
+    assert serialized.collecte_reference is not None
+    assert serialized.collecte_reference.startswith("COL-HIST-")

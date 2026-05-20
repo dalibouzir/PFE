@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
+import { scopePrefix, scopedQueryKey, useQueryScope } from "@/lib/query/scope";
 import type {
   TreasuryStats,
   TreasuryTransaction,
@@ -28,54 +29,60 @@ function buildTreasuryPath(filters: TreasuryFilters) {
 }
 
 export function useTreasuryTransactions(filters: TreasuryFilters) {
+  const scope = useQueryScope();
   return useQuery({
-    queryKey: ["treasury", "list", filters],
+    queryKey: scopedQueryKey(["treasury", "list"], scope, filters),
     queryFn: () => apiFetch<TreasuryTransaction[]>(buildTreasuryPath(filters)),
   });
 }
 
 export function useTreasuryStats() {
+  const scope = useQueryScope();
   return useQuery({
-    queryKey: ["treasury", "stats"],
+    queryKey: scopedQueryKey(["treasury", "stats"], scope),
     queryFn: () => apiFetch<TreasuryStats>(endpoints.treasury.stats),
   });
 }
 
 export function useCreateTreasuryTransaction() {
   const queryClient = useQueryClient();
+  const scope = useQueryScope();
   return useMutation({
     mutationFn: (payload: TreasuryTransactionCreate) =>
       apiFetch<TreasuryTransaction>(endpoints.treasury.list, { method: "POST", body: payload }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["treasury"] });
+      queryClient.invalidateQueries({ queryKey: scopePrefix("treasury", scope) });
     },
   });
 }
 
 export function useUpdateTreasuryTransaction() {
   const queryClient = useQueryClient();
+  const scope = useQueryScope();
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: TreasuryTransactionUpdate }) =>
       apiFetch<TreasuryTransaction>(endpoints.treasury.update(id), { method: "PUT", body: payload }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["treasury"] });
+      queryClient.invalidateQueries({ queryKey: scopePrefix("treasury", scope) });
     },
   });
 }
 
 export function useCancelTreasuryTransaction() {
   const queryClient = useQueryClient();
+  const scope = useQueryScope();
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<TreasuryTransaction>(endpoints.treasury.cancel(id), { method: "PATCH" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["treasury"] });
+      queryClient.invalidateQueries({ queryKey: scopePrefix("treasury", scope) });
     },
   });
 }
 
 export function useUploadTreasuryJustificatif() {
   const queryClient = useQueryClient();
+  const scope = useQueryScope();
   return useMutation({
     mutationFn: async ({ id, file }: { id: string; file: File }) => {
       const formData = new FormData();
@@ -98,7 +105,7 @@ export function useUploadTreasuryJustificatif() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["treasury"] });
+      queryClient.invalidateQueries({ queryKey: scopePrefix("treasury", scope) });
     },
   });
 }

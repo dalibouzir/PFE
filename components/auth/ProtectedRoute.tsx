@@ -9,9 +9,15 @@ import type { UserRole } from "@/lib/api/types";
 export function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: UserRole | UserRole[] }) {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const scopePending =
+    loading ||
+    !user ||
+    !user.id ||
+    !user.role ||
+    (user.role === "manager" || user.role === "owner" || user.role === "viewer" ? !user.cooperative_id : false);
 
   useEffect(() => {
-    if (loading) return;
+    if (scopePending) return;
     if (!user) {
       router.replace("/login");
       return;
@@ -32,9 +38,9 @@ export function ProtectedRoute({ children, role }: { children: React.ReactNode; 
       }
       router.replace("/manager/dashboard");
     }
-  }, [loading, user, role, router]);
+  }, [scopePending, user, role, router]);
 
-  if (loading || !user) {
+  if (scopePending) {
     return <AgriBrandLoader mode="screen" />;
   }
 

@@ -15,6 +15,7 @@ from app.schemas.batch import BatchCreate, BatchStatusUpdate
 from app.schemas.input import InputCreate
 from app.schemas.process_step import ProcessStepCreate, ProcessStepUpdate
 from app.schemas.stock import StockCreate
+from app.schemas.stock_movement import ManualStockMovementCreate
 from app.services import batches as batch_service
 from app.services import inputs as inputs_service
 from app.services import process_steps as process_step_service
@@ -338,7 +339,7 @@ def test_linked_collecte_movement_has_linked_lot_traceability(db_session):
         ),
     )
     batch_service.complete_preharvest(db_session, manager, batch.id)
-    inputs_service.record_input(
+    collecte = inputs_service.record_input(
         db_session,
         manager,
         InputCreate(
@@ -352,11 +353,16 @@ def test_linked_collecte_movement_has_linked_lot_traceability(db_session):
             source_type="manual",
         ),
     )
+    assert collecte.collecte_reference is not None
+    assert collecte.collecte_reference.startswith("COL-MANG-")
 
     movements = stock_movement_service.list_stock_movements(db_session, manager)
     linked = next(item for item in movements if item.source == "lot_linked_collecte")
     assert linked.traceability_status == "linked_lot"
+    assert linked.grade == "A"
     assert linked.batch_reference == batch.code
+    assert linked.collecte_reference == collecte.collecte_reference
+    assert linked.movement_reference.startswith("MVT-IN-")
 
 
 def test_post_harvest_loss_movement_keeps_batch_and_step_reference(db_session):
@@ -424,3 +430,97 @@ def test_missing_or_legacy_lot_traceability_statuses(db_session):
     by_key = {m.idempotency_key: m for m in movements}
     assert by_key["test:missing-lot"].traceability_status == "missing_lot"
     assert by_key["test:legacy-unlinked"].traceability_status == "legacy_unlinked"
+    assert by_key["test:legacy-unlinked"].movement_reference.startswith("MVT-HIST-")
+
+
+def test_manual_in_movement_increases_selected_grade_stock(db_session):
+    manager, product, _stock = _manager_and_product(db_session)
+    stock_service.apply_total_stock_delta(db_session, manager.cooperative_id, product, 0, create_if_missing=True, grade="A")
+    before = stock_service.get_stock_by_product(db_session, manager.cooperative_id, product.id, "A")
+    assert before is not None
+    before_total = float(before.total_stock_kg)
+    created = stock_movement_service.create_manual_stock_movement(
+        db_session,
+        manager,
+        ManualStockMovementCreate(
+            product_id=product.id,
+            grade="A",
+            movement_type="in",
+            quantity_kg=12,
+            notes="manual test in",
+        ),
+    )
+    after = stock_service.get_stock_by_product(db_session, manager.cooperative_id, product.id, "A")
+    assert after is not None
+    assert after.total_stock_kg == pytest.approx(before_total + 12)
+    assert created.source == "manual_adjustment"
+    assert created.movement_reference.startswith("MVT-MAN-")
+
+
+def test_manual_out_movement_decreases_selected_grade_stock(db_session):
+    manager, product, _stock = _manager_and_product(db_session)
+    stock_service.apply_total_stock_delta(db_session, manager.cooperative_id, product, 40, create_if_missing=True, grade="B")
+    before = stock_service.get_stock_by_product(db_session, manager.cooperative_id, product.id, "B")
+    assert before is not None
+    before_total = float(before.total_stock_kg)
+    created = stock_movement_service.create_manual_stock_movement(
+        db_session,
+        manager,
+        ManualStockMovementCreate(
+            product_id=product.id,
+            grade="B",
+            movement_type="out",
+            quantity_kg=10,
+            notes="manual test out",
+        ),
+    )
+    after = stock_service.get_stock_by_product(db_session, manager.cooperative_id, product.id, "B")
+    assert after is not None
+    assert after.total_stock_kg == pytest.approx(before_total - 10)
+    assert created.source == "manual_adjustment"
+
+
+def test_manual_out_cannot_exceed_available_stock(db_session):
+    manager, product, _stock = _manager_and_product(db_session)
+    stock_service.apply_total_stock_delta(db_session, manager.cooperative_id, product, 5, create_if_missing=True, grade="C")
+    with pytest.raises(ValidationError):
+        stock_movement_service.create_manual_stock_movement(
+            db_session,
+            manager,
+            ManualStockMovementCreate(
+                product_id=product.id,
+                grade="C",
+                movement_type="out",
+                quantity_kg=9999,
+                notes="too much out",
+            ),
+        )
+
+
+def test_manual_movement_requires_reason(db_session):
+    manager, product, _stock = _manager_and_product(db_session)
+    with pytest.raises(Exception):
+        ManualStockMovementCreate(
+            product_id=product.id,
+            grade="A",
+            movement_type="in",
+            quantity_kg=2,
+            notes="",
+        )
+
+
+def test_manual_movement_appears_with_source_manual_adjustment(db_session):
+    manager, product, _stock = _manager_and_product(db_session)
+    stock_movement_service.create_manual_stock_movement(
+        db_session,
+        manager,
+        ManualStockMovementCreate(
+            product_id=product.id,
+            grade="A",
+            movement_type="in",
+            quantity_kg=3,
+            notes="manual source check",
+        ),
+    )
+    rows = stock_movement_service.list_stock_movements(db_session, manager, source="manual_adjustment")
+    assert any(row.source == "manual_adjustment" for row in rows)

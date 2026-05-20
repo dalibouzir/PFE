@@ -1,0 +1,113 @@
+{
+  "timestamp": "2026-05-20T13:05:38.474884",
+  "config": {
+    "llm_provider": "groq",
+    "groq_present": true
+  },
+  "results": [
+    {
+      "index": 1,
+      "question": "Quel est le stock actuel par produit ?",
+      "route": "AgentRoute.SQL_ONLY",
+      "agents": [
+        "SQLAnalyticsAgent"
+      ],
+      "answer_length": 49,
+      "answer_preview": "Donnée non disponible pour cette requête précise.",
+      "llm_indicator": false,
+      "status": "success"
+    },
+    {
+      "index": 2,
+      "question": "Quels lots ont les pertes les plus élevées ?",
+      "route": "AgentRoute.SQL_ONLY",
+      "agents": [
+        "SQLAnalyticsAgent"
+      ],
+      "answer_length": 485,
+      "answer_preview": "1. Réponse directe\nLots à risque élevé (1):\n- LOT-MANG-001: perte 5.0 % | efficacité 95.0 %\n\n2. Inte...",
+      "llm_indicator": false,
+      "status": "success"
+    },
+    {
+      "index": 3,
+      "question": "Quels lots ont le plus grand écart entre entrée et sortie ?",
+      "route": "AgentRoute.SQL_ONLY",
+      "agents": [
+        "SQLAnalyticsAgent"
+      ],
+      "answer_length": 487,
+      "answer_preview": "1. Réponse directe\nLe lot LOT-MANG-001 présente une perte de 5.0% et une efficacité de 95.0%.\n\n2. In...",
+      "llm_indicator": false,
+      "status": "success"
+    },
+    {
+      "index": 4,
+      "question": "Quelles bonnes pratiques appliquer avant l'emballage ?",
+      "route": "AgentRoute.HYBRID_SQL_RAG",
+      "agents": [
+        "SQLAnalyticsAgent",
+        "RAGKnowledgeAgent"
+      ],
+      "answer_length": 526,
+      "answer_preview": "Avant l'emballage, il est recommandé d'appliquer les bonnes pratiques suivantes :\n\n* Conserver les p...",
+      "llm_indicator": true,
+      "status": "success"
+    },
+    {
+      "index": 5,
+      "question": "Selon nos données et les bonnes pratiques, comment réduire les pertes au séchage ?",
+      "route": "AgentRoute.HYBRID_SQL_RAG",
+      "agents": [
+        "SQLAnalyticsAgent",
+        "RAGKnowledgeAgent"
+      ],
+      "answer_length": 416,
+      "answer_preview": "Réduction des pertes au séchage : indisponible. Les données SQL nécessaires pour répondre à cette qu...",
+      "llm_indicator": true,
+      "status": "success"
+    },
+    {
+      "index": 6,
+      "question": "Analyse uniquement le lot LOT-MANG-001 : perte, efficacité, signal ML et recommandation liée.",
+      "route": "AgentRoute.HYBRID_SQL_ML",
+      "agents": [
+        "SQLAnalyticsAgent",
+        "MLLossAgent"
+      ],
+      "answer_length": 305,
+      "answer_preview": "Analyse du lot LOT-MANG-001 :\n\n- Perte : indisponible\n- Efficacité : indisponible\n- Signal ML : indi...",
+      "llm_indicator": true,
+      "status": "success"
+    },
+    {
+      "index": 7,
+      "question": "Quels lots ont les pertes les plus élevées ?",
+      "route": "AgentRoute.SQL_ONLY",
+      "agents": [
+        "SQLAnalyticsAgent"
+      ],
+      "answer_length": 485,
+      "answer_preview": "1. Réponse directe\nLots à risque élevé (1):\n- LOT-MANG-001: perte 5.0 % | efficacité 95.0 %\n\n2. Inte...",
+      "llm_indicator": false,
+      "status": "success"
+    },
+    {
+      "index": 8,
+      "question": "Et le premier, quelle action recommandes-tu ?",
+      "route": "AgentRoute.RECOMMENDATION_ONLY",
+      "agents": [
+        "RecommendationAgent"
+      ],
+      "answer_length": 830,
+      "answer_preview": "1. Réponse directe\nLe premier élément demandé: 5 action(s) priorisée(s) générée(s), dont 2 priorité ...",
+      "llm_indicator": false,
+      "status": "success"
+    }
+  ],
+  "summary": {
+    "total_tested": 8,
+    "successful": 8,
+    "llm_likely_used": 3
+  }
+}

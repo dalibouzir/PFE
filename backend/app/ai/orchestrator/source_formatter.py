@@ -139,7 +139,13 @@ def _build_recommendation_source(agent_results: list[AgentResult]) -> dict[str, 
     has_evidence = False
     if isinstance(recommendations, list):
         for rec in recommendations:
-            if isinstance(rec, dict) and rec.get("evidence"):
+            refs = rec.get("evidence_refs") if isinstance(rec, dict) else None
+            if isinstance(refs, list) and any(
+                isinstance(ref, dict)
+                and str(ref.get("type") or "").upper() in {"SQL", "RAG", "ML", "RULE"}
+                and str(ref.get("source_id") or "").strip()
+                for ref in refs
+            ):
                 has_evidence = True
                 break
     warning = None

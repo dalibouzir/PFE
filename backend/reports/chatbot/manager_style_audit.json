@@ -1,0 +1,223 @@
+{
+  "generated_at": "2026-05-19T00:50:31.126767+00:00",
+  "cooperative_id": "4cbc6020-def9-4d24-bb75-9d40bc031466",
+  "total": 30,
+  "counts": {
+    "PASS": 29,
+    "PARTIAL": 1
+  },
+  "rows": [
+    {
+      "id": "sql1",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Combien de mouvements de stock et les 5 derniers (type, produit, quantité, source) ?"
+    },
+    {
+      "id": "sql2",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Quels lots ont les pertes les plus élevées ?"
+    },
+    {
+      "id": "sql3",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Donne les charges globales et dépenses trésorerie."
+    },
+    {
+      "id": "sql4",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Pour les commandes payées, quelles factures sont liées ?"
+    },
+    {
+      "id": "sql5",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Quelles collectes ont BL ou justificatif ?"
+    },
+    {
+      "id": "sql6",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Stock disponible par produit."
+    },
+    {
+      "id": "sql7",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Quel est le bilan matière des lots ?"
+    },
+    {
+      "id": "sql8",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Top producteurs par volume."
+    },
+    {
+      "id": "ml1",
+      "route": "HYBRID_SQL_ML",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Pour le lot DEMOFP-LOT-MANG-013, perte SQL et signal ML."
+    },
+    {
+      "id": "ml2",
+      "route": "HYBRID_SQL_ML",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Quel lot a le signal ML le plus critique ?"
+    },
+    {
+      "id": "ml3",
+      "route": "HYBRID_SQL_ML",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Pour ce lot, y a-t-il anomalie ML ?"
+    },
+    {
+      "id": "ml4",
+      "route": "HYBRID_SQL_ML",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Donne le risque ML et la perte observée du même lot."
+    },
+    {
+      "id": "ml5",
+      "route": "HYBRID_SQL_ML",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Signal ML indisponible: dis-le clairement pour ce lot."
+    },
+    {
+      "id": "rag1",
+      "route": "HYBRID_SQL_RAG",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Selon nos données, où perd-on le plus et comment améliorer ?"
+    },
+    {
+      "id": "rag2",
+      "route": "HYBRID_SQL_RAG",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Précautions avant emballage."
+    },
+    {
+      "id": "rag3",
+      "route": "HYBRID_SQL_RAG",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Bonnes pratiques de séchage."
+    },
+    {
+      "id": "rag4",
+      "route": "HYBRID_SQL_RAG",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Conseil opérationnel pour réduire les pertes au tri."
+    },
+    {
+      "id": "rag5",
+      "route": "RAG_ONLY",
+      "score": "PARTIAL",
+      "reasons": [
+        "missing_structure_header"
+      ],
+      "question": "Checklist post-récolte concise."
+    },
+    {
+      "id": "full1",
+      "route": "HYBRID_FULL",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Quel lot a la plus forte perte SQL, son signal ML, et la recommandation liée ?"
+    },
+    {
+      "id": "full2",
+      "route": "HYBRID_FULL",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Analyse lot critique avec SQL, ML, recommandation et conseil pratique."
+    },
+    {
+      "id": "full3",
+      "route": "HYBRID_FULL",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Pour ce lot, données SQL + risque ML + action recommandée."
+    },
+    {
+      "id": "full4",
+      "route": "SQL_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Synthèse complète lot/perte/ML/recommandation."
+    },
+    {
+      "id": "ro1",
+      "route": "HYBRID_SQL_RAG",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Quelles précautions prendre avant l’emballage ?"
+    },
+    {
+      "id": "ro2",
+      "route": "HYBRID_SQL_RAG",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Checklist rapide tri/séchage/nettoyage."
+    },
+    {
+      "id": "ro3",
+      "route": "OUT_OF_SCOPE",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Point de vigilance avant conditionnement."
+    },
+    {
+      "id": "reco1",
+      "route": "RECOMMENDATION_ONLY",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Et le premier, quelle action recommandes-tu ?"
+    },
+    {
+      "id": "reco2",
+      "route": "HYBRID_FULL",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Action prioritaire pour ce lot."
+    },
+    {
+      "id": "reco3",
+      "route": "HYBRID_FULL",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Quelle recommandation liée à ce lot ?"
+    },
+    {
+      "id": "o1",
+      "route": "OUT_OF_SCOPE",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Connecte-toi et vérifie le dashboard."
+    },
+    {
+      "id": "o2",
+      "route": "OUT_OF_SCOPE",
+      "score": "PASS",
+      "reasons": [],
+      "question": "Dois-je licencier des membres ?"
+    }
+  ]
+}

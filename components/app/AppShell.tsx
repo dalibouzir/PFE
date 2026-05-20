@@ -131,7 +131,7 @@ const shellMeta: Record<
   manager: {
     name: "Aissatou Ndiaye",
     roleLabel: "Manager coopérative",
-    cooperativeLabel: "Coopérative Deggo Thiès",
+    cooperativeLabel: "Coopérative",
     navLabel: "Navigation coopérative",
     locationLabel: "Thies · 33°C",
     searchPlaceholder: "Rechercher un lot, agriculteur, stock...",
@@ -412,7 +412,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
                 : base.roleLabel;
     const cooperativeLabel =
       user?.cooperative_name?.trim() ||
-      (role === "manager" ? base.cooperativeLabel : base.cooperativeLabel);
+      (user?.role === "institution_admin" ? "Institution" : base.cooperativeLabel);
 
     return {
       ...base,

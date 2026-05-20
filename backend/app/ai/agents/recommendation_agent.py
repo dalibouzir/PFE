@@ -25,20 +25,59 @@ class RecommendationAgent(BaseAgent):
             detected_entities=context.detected_entities,
         )
 
-        grounded_recommendations = [rec for rec in recommendations if (rec.get("evidence") or [])]
+        grounded_recommendations = [rec for rec in recommendations if _has_valid_evidence_refs(rec)]
         warnings: list[str] = []
-        if grounded_recommendations and any(not rec.get("evidence") for rec in recommendations):
+        if grounded_recommendations and any(not _has_valid_evidence_refs(rec) for rec in recommendations):
             warnings.append("RECOMMENDATION_EVIDENCE_WEAK")
+        if recommendations and not grounded_recommendations:
+            warnings.append("RECOMMENDATION_WITHOUT_EVIDENCE")
 
         sources = []
         for rec in grounded_recommendations:
-            for evidence in rec.get("evidence", []):
-                if evidence.startswith("SQL:"):
-                    sources.append({"type": "sql", "table": evidence.replace("SQL: ", "").split(" ")[0], "label": evidence})
-                elif evidence.startswith("RAG:"):
-                    sources.append({"type": "rag", "title": evidence.replace("RAG: ", "")})
-                elif evidence.startswith("ML:"):
-                    sources.append({"type": "ml", "model": evidence.replace("ML: ", "")})
+            for evidence in rec.get("evidence_refs", []):
+                if not isinstance(evidence, dict):
+                    continue
+                ev_type = str(evidence.get("type") or "").upper()
+                if ev_type == "SQL":
+                    sources.append(
+                        {
+                            "type": "sql",
+                            "table": evidence.get("table") or "operational_data",
+                            "label": evidence.get("short_fact") or evidence.get("label"),
+                            "source_id": evidence.get("source_id"),
+                            "related_batch": evidence.get("batch_ref"),
+                            "related_product": evidence.get("product"),
+                        }
+                    )
+                elif ev_type == "RAG":
+                    sources.append(
+                        {
+                            "type": "rag",
+                            "title": evidence.get("label") or evidence.get("source_title") or "knowledge_source",
+                            "chunk_id": evidence.get("chunk_id"),
+                            "document_id": evidence.get("source_id"),
+                            "label": evidence.get("short_fact") or evidence.get("label"),
+                        }
+                    )
+                elif ev_type == "ML":
+                    sources.append(
+                        {
+                            "type": "ml",
+                            "model": evidence.get("source_id") or "ml_signal",
+                            "result_id": evidence.get("ml_log_id"),
+                            "label": evidence.get("short_fact") or evidence.get("label"),
+                            "risk_level": evidence.get("metric_value") if str(evidence.get("metric_name") or "") == "risk_level" else None,
+                        }
+                    )
+                elif ev_type == "RULE":
+                    sources.append(
+                        {
+                            "type": "recommendation",
+                            "label": evidence.get("label") or "rule_based_logic",
+                            "source_id": evidence.get("source_id"),
+                            "used_for": "recommendation_evidence",
+                        }
+                    )
 
         if grounded_recommendations:
             answer = "\n".join(
@@ -47,19 +86,19 @@ class RecommendationAgent(BaseAgent):
             )
             confidence_values = [float(item.get("confidence", 0.4)) for item in grounded_recommendations]
             confidence = sum(confidence_values) / max(1, len(confidence_values))
+            has_global_scope = any(str(item.get("scope") or "") == "GLOBAL_COOPERATIVE" for item in grounded_recommendations)
             data_payload = {
                 "recommendations": grounded_recommendations,
                 "insufficient_evidence": False,
+                "scope": "GLOBAL_COOPERATIVE" if has_global_scope else "ACTIVE_QUERY",
             }
         else:
-            answer = (
-                "Les preuves actuelles sont insuffisantes pour recommander une action prioritaire. "
-                "Complétez d’abord les mesures opérationnelles (SQL), puis confrontez-les aux signaux ML et aux bonnes pratiques RAG."
-            )
+            answer = "Je ne peux pas générer de recommandations fiables sans données vérifiables."
             confidence = 0.45
             data_payload = {
                 "recommendations": [],
                 "insufficient_evidence": True,
+                "scope": "ACTIVE_QUERY",
             }
 
         return AgentResult(
@@ -72,3 +111,15 @@ class RecommendationAgent(BaseAgent):
             warnings=warnings,
             execution_time_ms=int((time.perf_counter() - start) * 1000),
         )
+
+
+def _has_valid_evidence_refs(rec: dict) -> bool:
+    refs = rec.get("evidence_refs") if isinstance(rec, dict) else None
+    if not isinstance(refs, list) or not refs:
+        return False
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        if str(ref.get("type") or "").upper() in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
+            return True
+    return False
