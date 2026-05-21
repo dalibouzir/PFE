@@ -767,6 +767,7 @@ export default function ParcellesCulturePage() {
       duration_minutes: parseDurationDaysToMinutes(draft.duration_days),
       summary: draft.summary || null,
     });
+    setEditingExecutionStepIndex(null);
   };
 
   const completeExecutionStepWithDetails = async (stepIndex: number) => {
