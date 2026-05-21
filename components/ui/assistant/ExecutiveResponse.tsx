@@ -70,6 +70,11 @@ function metric(metrics: ChatMetricFact[] | undefined, key: string): ChatMetricF
   return (metrics || []).find((item) => item.metric === key);
 }
 
+function metricText(metrics: ChatMetricFact[] | undefined, key: string): string {
+  const item = metric(metrics, key);
+  return String(item?.unit || item?.notes || "").trim();
+}
+
 function normalizeSummaryText(text: string, hasTable: boolean): string {
   const clean = String(text || "").trim();
   if (!clean) return "";
@@ -227,12 +232,22 @@ function deriveSummaryFromRecommendations(blocks: ChatUIBlock[]): string | null 
   const items = asArray(asObject(recommendationBlock.payload).items).map((item) => asObject(item));
   if (!items.length) return null;
   const first = items[0];
-  const action = asString(first.action || first.title, "action prioritaire")
+  let action = asString(first.action || first.title, "action prioritaire")
     .replace(/\s+/g, " ")
     .replace(/[.:;,\s]+$/g, "")
     .trim();
   const lot = asString(first.affected_lot || first.related_batch || first.batch_ref, "").trim();
   const cleanLot = lot.replace(/^lot\s+/i, "").trim();
+  if (cleanLot) {
+    const lotRegex = new RegExp(`\\b(?:lot\\s*)?${cleanLot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "ig");
+    action = action
+      .replace(/\bisoler\s+le\s+lot\b/i, "l’isoler")
+      .replace(/\bisoler\b/i, "l’isoler")
+      .replace(lotRegex, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s+([,.;:])/g, "$1")
+      .trim();
+  }
   if (items.length === 1) {
     if (cleanLot) {
       return `Avec les preuves disponibles, une seule action fiable peut être proposée pour ${cleanLot} : ${firstUpper(action)}. Les autres actions ne sont pas générées car le contexte documentaire est limité.`;
@@ -244,14 +259,28 @@ function deriveSummaryFromRecommendations(blocks: ChatUIBlock[]): string | null 
 }
 
 function pickExecutiveSummary(response: AssistantChatResponse | undefined, blocks: ChatUIBlock[], fallbackText: string): string {
+  const metrics = response?.context_metrics || [];
+  const intentFamily = String(metric(metrics, "retrieval_plan.intent_type")?.unit || "").trim().toUpperCase();
+  const sqlOperation = String(
+    metric(metrics, "orchestration.sql_operation")?.unit ||
+      metric(metrics, "sql_dispatch_trace.sql_operation")?.unit ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
   const summaryBlock = blocks.find((block) => block.type === "executive_summary");
   const summaryFromBlock = asString(asObject(summaryBlock?.payload).text, "").trim();
   const summaryFromMessage = asString(response?.message, "").trim();
   const genericSummary = /bilan matière global|^stock:\s*\d+\s*produit|^conclusion:|^action prioritaire:/i;
-  if (summaryFromBlock && !genericSummary.test(summaryFromBlock)) return summaryFromBlock;
 
   const recommendationSummary = deriveSummaryFromRecommendations(blocks);
-  if (recommendationSummary) return recommendationSummary;
+  if (
+    recommendationSummary &&
+    (intentFamily.includes("RECOMMENDATION") || blocks.some((block) => block.type === "recommendations" || block.type === "recommendation_cards"))
+  ) {
+    return recommendationSummary;
+  }
 
   const parsedTables = blocks
     .filter((block) => block.type === "comparison_table" || block.type === "table")
@@ -261,7 +290,7 @@ function pickExecutiveSummary(response: AssistantChatResponse | undefined, block
   const comparisonTable = parsedTables.find((table) => table.block.type === "comparison_table" || table.title.includes("compar"));
   if (comparisonTable) {
     const summary = deriveComparisonSummary(comparisonTable);
-    if (summary) return summary;
+    if (summary && (intentFamily === "LOT_COMPARISON" || sqlOperation === "get_canonical_material_balance_for_lots")) return summary;
   }
 
   const gapTable = parsedTables.find((table) => {
@@ -270,7 +299,12 @@ function pickExecutiveSummary(response: AssistantChatResponse | undefined, block
   });
   if (gapTable) {
     const summary = deriveGapSummary(gapTable);
-    if (summary) return summary;
+    if (
+      summary &&
+      (intentFamily === "INPUT_OUTPUT_GAP" || sqlOperation === "get_canonical_material_balance" || /écart|gap|kg|entrée|sortie|matière|difference|différence/.test(`${gapTable.title} ${gapTable.columns.join(" ")}`))
+    ) {
+      return summary;
+    }
   }
 
   const lossTable = parsedTables.find((table) => {
@@ -299,6 +333,8 @@ function pickExecutiveSummary(response: AssistantChatResponse | undefined, block
     const summary = deriveStockSummary(stockTable);
     if (summary) return summary;
   }
+
+  if (summaryFromBlock && !genericSummary.test(summaryFromBlock)) return summaryFromBlock;
 
   if (summaryFromMessage && !genericSummary.test(summaryFromMessage)) {
     const firstSentence = summaryFromMessage
@@ -388,6 +424,70 @@ function normalizeWarningText(value: string): string {
     .trim();
 }
 
+function isGenericReliabilityText(value: string): boolean {
+  const normalized = normalizeWarningText(value);
+  return (
+    normalized.includes("avertissement de fiabilite") ||
+    normalized.includes("avertissement de fiabilité") ||
+    normalized.includes("informations partielles ou insuffisantes") ||
+    normalized.includes("donnees partielles ou insuffisantes") ||
+    normalized.includes("données partielles ou insuffisantes")
+  );
+}
+
+function responseHasCleanSqlEvidence(response?: AssistantChatResponse): boolean {
+  const metrics = response?.context_metrics || [];
+  const route = `${response?.mode || ""} ${metricText(metrics, "orchestration.route")}`.toUpperCase();
+  const sqlStatus = metricText(metrics, "sql_dispatch_trace.evidence_status") || metricText(metrics, "evidence_status.sql");
+  const normalizedStatus = sqlStatus.toUpperCase();
+  const warningCount = Number(metric(metrics, "orchestration.warning_count")?.value || 0);
+  return (
+    route.includes("SQL_ONLY") &&
+    ["HAS_EVIDENCE", "PROVEN_NO_DATA"].includes(normalizedStatus) &&
+    warningCount === 0
+  );
+}
+
+function responseUsesMl(response?: AssistantChatResponse): boolean {
+  const metrics = response?.context_metrics || [];
+  const route = `${response?.mode || ""} ${metricText(metrics, "orchestration.route")}`.toUpperCase();
+  const agents = String(metric(metrics, "agent.agents_count")?.notes || "").toUpperCase();
+  const mlStatus = metricText(metrics, "evidence_status.ml").toUpperCase();
+  const hasMlSource = (response?.citations || []).some((citation) => String(citation.topic || "").toUpperCase() === "ML");
+  return route.includes("ML") || agents.includes("MLLOSSAGENT") || hasMlSource || Boolean(mlStatus);
+}
+
+function isUnknownMlKpiItem(item: Generic): boolean {
+  const label = `${asString(item.title)} ${asString(item.label)} ${asString(item.metric)}`.toLowerCase();
+  if (!label.includes("ml") && !label.includes("signal")) return false;
+  const status = `${asString(item.status)} ${String(item.value ?? "")} ${asString(item.unit)}`.toLowerCase();
+  return !status.trim() || status.includes("unknown") || status.includes("n/a");
+}
+
+function filterKpiBlock(block: ChatUIBlock | undefined, response?: AssistantChatResponse): ChatUIBlock | undefined {
+  if (!block) return undefined;
+  const payload = asObject(block.payload);
+  const items = asArray(payload.items).map((item) => asObject(item));
+  if (!items.length) return block;
+  const allowMl = responseUsesMl(response);
+  const filteredItems = allowMl ? items : items.filter((item) => !isUnknownMlKpiItem(item));
+  if (!filteredItems.length) return undefined;
+  if (filteredItems.length === items.length) return block;
+  return { ...block, payload: { ...payload, items: filteredItems } };
+}
+
+function filterLimitsBlock(block: ChatUIBlock | undefined, response?: AssistantChatResponse): ChatUIBlock | undefined {
+  if (!block) return undefined;
+  const payload = asObject(block.payload);
+  const items = asArray(payload.items).map((item) => String(item || "").trim()).filter(Boolean);
+  if (!items.length) return block;
+  const cleanSqlEvidence = responseHasCleanSqlEvidence(response);
+  const filteredItems = cleanSqlEvidence ? items.filter((item) => !isGenericReliabilityText(item)) : items;
+  if (!filteredItems.length) return undefined;
+  if (filteredItems.length === items.length) return block;
+  return { ...block, payload: { ...payload, items: filteredItems } };
+}
+
 function sourceIcon(role: string) {
   const normalized = role.toLowerCase();
   if (normalized.includes("sql")) return Database;
@@ -451,12 +551,19 @@ function TechnicalDetailsSection({
   const sourceCount = response.citations?.length || 0;
   const agentCount = Number(metric(metrics, "agent.agents_count")?.value || 0);
   const confidencePct = Math.round(Math.max(0, Math.min(100, Number(confidenceMetric?.value || 0) * 100)));
+  const route = metricText(metrics, "orchestration.route") || String(modeMetric?.unit || response.mode || "N/A");
+  const intentFamily = metricText(metrics, "retrieval_plan.intent_type") || "N/A";
+  const sqlOperation = metricText(metrics, "sql_dispatch_trace.sql_operation") || "N/A";
+  const sqlEvidenceStatus = metricText(metrics, "sql_dispatch_trace.evidence_status") || metricText(metrics, "evidence_status.sql") || "N/A";
+  const evidenceRows = Number(metric(metrics, "sql_dispatch_trace.evidence_row_count")?.value ?? NaN);
+  const finalResponseSource = metricText(metrics, "final_response_source") || "N/A";
+  const llmProvider = metricText(metrics, "llm_provider") || "N/A";
   const sqlMs = Number(metric(metrics, "orchestration.sql_duration_ms")?.value || 0);
   const ragMs = Number(metric(metrics, "orchestration.rag_duration_ms")?.value || 0);
   const llmMs = Number(metric(metrics, "orchestration.llm_duration_ms")?.value || 0);
   const totalMs = Number(metric(metrics, "orchestration.total_duration_ms")?.value || 0);
   const warningText = warnings.join(" ").toLowerCase();
-  const sqlLayer = sourceCount > 0 ? "fiables" : "limitées";
+  const sqlLayer = ["HAS_EVIDENCE", "PROVEN_NO_DATA"].includes(sqlEvidenceStatus.toUpperCase()) ? "fiables" : sourceCount > 0 ? "fiables" : "limitées";
   const ragLayer = warningText.includes("documentaire") ? "limité" : "disponible";
   const mlLayer = warningText.includes("ml") ? "indicatif/limité" : "indicatif";
 
@@ -467,10 +574,16 @@ function TechnicalDetailsSection({
         <ChevronDown className="h-4 w-4 text-[var(--muted)] transition-transform group-open:rotate-180" />
       </summary>
       <div className="mt-3 grid gap-2 text-xs text-[#355f4b] sm:grid-cols-2">
-        <p>Mode de réponse: {String(modeMetric?.unit || response.mode || "N/A")}</p>
+        <p>Route: {route}</p>
+        <p>Intent: {intentFamily}</p>
+        <p>SQL operation: {sqlOperation}</p>
+        <p>Evidence SQL: {sqlEvidenceStatus}</p>
         <p>Confiance: {Number.isFinite(confidencePct) ? `${confidencePct}%` : "N/A"}</p>
+        <p>Evidence rows: {Number.isFinite(evidenceRows) ? evidenceRows : "N/A"}</p>
         <p>Agents mobilisés: {agentCount || "N/A"}</p>
         <p>Citations: {sourceCount}</p>
+        <p>Final source: {finalResponseSource}</p>
+        <p>LLM provider: {llmProvider}</p>
         <p>Durée totale: {totalMs > 0 ? `${Math.round(totalMs)} ms` : "N/A"}</p>
         <p>SQL/RAG/LLM: {sqlMs > 0 ? `${Math.round(sqlMs)} ms` : "-"} / {ragMs > 0 ? `${Math.round(ragMs)} ms` : "-"} / {llmMs > 0 ? `${Math.round(llmMs)} ms` : "-"}</p>
         <p className="sm:col-span-2">Lecture par couche: Données SQL {sqlLayer} | RAG documentaire {ragLayer} | ML {mlLayer}</p>
@@ -615,7 +728,7 @@ function TablesSection({ blocks }: { blocks: ChatUIBlock[] }) {
           <section key={`table-${index}`} className="rounded-2xl border border-[var(--line)] bg-white/90 p-4">
             <h3 className="text-sm font-semibold text-[#173324]">{block.title || "Tableau"}</h3>
             <div className="wf-mobile-scroll mt-3 overflow-auto">
-              <table className="wf-table min-w-full text-left text-sm">
+              <table className="wf-table w-full min-w-[980px] text-left text-sm">
                 <thead>
                   <tr>
                     {columns.map((column) => (
@@ -756,7 +869,7 @@ function ChartsSection({ blocks }: { blocks: ChatUIBlock[] }) {
               <div className="mt-3 rounded-xl border border-[#e3eadf] bg-[#f9fcf9] p-3">
                 <p className="text-xs text-[#4f705d]">Données graphiques incomplètes. Affichage tabulaire de secours.</p>
                 <div className="wf-mobile-scroll mt-2 overflow-auto">
-                  <table className="wf-table min-w-full text-left text-xs">
+                  <table className="wf-table w-full min-w-[980px] text-left text-xs">
                     <thead>
                       <tr>
                         <th>Libellé</th>
@@ -793,12 +906,12 @@ function ChartsSection({ blocks }: { blocks: ChatUIBlock[] }) {
 export function ExecutiveResponse({ response, fallbackText, hideMetaSections = false }: Props) {
   const blocks = response?.ui_blocks || [];
 
-  const kpiBlock = blocks.find((block) => block.type === "kpi_cards");
+  const kpiBlock = filterKpiBlock(blocks.find((block) => block.type === "kpi_cards"), response);
   const tableBlocks = blocks.filter((block) => block.type === "table" || block.type === "comparison_table");
   const chartBlocks = blocks.filter((block) => block.type === "bar_chart" || block.type === "line_chart" || block.type === "chart");
   const recommendationBlock = blocks.find((block) => block.type === "recommendation_cards" || block.type === "recommendations");
   const bestPracticesBlock = blocks.find((block) => block.type === "best_practices");
-  const limitsBlock = blocks.find((block) => block.type === "limits_block");
+  const limitsBlock = filterLimitsBlock(blocks.find((block) => block.type === "limits_block"), response);
   const sourcesBlock = blocks.find((block) => block.type === "sources");
   const warningItemsRaw = extractWarningItems(blocks);
   const limitItems = extractLimitItems(limitsBlock);
@@ -808,6 +921,11 @@ export function ExecutiveResponse({ response, fallbackText, hideMetaSections = f
     .filter((item) => !limitKeySet.has(normalizeWarningText(item)))
     .filter((item) => {
       const normalized = normalizeWarningText(item);
+      if (normalized === normalizeWarningText("Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.")) {
+        const hasStructuredEvidence = tableBlocks.length > 0 || Boolean(kpiBlock) || chartBlocks.length > 0;
+        if (mode.includes("SQL_ONLY") && hasStructuredEvidence) return false;
+      }
+      if (isGenericReliabilityText(normalized) && responseHasCleanSqlEvidence(response)) return false;
       if (!mode.includes("SQL_ONLY")) return true;
       if (!tableBlocks.length && !kpiBlock) return true;
       if (normalized.includes("partielles") || normalized.includes("insuffisantes")) return false;

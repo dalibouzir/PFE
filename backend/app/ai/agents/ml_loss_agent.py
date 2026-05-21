@@ -8,6 +8,10 @@ from app.ai.agents.base_agent import BaseAgent
 from app.ai.schemas.agent_schemas import AgentContext, AgentResult
 from app.ai.tools.ml_tools import MLTools
 
+EVIDENCE_HAS = "HAS_EVIDENCE"
+EVIDENCE_NO_DATA = "PROVEN_NO_DATA"
+EVIDENCE_PARTIAL = "PARTIAL_EVIDENCE"
+
 
 class MLLossAgent(BaseAgent):
     name = "MLLossAgent"
@@ -32,18 +36,19 @@ class MLLossAgent(BaseAgent):
         if asks_max_anomaly:
             result = self.ml_tools.max_anomaly_score_lot()
             rows = result.get("data", []) or []
+            evidence_status = str(result.get("evidence_status") or (EVIDENCE_HAS if rows else EVIDENCE_NO_DATA))
             answer = (
                 f"Lot avec anomaly_score max: {rows[0].get('lot_code')} ({float(rows[0].get('anomaly_score', 0.0)):.4f})."
                 if rows
-                else "Donnée non disponible pour cette requête précise."
+                else "Aucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré."
             )
             return AgentResult(
                 agent_name=self.name,
                 route=context.route,
                 answer_part=answer,
-                data={"max_anomaly_score_lot": rows},
+                data={"max_anomaly_score_lot": rows, "evidence_status": evidence_status},
                 sources=result.get("sources", []),
-                confidence=0.86 if rows else 0.4,
+                confidence=0.86 if rows else 0.72,
                 warnings=result.get("warnings", []),
                 execution_time_ms=int((time.perf_counter() - start) * 1000),
             )
@@ -57,18 +62,19 @@ class MLLossAgent(BaseAgent):
             days = _extract_days(normalized, default=60)
             result = self.ml_tools.ml_high_signal_count(days=days)
             rows = result.get("data", []) or []
-            answer = (
-                f"Signaux ML HIGH sur {days} jours: {int(rows[0].get('high_signal_count', 0) or 0)}."
-                if rows
-                else "Donnée non disponible pour cette requête précise."
-            )
+            count = int(rows[0].get("high_signal_count", 0) or 0) if rows else 0
+            evidence_status = str(result.get("evidence_status") or (EVIDENCE_HAS if count > 0 else EVIDENCE_NO_DATA))
+            if rows and count > 0:
+                answer = f"Signaux ML HIGH sur {days} jours: {count}."
+            else:
+                answer = "Aucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré."
             return AgentResult(
                 agent_name=self.name,
                 route=context.route,
                 answer_part=answer,
-                data={"ml_high_signal_count": rows},
+                data={"ml_high_signal_count": rows, "evidence_status": evidence_status},
                 sources=result.get("sources", []),
-                confidence=0.85 if rows else 0.4,
+                confidence=0.84 if rows and count > 0 else 0.72,
                 warnings=result.get("warnings", []),
                 execution_time_ms=int((time.perf_counter() - start) * 1000),
             )
@@ -92,21 +98,25 @@ class MLLossAgent(BaseAgent):
                 agent_name=self.name,
                 route=context.route,
                 answer_part=answer,
-                data={"ml_insight_summary": rows},
+                data={"ml_insight_summary": rows, "evidence_status": str(result.get("evidence_status") or (EVIDENCE_HAS if rows else EVIDENCE_NO_DATA))},
                 sources=result.get("sources", []),
-                confidence=0.8 if rows else 0.4,
+                confidence=0.8 if rows else 0.72,
                 warnings=result.get("warnings", []),
                 execution_time_ms=int((time.perf_counter() - start) * 1000),
             )
 
         result = self.ml_tools.analyze_loss_risk(batch_ref=batch_ref, stage=stage)
         warnings = result.get("warnings", [])
+        evidence_status = str(result.get("evidence_status") or EVIDENCE_PARTIAL)
         confidence = float(result.get("confidence", 0.4))
 
-        answer = (
-            f"Risque {_format_risk_level(result.get('risk_level'))}"
-            + (" avec anomalie détectée." if result.get("anomaly_detected") else " sans anomalie confirmée.")
-        )
+        if evidence_status == EVIDENCE_NO_DATA:
+            answer = "Aucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré."
+        else:
+            answer = (
+                f"Risque {_format_risk_level(result.get('risk_level'))}"
+                + (" avec anomalie détectée." if result.get("anomaly_detected") else " sans anomalie confirmée.")
+            )
 
         return AgentResult(
             agent_name=self.name,

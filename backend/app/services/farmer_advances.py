@@ -4,7 +4,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.models.batch import Batch
-from app.models.enums import FarmerAdvanceStatus, InputStatus
+from app.models.enums import FarmerAdvanceStatus, InputStatus, TreasuryTransactionStatus
 from app.models.farmer_advance import FarmerAdvance
 from app.models.global_charge import GlobalCharge
 from app.models.input import Input
@@ -331,6 +331,12 @@ def upload_farmer_advance_devis(db: Session, manager: User, advance_id, file) ->
         file=file,
     )
     advance.devis_file_id = uploaded.id
+    if advance.treasury_transaction is not None and advance.treasury_transaction.status in {
+        TreasuryTransactionStatus.NON_ENREGISTRE,
+        TreasuryTransactionStatus.ENREGISTRE_SANS_JUSTIFICATIF,
+        TreasuryTransactionStatus.RECORDED,
+    }:
+        advance.treasury_transaction.status = TreasuryTransactionStatus.ENREGISTRE_COMPLET
     db.commit()
     db.refresh(advance)
     return _serialize_advance(db, advance)

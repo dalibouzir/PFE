@@ -62,6 +62,7 @@ body {
     var(--bg);
   color: var(--text);
   font-family: var(--font-manrope), sans-serif;
+  overflow-x: hidden;
 }
 
 h1,
@@ -309,6 +310,62 @@ h6 {
 
 .wf-table tbody tr:hover {
   background: color-mix(in srgb, var(--surface-soft) 84%, white 16%);
+}
+
+.wf-table {
+  min-width: 680px;
+}
+
+.wf-table th,
+.wf-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.wf-mobile-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 1024px) {
+  .premium-card {
+    border-radius: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  main,
+  section,
+  article {
+    min-width: 0;
+  }
+
+  .wf-table {
+    min-width: 620px;
+    font-size: 0.8rem;
+  }
+
+  .wf-table th {
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+  }
+
+  .wf-table th,
+  .wf-table td {
+    padding: 0.55rem 0.6rem;
+  }
+}
+
+@media (max-width: 430px) {
+  .wf-table {
+    min-width: 580px;
+    font-size: 0.76rem;
+  }
+
+  .wf-table th,
+  .wf-table td {
+    padding: 0.5rem 0.5rem;
+  }
 }
 
 .wf-login-page {

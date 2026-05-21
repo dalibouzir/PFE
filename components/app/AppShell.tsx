@@ -908,11 +908,11 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="max-w-[145px] shrink-0 truncate border-l border-[#1b3a2b]/25 pl-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#123223]/88">{meta.cooperativeLabel}</span>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="max-w-[110px] shrink-0 truncate border-l border-[#1b3a2b]/25 pl-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#123223]/88 sm:max-w-[145px]">{meta.cooperativeLabel}</span>
               <div className="relative min-w-0 flex-1">
                 <SearchIcon className="pointer-events-none absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1b3a2b]/80" />
-                <input className="h-9 w-full border-0 border-b border-[#1b3a2b]/30 bg-transparent py-2 pl-7 pr-1 text-sm text-[#0f2318] placeholder:text-[#1b3a2b]/70 focus:border-b-[#1b3a2b]/30 focus:shadow-none focus:outline-none" placeholder={meta.searchPlaceholder} />
+                <input className="h-9 w-full border-0 border-b border-[#1b3a2b]/30 bg-transparent py-2 pl-7 pr-1 text-sm text-[#0f2318] placeholder:text-[#1b3a2b]/70 focus:border-b-[#1b3a2b]/30 focus:shadow-none focus:outline-none" placeholder="Rechercher..." />
               </div>
             </div>
           </div>

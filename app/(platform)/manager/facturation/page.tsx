@@ -420,7 +420,7 @@ export default function FacturationPage() {
             {visibleInvoices.length === 0 ? (
               <p className="px-4 py-5 text-sm text-[var(--muted)]">Aucune facture generee pour l&apos;instant.</p>
             ) : (
-              <table className="wf-table w-full text-left text-sm">
+              <table className="wf-table w-full min-w-[980px] text-left text-sm">
                 <thead className="sticky top-0 z-10 bg-white">
                   <tr>
                     <th className="px-4 py-3 whitespace-nowrap">Facture</th>
@@ -587,7 +587,7 @@ export default function FacturationPage() {
             </div>
 
             <div className="mt-5 overflow-hidden rounded-xl border border-[var(--line)]">
-              <table className="wf-table min-w-full text-left text-sm">
+              <table className="wf-table w-full min-w-[980px] text-left text-sm">
                 <thead>
                   <tr>
                     <th className="px-4 py-3">Description</th>

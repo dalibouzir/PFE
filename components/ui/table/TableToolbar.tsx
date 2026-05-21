@@ -36,11 +36,11 @@ export function TableToolbar({
 }: TableToolbarProps) {
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_auto]">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 sm:gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <input
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          className="soft-focus wf-input px-3 py-2.5 text-sm sm:col-span-2 xl:col-span-1"
+          className="soft-focus wf-input min-w-0 px-3 py-2.5 text-sm sm:col-span-2 xl:col-span-1"
           placeholder={searchPlaceholder}
         />
 
@@ -49,7 +49,7 @@ export function TableToolbar({
             key={filter.key}
             value={filter.value}
             onChange={(event) => onFilterChange?.(filter.key, event.target.value)}
-            className="soft-focus wf-input px-3 py-2.5 text-sm"
+            className="soft-focus wf-input min-w-0 px-3 py-2.5 text-sm"
             aria-label={filter.label}
           >
             {filter.options.map((option) => (
@@ -63,7 +63,7 @@ export function TableToolbar({
         <select
           value={sortOrder}
           onChange={(event) => onSortOrderChange(event.target.value as SortOrder)}
-          className="soft-focus wf-input px-3 py-2.5 text-sm"
+          className="soft-focus wf-input min-w-0 px-3 py-2.5 text-sm"
         >
           <option value="desc">{sortDescLabel}</option>
           <option value="asc">{sortAscLabel}</option>

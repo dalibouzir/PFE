@@ -45,7 +45,7 @@ export function LotProcessTable({
   return (
     <article className="premium-card reveal min-w-0 overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "130ms" }}>
       <div className="thin-scrollbar max-w-full overflow-x-auto">
-        <table className="wf-table min-w-full text-left text-sm">
+        <table className="wf-table w-full min-w-[980px] text-left text-sm">
           <thead>
             <tr>
               <th className="px-5 py-3.5">Etape</th>

@@ -351,6 +351,17 @@ function adaptAgentResponseToAssistant(response: AgentChatResponse): AssistantCh
   const conversationId = String(response.metadata?.conversation_id || "");
   const warnings = Array.isArray(response.warnings) ? response.warnings : [];
   const timing = (response.metadata?.durations_ms as Record<string, unknown>) || {};
+  const metadata = (response.metadata || {}) as Record<string, unknown>;
+  const detectedEntities = (metadata.detected_entities || {}) as Record<string, unknown>;
+  const sqlTrace = (metadata.sql_dispatch_trace || {}) as Record<string, unknown>;
+  const evidenceStatus = (metadata.evidence_status || {}) as Record<string, unknown>;
+  const llmMetadata = (metadata.llm_metadata || {}) as Record<string, unknown>;
+  const intentFamily = String(metadata.intent_family || detectedEntities.intent_family || "");
+  const sqlOperation = String(sqlTrace.sql_operation || "");
+  const sqlEvidenceStatus = String(sqlTrace.evidence_status || evidenceStatus.sql || "");
+  const rowCount = Number(sqlTrace.row_count ?? 0);
+  const finalResponseSource = String(metadata.final_response_source || "");
+  const llmProvider = String(llmMetadata.provider || (response as unknown as { llm_provider?: unknown }).llm_provider || "");
   const asMs = (value: unknown) => {
     const n = Number(value);
     return Number.isFinite(n) ? n : null;
@@ -381,6 +392,16 @@ function adaptAgentResponseToAssistant(response: AgentChatResponse): AssistantCh
         region: "cooperative",
         crop: "multi",
         metric: "retrieval_plan.intent_type",
+        period: "current",
+        value: 1,
+        unit: intentFamily || response.route,
+        notes: intentFamily || response.route,
+      },
+      {
+        source_id: "agent",
+        region: "cooperative",
+        crop: "multi",
+        metric: "orchestration.route",
         period: "current",
         value: 1,
         unit: response.route,
@@ -416,6 +437,90 @@ function adaptAgentResponseToAssistant(response: AgentChatResponse): AssistantCh
         unit: "count",
         notes: Array.isArray(response.agents_used) ? response.agents_used.join(" | ") : "",
       },
+      ...(sqlOperation
+        ? [
+            {
+              source_id: "agent",
+              region: "cooperative",
+              crop: "multi",
+              metric: "sql_dispatch_trace.sql_operation",
+              period: "current",
+              value: 1,
+              unit: sqlOperation,
+              notes: sqlOperation,
+            },
+          ]
+        : []),
+      ...(sqlEvidenceStatus
+        ? [
+            {
+              source_id: "agent",
+              region: "cooperative",
+              crop: "multi",
+              metric: "sql_dispatch_trace.evidence_status",
+              period: "current",
+              value: 1,
+              unit: sqlEvidenceStatus,
+              notes: sqlEvidenceStatus,
+            },
+          ]
+        : []),
+      ...(Number.isFinite(rowCount)
+        ? [
+            {
+              source_id: "agent",
+              region: "cooperative",
+              crop: "multi",
+              metric: "sql_dispatch_trace.evidence_row_count",
+              period: "current",
+              value: rowCount,
+              unit: "rows",
+              notes: "",
+            },
+          ]
+        : []),
+      ...(["sql", "rag", "ml"] as const)
+        .map((key) => String(evidenceStatus[key] || ""))
+        .map((status, index) => ({ status, key: (["sql", "rag", "ml"] as const)[index] }))
+        .filter((item) => item.status)
+        .map((item) => ({
+          source_id: "agent",
+          region: "cooperative",
+          crop: "multi",
+          metric: `evidence_status.${item.key}`,
+          period: "current",
+          value: 1,
+          unit: item.status,
+          notes: item.status,
+        })),
+      ...(finalResponseSource
+        ? [
+            {
+              source_id: "agent",
+              region: "cooperative",
+              crop: "multi",
+              metric: "final_response_source",
+              period: "current",
+              value: 1,
+              unit: finalResponseSource,
+              notes: finalResponseSource,
+            },
+          ]
+        : []),
+      ...(llmProvider
+        ? [
+            {
+              source_id: "agent",
+              region: "cooperative",
+              crop: "multi",
+              metric: "llm_provider",
+              period: "current",
+              value: 1,
+              unit: llmProvider,
+              notes: llmProvider,
+            },
+          ]
+        : []),
       ...(asMs(timing.total_duration_ms) !== null
         ? [
             {

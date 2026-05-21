@@ -254,7 +254,10 @@ class IntentRouter:
                 "UI/action command detected; chatbot should provide guidance instead of analytics.",
                 0.99,
             )
-        if any(token in lowered for token in UNSAFE_OPERATION_HINTS):
+        has_unsafe_hint = any(token in lowered for token in UNSAFE_OPERATION_HINTS)
+        if "sans inventer" in lowered or "without inventing" in lowered:
+            has_unsafe_hint = False
+        if has_unsafe_hint:
             entities["intent_family"] = "unsupported_unsafe_action"
             return _decision(
                 AgentRoute.OUT_OF_SCOPE,
@@ -1189,6 +1192,7 @@ def _contract_route_decision(
     previous_entities: dict,
     previous_module_hint: str | None,
 ) -> IntentRouteDecision | None:
+    lowered_ascii = "".join(ch for ch in unicodedata.normalize("NFKD", lowered) if not unicodedata.combining(ch))
     reset_context = any(
         token in lowered
         for token in (
@@ -1211,17 +1215,29 @@ def _contract_route_decision(
         entities["scope"] = "global"
 
     has_batch = bool(entities.get("batch_ref"))
-    has_operational_anchor = has_batch or bool(entities.get("product")) or bool(entities.get("stage"))
+    has_lot_mention = bool(re.search(r"\b(lot|lots|batch|batches)\b", lowered_ascii))
+    has_operational_anchor = has_batch or bool(entities.get("product")) or bool(entities.get("stage")) or has_lot_mention
     asks_current_scope = any(
-        token in lowered
-        for token in ("dans nos données", "dans nos donnees", "selon nos données", "selon nos donnees", "notre coop", "cette coopérative", "cette cooperative")
+        token in lowered_ascii
+        for token in (
+            "dans nos donnees",
+            "selon nos donnees",
+            "notre coop",
+            "cette cooperative",
+            "dans la base",
+            "dans nos lots",
+            "dans nos stocks",
+        )
     )
     asks_recommendation = any(
         token in lowered
         for token in (
             "que faire",
+            "que dois-je faire",
+            "que dois je faire",
             "quelles actions",
             "quelle action",
+            "actions fiables",
             "actions à appliquer",
             "actions a appliquer",
             "actions concretes",
@@ -1231,10 +1247,20 @@ def _contract_route_decision(
             "on fait quoi",
             "actions prioritaires",
             "action prioritaire",
+            "recommandations disponibles",
+            "recommandation disponible",
             "que recommandes",
             "tu recommandes",
             "conseilles quoi",
             "conseille quoi",
+            "dois-je faire",
+            "dois je faire",
+            "quelles mesures",
+            "quelle mesure",
+            "mesures immediates",
+            "mesures immédiates",
+            "mesures a lancer",
+            "mesures à lancer",
         )
     )
     if "recommand" in lowered and any(token in lowered for token in ("action", "actions", "priorit", "faire", "plan")):
@@ -1261,6 +1287,9 @@ def _contract_route_decision(
             "procédure",
             "conseil",
             "conseils",
+            "stockage",
+            "pratiques de stockage",
+            "pratiques de conditionnement",
             "comment améliorer",
             "comment ameliorer",
             "comment réduire",
@@ -1282,6 +1311,8 @@ def _contract_route_decision(
         or re.search(r"\bperdu\s+le\s+plus\s+de\s+(quantite|quantité)\b", lowered)
         or re.search(r"\bplus\s+de\s+(quantite|quantité)\s+perdue?\b", lowered)
         or re.search(r"\bperte\s+en\s+kg\b", lowered)
+        or re.search(r"\bperte\s+(matiere|matière)\s+en\s+kilogrammes?\b", lowered)
+        or re.search(r"\bperte\s+(matiere|matière)\b.*\b(kilogrammes?|kg)\b", lowered)
         or re.search(r"\becart\s+de\s+matiere\b", lowered)
         or re.search(r"\bécart\s+de\s+matière\b", lowered)
         or re.search(r"\brange\s+les\s+lots\s+selon\s+la\s+quantite\s+perdue\b", lowered)
@@ -1332,6 +1363,7 @@ def _contract_route_decision(
     )
     asks_available_lots = asks_available_lots or bool(
         re.search(r"\blots?\b.*\b(pret|prêt|prets|prêts|utilisable|disponible)\b.*\b(trait|transform)\w*", lowered)
+        or re.search(r"\blots?\b.*\b(disponible|disponibles|pret|prêt|prets|prêts)\b.*\b(post-?recolte|post-récolte)\b", lowered)
     )
     asks_low_remaining_qty = bool(
         re.search(r"\b(peu|faible|petite)\b.{0,24}\b(quantite|quantité|restante?|reste)\b", lowered)
@@ -1341,7 +1373,16 @@ def _contract_route_decision(
     if asks_available_lots and asks_low_remaining_qty:
         entities["sort_by"] = "current_qty"
         entities["sort_order"] = "asc"
-    asks_stock = "stock" in lowered or ("inventaire" in lowered)
+    asks_stock = bool(re.search(r"\bstock(?:s)?\b", lowered_ascii)) or ("inventaire" in lowered_ascii) or ("stockable" in lowered_ascii)
+    asks_stock_movements = asks_stock and any(
+        token in lowered_ascii
+        for token in ("mouvement", "mouvements", "journal", "historique", "nature", "origine")
+    )
+    if not asks_stock:
+        stock_axes_tokens = ("total", "reserve", "reservee", "reservees", "disponible", "disponibles", "restant", "restante", "restantes")
+        stock_axes_hits = sum(1 for token in stock_axes_tokens if token in lowered_ascii)
+        if stock_axes_hits >= 2 and any(token in lowered_ascii for token in ("produit", "produits", "grade", "quantite", "quantites")):
+            asks_stock = True
     asks_preharvest = any(token in lowered for token in ("pré-récolte", "pre-recolte", "pre-harvest", "parcelle", "parcelles", "lifecycle"))
     asks_ranking = any(
         token in lowered
@@ -1369,22 +1410,26 @@ def _contract_route_decision(
         token in lowered for token in ("sans parler des pertes", "sans analyse de perte", "sans perte", "pas les pertes", "pas de pertes")
     )
     asks_stage_loss = any(
-        token in lowered
+        token in lowered_ascii
         for token in (
             "a quelle etape",
-            "à quelle étape",
             "quelle etape",
-            "quelle étape",
             "etape perd le plus",
-            "étape perd le plus",
             "plus mauvaise efficacite",
-            "plus mauvaise efficacité",
             "pire efficacite",
-            "pire efficacité",
             "process-step",
             "process step",
+            "etape la plus penalisante",
+            "etape moins efficace",
+            "pertes par etape",
+            "perte par etape",
+            "plus de pertes par etape",
         )
-    ) and any(token in lowered for token in ("etape", "étape", "tri", "sechage", "séchage", "nettoyage", "emballage", "conditionnement"))
+    ) and any(token in lowered_ascii for token in ("etape", "tri", "sechage", "nettoyage", "emballage", "conditionnement", "process"))
+    asks_stage_loss = asks_stage_loss or bool(
+        re.search(r"\b(etape|process)\b.*\b(plus|pire|moins)\b.*\b(perte|penalis|efficac|kg)\b", lowered_ascii)
+        or re.search(r"\bpertes?\b.*\bpar\s+etape\b", lowered_ascii)
+    )
     asks_lot_comparison = (
         any(token in lowered for token in ("compare", "compar", "versus", " vs ", "entre "))
         and len(re.findall(r"\b(?:LOT|BATCH|MANG|MANGO|ARA|ARACH|MIL|BISS)[-_][A-Z0-9][A-Z0-9\-_]*\b", lowered, flags=re.IGNORECASE)) >= 2
@@ -1393,6 +1438,27 @@ def _contract_route_decision(
         has_batch
         or "pour ce lot" in lowered
         or bool(re.search(r"\b(?:lot|batch)[-_][a-z0-9][a-z0-9\-_]*\b", lowered))
+    )
+    asks_lot_specific_recommendation = asks_lot_specific_recommendation or (
+        has_batch
+        and (
+            asks_recommendation
+            or (
+                asks_loss
+                and any(
+                    token in lowered
+                    for token in (
+                        "comment reduire",
+                        "comment réduire",
+                        "que faire",
+                        "action",
+                        "actions",
+                        "recommand",
+                        "sans inventer",
+                    )
+                )
+            )
+        )
     )
     asks_advisory_loss_process = (
         any(
@@ -1411,6 +1477,27 @@ def _contract_route_decision(
         )
         and any(token in lowered for token in ("sechage", "séchage", "tri", "emballage", "post-recolte", "post-récolte"))
     )
+    asks_lot_critical_ranking = has_lot_mention and any(
+        token in lowered_ascii
+        for token in (
+            "lot critique",
+            "lots critiques",
+            "plus critique",
+            "plus critiques",
+            "lots a risque",
+            "lot a risque",
+            "top lots critiques",
+        )
+    )
+    if not asks_recommendation and "mesure" in lowered_ascii and (has_lot_mention or asks_loss or asks_risk):
+        asks_recommendation = True
+    asks_ml_log_status = (
+        any(token in lowered_ascii for token in ("ml", "anomaly_score", "anomalie", "anomaly"))
+        and any(token in lowered_ascii for token in ("combien", "nombre", "max", "maximum", "plus grand", "plus eleve", "top"))
+        and not any(token in lowered_ascii for token in ("recommand", "action", "conseil", "pourquoi", "cause", "explique"))
+        and not asks_current_scope
+        and not any(token in lowered_ascii for token in ("perte", "efficac", "rendement", "etape", "sechage", "tri", "emballage", "conditionnement", "process"))
+    )
 
     referential_marker = bool(FOLLOWUP_REFERENCE_PATTERN.search(lowered)) or any(
         token in lowered for token in ("same product", "meme produit", "même produit", "ce lot", "celui-ci", "celui ci", "et pour le meme produit", "et pour le même produit")
@@ -1421,14 +1508,31 @@ def _contract_route_decision(
     if reset_context:
         referential_followup = False
     if referential_followup:
+        followup_recommendation_like = asks_recommendation or ("recommand" in lowered) or ("action" in lowered)
+        if followup_recommendation_like and not previous_entities and not previous_module_hint and not has_batch:
+            entities["intent_family"] = "FOLLOW_UP"
+            entities["needs_batch_clarification"] = True
+            return _decision(
+                AgentRoute.SQL_ONLY,
+                entities,
+                ["SQLAnalyticsAgent"],
+                "Follow-up recommendation without previous lot context requires explicit lot clarification.",
+                0.86,
+            )
         safe_to_reuse = not (
             (entities.get("product") and previous_entities.get("product") and entities.get("product") != previous_entities.get("product"))
             or (entities.get("module") and previous_entities.get("module") and entities.get("module") != "global" and previous_entities.get("module") != "global" and entities.get("module") != previous_entities.get("module"))
         )
+        if followup_recommendation_like and (
+            previous_entities.get("batch_ref")
+            or str(previous_entities.get("module") or "") in {"post_harvest", "material_balance", "recommendations"}
+            or str(previous_module_hint or "") in {"post_harvest", "material_balance", "recommendations"}
+        ):
+            safe_to_reuse = True
         entities["intent_family"] = "FOLLOW_UP"
         if not safe_to_reuse:
             return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Follow-up detected with context shift; avoid unsafe entity carry-over.", 0.84)
-        if asks_recommendation:
+        if followup_recommendation_like:
             return _decision(
                 AgentRoute.HYBRID_FULL,
                 entities,
@@ -1475,6 +1579,11 @@ def _contract_route_decision(
             0.9,
         )
 
+    if asks_stock_movements and not asks_best_practice and not asks_why and not asks_risk and not asks_recommendation:
+        entities["intent_family"] = "factual_sql"
+        entities["module"] = "stocks"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Stock movement journal intent.", 0.92)
+
     if asks_stock and not asks_best_practice and not asks_why and not asks_risk and not asks_recommendation:
         entities["intent_family"] = "STOCK_CURRENT"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Current stock intent.", 0.93)
@@ -1484,7 +1593,9 @@ def _contract_route_decision(
         entities["module"] = "post_harvest"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Available post-harvest lots intent.", 0.93)
 
-    if asks_loss and asks_ranking and not asks_gap_by_qty and not asks_risk and not asks_recommendation and not asks_best_practice:
+    if (asks_loss and asks_ranking and not asks_gap_by_qty and not asks_risk and not asks_recommendation and not asks_best_practice) or (
+        asks_lot_critical_ranking and not asks_risk and not asks_recommendation
+    ):
         entities["intent_family"] = "LOSS_RANKING"
         entities["module"] = "post_harvest"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Loss/efficiency ranking intent.", 0.92)
@@ -1494,16 +1605,39 @@ def _contract_route_decision(
         entities["module"] = "material_balance"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Input-output gap intent.", 0.92)
 
+    if any(token in lowered_ascii for token in ("producteurs actifs", "membres actifs", "producteur actifs")) and any(
+        token in lowered_ascii for token in ("parcelle", "parcelles", "produit", "produits")
+    ):
+        entities["intent_family"] = "factual_sql"
+        entities["module"] = "members"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Active producers with parcel/product intent.", 0.9)
+
     if asks_preharvest and not asks_risk and not asks_recommendation:
         entities["intent_family"] = "PREHARVEST_STEPS"
         entities["module"] = "pre_harvest"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Pre-harvest lifecycle intent.", 0.9)
+
+    if asks_best_practice and not asks_risk and not asks_recommendation and not asks_current_scope and not has_batch:
+        entities["intent_family"] = "BEST_PRACTICES"
+        return _decision(AgentRoute.RAG_ONLY, entities, ["RAGKnowledgeAgent"], "Pure best-practices intent.", 0.9)
 
     if asks_best_practice and not asks_risk and not asks_recommendation and not explicit_loss_analytics:
         entities["intent_family"] = "BEST_PRACTICES"
         if asks_current_scope or has_batch:
             return _decision(AgentRoute.HYBRID_SQL_RAG, entities, ["SQLAnalyticsAgent", "RAGKnowledgeAgent"], "Advice with current operational scope.", 0.88)
         return _decision(AgentRoute.RAG_ONLY, entities, ["RAGKnowledgeAgent"], "General best-practices intent.", 0.9)
+
+    if asks_ml_log_status:
+        entities["intent_family"] = "risk_ml"
+        entities["module"] = "ml_logs"
+        return _decision(AgentRoute.ML_ONLY, entities, ["MLLossAgent"], "Pure ML-log status intent.", 0.91)
+
+    if any(token in lowered_ascii for token in ("tresorerie", "transaction", "transactions")) and any(
+        token in lowered_ascii for token in ("justificatif", "recu", "receipt", "reference", "preuve")
+    ):
+        entities["intent_family"] = "factual_sql"
+        entities["module"] = "finance"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Treasury traceability intent.", 0.91)
 
     if asks_risk:
         entities["intent_family"] = "RISK_ANALYSIS"
@@ -1521,7 +1655,9 @@ def _contract_route_decision(
 
     if asks_recommendation:
         entities["intent_family"] = "RECOMMENDATION"
-        if asks_current_scope or has_operational_anchor or asks_loss or asks_risk:
+        if asks_current_scope or has_operational_anchor or asks_loss or asks_risk or (
+            has_lot_mention and any(token in lowered_ascii for token in ("critique", "perte", "efficac", "rendement", "risque", "a risque"))
+        ):
             return _decision(
                 AgentRoute.HYBRID_FULL,
                 entities,

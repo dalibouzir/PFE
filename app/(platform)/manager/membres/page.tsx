@@ -442,7 +442,7 @@ export default function MembersPage() {
       ) : viewMode === "table" ? (
         <section className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "90ms" }}>
           <div className="overflow-x-auto">
-            <table className="wf-table min-w-full text-left text-sm">
+            <table className="wf-table w-full min-w-[980px] text-left text-sm">
               <thead>
                 <tr>
                   <th className="px-5 py-3.5">Nom</th>

@@ -503,7 +503,7 @@ export default function StocksPage() {
       ) : (
         <section className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "70ms" }}>
           <div className="thin-scrollbar overflow-x-auto">
-            <table className="wf-table min-w-full text-left text-sm">
+            <table className="wf-table w-full min-w-[980px] text-left text-sm">
               <thead>
                 <tr>
                   <th className="px-5 py-3.5">Produit</th>
@@ -603,11 +603,13 @@ export default function StocksPage() {
         <p className="mt-2 text-xs text-[var(--muted)]">Exporte toutes les lignes filtrées.</p>
 
         <div className="mt-4">
-          <table className="wf-table w-full table-fixed text-left text-sm">
+          <table className="wf-table w-full min-w-[1280px] table-fixed text-left text-sm">
             <thead>
               <tr>
                 <th className="px-3 py-3.5">Type</th>
                 <th className="px-3 py-3.5">Lot</th>
+                <th className="px-3 py-3.5">Collecte / BL</th>
+                <th className="px-3 py-3.5">Source</th>
                 <th className="px-3 py-3.5">Produit</th>
                 <th className="px-3 py-3.5">Grade</th>
                 <th className="px-3 py-3.5">Quantité</th>
@@ -620,17 +622,17 @@ export default function StocksPage() {
             <tbody>
               {movementsQuery.isLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-4 text-center text-sm text-[var(--muted)]">Chargement des mouvements...</td>
+                  <td colSpan={11} className="px-5 py-4 text-center text-sm text-[var(--muted)]">Chargement des mouvements...</td>
                 </tr>
               ) : movementsQuery.error ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-4 text-center text-sm text-[var(--danger)]">
+                  <td colSpan={11} className="px-5 py-4 text-center text-sm text-[var(--danger)]">
                     {movementsQuery.error instanceof Error ? movementsQuery.error.message : "Erreur de chargement du journal."}
                   </td>
                 </tr>
               ) : movementRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-4 text-center text-sm text-[var(--muted)]">Aucun mouvement disponible pour ces filtres.</td>
+                  <td colSpan={11} className="px-5 py-4 text-center text-sm text-[var(--muted)]">Aucun mouvement disponible pour ces filtres.</td>
                 </tr>
               ) : (
                 pagedMovementRows.map((movement) => (
@@ -647,6 +649,19 @@ export default function StocksPage() {
                           ) : null}
                         </div>
                       </div>
+                    </td>
+                    <td className="px-3 py-4">
+                      <div className="space-y-0.5 text-xs">
+                        <p className="truncate font-medium text-[var(--text)]" title={movement.input_reference || movement.collecte_reference || "—"}>
+                          {movement.input_reference || movement.collecte_reference || "—"}
+                        </p>
+                        <p className="truncate text-[var(--muted)]" title={movement.input_reference_bl || "BL absent"}>
+                          BL: {movement.input_reference_bl || "—"}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-4 truncate" title={movement.source_label || movement.source}>
+                      {movement.source_label || movement.source}
                     </td>
                     <td className="px-3 py-4 truncate" title={movement.product_name || movement.product_id.slice(0, 8)}>{movement.product_name || movement.product_id.slice(0, 8)}</td>
                     <td className="px-3 py-4">{movement.grade || "Non spécifié"}</td>

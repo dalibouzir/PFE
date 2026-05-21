@@ -1,0 +1,134 @@
+
+✓ Audit mode set to: local_test
+✓ SQLite database schema initialized at /Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/weefarm.db
+============================= test session starts ==============================
+platform darwin -- Python 3.13.11, pytest-9.0.3, pluggy-1.6.0 -- /Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project
+configfile: pytest.ini
+plugins: asyncio-1.3.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_qa_anti_overfitting.py::test_anti_overfitting_qa_set ⚠️  Failed to seed test database: (sqlite3.OperationalError) no such column: batches.postharvest_reference
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT batches.id AS batches_id, batches.cooperative_id AS batches_cooperative_id, batches.product_id AS batches_product_id, batches.member_id AS batches_member_id, batches.parcel_id AS batches_parcel_id, batches.code AS batches_code, batches.postharvest_reference AS batches_postharvest_reference, batches.creation_date AS batches_creation_date, batches.unit AS batches_unit, batches.ordered_process_steps AS batches_ordered_process_steps, batches.initial_qty AS batches_initial_qty, batches.current_qty AS batches_current_qty, batches.surface_ha AS batches_surface_ha, batches.expected_yield_kg_per_ha AS batches_expected_yield_kg_per_ha, batches.expected_losses_kg AS batches_expected_losses_kg, batches.estimated_qty_kg AS batches_estimated_qty_kg, batches.estimated_qty_override_reason AS batches_estimated_qty_override_reason, batches.estimated_charge_fcfa AS batches_estimated_charge_fcfa, batches.charge_approved_at AS batches_charge_approved_at, batches.charge_approved_by_user_id AS batches_charge_approved_by_user_id, batches.preharvest_activated_at AS batches_preharvest_activated_at, batches.preharvest_step_statuses AS batches_preharvest_step_statuses, batches.preharvest_completed_at AS batches_preharvest_completed_at, batches.confirmed_weight_kg AS batches_confirmed_weight_kg, batches.postharvest_started_at AS batches_postharvest_started_at, batches.status_note AS batches_status_note, batches.status AS batches_status, batches.created_by_user_id AS batches_created_by_user_id, batches.created_at AS batches_created_at, batches.updated_at AS batches_updated_at 
+FROM batches) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+FAILED
+
+=================================== FAILURES ===================================
+_________________________ test_anti_overfitting_qa_set _________________________
+
+db_session = <sqlalchemy.orm.session.Session object at 0x10a0ee510>
+
+    @pytest.mark.asyncio
+    async def test_anti_overfitting_qa_set(db_session: Session) -> None:
+        """Run the 14-question anti-overfitting QA set."""
+        # Get the manager user created by the db_session fixture
+        user = db_session.query(User).filter_by(email="manager@test.local").first()
+        if not user:
+            raise RuntimeError("Manager test user not found in db_session")
+    
+        orchestrator = AgentOrchestrator(db_session, user)
+    
+        # Use a fixed conversation ID to test memory carry-over
+        conversation_id = f"qa-test-{datetime.now().isoformat()}"
+    
+        logger.info(f"Starting anti-overfitting QA test suite (conversation={conversation_id})")
+    
+        # Run tests sequentially to maintain conversation state
+        for test in QA_TESTS:
+            logger.info(f"Test {test.question_id}/{len(QA_TESTS)}: {test.question[:60]}...")
+            await run_single_test(orchestrator, test, conversation_id)
+    
+        # Generate report
+        report = _generate_report(QA_TESTS)
+    
+        # Log report
+        import pprint
+        logger.info(f"\n\n{'='*80}\nQA TEST REPORT\n{'='*80}\n{pprint.pformat(report)}")
+    
+        # Write report to file
+        report_path = "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/artifacts/qa_anti_overfitting_report.json"
+        with open(report_path, "w") as f:
+            json.dump(report, f, indent=2)
+        logger.info(f"Report written to {report_path}")
+    
+        # Assert pass rate
+        passed = sum(1 for test in QA_TESTS if test.pass_fail == "pass")
+        total = len(QA_TESTS)
+        pass_rate = passed / total if total > 0 else 0
+    
+        logger.info(f"\nPass rate: {passed}/{total} ({pass_rate*100:.1f}%)")
+    
+        # Require at least 85% pass rate
+>       assert pass_rate >= 0.85, f"Pass rate {pass_rate*100:.1f}% below 85% threshold"
+E       AssertionError: Pass rate 7.1% below 85% threshold
+E       assert 0.07142857142857142 >= 0.85
+
+tests/test_qa_anti_overfitting.py:290: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    app.ml.llm.provider:provider.py:56 OpenRouter returned HTTP 402
+WARNING  app.ai.orchestrator.evidence_pipeline:evidence_pipeline.py:713 LLM summary error (OpenRouter): OpenRouter returned HTTP 402, fallback to deterministic
+ERROR    app.ml.llm.provider:provider.py:56 OpenRouter returned HTTP 402
+WARNING  app.ai.orchestrator.evidence_pipeline:evidence_pipeline.py:713 LLM summary error (OpenRouter): OpenRouter returned HTTP 402, fallback to deterministic
+ERROR    app.ml.llm.provider:provider.py:56 OpenRouter returned HTTP 402
+WARNING  app.ai.orchestrator.evidence_pipeline:evidence_pipeline.py:713 LLM summary error (OpenRouter): OpenRouter returned HTTP 402, fallback to deterministic
+ERROR    test_qa_anti_overfitting:test_qa_anti_overfitting.py:246 Test 4 failed with exception
+Traceback (most recent call last):
+  File "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/tests/test_qa_anti_overfitting.py", line 214, in run_single_test
+    test.warnings = [w.get("code") for w in (response.warnings or [])]
+                     ^^^^^
+AttributeError: 'str' object has no attribute 'get'
+ERROR    test_qa_anti_overfitting:test_qa_anti_overfitting.py:246 Test 5 failed with exception
+Traceback (most recent call last):
+  File "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/tests/test_qa_anti_overfitting.py", line 214, in run_single_test
+    test.warnings = [w.get("code") for w in (response.warnings or [])]
+                     ^^^^^
+AttributeError: 'str' object has no attribute 'get'
+ERROR    test_qa_anti_overfitting:test_qa_anti_overfitting.py:246 Test 6 failed with exception
+Traceback (most recent call last):
+  File "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/tests/test_qa_anti_overfitting.py", line 214, in run_single_test
+    test.warnings = [w.get("code") for w in (response.warnings or [])]
+                     ^^^^^
+AttributeError: 'str' object has no attribute 'get'
+ERROR    test_qa_anti_overfitting:test_qa_anti_overfitting.py:246 Test 7 failed with exception
+Traceback (most recent call last):
+  File "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/tests/test_qa_anti_overfitting.py", line 214, in run_single_test
+    test.warnings = [w.get("code") for w in (response.warnings or [])]
+                     ^^^^^
+AttributeError: 'str' object has no attribute 'get'
+ERROR    test_qa_anti_overfitting:test_qa_anti_overfitting.py:246 Test 8 failed with exception
+Traceback (most recent call last):
+  File "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/tests/test_qa_anti_overfitting.py", line 214, in run_single_test
+    test.warnings = [w.get("code") for w in (response.warnings or [])]
+                     ^^^^^
+AttributeError: 'str' object has no attribute 'get'
+ERROR    app.ml.llm.provider:provider.py:56 OpenRouter returned HTTP 402
+WARNING  app.ai.orchestrator.evidence_pipeline:evidence_pipeline.py:713 LLM summary error (OpenRouter): OpenRouter returned HTTP 402, fallback to deterministic
+ERROR    test_qa_anti_overfitting:test_qa_anti_overfitting.py:246 Test 11 failed with exception
+Traceback (most recent call last):
+  File "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/tests/test_qa_anti_overfitting.py", line 214, in run_single_test
+    test.warnings = [w.get("code") for w in (response.warnings or [])]
+                     ^^^^^
+AttributeError: 'str' object has no attribute 'get'
+ERROR    app.ml.llm.provider:provider.py:56 OpenRouter returned HTTP 402
+WARNING  app.ai.orchestrator.evidence_pipeline:evidence_pipeline.py:713 LLM summary error (OpenRouter): OpenRouter returned HTTP 402, fallback to deterministic
+ERROR    app.ml.llm.provider:provider.py:56 OpenRouter returned HTTP 402
+WARNING  app.ai.orchestrator.evidence_pipeline:evidence_pipeline.py:713 LLM summary error (OpenRouter): OpenRouter returned HTTP 402, fallback to deterministic
+ERROR    test_qa_anti_overfitting:test_qa_anti_overfitting.py:246 Test 13 failed with exception
+Traceback (most recent call last):
+  File "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/tests/test_qa_anti_overfitting.py", line 214, in run_single_test
+    test.warnings = [w.get("code") for w in (response.warnings or [])]
+                     ^^^^^
+AttributeError: 'str' object has no attribute 'get'
+ERROR    test_qa_anti_overfitting:test_qa_anti_overfitting.py:246 Test 14 failed with exception
+Traceback (most recent call last):
+  File "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/tests/test_qa_anti_overfitting.py", line 214, in run_single_test
+    test.warnings = [w.get("code") for w in (response.warnings or [])]
+                     ^^^^^
+AttributeError: 'str' object has no attribute 'get'
+=========================== short test summary info ============================
+FAILED tests/test_qa_anti_overfitting.py::test_anti_overfitting_qa_set - Asse...
+============================== 1 failed in 1.82s ===============================

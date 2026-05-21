@@ -6,7 +6,7 @@ export function SimpleTable({ rows }: { rows: Row[] }) {
   return (
     <div className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "70ms" }}>
       <div className="thin-scrollbar overflow-x-auto">
-        <table className="wf-table min-w-full text-left">
+        <table className="wf-table w-full min-w-[980px] text-left">
           <thead>
             <tr>
               {headers.map((header) => (

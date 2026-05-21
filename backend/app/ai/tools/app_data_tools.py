@@ -20,13 +20,17 @@ def tool_response(
     data: Any,
     sources: list[dict[str, Any]] | None = None,
     warnings: list[str] | None = None,
+    evidence_status: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "ok": ok,
         "data": data,
         "sources": sources or [],
         "warnings": warnings or [],
     }
+    if evidence_status:
+        payload["evidence_status"] = str(evidence_status)
+    return payload
 
 
 def missing_module_response() -> dict[str, Any]:

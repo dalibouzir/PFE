@@ -283,10 +283,10 @@ export default function FarmerAdvancesPage() {
   }
 
   return (
-    <main>
+    <main className="w-full min-w-0">
       <PageIntro title="Avances Producteurs" />
 
-      <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-4 grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="premium-card reveal rounded-2xl p-4" style={{ ["--delay" as string]: "20ms" }}>
           <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Total avancé</p>
           <p className="mt-2 text-2xl font-semibold text-[var(--text)]">{formatAmount(stats?.total_advanced ?? 0)}</p>
@@ -305,7 +305,7 @@ export default function FarmerAdvancesPage() {
         </article>
       </section>
 
-      <section className="premium-card reveal mb-4 rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
+      <section className="premium-card reveal mb-4 w-full rounded-2xl p-4" style={{ ["--delay" as string]: "40ms" }}>
         <div className="mb-3 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
           <select value={selectedFarmerFilter} onChange={(event) => setSelectedFarmerFilter(event.target.value)} className="soft-focus wf-input px-3 py-2.5 text-sm">
             <option value="all">Tous producteurs</option>
@@ -378,9 +378,9 @@ export default function FarmerAdvancesPage() {
           </button>
         </section>
       ) : (
-        <section className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "90ms" }}>
-          <div className="thin-scrollbar overflow-x-auto">
-            <table className="wf-table min-w-full text-left text-sm">
+        <section className="premium-card reveal w-full overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "90ms" }}>
+          <div className="thin-scrollbar w-full overflow-x-auto">
+            <table className="wf-table w-full min-w-[980px] text-left text-sm">
               <thead>
                 <tr>
                   <th className="px-5 py-3.5">Producteur</th>
@@ -487,7 +487,7 @@ export default function FarmerAdvancesPage() {
               <p className="text-sm text-[var(--muted)]">Aucune avance enregistrée pour ce producteur.</p>
             ) : (
               <div className="thin-scrollbar overflow-x-auto rounded-xl border border-[var(--line)]">
-                <table className="wf-table min-w-full text-left text-sm">
+                <table className="wf-table w-full min-w-[980px] text-left text-sm">
                   <thead>
                     <tr>
                       <th className="px-4 py-3">Date</th>

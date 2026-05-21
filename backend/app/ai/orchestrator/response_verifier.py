@@ -16,6 +16,11 @@ PROMPT_INJECTION_MARKERS = (
     "reveal secrets",
     "change system behavior",
 )
+EVIDENCE_HAS = "HAS_EVIDENCE"
+EVIDENCE_NO_DATA = "PROVEN_NO_DATA"
+EVIDENCE_PARTIAL = "PARTIAL_EVIDENCE"
+EVIDENCE_TOOL_ERROR = "TOOL_ERROR"
+EVIDENCE_UNSUPPORTED = "UNSUPPORTED"
 
 
 @dataclass
@@ -48,18 +53,17 @@ class ResponseVerifier:
         has_recommendation_evidence = _has_recommendation_evidence(results)
         has_recommendation_agent = any(res.agent_name == "RecommendationAgent" for res in results)
         has_any_evidence = has_sql or has_rag or has_ml or has_recommendation_evidence
+        required = _required_sources_for_context(context=context, route=route)
+        required_sql = "SQL" in required
+        required_rag = "RAG" in required
+        required_ml = "ML" in required
+        required_recommendation = "RECOMMENDATION" in required
 
         numeric_claim = _has_operational_numeric_claim(answer or "")
         if numeric_claim and not (has_sql or has_ml or (route == AgentRoute.RAG_ONLY and has_rag)):
             warnings.append("NUMERIC_CLAIMS_NOT_GROUNDED")
 
-        rag_needed = route in {
-            AgentRoute.RAG_ONLY,
-            AgentRoute.HYBRID_SQL_RAG,
-            AgentRoute.HYBRID_RAG_RECOMMENDATION,
-            AgentRoute.HYBRID_FULL,
-        }
-        if rag_needed and not has_rag:
+        if required_rag and not has_rag:
             warnings.append("MISSING_RAG_SOURCE")
 
         recommends = any(token in (answer or "").lower() for token in ("recommand", "action", "priorit"))
@@ -82,8 +86,9 @@ class ResponseVerifier:
         if _sql_side_succeeded(route=route, results=results):
             warnings = [item for item in warnings if item != "MISSING_DATA_SIGNALLED"]
 
+        ml_status = _ml_evidence_status(results)
         contradiction = False
-        if has_sql and has_ml:
+        if has_sql and has_ml and ml_status not in {EVIDENCE_NO_DATA, EVIDENCE_TOOL_ERROR, EVIDENCE_UNSUPPORTED}:
             contradiction = _is_sql_ml_contradiction(results)
             if contradiction:
                 warnings.append("SQL_ML_CONTRADICTION")
@@ -97,15 +102,12 @@ class ResponseVerifier:
 
         weak_ml_confidence = False
         for res in results:
-            if res.agent_name == "MLLossAgent" and float(res.confidence) < 0.55:
+            if res.agent_name == "MLLossAgent" and float(res.confidence) < 0.55 and ml_status not in {EVIDENCE_NO_DATA, EVIDENCE_HAS}:
                 weak_ml_confidence = True
                 warnings.append("WEAK_ML_CONFIDENCE")
 
-        incomplete_sql = any(
-            "SQL_DATA_INCOMPLETE" in res.warnings or "NO_SQL_DATA" in res.warnings
-            for res in results
-            if res.agent_name == "SQLAnalyticsAgent"
-        )
+        sql_status = _sql_evidence_status(results)
+        incomplete_sql = sql_status == EVIDENCE_PARTIAL
         if incomplete_sql:
             warnings.append("INCOMPLETE_SQL_DATA")
 
@@ -113,11 +115,11 @@ class ResponseVerifier:
             warnings.append("PROMPT_INJECTION_DETECTED")
 
         route_missing_expected_source = bool(
-            (route in {AgentRoute.SQL_ONLY, AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_SQL_ML, AgentRoute.HYBRID_FULL} and not has_sql)
-            or (route in {AgentRoute.ML_ONLY, AgentRoute.HYBRID_SQL_ML, AgentRoute.HYBRID_FULL} and not has_ml)
-            or (rag_needed and not has_rag)
+            (required_sql and not has_sql)
+            or (required_ml and not has_ml)
+            or (required_rag and not has_rag)
         )
-        if route in {AgentRoute.RECOMMENDATION_ONLY, AgentRoute.HYBRID_RAG_RECOMMENDATION, AgentRoute.HYBRID_FULL} and not has_recommendation_agent:
+        if required_recommendation and not has_recommendation_agent:
             route_missing_expected_source = True
             warnings.append("MISSING_RECOMMENDATION_SOURCE")
         if route_missing_expected_source:
@@ -266,9 +268,60 @@ def _sql_side_succeeded(*, route: AgentRoute, results: list[AgentResult]) -> boo
     except (TypeError, ValueError):
         row_count = None
     has_operation = bool(str(trace.get("sql_operation") or "").strip())
+    evidence_status = str(trace.get("evidence_status") or "").strip().upper()
+    if evidence_status in {EVIDENCE_HAS, EVIDENCE_NO_DATA} and has_operation:
+        return True
     if has_operation and row_count is not None and row_count > 0:
         return True
     return False
+
+
+def _required_sources_for_context(*, context: AgentContext, route: AgentRoute) -> set[str]:
+    intent = str((context.detected_entities or {}).get("intent_family") or "").upper()
+    query = str(getattr(context, "user_query", "") or "").lower()
+
+    if route == AgentRoute.SQL_ONLY:
+        return {"SQL"}
+    if route == AgentRoute.RAG_ONLY:
+        return {"RAG"}
+    if route == AgentRoute.ML_ONLY:
+        return {"ML"}
+    if route == AgentRoute.RECOMMENDATION_ONLY:
+        return {"RECOMMENDATION"}
+    if route == AgentRoute.HYBRID_SQL_RAG:
+        return {"SQL", "RAG"}
+    if route == AgentRoute.HYBRID_SQL_ML:
+        return {"SQL", "ML"}
+    if route == AgentRoute.HYBRID_RAG_RECOMMENDATION:
+        return {"RAG", "RECOMMENDATION"}
+    if route != AgentRoute.HYBRID_FULL:
+        return set()
+
+    required = {"SQL", "RECOMMENDATION"}
+    if intent in {"BEST_PRACTICES", "EXPLANATION_CAUSAL", "HYBRID_ANALYSIS"}:
+        required.add("RAG")
+    if intent in {"RISK_ANALYSIS", "RISK_ML"}:
+        required.add("ML")
+    if any(token in query for token in ("ml", "anomaly", "anomalie", "signal", "risque")):
+        required.add("ML")
+    if any(token in query for token in ("bonnes pratiques", "best practice", "checklist", "check-list")):
+        required.add("RAG")
+    return required
+
+
+def _sql_evidence_status(results: list[AgentResult]) -> str:
+    sql_result = next((res for res in results if res.agent_name == "SQLAnalyticsAgent"), None)
+    if not sql_result or not isinstance(sql_result.data, dict):
+        return ""
+    trace = sql_result.data.get("sql_dispatch_trace") or {}
+    return str(trace.get("evidence_status") or "").strip().upper()
+
+
+def _ml_evidence_status(results: list[AgentResult]) -> str:
+    ml_result = next((res for res in results if res.agent_name == "MLLossAgent"), None)
+    if not ml_result or not isinstance(ml_result.data, dict):
+        return ""
+    return str(ml_result.data.get("evidence_status") or "").strip().upper()
 
 
 def _has_prompt_injection(results: list[AgentResult]) -> bool:
@@ -287,6 +340,10 @@ def _has_sql_evidence(results: list[AgentResult]) -> bool:
     sql_result = next((res for res in results if res.agent_name == "SQLAnalyticsAgent"), None)
     if not sql_result or not isinstance(sql_result.data, dict):
         return False
+    trace = sql_result.data.get("sql_dispatch_trace") or {}
+    trace_status = str(trace.get("evidence_status") or "").strip().upper()
+    if trace_status in {EVIDENCE_HAS, EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}:
+        return True
     ignored_keys = {"detected_module", "query_text", "requested_batch_ref"}
     for key, value in sql_result.data.items():
         if key in ignored_keys:
@@ -306,6 +363,10 @@ def _has_rag_evidence(results: list[AgentResult]) -> bool:
     rag_result = next((res for res in results if res.agent_name == "RAGKnowledgeAgent"), None)
     if not rag_result:
         return False
+    if isinstance(rag_result.data, dict):
+        status = str(rag_result.data.get("evidence_status") or "").strip().upper()
+        if status in {EVIDENCE_HAS, EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}:
+            return True
     if rag_result.sources:
         return True
     if not isinstance(rag_result.data, dict):
@@ -324,6 +385,9 @@ def _has_ml_evidence(results: list[AgentResult]) -> bool:
     if not ml_result or not isinstance(ml_result.data, dict):
         return False
     payload = ml_result.data
+    status = str(payload.get("evidence_status") or "").strip().upper()
+    if status in {EVIDENCE_HAS, EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}:
+        return True
     signal_keys = {"risk_level", "anomaly_detected", "predicted_loss_pct", "observed_loss_pct", "expected_loss_pct", "confidence"}
     if any(key in payload and payload.get(key) not in (None, "", []) for key in signal_keys):
         return True

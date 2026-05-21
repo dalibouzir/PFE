@@ -13,6 +13,11 @@ from app.models.ml import MLModelRegistry, MLPredictionLog, MLTrainingRun
 from app.models.process_step import ProcessStep
 from app.models.user import User
 
+EVIDENCE_HAS = "HAS_EVIDENCE"
+EVIDENCE_NO_DATA = "PROVEN_NO_DATA"
+EVIDENCE_PARTIAL = "PARTIAL_EVIDENCE"
+EVIDENCE_TOOL_ERROR = "TOOL_ERROR"
+
 
 class MLTools:
     def __init__(self, db: Session, current_user: User):
@@ -39,8 +44,9 @@ class MLTools:
                     "deviation": None,
                     "affected_stage": stage,
                     "affected_batch": batch_ref,
-                    "confidence": 0.2,
+                    "confidence": 0.3,
                     "warnings": ["NO_MATCHING_BATCH_FOR_ML"],
+                    "evidence_status": EVIDENCE_NO_DATA,
                     "sources": [],
                 }
 
@@ -51,18 +57,21 @@ class MLTools:
 
         warnings: list[str] = []
         if row is None:
-            warnings.append("ML_SERVICE_UNAVAILABLE")
+            warnings.append("NO_ML_DATA")
             return {
                 "anomaly_detected": False,
-                "risk_level": "MEDIUM",
+                "risk_level": "UNKNOWN",
                 "observed_loss_pct": None,
                 "expected_loss_pct": None,
                 "deviation": None,
                 "affected_stage": stage,
                 "affected_batch": batch_ref,
-                "confidence": 0.35,
+                "confidence": 0.72,
                 "warnings": warnings,
-                "sources": [],
+                "evidence_status": EVIDENCE_NO_DATA,
+                "sources": [
+                    source(table="ml_prediction_logs", label="Journaux ML", record_count=0, source_type="ml", evidence_status=EVIDENCE_NO_DATA)
+                ],
             }
 
         observed_loss = _compute_observed_loss(self.db, cooperative_id=self.current_user.cooperative_id, batch_id=row.batch_id, stage=stage)
@@ -88,12 +97,14 @@ class MLTools:
             "affected_batch": batch_ref,
             "confidence": confidence,
             "warnings": warnings,
+            "evidence_status": EVIDENCE_HAS if row else EVIDENCE_PARTIAL,
             "sources": [
                 {
                     "type": "ml",
                     "model": "loss_anomaly_detector",
                     "result_id": str(row.id),
                     "risk_level": str((row.risk_level.value if hasattr(row.risk_level, "value") else row.risk_level) or "unknown"),
+                    "evidence_status": EVIDENCE_HAS,
                 }
             ],
         }
@@ -109,8 +120,9 @@ class MLTools:
         return tool_response(
             ok=True,
             data=data,
-            sources=[source(table="ml_prediction_logs", label="Lots à risque détectés par le modèle", record_count=len(data), source_type="ml")],
+            sources=[source(table="ml_prediction_logs", label="Lots à risque détectés par le modèle", record_count=len(data), source_type="ml", evidence_status=EVIDENCE_HAS if data else EVIDENCE_NO_DATA)],
             warnings=warnings_for_empty(data) or (["Aucun lot à risque confirmé n’a été trouvé avec les données disponibles."] if not data else []),
+            evidence_status=EVIDENCE_HAS if data else EVIDENCE_NO_DATA,
         )
 
     def detect_loss_anomaly(self, batch_ref: str | None = None, stage: str | None = None, product: str | None = None) -> dict[str, Any]:
@@ -123,6 +135,7 @@ class MLTools:
             data=result,
             sources=result.get("sources", []),
             warnings=warnings,
+            evidence_status=str(result.get("evidence_status") or (EVIDENCE_HAS if result.get("sources") else EVIDENCE_NO_DATA)),
         )
 
     def get_ml_insight_summary(self, product: str | None = None, stage: str | None = None, date_range: list[str] | None = None) -> dict[str, Any]:
@@ -135,8 +148,9 @@ class MLTools:
         return tool_response(
             ok=True,
             data=data,
-            sources=[source(table="ml_prediction_logs", label="Résumé des signaux ML", record_count=len(data), source_type="ml")],
+            sources=[source(table="ml_prediction_logs", label="Résumé des signaux ML", record_count=len(data), source_type="ml", evidence_status=EVIDENCE_HAS if data else EVIDENCE_NO_DATA)],
             warnings=warnings_for_empty(data),
+            evidence_status=EVIDENCE_HAS if data else EVIDENCE_NO_DATA,
         )
 
     def get_model_evaluation_summary(self) -> dict[str, Any]:
@@ -171,6 +185,7 @@ class MLTools:
             data=data,
             sources=[source(table="ml_training_runs,ml_model_registry", label="Évaluation des modèles ML", record_count=count, source_type="ml")],
             warnings=warnings_for_empty(data["training_runs"]) if count == 0 else [],
+            evidence_status=EVIDENCE_HAS if count > 0 else EVIDENCE_NO_DATA,
         )
 
     def max_anomaly_score_lot(self) -> dict[str, Any]:
@@ -182,13 +197,20 @@ class MLTools:
             .limit(1)
         ).first()
         if not row:
-            return tool_response(ok=True, data=[], sources=[source(table="ml_prediction_logs", label="Max anomaly score", record_count=0, source_type="ml")], warnings=["NO_ML_DATA"])
+            return tool_response(
+                ok=True,
+                data=[],
+                sources=[source(table="ml_prediction_logs", label="Max anomaly score", record_count=0, source_type="ml", evidence_status=EVIDENCE_NO_DATA)],
+                warnings=["NO_ML_DATA"],
+                evidence_status=EVIDENCE_NO_DATA,
+            )
         prediction, batch_code = row
         return tool_response(
             ok=True,
             data=[{"lot_code": batch_code, "anomaly_score": float(prediction.anomaly_score or 0.0), "model_version": prediction.model_version}],
-            sources=[source(table="ml_prediction_logs", label="Max anomaly score", record_count=1, source_type="ml")],
+            sources=[source(table="ml_prediction_logs", label="Max anomaly score", record_count=1, source_type="ml", evidence_status=EVIDENCE_HAS)],
             warnings=[],
+            evidence_status=EVIDENCE_HAS,
         )
 
     def ml_high_signal_count(self, days: int) -> dict[str, Any]:
@@ -208,8 +230,9 @@ class MLTools:
         return tool_response(
             ok=True,
             data=[{"high_signal_count": count, "days": int(days)}],
-            sources=[source(table="ml_prediction_logs", label="HIGH ML signals count", record_count=1, source_type="ml")],
+            sources=[source(table="ml_prediction_logs", label="HIGH ML signals count", record_count=1, source_type="ml", evidence_status=EVIDENCE_HAS if count > 0 else EVIDENCE_NO_DATA)],
             warnings=[],
+            evidence_status=EVIDENCE_HAS if count > 0 else EVIDENCE_NO_DATA,
         )
 
 

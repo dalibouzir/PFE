@@ -1,0 +1,200 @@
+[
+  {
+    "qid": "MR01",
+    "module_group": "stocks",
+    "question": "Présente l’inventaire disponible par article et qualité.",
+    "expected_module": "stocks",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "STOCK_CURRENT",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_current_stock",
+    "expected_evidence_source": "sql:stocks,products",
+    "expected_response_shape": "table:stock_by_grade"
+  },
+  {
+    "qid": "MR02",
+    "module_group": "stock_movements",
+    "question": "Donne les derniers mouvements de stock avec nature, produit, quantité et origine.",
+    "expected_module": "stock_movements",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_stock_movements_journal",
+    "expected_evidence_source": "sql:stock_movements",
+    "expected_response_shape": "table:stock_movements"
+  },
+  {
+    "qid": "MR03",
+    "module_group": "collectes",
+    "question": "Agrège les quantités collectées par produit.",
+    "expected_module": "inputs",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_collections_summary",
+    "expected_evidence_source": "sql:inputs,products",
+    "expected_response_shape": "table:collected_by_product"
+  },
+  {
+    "qid": "MR04",
+    "module_group": "collectes",
+    "question": "Montre la traçabilité des collectes: bon de livraison, preuve et lot associé.",
+    "expected_module": "inputs",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_collecte_traceability",
+    "expected_evidence_source": "sql:inputs,uploaded_files,batches",
+    "expected_response_shape": "table:collecte_traceability"
+  },
+  {
+    "qid": "MR05",
+    "module_group": "members",
+    "question": "Liste les producteurs actifs avec leurs parcelles ou produits liés.",
+    "expected_module": "parcels",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_parcels_list",
+    "expected_evidence_source": "sql:members,parcels,products",
+    "expected_response_shape": "table:active_producers"
+  },
+  {
+    "qid": "MR06",
+    "module_group": "members",
+    "question": "Quel producteur a livré le plus grand volume ?",
+    "expected_module": "members",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_top_farmers",
+    "expected_evidence_source": "sql:members,inputs",
+    "expected_response_shape": "ranking:delivered_quantity"
+  },
+  {
+    "qid": "MR07",
+    "module_group": "lots",
+    "question": "Quels lots sont disponibles pour passer en post-récolte ?",
+    "expected_module": "lots",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "POSTHARVEST_AVAILABLE_LOTS",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_available_postharvest_lots",
+    "expected_evidence_source": "sql:batches",
+    "expected_response_shape": "table:postharvest_lots"
+  },
+  {
+    "qid": "MR08",
+    "module_group": "material_balance",
+    "question": "Classe les lots selon la perte matière en kilogrammes.",
+    "expected_module": "material_balance",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "INPUT_OUTPUT_GAP",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_canonical_material_balance",
+    "expected_evidence_source": "sql:process_steps,batches",
+    "expected_response_shape": "ranking:kg_loss"
+  },
+  {
+    "qid": "MR09",
+    "module_group": "process_steps",
+    "question": "Quelle étape génère la plus forte perte matière ?",
+    "expected_module": "process_steps",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "STAGE_LOSS_ANALYSIS",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_stage_loss_analysis",
+    "expected_evidence_source": "sql:process_steps,batches",
+    "expected_response_shape": "summary:stage_loss"
+  },
+  {
+    "qid": "MR10",
+    "module_group": "commercial",
+    "question": "Répartis les commandes commerciales par statut.",
+    "expected_module": "commercial",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_orders_summary",
+    "expected_evidence_source": "sql:commercial_orders",
+    "expected_response_shape": "table:orders_by_status"
+  },
+  {
+    "qid": "MR11",
+    "module_group": "invoices",
+    "question": "Répartis les factures selon leur statut de paiement.",
+    "expected_module": "invoices",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_invoices_summary",
+    "expected_evidence_source": "sql:commercial_invoices",
+    "expected_response_shape": "table:invoices_by_payment_status"
+  },
+  {
+    "qid": "MR12",
+    "module_group": "treasury",
+    "question": "Affiche les opérations de trésorerie qui n’ont pas de justificatif.",
+    "expected_module": "finance",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_treasury_traceability",
+    "expected_evidence_source": "sql:treasury_transactions",
+    "expected_response_shape": "table:treasury_without_proof"
+  },
+  {
+    "qid": "MR13",
+    "module_group": "stocks",
+    "question": "Pour chaque produit, distingue total, disponible et réservé si l’information existe.",
+    "expected_module": "stocks",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "STOCK_CURRENT",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_current_stock",
+    "expected_evidence_source": "sql:stocks",
+    "expected_response_shape": "table:stock_total_available_reserved"
+  },
+  {
+    "qid": "MR14",
+    "module_group": "collectes",
+    "question": "Quel produit domine les collectes et avec quelle quantité cumulée ?",
+    "expected_module": "inputs",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_collections_summary",
+    "expected_evidence_source": "sql:inputs,products",
+    "expected_response_shape": "summary:top_collected_product"
+  },
+  {
+    "qid": "MR15",
+    "module_group": "process_steps",
+    "question": "Quelle étape cause le plus de pertes en kg et sur quels lots ?",
+    "expected_module": "process_steps",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "STAGE_LOSS_ANALYSIS",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_stage_loss_analysis",
+    "expected_evidence_source": "sql:process_steps,batches",
+    "expected_response_shape": "table:stage_loss_with_lots"
+  },
+  {
+    "qid": "MR16",
+    "module_group": "commercial",
+    "question": "Existe-t-il des commandes payées sans facture rattachée ?",
+    "expected_module": "commercial",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_invoice_linkage",
+    "expected_evidence_source": "sql:commercial_orders,commercial_invoices",
+    "expected_response_shape": "summary:paid_orders_without_invoice"
+  },
+  {
+    "qid": "MR17",
+    "module_group": "treasury",
+    "question": "Quelles transactions manquent de justificatif ou de référence de reçu ?",
+    "expected_module": "finance",
+    "expected_route": "SQL_ONLY",
+    "expected_intent_family": "factual_sql",
+    "expected_tool_agent": "SQLAnalyticsAgent:get_treasury_traceability",
+    "expected_evidence_source": "sql:treasury_transactions",
+    "expected_response_shape": "table:treasury_missing_proof_or_receipt"
+  },
+  {
+    "qid": "MR18",
+    "module_group": "ml",
+    "question": "Combien de signaux ML élevés sont enregistrés dans les journaux ?",
+    "expected_module": "ml_logs",
+    "expected_route": "ML_ONLY",
+    "expected_intent_family": "risk_ml",
+    "expected_tool_agent": "MLLossAgent:ml_high_signal_count",
+    "expected_evidence_source": "ml:ml_prediction_logs",
+    "expected_response_shape": "summary:ml_signal_count"
+  }
+]

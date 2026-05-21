@@ -551,7 +551,7 @@ export default function InputsPage() {
             }}
           />
           <div className="thin-scrollbar overflow-x-auto">
-            <table className="wf-table min-w-full text-left text-sm">
+            <table className="wf-table w-full min-w-[980px] text-left text-sm">
               <thead>
                 <tr>
                   <th className="px-5 py-3.5">Date</th>

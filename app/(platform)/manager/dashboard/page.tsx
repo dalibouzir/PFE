@@ -434,7 +434,7 @@ export default function ManagerDashboardPage() {
             <p className="text-xs text-[#6f8398]">{recentRows.length} lignes</p>
           </div>
           <div className="scroll-thin overflow-x-auto rounded-lg border border-[#dce4ef]">
-            <table className="wf-table min-w-full text-left text-sm">
+            <table className="wf-table w-full min-w-[980px] text-left text-sm">
               <thead>
                 <tr>
                   <th className="px-3 py-3 font-semibold">Date</th>

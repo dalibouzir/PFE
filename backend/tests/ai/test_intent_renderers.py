@@ -79,6 +79,8 @@ def test_input_output_gap_renderer_orders_by_gap_qty():
     )
     answer, blocks, _ = compose_answer(pack, verify_evidence(pack))
     assert "classement établi par écart de quantité (kg)" in answer.lower()
+    assert "écart matière" in answer.lower()
+    assert "lot le plus critique" not in answer.lower()
     table = next(b for b in blocks if b.get("type") == "table")
     assert table["rows"][0][0] == "LOT-B"
 
@@ -92,6 +94,7 @@ def test_lot_comparison_renderer_side_by_side():
     )
     answer, blocks, _ = compose_answer(pack, verify_evidence(pack))
     assert "comparaison côte à côte" in answer.lower()
+    assert "lot le plus critique" not in answer.lower()
     table = next(b for b in blocks if b.get("type") in {"table", "comparison_table"})
     assert table.get("title") == "Comparaison des lots"
 

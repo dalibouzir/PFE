@@ -1,0 +1,2424 @@
+{
+  "audit_name": "chatbot_whole_app_runtime_audit",
+  "generated_at": "2026-05-21T14:54:15.176310+00:00",
+  "total_cases": 60,
+  "counts": {
+    "PASS": 17,
+    "PARTIAL": 2,
+    "FAIL": 41
+  },
+  "score_by_module": {
+    "dashboard": {
+      "PASS": 2,
+      "PARTIAL": 0,
+      "FAIL": 4
+    },
+    "stocks": {
+      "PASS": 3,
+      "PARTIAL": 0,
+      "FAIL": 3
+    },
+    "stock_movements": {
+      "PASS": 2,
+      "PARTIAL": 0,
+      "FAIL": 0
+    },
+    "collectes": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 6
+    },
+    "members": {
+      "PASS": 2,
+      "PARTIAL": 0,
+      "FAIL": 4
+    },
+    "lots": {
+      "PASS": 1,
+      "PARTIAL": 0,
+      "FAIL": 2
+    },
+    "material_balance": {
+      "PASS": 3,
+      "PARTIAL": 0,
+      "FAIL": 1
+    },
+    "process_steps": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 3
+    },
+    "recommendations": {
+      "PASS": 1,
+      "PARTIAL": 2,
+      "FAIL": 1
+    },
+    "rag": {
+      "PASS": 2,
+      "PARTIAL": 0,
+      "FAIL": 1
+    },
+    "commercial": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 6
+    },
+    "invoices": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 4
+    },
+    "treasury": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 4
+    },
+    "ml": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 2
+    },
+    "memory": {
+      "PASS": 1,
+      "PARTIAL": 0,
+      "FAIL": 0
+    }
+  },
+  "score_by_failure_category": {
+    "SQL_OPERATION_MISSING": 33,
+    "NO_FAILURE": 17,
+    "INTENT_MISMATCH": 4,
+    "WARNING_NOISE": 1,
+    "EVIDENCE_INSUFFICIENT": 1,
+    "ROUTING_ERROR": 4
+  },
+  "top_10_p0_failures": [
+    {
+      "qid": "O06",
+      "module_group": "commercial",
+      "question": "Revenus trésorerie liés aux factures commerciales ?",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_invoice_linkage",
+      "expected_evidence_source": "sql:treasury_transactions,commercial_invoices",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nLa trésorerie liée aux factures commerciales présente 0 ENREGISTRE_COMPLET, 0 avec receipt_reference et 10 sans justificatif. Avertissement : informations partielles ou insuffisantes pour cette requête.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- SQL: commercial_orders\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 15144.1,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "O04",
+      "module_group": "commercial",
+      "question": "Lien commandes-factures-trésorerie.",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_invoice_linkage",
+      "expected_evidence_source": "sql:commercial_orders,commercial_invoices,treasury_transactions",
+      "expected_response_shape": "summary+table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nCommandes/factures/trésorerie: 0 commandes payées avec facture, 0 factures payées, 0 écritures de trésorerie liées.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- SQL: commercial_orders\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 14955.21,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "T02",
+      "module_group": "treasury",
+      "question": "Statuts trésorerie et justificatifs.",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_treasury_traceability",
+      "expected_evidence_source": "sql:treasury_transactions",
+      "expected_response_shape": "summary+table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nActuellement, nous avons 0 ENREGISTRE_COMPLET en trésorerie, 0 avec receipt_reference et 10 sans justificatif. Veuillez noter que ces informations peuvent être partielles ou insuffisantes pour une analyse complète.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 12491.28,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "O05",
+      "module_group": "commercial",
+      "question": "Commandes payées avec facture générée ?",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_invoice_linkage",
+      "expected_evidence_source": "sql:commercial_orders,commercial_invoices",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nCommandes/factures: 0 commandes payées avec facture, 0 factures payées.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- SQL: commercial_orders\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 12451.91,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "F02",
+      "module_group": "invoices",
+      "question": "Résumé factures par statut payé/non payé.",
+      "expected_module": "invoices",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_invoices_summary",
+      "expected_evidence_source": "sql:commercial_invoices",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nNous avons un total de 4 factures disponibles. Veuillez noter que ces informations peuvent être partielles ou insuffisantes pour une analyse complète.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 12088.08,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "T01",
+      "module_group": "treasury",
+      "question": "Dépenses finance/trésorerie récentes.",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_finance_expenses",
+      "expected_evidence_source": "sql:treasury_transactions,global_charges",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nTrésorerie: 0 ENREGISTRE_COMPLET, 0 avec receipt_reference, 10 sans justificatif.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11867.56,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "T03",
+      "module_group": "treasury",
+      "question": "Coverage receipt_reference en trésorerie.",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_treasury_traceability",
+      "expected_evidence_source": "sql:treasury_transactions",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nEn trésorerie, nous avons 0 enregistrements complets, 0 avec receipt_reference et 10 sans justificatif. Avertissement de fiabilité : informations partielles ou insuffisantes pour cette requête.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11866.19,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "L03",
+      "module_group": "lots",
+      "question": "Lot ouvert le plus ancien ?",
+      "expected_module": "lots",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:oldest_open_lot",
+      "expected_evidence_source": "sql:batches",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n\n4. Action recommandée\nPrioriser le lot LOT-BISS-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 11865.55,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "O02",
+      "module_group": "commercial",
+      "question": "Résumé des commandes commerciales par statut.",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_orders_summary",
+      "expected_evidence_source": "sql:commercial_orders",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nActuellement, nous avons un total de 4 commandes commerciales disponibles. Veuillez noter que ces informations peuvent être partielles ou insuffisantes pour une analyse complète.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_orders\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11565.82,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "M03",
+      "module_group": "members",
+      "question": "Plus petit contributeur non zéro ?",
+      "expected_module": "members",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:lowest_nonzero_member_contributor",
+      "expected_evidence_source": "sql:members,inputs",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources"
+      ],
+      "warnings": [],
+      "confidence": 0.96,
+      "final_answer_text": "1. Réponse directe\nLe plus petit contributeur non zéro est Awa Diop avec 135.0 kg.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: inputs\n- SQL: members\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Aucune limite critique signalée.",
+      "latency_ms": 11530.93,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    }
+  ],
+  "results": [
+    {
+      "qid": "D01",
+      "module_group": "dashboard",
+      "question": "Donne un résumé KPI global de la coopérative.",
+      "expected_module": "cooperative_summary",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_cooperative_overview",
+      "expected_evidence_source": "sql:members,parcels,stocks,batches,process_steps",
+      "expected_response_shape": "summary+kpi",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nRésumé coopérative: 4 membre(s), 5 parcelle(s), 3 lot(s) dont 2 en cours, stock total 223.0 kg, perte moyenne 19.6%.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: members\n- SQL: parcels\n- SQL: process_steps\n- SQL: stocks\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11338.71,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "D02",
+      "module_group": "dashboard",
+      "question": "Combien de membres, parcelles et lots ouverts actuellement ?",
+      "expected_module": "cooperative_summary",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_cooperative_overview",
+      "expected_evidence_source": "sql:members,parcels,batches",
+      "expected_response_shape": "summary+table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "PREHARVEST_STEPS",
+      "actual_sql_operation_tool": "get_parcel_preharvest_status",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 5,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nJe n’ai pas trouvé de preuve opérationnelle exploitable pour répondre précisément à cette demande.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: parcels\n- SQL: pre_harvest_steps\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 9924.19,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "D03",
+      "module_group": "dashboard",
+      "question": "Quel est le stock disponible total de la coopérative ?",
+      "expected_module": "stocks",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_current_stock",
+      "expected_evidence_source": "sql:stocks,products",
+      "expected_response_shape": "summary+kpi",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STOCK_CURRENT",
+      "actual_sql_operation_tool": "get_current_stock",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLa coopérative dispose actuellement de 223.0 kg de stock disponible répartis sur 4 produits. Le produit le plus disponible est Bissap avec 78.0 kg. Détail qualité: Grade A 78.0 kg, Grade B 0.0 kg, Grade C 0.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11882.87,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "D04",
+      "module_group": "dashboard",
+      "question": "Perte moyenne observée sur les étapes de process ?",
+      "expected_module": "cooperative_summary",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_cooperative_overview",
+      "expected_evidence_source": "sql:process_steps",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: process_steps\n\n4. Action recommandée\nPrioriser le lot LOT-MILX-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 8623.77,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "D05",
+      "module_group": "dashboard",
+      "question": "Charges globales ce mois vs mois dernier ?",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:month_vs_month_charges",
+      "expected_evidence_source": "sql:global_charges,treasury_transactions",
+      "expected_response_shape": "summary+comparison",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources"
+      ],
+      "warnings": [],
+      "confidence": 0.96,
+      "final_answer_text": "1. Réponse directe\nLes charges globales pour ce mois s'élèvent à 0 FCFA, tout comme le mois dernier, également à 0 FCFA.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Aucune limite critique signalée.",
+      "latency_ms": 10112.85,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "D06",
+      "module_group": "dashboard",
+      "question": "Top lots critiques actuellement ?",
+      "expected_module": "material_balance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "LOSS_RANKING",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_canonical_material_balance",
+      "expected_evidence_source": "sql:process_steps,batches",
+      "expected_response_shape": "ranking_table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: inputs\n- SQL: members\n- SQL: process_steps\n\n4. Action recommandée\nPrioriser le lot LOT-MANG-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 8373.54,
+      "status": "FAIL",
+      "failure_category": "INTENT_MISMATCH",
+      "reason": "expected intent LOSS_RANKING, got FACTUAL_SQL"
+    },
+    {
+      "qid": "S01",
+      "module_group": "stocks",
+      "question": "Stock disponible par produit ?",
+      "expected_module": "stocks",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "STOCK_CURRENT",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_current_stock",
+      "expected_evidence_source": "sql:stocks,products",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STOCK_CURRENT",
+      "actual_sql_operation_tool": "get_current_stock",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Le filtre produit détecté était ambigu et a été ignoré."
+      ],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLa coopérative dispose actuellement de 223.0 kg de stock disponible répartis sur 4 produits. Le produit le plus disponible est Bissap avec 78.0 kg. Détail qualité: Grade A 78.0 kg, Grade B 0.0 kg, Grade C 0.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Le filtre produit détecté était ambigu et a été ignoré.",
+      "latency_ms": 9891.19,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "S02",
+      "module_group": "stocks",
+      "question": "Produit avec le plus de stock disponible ?",
+      "expected_module": "stocks",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "STOCK_CURRENT",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_current_stock",
+      "expected_evidence_source": "sql:stocks,products",
+      "expected_response_shape": "ranking",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STOCK_CURRENT",
+      "actual_sql_operation_tool": "get_current_stock",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Le filtre produit détecté était ambigu et a été ignoré."
+      ],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLe produit avec le plus de stock disponible est Bissap avec 78.0 kg. Le classement complet des 4 produits est présenté ci-dessous.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Le filtre produit détecté était ambigu et a été ignoré.",
+      "latency_ms": 9921.78,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "S03",
+      "module_group": "stocks",
+      "question": "Montre total/réservé/disponible pour chaque produit.",
+      "expected_module": "stocks",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "STOCK_CURRENT",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_current_stock",
+      "expected_evidence_source": "sql:stocks",
+      "expected_response_shape": "comparison_table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "warnings"
+      ],
+      "warnings": [
+        "La réponse signale une donnée manquante.",
+        "Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      ],
+      "confidence": 0.94,
+      "final_answer_text": "Donnée non disponible pour cette requête précise.",
+      "latency_ms": 8578.65,
+      "status": "FAIL",
+      "failure_category": "INTENT_MISMATCH",
+      "reason": "expected intent STOCK_CURRENT, got FACTUAL_SQL"
+    },
+    {
+      "qid": "S04",
+      "module_group": "stocks",
+      "question": "Quels produits sont sous seuil ?",
+      "expected_module": "stocks",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_low_stock_alerts",
+      "expected_evidence_source": "sql:stocks",
+      "expected_response_shape": "alerts_table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "warnings"
+      ],
+      "warnings": [
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les données SQL sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucune donnée SQL exploitable n’a été trouvée."
+      ],
+      "confidence": 0.42000000000000004,
+      "final_answer_text": "Donnée non disponible pour cette requête précise.",
+      "latency_ms": 8459.63,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "S05",
+      "module_group": "stock_movements",
+      "question": "Journal des mouvements de stock les plus récents.",
+      "expected_module": "stock_movements",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_stock_movements_journal",
+      "expected_evidence_source": "sql:stock_movements",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STOCK_CURRENT",
+      "actual_sql_operation_tool": "get_current_stock",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLa coopérative dispose actuellement de 223.0 kg de stock disponible répartis sur 4 produits. Le produit le plus disponible est Bissap avec 78.0 kg. Détail qualité: Grade A 78.0 kg, Grade B 0.0 kg, Grade C 0.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 10108.08,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "S06",
+      "module_group": "stock_movements",
+      "question": "Mouvements de stock pour LOT-MILX-001.",
+      "expected_module": "stock_movements",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_stock_movements_journal",
+      "expected_evidence_source": "sql:stock_movements,batches",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STOCK_CURRENT",
+      "actual_sql_operation_tool": "get_current_stock",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLa coopérative dispose actuellement de 223.0 kg de stock disponible répartis sur 4 produits. Le produit le plus disponible est Bissap avec 78.0 kg. Détail qualité: Grade A 78.0 kg, Grade B 0.0 kg, Grade C 0.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 9785.87,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "S07",
+      "module_group": "stocks",
+      "question": "Disponible net vs seuil pour la mangue.",
+      "expected_module": "stocks",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:available_stock_gap",
+      "expected_evidence_source": "sql:stocks",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources"
+      ],
+      "warnings": [],
+      "confidence": 0.96,
+      "final_answer_text": "1. Réponse directe\nPour la mangue, nous avons un disponible net de 43.0 kg, avec un écart par rapport au seuil de 43.0 kg.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: stocks\n\n4. Action recommandée\nPrioriser le lot mango: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Aucune limite critique signalée.",
+      "latency_ms": 9904.45,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "S08",
+      "module_group": "stocks",
+      "question": "Le stock restant et le stock total sont-ils cohérents pour chaque produit ?",
+      "expected_module": "stocks",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_current_stock",
+      "expected_evidence_source": "sql:stocks",
+      "expected_response_shape": "consistency_table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STOCK_CURRENT",
+      "actual_sql_operation_tool": "get_current_stock",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Le filtre produit détecté était ambigu et a été ignoré."
+      ],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLa coopérative dispose actuellement de 223.0 kg de stock disponible répartis sur 4 produits. Le produit le plus disponible est Bissap avec 78.0 kg. Détail qualité: Grade A 78.0 kg, Grade B 0.0 kg, Grade C 0.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Le filtre produit détecté était ambigu et a été ignoré.",
+      "latency_ms": 9649.45,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "C01",
+      "module_group": "collectes",
+      "question": "Résumé des collectes par produit.",
+      "expected_module": "inputs",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_collections_summary",
+      "expected_evidence_source": "sql:inputs,products",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nCollectes traçables: 1 avec BL, 0 avec justificatif, 1 liées à un lot. Producteur/produit/statut fichier: 0/1 fichiers présents.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: inputs\n- SQL: members\n- SQL: products\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 10233.77,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "C02",
+      "module_group": "collectes",
+      "question": "Top 3 jours de collecte (6 mois).",
+      "expected_module": "inputs",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:top_collection_days",
+      "expected_evidence_source": "sql:inputs",
+      "expected_response_shape": "ranking",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources"
+      ],
+      "warnings": [],
+      "confidence": 0.96,
+      "final_answer_text": "1. Réponse directe\n2026-05-16: 135.0 kg\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: inputs\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Aucune limite critique signalée.",
+      "latency_ms": 9468.38,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "C03",
+      "module_group": "collectes",
+      "question": "Grade dominant en volume collecté ?",
+      "expected_module": "inputs",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:top_grade_by_volume",
+      "expected_evidence_source": "sql:inputs",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nCollectes: 1 enregistrements, quantité totale 135.0 kg.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: inputs\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 9432.62,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "C04",
+      "module_group": "collectes",
+      "question": "Traçabilité collectes: BL, justificatifs, liaison lot.",
+      "expected_module": "inputs",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_collecte_traceability",
+      "expected_evidence_source": "sql:inputs,uploaded_files,batches",
+      "expected_response_shape": "summary+table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: inputs\n- SQL: members\n- SQL: products\n\n4. Action recommandée\nPrioriser le lot LOT-BISS-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 8814.2,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "C05",
+      "module_group": "collectes",
+      "question": "Collectes liées à des lots: combien ?",
+      "expected_module": "inputs",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_collecte_traceability",
+      "expected_evidence_source": "sql:inputs,batches",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: inputs\n- SQL: members\n- SQL: products\n\n4. Action recommandée\nPrioriser le lot LOT-BISS-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 8910.44,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "C06",
+      "module_group": "collectes",
+      "question": "Preuves documentaires upload associées aux collectes ?",
+      "expected_module": "inputs",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_uploaded_files_evidence",
+      "expected_evidence_source": "sql:uploaded_files,inputs",
+      "expected_response_shape": "summary+table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nCollectes: 1 enregistrements, quantité totale 135.0 kg.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: farmer_advances\n- SQL: inputs\n- SQL: treasury_transactions\n- SQL: uploaded_files\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 10544.41,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "M01",
+      "module_group": "members",
+      "question": "Liste des membres.",
+      "expected_module": "members",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_members_list",
+      "expected_evidence_source": "sql:members",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nLa coopérative compte 4 membre(s) inscrit(s).\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: members\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 9879.83,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "M02",
+      "module_group": "members",
+      "question": "Top membres contributeurs par quantité.",
+      "expected_module": "members",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_top_farmers",
+      "expected_evidence_source": "sql:members,inputs",
+      "expected_response_shape": "ranking",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: inputs\n- SQL: members\n- SQL: process_steps\n\n4. Action recommandée\nPrioriser le lot LOT-MILX-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 8783.92,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "M03",
+      "module_group": "members",
+      "question": "Plus petit contributeur non zéro ?",
+      "expected_module": "members",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:lowest_nonzero_member_contributor",
+      "expected_evidence_source": "sql:members,inputs",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources"
+      ],
+      "warnings": [],
+      "confidence": 0.96,
+      "final_answer_text": "1. Réponse directe\nLe plus petit contributeur non zéro est Awa Diop avec 135.0 kg.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: inputs\n- SQL: members\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Aucune limite critique signalée.",
+      "latency_ms": 11530.93,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "M04",
+      "module_group": "members",
+      "question": "Valeur cumulée par membre ?",
+      "expected_module": "member_value",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_top_members_by_cost",
+      "expected_evidence_source": "sql:members,global_charges",
+      "expected_response_shape": "ranking",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les données SQL sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucune donnée SQL exploitable n’a été trouvée."
+      ],
+      "confidence": 0.42000000000000004,
+      "final_answer_text": "1. Réponse directe\nJe n'ai pas trouvé de données SQL exploitables pour répondre à la demande de valeur cumulée par membre. Les informations disponibles sont insuffisantes pour fournir une réponse précise.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: global_charges\n- SQL: members\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Aucune donnée SQL exploitable n’a été trouvée.",
+      "latency_ms": 10417.45,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "M05",
+      "module_group": "members",
+      "question": "Plus grande parcelle pour la mangue ?",
+      "expected_module": "parcels",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:largest_parcel_by_product",
+      "expected_evidence_source": "sql:parcels,members",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "PREHARVEST_STEPS",
+      "actual_sql_operation_tool": "get_parcel_preharvest_status",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "warnings"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "Donnée non disponible pour cette requête précise.",
+      "latency_ms": 8652.61,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "M06",
+      "module_group": "members",
+      "question": "Parcelles enregistrées par membre.",
+      "expected_module": "parcels",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_parcels_list",
+      "expected_evidence_source": "sql:parcels,members",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "PREHARVEST_STEPS",
+      "actual_sql_operation_tool": "get_parcel_preharvest_status",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 5,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nJe n’ai pas trouvé de preuve opérationnelle exploitable pour répondre précisément à cette demande.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: parcels\n- SQL: pre_harvest_steps\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 9804.47,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "L01",
+      "module_group": "lots",
+      "question": "Lots post-récolte disponibles.",
+      "expected_module": "lots",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "POSTHARVEST_AVAILABLE_LOTS",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_available_postharvest_lots",
+      "expected_evidence_source": "sql:batches",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "POSTHARVEST_AVAILABLE_LOTS",
+      "actual_sql_operation_tool": "get_available_postharvest_lots",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 2,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLots post-récolte disponibles: 2. Exemple LOT-MILX-001 (Mil) 30.0 kg -> 5.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11211.55,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "L02",
+      "module_group": "lots",
+      "question": "Résumé du lot LOT-MILX-001.",
+      "expected_module": "lots",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_batch_summary",
+      "expected_evidence_source": "sql:batches",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n\n4. Action recommandée\nPrioriser le lot LOT-MILX-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 11464.22,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "L03",
+      "module_group": "lots",
+      "question": "Lot ouvert le plus ancien ?",
+      "expected_module": "lots",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:oldest_open_lot",
+      "expected_evidence_source": "sql:batches",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n\n4. Action recommandée\nPrioriser le lot LOT-BISS-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 11865.55,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "L04",
+      "module_group": "material_balance",
+      "question": "Top lots par perte %.",
+      "expected_module": "material_balance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "LOSS_RANKING",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_canonical_material_balance",
+      "expected_evidence_source": "sql:process_steps,batches",
+      "expected_response_shape": "ranking",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "LOSS_RANKING",
+      "actual_sql_operation_tool": "get_canonical_material_balance",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 2,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLe lot le plus critique est LOT-MILX-001 avec 74.1% de perte et une efficacité de 25.9%.\n\n2. Interprétation\nClassement établi par perte (%) et efficacité (%).\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 10612.01,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "L05",
+      "module_group": "material_balance",
+      "question": "Top lots par écart kg entrée-sortie.",
+      "expected_module": "material_balance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "INPUT_OUTPUT_GAP",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_canonical_material_balance",
+      "expected_evidence_source": "sql:process_steps,batches",
+      "expected_response_shape": "ranking",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "INPUT_OUTPUT_GAP",
+      "actual_sql_operation_tool": "get_canonical_material_balance",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 2,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLe lot le plus critique est LOT-MILX-001 avec 74.1% de perte et une efficacité de 25.9%.\n\n2. Interprétation\nClassement établi par écart de quantité (kg), puis perte (%).\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 13465.6,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "L06",
+      "module_group": "material_balance",
+      "question": "Comparer LOT-MILX-001 et LOT-MANG-001 en perte/efficacité.",
+      "expected_module": "material_balance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "LOT_COMPARISON",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_canonical_material_balance_for_lots",
+      "expected_evidence_source": "sql:process_steps,batches",
+      "expected_response_shape": "comparison_table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "LOT_COMPARISON",
+      "actual_sql_operation_tool": "get_canonical_material_balance_for_lots",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 2,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "comparison_table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLe lot le plus critique est LOT-MILX-001 avec 74.1% de perte et une efficacité de 25.9%.\n\n2. Interprétation\nComparaison côte à côte des lots demandés sur les mêmes métriques.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11928.11,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "L07",
+      "module_group": "process_steps",
+      "question": "Étape la plus pénalisante (30j).",
+      "expected_module": "process_steps",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "STAGE_LOSS_ANALYSIS",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_stage_loss_analysis",
+      "expected_evidence_source": "sql:process_steps",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: process_steps\n\n4. Action recommandée\nPrioriser le lot LOT-MILX-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 9531.93,
+      "status": "FAIL",
+      "failure_category": "INTENT_MISMATCH",
+      "reason": "expected intent STAGE_LOSS_ANALYSIS, got FACTUAL_SQL"
+    },
+    {
+      "qid": "L08",
+      "module_group": "process_steps",
+      "question": "Pertes par étape pour LOT-MILX-001.",
+      "expected_module": "process_steps",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "STAGE_LOSS_ANALYSIS",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_stage_loss_analysis",
+      "expected_evidence_source": "sql:process_steps,batches",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: process_steps\n\n4. Action recommandée\nPrioriser le lot LOT-MILX-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 10071.91,
+      "status": "FAIL",
+      "failure_category": "INTENT_MISMATCH",
+      "reason": "expected intent STAGE_LOSS_ANALYSIS, got FACTUAL_SQL"
+    },
+    {
+      "qid": "L09",
+      "module_group": "process_steps",
+      "question": "Comparaison séchage vs tri (perte moyenne).",
+      "expected_module": "process_steps",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_stage_efficiency_summary",
+      "expected_evidence_source": "sql:process_steps",
+      "expected_response_shape": "comparison_table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les données SQL sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucune donnée SQL exploitable n’a été trouvée.",
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.14,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: process_steps\n\n4. Action recommandée\nPrioriser le lot drying: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Aucune donnée SQL exploitable n’a été trouvée.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 8837.77,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "L10",
+      "module_group": "material_balance",
+      "question": "Lots incohérents output>input ?",
+      "expected_module": "material_balance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_postharvest_material_balance",
+      "expected_evidence_source": "sql:process_steps,batches",
+      "expected_response_shape": "warnings+table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
+      ],
+      "confidence": 0.26,
+      "final_answer_text": "1. Réponse directe\nCette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: inputs\n- SQL: members\n- SQL: products\n\n4. Action recommandée\nPrioriser le lot LOT-BISS-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+      "latency_ms": 8713.7,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "R01",
+      "module_group": "recommendations",
+      "question": "Donne 3 actions pour réduire les pertes de LOT-MILX-001 avec preuves.",
+      "expected_module": "recommendations",
+      "expected_route": "HYBRID_FULL",
+      "expected_intent_family": "LOT_SPECIFIC_RECOMMENDATION",
+      "expected_tool_agent": "RecommendationAgent:build_recommendations",
+      "expected_evidence_source": "sql+rag+ml+recommendation",
+      "expected_response_shape": "recommendation_cards",
+      "actual_route": "HYBRID_FULL",
+      "actual_intent_family": "LOT_SPECIFIC_RECOMMENDATION",
+      "actual_sql_operation_tool": "get_canonical_material_balance",
+      "agents_called": [
+        "SQLAnalyticsAgent",
+        "MLLossAgent",
+        "RAGKnowledgeAgent",
+        "RecommendationAgent"
+      ],
+      "evidence_row_count": 1,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "recommendations",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Le contexte documentaire est limité pour cette question.",
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+        "Les signaux SQL et ML ne sont pas totalement cohérents."
+      ],
+      "confidence": 0.21250000000000002,
+      "final_answer_text": "1. Données mesurées\nLot LOT-MILX-001: entrée 27.0 kg, sortie 7.0 kg, perte 74.1%.\n\n2. Signal ML\nSignal ML disponible (MEDIUM).\n\n3. Recommandations validées\n- Isoler le lot LOT-MILX-001 et renforcer le contrôle à l’étape critique. (HIGH) | preuves: 2 [SQL, RULE]\n  preuves -> SQL:sql:batches:LOT-MILX-001 ; RULE:rule:RULE_LOSS_PRIORITY_FROM_SQL\n- Je peux proposer 1 action fiable avec les preuves disponibles. Les autres actions ne sont pas générées car le contexte documentaire est limité.\n\n4. Limites\n- Le contexte documentaire est limité pour cette question.\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n\nLes données disponibles ne permettent pas de confirmer ce point.",
+      "latency_ms": 11144.62,
+      "status": "PARTIAL",
+      "failure_category": "WARNING_NOISE",
+      "reason": "too many warnings for valid answer"
+    },
+    {
+      "qid": "R02",
+      "module_group": "recommendations",
+      "question": "Actions prioritaires cette semaine pour améliorer le rendement global.",
+      "expected_module": "recommendations",
+      "expected_route": "HYBRID_FULL",
+      "expected_intent_family": "RECOMMENDATION",
+      "expected_tool_agent": "RecommendationAgent:build_recommendations",
+      "expected_evidence_source": "sql+rag+ml+recommendation",
+      "expected_response_shape": "recommendation_cards",
+      "actual_route": "HYBRID_FULL",
+      "actual_intent_family": "RECOMMENDATION",
+      "actual_sql_operation_tool": "get_canonical_material_balance",
+      "agents_called": [
+        "SQLAnalyticsAgent",
+        "MLLossAgent",
+        "RAGKnowledgeAgent",
+        "RecommendationAgent"
+      ],
+      "evidence_row_count": 2,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "recommendations",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Le contexte documentaire est limité pour cette question.",
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les signaux SQL et ML ne sont pas totalement cohérents."
+      ],
+      "confidence": 0.4275,
+      "final_answer_text": "1. Données mesurées\nLot LOT-MANG-001: entrée 80.0 kg, sortie 76.0 kg, perte 5.0%.\n\n2. Signal ML\nSignal ML disponible (HIGH).\n\n3. Recommandations validées\n- Isoler le lot LOT-MILX-001 et renforcer le contrôle à l’étape critique. (HIGH) | preuves: 2 [SQL, RULE]\n- Déclencher une revue lot-étape sous 24h et prioriser les contrôles des flux à risque. (HIGH) | preuves: 2 [ML, RULE]\n  preuves -> SQL:sql:batches:LOT-MILX-001 ; RULE:rule:RULE_LOSS_PRIORITY_FROM_SQL\n  preuves -> ML:ml:1f8e3afc-ac16-4a68-8b5a-3454309eed4c ; RULE:rule:RULE_PREVENTIVE_REVIEW_FROM_ML\n\n4. Limites\n- Le contexte documentaire est limité pour cette question.\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n\nLes données disponibles ne permettent pas de confirmer ce point.",
+      "latency_ms": 11064.03,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "R03",
+      "module_group": "recommendations",
+      "question": "Plan d’action manager basé SQL+ML+RAG avec evidence_refs.",
+      "expected_module": "recommendations",
+      "expected_route": "HYBRID_FULL",
+      "expected_intent_family": "action_recommendation",
+      "expected_tool_agent": "RecommendationAgent:build_recommendations",
+      "expected_evidence_source": "sql+rag+ml+recommendation",
+      "expected_response_shape": "recommendation_cards+summary",
+      "actual_route": "HYBRID_FULL",
+      "actual_intent_family": "action_recommendation",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent",
+        "MLLossAgent",
+        "RAGKnowledgeAgent",
+        "RecommendationAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "recommendations",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Le contexte documentaire est limité pour cette question.",
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les signaux SQL et ML ne sont pas totalement cohérents."
+      ],
+      "confidence": 0.42333333333333334,
+      "final_answer_text": "1. Données mesurées\nLot LOT-BISS-001: perte 100.0% et efficacité 0.0%.\n\n2. Signal ML\nSignal ML disponible (HIGH).\n\n3. Recommandations validées\n- Isoler le lot LOT-BISS-001 et renforcer le contrôle à l’étape critique. (HIGH) | preuves: 2 [SQL, RULE]\n- Déclencher une revue lot-étape sous 24h et prioriser les contrôles des flux à risque. (HIGH) | preuves: 2 [ML, RULE]\n- Standardiser les contrôles de tri avec traçabilité entrée/sortie. (HIGH) | preuves: 2 [SQL, RULE]\n  preuves -> SQL:sql:batches:LOT-BISS-001 ; RULE:rule:RULE_LOSS_PRIORITY_FROM_SQL\n  preuves -> ML:ml:1f8e3afc-ac16-4a68-8b5a-3454309eed4c ; RULE:rule:RULE_PREVENTIVE_REVIEW_FROM_ML\n  preuves -> SQL:sql:process_steps:LOT-MILX-001 ; RULE:rule:RULE_STAGE_CONTROL_FROM_SQL\n\n4. Limites\n- Le contexte documentaire est limité pour cette question.\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n\nLes données disponibles ne permettent pas de confirmer ce point.",
+      "latency_ms": 10913.83,
+      "status": "PARTIAL",
+      "failure_category": "EVIDENCE_INSUFFICIENT",
+      "reason": "no evidence rows"
+    },
+    {
+      "qid": "R04",
+      "module_group": "recommendations",
+      "question": "Pour le lot le plus critique, quelles actions immédiates ?",
+      "expected_module": "recommendations",
+      "expected_route": "HYBRID_FULL",
+      "expected_intent_family": "RECOMMENDATION",
+      "expected_tool_agent": "RecommendationAgent:build_recommendations",
+      "expected_evidence_source": "sql+rag+ml+recommendation",
+      "expected_response_shape": "recommendation_cards",
+      "actual_route": "RECOMMENDATION_ONLY",
+      "actual_intent_family": "RECOMMENDATION",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "RecommendationAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "warnings"
+      ],
+      "warnings": [],
+      "confidence": 0.23,
+      "final_answer_text": "Je ne peux pas générer de recommandations fiables sans données vérifiables.\n\nLes données disponibles ne permettent pas de confirmer ce point.",
+      "latency_ms": 1558.3,
+      "status": "FAIL",
+      "failure_category": "ROUTING_ERROR",
+      "reason": "expected route HYBRID_FULL, got RECOMMENDATION_ONLY"
+    },
+    {
+      "qid": "G01",
+      "module_group": "rag",
+      "question": "Bonnes pratiques de séchage pour limiter les pertes.",
+      "expected_module": "rag",
+      "expected_route": "RAG_ONLY",
+      "expected_intent_family": "BEST_PRACTICES",
+      "expected_tool_agent": "RAGKnowledgeAgent:search",
+      "expected_evidence_source": "rag",
+      "expected_response_shape": "best_practices",
+      "actual_route": "HYBRID_SQL_RAG",
+      "actual_intent_family": "hybrid_analysis",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent",
+        "RAGKnowledgeAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "best_practices",
+        "sources",
+        "warnings",
+        "limits_block",
+        "warnings"
+      ],
+      "warnings": [
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les données SQL sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucune donnée SQL exploitable n’a été trouvée."
+      ],
+      "confidence": 0.515,
+      "final_answer_text": "1. Données mesurées\n\n2. Analyse\nConseil pratique (RAG):  for Mangue in Thies, Senegal. Séchage. DEMOFP-SRC-KNOW-001. [DEMOFP] Contrôler humidité finale < 15% et homogénéiser la circulation d'a...\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Aucune donnée SQL exploitable n’a été trouvée.",
+      "latency_ms": 10593.01,
+      "status": "FAIL",
+      "failure_category": "ROUTING_ERROR",
+      "reason": "expected route RAG_ONLY, got HYBRID_SQL_RAG"
+    },
+    {
+      "qid": "G02",
+      "module_group": "rag",
+      "question": "Checklist avant emballage pour éviter casse et humidité.",
+      "expected_module": "rag",
+      "expected_route": "RAG_ONLY",
+      "expected_intent_family": "BEST_PRACTICES",
+      "expected_tool_agent": "RAGKnowledgeAgent:search",
+      "expected_evidence_source": "rag",
+      "expected_response_shape": "best_practices",
+      "actual_route": "RAG_ONLY",
+      "actual_intent_family": "BEST_PRACTICES",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "RAGKnowledgeAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "best_practices",
+        "sources",
+        "warnings",
+        "limits_block",
+        "warnings"
+      ],
+      "warnings": [
+        "Des informations contradictoires peuvent exister dans les sources."
+      ],
+      "confidence": 0.6100000000000001,
+      "final_answer_text": "Résumé\n\nChecklist pratique\n-  for Mil in West Africa\n- Senegal. storage after conditioning. . Après conditionnement\n- le stockage recommandé utilise des zones sèches et ventilées\n- des palettes séparées du sol/m\n\nErreurs à éviter\n- Éviter toute reprise d’humidité après séchage.\n- Éviter un tri sans contrôle qualité visuel régulier.\n- Éviter l’emballage sur produit insuffisamment sec.\n\nLimites / sources\n- Des informations contradictoires peuvent exister dans les sources.\n- RAG: Knowledge Mil - storage after conditioning\n- RAG: Knowledge Mil - conditioning standard procedure\n- RAG: Knowledge Mangue - precautions before packaging",
+      "latency_ms": 3824.28,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "G03",
+      "module_group": "rag",
+      "question": "Précautions de stockage post-conditionnement.",
+      "expected_module": "rag",
+      "expected_route": "RAG_ONLY",
+      "expected_intent_family": "BEST_PRACTICES",
+      "expected_tool_agent": "RAGKnowledgeAgent:search",
+      "expected_evidence_source": "rag",
+      "expected_response_shape": "best_practices",
+      "actual_route": "RAG_ONLY",
+      "actual_intent_family": "BEST_PRACTICES",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "RAGKnowledgeAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Le contexte documentaire est limité pour cette question.",
+        "Certaines preuves attendues sont partielles ou indisponibles."
+      ],
+      "confidence": 0.12,
+      "final_answer_text": "Je n’ai pas assez de contexte documentaire fiable pour répondre précisément à cette question.",
+      "latency_ms": 2178.97,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "O01",
+      "module_group": "commercial",
+      "question": "Top client par cumul de commandes.",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:top_customer_by_orders",
+      "expected_evidence_source": "sql:commercial_orders",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nClassement des membres par quantité collectée (1):\n- Awa Diop (DEMOGRADE26-M-01): 135.0 kg\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_orders\n- SQL: inputs\n- SQL: members\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11157.07,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "O02",
+      "module_group": "commercial",
+      "question": "Résumé des commandes commerciales par statut.",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_orders_summary",
+      "expected_evidence_source": "sql:commercial_orders",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nActuellement, nous avons un total de 4 commandes commerciales disponibles. Veuillez noter que ces informations peuvent être partielles ou insuffisantes pour une analyse complète.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_orders\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11565.82,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "O03",
+      "module_group": "commercial",
+      "question": "Totaux commerciaux (ventes).",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_totals",
+      "expected_evidence_source": "sql:commercial_orders",
+      "expected_response_shape": "kpi",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nActuellement, nous avons 4 commandes commerciales disponibles. Veuillez noter que les informations peuvent être partielles ou insuffisantes pour cette requête.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_orders\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11117.39,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "O04",
+      "module_group": "commercial",
+      "question": "Lien commandes-factures-trésorerie.",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_invoice_linkage",
+      "expected_evidence_source": "sql:commercial_orders,commercial_invoices,treasury_transactions",
+      "expected_response_shape": "summary+table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nCommandes/factures/trésorerie: 0 commandes payées avec facture, 0 factures payées, 0 écritures de trésorerie liées.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- SQL: commercial_orders\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 14955.21,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "O05",
+      "module_group": "commercial",
+      "question": "Commandes payées avec facture générée ?",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_invoice_linkage",
+      "expected_evidence_source": "sql:commercial_orders,commercial_invoices",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nCommandes/factures: 0 commandes payées avec facture, 0 factures payées.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- SQL: commercial_orders\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 12451.91,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "O06",
+      "module_group": "commercial",
+      "question": "Revenus trésorerie liés aux factures commerciales ?",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_invoice_linkage",
+      "expected_evidence_source": "sql:treasury_transactions,commercial_invoices",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nLa trésorerie liée aux factures commerciales présente 0 ENREGISTRE_COMPLET, 0 avec receipt_reference et 10 sans justificatif. Avertissement : informations partielles ou insuffisantes pour cette requête.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- SQL: commercial_orders\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 15144.1,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "F01",
+      "module_group": "invoices",
+      "question": "Montant moyen des factures payées ce trimestre.",
+      "expected_module": "invoices",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:avg_paid_invoices_current_quarter",
+      "expected_evidence_source": "sql:commercial_invoices",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "warnings"
+      ],
+      "warnings": [
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les données SQL sont incomplètes.",
+        "La réponse signale une donnée manquante.",
+        "Aucune donnée SQL exploitable n’a été trouvée."
+      ],
+      "confidence": 0.34,
+      "final_answer_text": "Donnée non disponible pour cette requête précise.",
+      "latency_ms": 10354.13,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "F02",
+      "module_group": "invoices",
+      "question": "Résumé factures par statut payé/non payé.",
+      "expected_module": "invoices",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_invoices_summary",
+      "expected_evidence_source": "sql:commercial_invoices",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nNous avons un total de 4 factures disponibles. Veuillez noter que ces informations peuvent être partielles ou insuffisantes pour une analyse complète.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 12088.08,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "F03",
+      "module_group": "invoices",
+      "question": "Factures payées ce mois ?",
+      "expected_module": "invoices",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_invoices_summary",
+      "expected_evidence_source": "sql:commercial_invoices",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nCe mois-ci, nous avons 4 factures payées. Notez que ces informations peuvent être partielles ou insuffisantes pour une analyse complète.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 10706.03,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "F04",
+      "module_group": "invoices",
+      "question": "Factures sans données: signaler proprement si vide.",
+      "expected_module": "invoices",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_invoices_summary",
+      "expected_evidence_source": "sql:commercial_invoices",
+      "expected_response_shape": "summary+warning",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nActuellement, nous avons 4 factures disponibles. Veuillez noter que le signal ML est indisponible pour cette entité et que les informations fournies peuvent être partielles ou insuffisantes pour cette requête.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Signal ML indisponible pour cette entité.\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 10922.07,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "T01",
+      "module_group": "treasury",
+      "question": "Dépenses finance/trésorerie récentes.",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_finance_expenses",
+      "expected_evidence_source": "sql:treasury_transactions,global_charges",
+      "expected_response_shape": "table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nTrésorerie: 0 ENREGISTRE_COMPLET, 0 avec receipt_reference, 10 sans justificatif.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11867.56,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "T02",
+      "module_group": "treasury",
+      "question": "Statuts trésorerie et justificatifs.",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_treasury_traceability",
+      "expected_evidence_source": "sql:treasury_transactions",
+      "expected_response_shape": "summary+table",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nActuellement, nous avons 0 ENREGISTRE_COMPLET en trésorerie, 0 avec receipt_reference et 10 sans justificatif. Veuillez noter que ces informations peuvent être partielles ou insuffisantes pour une analyse complète.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 12491.28,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "T03",
+      "module_group": "treasury",
+      "question": "Coverage receipt_reference en trésorerie.",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_treasury_traceability",
+      "expected_evidence_source": "sql:treasury_transactions",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nEn trésorerie, nous avons 0 enregistrements complets, 0 avec receipt_reference et 10 sans justificatif. Avertissement de fiabilité : informations partielles ou insuffisantes pour cette requête.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: global_charges\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11866.19,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "T04",
+      "module_group": "treasury",
+      "question": "Transactions sans justificatif: combien ?",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_treasury_traceability",
+      "expected_evidence_source": "sql:treasury_transactions",
+      "expected_response_shape": "summary",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nPerte observée sur tri du lot LOT-MILX-001: 74.1% (27.0 kg -> 7.0 kg).\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: process_steps\n\n4. Action recommandée\nPrioriser le lot LOT-MILX-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Recommandation exploitable indisponible pour cette entité.\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11270.87,
+      "status": "FAIL",
+      "failure_category": "SQL_OPERATION_MISSING",
+      "reason": "no sql_dispatch_trace.sql_operation"
+    },
+    {
+      "qid": "ML1",
+      "module_group": "ml",
+      "question": "Combien de signaux ML HIGH sur 30 jours ?",
+      "expected_module": "ml_logs",
+      "expected_route": "ML_ONLY",
+      "expected_intent_family": "risk_ml",
+      "expected_tool_agent": "MLLossAgent:ml_high_signal_count",
+      "expected_evidence_source": "ml:ml_prediction_logs",
+      "expected_response_shape": "summary",
+      "actual_route": "HYBRID_SQL_ML",
+      "actual_intent_family": "risk_ml",
+      "actual_sql_operation_tool": null,
+      "agents_called": [
+        "SQLAnalyticsAgent",
+        "MLLossAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources"
+      ],
+      "warnings": [
+        "Les signaux SQL et ML ne sont pas totalement cohérents.",
+        "Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      ],
+      "confidence": 0.55,
+      "final_answer_text": "1. Réponse directe\nSur les 30 derniers jours, nous avons enregistré 0 signaux ML HIGH.\n\n2. Interprétation opérationnelle\nSignal ML: risque UNKNOWN | anomalie non | anomaly_score 0.0000; les mesures SQL restent la vérité opérationnelle.\n\n3. Preuves\n- SQL: batches\n- SQL: process_steps\n- ML: ml_signal\n\n4. Action recommandée\nPrioriser le lot LOT-MILX-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Aucune limite critique signalée.",
+      "latency_ms": 9777.48,
+      "status": "FAIL",
+      "failure_category": "ROUTING_ERROR",
+      "reason": "expected route ML_ONLY, got HYBRID_SQL_ML"
+    },
+    {
+      "qid": "ML2",
+      "module_group": "ml",
+      "question": "Lot avec anomaly_score maximal ?",
+      "expected_module": "ml_logs",
+      "expected_route": "ML_ONLY",
+      "expected_intent_family": "risk_ml",
+      "expected_tool_agent": "MLLossAgent:max_anomaly_score_lot",
+      "expected_evidence_source": "ml:ml_prediction_logs",
+      "expected_response_shape": "summary",
+      "actual_route": "HYBRID_SQL_ML",
+      "actual_intent_family": "RISK_ANALYSIS",
+      "actual_sql_operation_tool": "get_canonical_material_balance",
+      "agents_called": [
+        "SQLAnalyticsAgent",
+        "MLLossAgent"
+      ],
+      "evidence_row_count": 2,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      ],
+      "confidence": 0.62,
+      "final_answer_text": "1. Réponse directe\nDonnée non disponible pour cette requête précise. Avertissement de fiabilité : informations partielles ou insuffisantes pour cette requête.\n\n2. Interprétation opérationnelle\nSignal ML: risque UNKNOWN | anomalie non | anomaly_score 0.0000; les mesures SQL restent la vérité opérationnelle.\n\n3. Preuves\n- SQL: batches\n- SQL: process_steps\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 9846.21,
+      "status": "FAIL",
+      "failure_category": "ROUTING_ERROR",
+      "reason": "expected route ML_ONLY, got HYBRID_SQL_ML"
+    },
+    {
+      "qid": "MEM1",
+      "module_group": "memory",
+      "question": "[SEQUENCE] Q1: lot le plus critique ? Q2: actions pour ce lot ? Q3: oublie ce lot et donne stock mangue.",
+      "expected_module": "memory",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "STOCK_CURRENT",
+      "expected_tool_agent": "MemoryAgent+SQLAnalyticsAgent",
+      "expected_evidence_source": "memory+sql:stocks",
+      "expected_response_shape": "sequence_reset",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STOCK_CURRENT",
+      "actual_sql_operation_tool": "get_current_stock",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 1,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLa coopérative dispose actuellement de 43.0 kg de stock disponible répartis sur 1 produits. Le produit le plus disponible est Mangue avec 43.0 kg. Détail qualité: Grade A 43.0 kg, Grade B 0.0 kg, Grade C 0.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 29816.55,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "memory reset honored",
+      "sequence_details": {
+        "step1": {
+          "status": 200,
+          "route": "SQL_ONLY",
+          "intent": "LOSS_RANKING"
+        },
+        "step2": {
+          "status": 200,
+          "route": "HYBRID_FULL",
+          "intent": "FOLLOW_UP"
+        },
+        "step3": {
+          "status": 200,
+          "route": "SQL_ONLY",
+          "intent": "STOCK_CURRENT"
+        }
+      }
+    }
+  ],
+  "files": {
+    "cases": "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/reports/chatbot/whole_app_runtime_audit_cases.json",
+    "json_report": "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/artifacts/evals/chatbot_whole_app_runtime_audit_20260521_155415.json",
+    "md_report": "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/artifacts/evals/chatbot_whole_app_runtime_audit_20260521_155415.md"
+  }
+}

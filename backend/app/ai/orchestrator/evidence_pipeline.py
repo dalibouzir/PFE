@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 import re
 import unicodedata
 import logging
@@ -11,6 +12,11 @@ from app.ml.llm.provider import get_llm_client
 from app.utils.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
+EVIDENCE_HAS = "HAS_EVIDENCE"
+EVIDENCE_NO_DATA = "PROVEN_NO_DATA"
+EVIDENCE_PARTIAL = "PARTIAL_EVIDENCE"
+EVIDENCE_TOOL_ERROR = "TOOL_ERROR"
+EVIDENCE_UNSUPPORTED = "UNSUPPORTED"
 
 
 def _first_or_none(value: Any) -> str | None:
@@ -374,6 +380,9 @@ def build_evidence_pack(*, question: str, plan: AnswerPlan, route: AgentRoute, a
     rag_data: dict[str, Any] = {"chunks": [], "titles": [], "content_snippets": [], "scores": [], "topics": []}
     ml_data: dict[str, Any] = {}
     reco_data: dict[str, Any] = {"actions": [], "insufficient_evidence": False}
+    sql_status = ""
+    rag_status = ""
+    ml_status = ""
 
     warnings: list[str] = []
     confidences: list[float] = []
@@ -385,6 +394,8 @@ def build_evidence_pack(*, question: str, plan: AnswerPlan, route: AgentRoute, a
 
         if result.agent_name == "SQLAnalyticsAgent":
             sql_data = dict(result.data or {})
+            trace = sql_data.get("sql_dispatch_trace") or {}
+            sql_status = str(trace.get("evidence_status") or "")
             for src in result.sources or []:
                 table = str(src.get("table") or "").strip()
                 if table:
@@ -394,6 +405,7 @@ def build_evidence_pack(*, question: str, plan: AnswerPlan, route: AgentRoute, a
 
         elif result.agent_name == "RAGKnowledgeAgent":
             rag_data["chunks"] = (result.data or {}).get("chunks") or []
+            rag_status = str((result.data or {}).get("evidence_status") or "")
             for chunk in rag_data["chunks"]:
                 if not isinstance(chunk, dict):
                     continue
@@ -412,6 +424,7 @@ def build_evidence_pack(*, question: str, plan: AnswerPlan, route: AgentRoute, a
 
         elif result.agent_name == "MLLossAgent":
             ml_data = dict(result.data or {})
+            ml_status = str(ml_data.get("evidence_status") or "")
 
         elif result.agent_name == "RecommendationAgent":
             recs = (result.data or {}).get("recommendations") or []
@@ -420,6 +433,11 @@ def build_evidence_pack(*, question: str, plan: AnswerPlan, route: AgentRoute, a
 
     sql_rows = _extract_sql_rows(sql_data)
     sql_metrics = _extract_sql_metrics(sql_data)
+    sql_status = _normalize_evidence_status(sql_status) or _derive_sql_evidence_status(sql_data=sql_data, warnings=warnings)
+    rag_status = _normalize_evidence_status(rag_status) or _derive_rag_evidence_status(rag_data=rag_data, warnings=warnings)
+    ml_status = _normalize_evidence_status(ml_status) or _derive_ml_evidence_status(ml_data=ml_data, warnings=warnings)
+    rag_data["evidence_status"] = rag_status
+    ml_data["evidence_status"] = ml_status
 
     module_registry = _build_module_registry(sql_data=sql_data, tables_used=tables_used)
 
@@ -433,6 +451,7 @@ def build_evidence_pack(*, question: str, plan: AnswerPlan, route: AgentRoute, a
             "metrics": sql_metrics,
             "calculations": {},
             "payload": sql_data,
+            "evidence_status": sql_status,
         },
         rag=rag_data,
         ml=ml_data,
@@ -447,13 +466,16 @@ def verify_evidence(pack: EvidencePack) -> EvidenceVerification:
     issues: list[str] = []
     required = set(pack.plan.required_sources)
     op = str(pack.plan.operation or "")
+    sql_status = _normalize_evidence_status(pack.sql.get("evidence_status")) or ""
+    rag_status = _normalize_evidence_status(pack.rag.get("evidence_status")) or ""
+    ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
 
     recommendation_actions = pack.recommendations.get("actions") or []
     has_recommendation_refs = any(_has_recommendation_evidence_refs(item) for item in recommendation_actions if isinstance(item, dict))
     available = {
-        "SQL": bool(pack.sql.get("rows") or pack.sql.get("metrics")),
-        "RAG": bool(pack.rag.get("chunks")),
-        "ML": bool(pack.ml),
+        "SQL": bool(pack.sql.get("rows") or pack.sql.get("metrics") or sql_status in {EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}),
+        "RAG": bool(pack.rag.get("chunks") or rag_status in {EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}),
+        "ML": bool(pack.ml or ml_status in {EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}),
         "RECOMMENDATION": bool(has_recommendation_refs),
     }
 
@@ -468,6 +490,7 @@ def verify_evidence(pack: EvidencePack) -> EvidenceVerification:
         answer_type in {"list", "ranking", "comparison", "risk_list"}
         and not rows
         and not pack.sql.get("metrics")
+        and sql_status != EVIDENCE_NO_DATA
         and op not in {"max_anomaly_score_lot", "ml_high_signal_count"}
     ):
         issues.append("MISSING_SQL_ROWS")
@@ -492,21 +515,33 @@ def verify_evidence(pack: EvidencePack) -> EvidenceVerification:
     # Strict operation-level validation.
     payload = pack.sql.get("payload") or {}
     required_fields = pack.plan.required_answer_fields or []
+    op_aliases = {
+        "process_stage_loss_ranking": "stage_loss_analysis",
+        "get_stage_loss_analysis": "stage_loss_analysis",
+    }
     op_rows = payload.get(op) if op else None
+    if op_rows is None and op in op_aliases:
+        op_rows = payload.get(op_aliases[op])
     if op.startswith("rag_") and not pack.rag.get("chunks"):
         issues.append("MISSING_RAG_PRACTICAL_CONTENT")
     if op.startswith("ml_") or op == "max_anomaly_score_lot":
-        if not pack.ml:
+        if not pack.ml and ml_status not in {EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}:
             issues.append("MISSING_ML_EVIDENCE")
     if op and not op.startswith("rag_") and not op.startswith("ml_") and op != "max_anomaly_score_lot":
         if op_rows is None:
             issues.append("MISSING_OPERATION_RESULT")
-        elif not op_rows:
+        elif not op_rows and sql_status != EVIDENCE_NO_DATA:
             issues.append("EMPTY_OPERATION_RESULT")
-        elif required_fields:
+        elif required_fields and isinstance(op_rows, list) and op_rows:
             first = op_rows[0] if isinstance(op_rows, list) else {}
             for field in required_fields:
-                if field not in first:
+                aliases = {
+                    "stage": ("stage", "stage_name"),
+                    "kg_loss": ("kg_loss", "gap_qty", "loss_qty", "input_output_gap_kg"),
+                    "lot": ("lot", "batch_ref", "lot_code"),
+                }
+                acceptable_fields = aliases.get(str(field), (field,))
+                if not any(candidate in first for candidate in acceptable_fields):
                     issues.append(f"MISSING_REQUIRED_FIELD_{field.upper()}")
 
     return EvidenceVerification(ok=not issues, issues=sorted(set(issues)))
@@ -650,12 +685,22 @@ def _compose_llm_summary(
     sql_payload: dict[str, Any],
     deterministic_summary: str,
     limitations: list[str] | None = None,
-) -> str | None:
-    """Compose manager-friendly opening summary using locked evidence only."""
+) -> tuple[str | None, dict[str, Any]]:
+    """Compose manager-friendly opening summary using locked evidence only.
+    
+    Returns: (llm_summary or None, metadata_dict)
+    """
+    import time
+    llm_start = time.perf_counter()
+    metadata = {"llm_attempted": False, "fallback_used": False, "llm_duration_ms": 0, "provider": "unknown"}
+    
     try:
+        metadata["llm_attempted"] = True
         grounding = _build_llm_grounding_prompt(pack, sql_payload)
         limitations_text = "\n".join(f"- {item}" for item in (limitations or [])[:3]) or "- aucune"
         client = get_llm_client()
+        metadata["provider"] = getattr(client, "provider_name", "unknown")
+        
         messages = [
             {
                 "role": "system",
@@ -677,7 +722,10 @@ def _compose_llm_summary(
         response = client.chat(messages)
         llm_summary = response.content.strip()
         if not llm_summary or len(llm_summary) < 10:
-            return None
+            metadata["fallback_used"] = True
+            metadata["fallback_reason"] = "empty_response"
+            return None, metadata
+        
         validation_issues = _validate_llm_summary(
             llm_summary,
             pack=pack,
@@ -687,12 +735,21 @@ def _compose_llm_summary(
         )
         if validation_issues:
             logger.warning(f"LLM validation failed: {validation_issues}")
-            return None
-        logger.info(f"LLM composed summary for {pack.route}")
-        return llm_summary
+            metadata["fallback_used"] = True
+            metadata["fallback_reason"] = "validation_failed"
+            return None, metadata
+        
+        logger.info(f"LLM composed summary for {pack.route} via {metadata['provider']}")
+        metadata["llm_duration_ms"] = int((time.perf_counter() - llm_start) * 1000)
+        return llm_summary, metadata
+        
     except Exception as e:
-        logger.warning(f"LLM summary error: {str(e)}, fallback to deterministic")
-        return None
+        llm_error = str(e)
+        logger.warning(f"LLM summary error ({metadata.get('provider')}): {llm_error}, fallback to deterministic")
+        metadata["fallback_used"] = True
+        metadata["fallback_reason"] = llm_error[:50]
+        metadata["llm_duration_ms"] = int((time.perf_counter() - llm_start) * 1000)
+        return None, metadata
 
 
 def _generate_kpi_cards(sql_payload: dict[str, Any], pack: EvidencePack) -> dict[str, Any] | None:
@@ -876,6 +933,7 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
                     "answer_type": pack.plan.answer_type,
                     "evidence_roles": _evidence_roles(pack),
                     "module_registry": pack.module_registry,
+                    "evidence_status_contract": _evidence_status_contract(pack),
                     "answer_contract": pack.plan.answer_contract or {},
                     "required_evidence_types": list(pack.plan.required_sources),
                     "missing_evidence_types": sorted(set(item.replace("MISSING_", "").replace("_EVIDENCE", "") for item in missing_required)),
@@ -884,12 +942,18 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
                     "warning_categories": {code: _warning_category(code) for code in sorted(set(missing_required))},
                 },
             )
+    sql_status = _normalize_evidence_status(pack.sql.get("evidence_status")) or ""
+    rag_status = _normalize_evidence_status(pack.rag.get("evidence_status")) or ""
+    ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
     has_any_evidence = bool(
         pack.sql.get("rows")
         or pack.sql.get("metrics")
         or pack.rag.get("chunks")
         or pack.ml
         or pack.recommendations.get("actions")
+        or sql_status == EVIDENCE_NO_DATA
+        or rag_status == EVIDENCE_NO_DATA
+        or ml_status == EVIDENCE_NO_DATA
     )
     if not has_any_evidence:
         return (
@@ -902,6 +966,7 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
                 "answer_type": pack.plan.answer_type,
                 "evidence_roles": _evidence_roles(pack),
                 "module_registry": pack.module_registry,
+                "evidence_status_contract": _evidence_status_contract(pack),
                 "answer_contract": pack.plan.answer_contract or {},
                 "required_evidence_types": list(pack.plan.required_sources),
                 "missing_evidence_types": sorted(set(item.replace("MISSING_", "").replace("_EVIDENCE", "") for item in verification.issues if item.startswith("MISSING_") and item.endswith("_EVIDENCE"))),
@@ -921,6 +986,7 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
                 "answer_type": pack.plan.answer_type,
                 "evidence_roles": _evidence_roles(pack),
                 "module_registry": pack.module_registry,
+                "evidence_status_contract": _evidence_status_contract(pack),
                 "answer_contract": pack.plan.answer_contract or {},
                 "required_evidence_types": list(pack.plan.required_sources),
                 "missing_evidence_types": sorted(
@@ -1019,8 +1085,9 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
 
     # Apply manager-friendly summary polish from locked evidence across all business routes.
     llm_summary = None
+    llm_metadata = {"llm_attempted": False, "fallback_used": False, "llm_duration_ms": 0, "provider": "unknown"}
     if not degraded_missing_set and not missing_required and "UNMAPPED_SQL_OPERATION" not in set(pack.warnings or []):
-        llm_summary = _compose_llm_summary(
+        llm_summary, llm_metadata = _compose_llm_summary(
             pack=pack,
             sql_payload=sql_payload,
             deterministic_summary=summary,
@@ -1057,6 +1124,7 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
         "answer_type": pack.plan.answer_type,
         "evidence_roles": _evidence_roles(pack),
         "module_registry": pack.module_registry,
+        "evidence_status_contract": _evidence_status_contract(pack),
         "answer_contract": pack.plan.answer_contract or {},
         "required_evidence_types": list(pack.plan.required_sources),
         "missing_evidence_types": sorted(
@@ -1074,6 +1142,7 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
         ),
         "confidence_reason": "warnings_present" if verification.issues else "evidence_verified",
         "warning_categories": {code: _warning_category(code) for code in warning_codes},
+        "llm_metadata": llm_metadata,
     }
 
     return answer, blocks, metadata
@@ -1081,15 +1150,29 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
 
 def _found_evidence_types(pack: EvidencePack) -> list[str]:
     found: list[str] = []
-    if pack.sql.get("rows") or pack.sql.get("metrics"):
+    if pack.sql.get("rows") or pack.sql.get("metrics") or _normalize_evidence_status(pack.sql.get("evidence_status")) in {EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}:
         found.append("SQL")
-    if pack.rag.get("chunks"):
+    if pack.rag.get("chunks") or _normalize_evidence_status(pack.rag.get("evidence_status")) in {EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}:
         found.append("RAG")
-    if pack.ml:
+    if pack.ml or _normalize_evidence_status(pack.ml.get("evidence_status")) in {EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}:
         found.append("ML")
     if any(_has_recommendation_evidence_refs(item) for item in (pack.recommendations.get("actions") or []) if isinstance(item, dict)):
         found.append("RECOMMENDATION")
     return found
+
+
+def _evidence_status_contract(pack: EvidencePack) -> dict[str, str]:
+    recommendation_status = EVIDENCE_HAS if any(
+        _has_recommendation_evidence_refs(item)
+        for item in (pack.recommendations.get("actions") or [])
+        if isinstance(item, dict)
+    ) else EVIDENCE_PARTIAL
+    return {
+        "sql": _normalize_evidence_status(pack.sql.get("evidence_status")) or EVIDENCE_PARTIAL,
+        "rag": _normalize_evidence_status(pack.rag.get("evidence_status")) or EVIDENCE_PARTIAL,
+        "ml": _normalize_evidence_status(pack.ml.get("evidence_status")) or EVIDENCE_PARTIAL,
+        "recommendation": recommendation_status,
+    }
 
 
 def _missing_evidence_message(route: AgentRoute, missing: list[str]) -> str:
@@ -1165,10 +1248,13 @@ def _compose_next_action(*, pack: EvidencePack, recommendation_block: dict[str, 
 def _compose_limitations(*, pack: EvidencePack, verification: EvidenceVerification, warning_items: list[str]) -> list[str]:
     limits: list[str] = []
     required = {str(item).upper() for item in (pack.plan.required_sources or [])}
+    sql_status = _normalize_evidence_status(pack.sql.get("evidence_status")) or ""
+    rag_status = _normalize_evidence_status(pack.rag.get("evidence_status")) or ""
+    ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
 
-    has_sql = bool(pack.sql.get("rows") or pack.sql.get("metrics") or pack.sql.get("payload"))
-    has_rag = bool(pack.rag.get("chunks") or pack.rag.get("content_snippets"))
-    has_ml = bool(pack.ml)
+    has_sql = bool(pack.sql.get("rows") or pack.sql.get("metrics") or pack.sql.get("payload") or sql_status == EVIDENCE_NO_DATA)
+    has_rag = bool(pack.rag.get("chunks") or pack.rag.get("content_snippets") or rag_status == EVIDENCE_NO_DATA)
+    has_ml = bool(pack.ml or ml_status == EVIDENCE_NO_DATA)
     has_reco = bool(pack.recommendations.get("actions"))
 
     if "SQL" in required and not has_sql:
@@ -1197,6 +1283,12 @@ def _compose_limitations(*, pack: EvidencePack, verification: EvidenceVerificati
                 limits.append(label)
 
     has_technical = any(_warning_category(code) == "TECHNICAL_WARNING" for code in [*pack.warnings, *verification.issues])
+    if (
+        {sql_status, rag_status, ml_status}.intersection({EVIDENCE_NO_DATA})
+        and not has_technical
+        and not any(_warning_category(code) == "TECHNICAL_WARNING" for code in warning_items)
+    ):
+        warning_items = [item for item in warning_items if "fiabilité" not in str(item).lower()]
     for item in warning_items[:4]:
         if not item:
             continue
@@ -1266,6 +1358,7 @@ def _compose_route_template_answer(
 
     if pack.route == AgentRoute.HYBRID_FULL and recommendation_block and recommendation_block.get("items"):
         measured = _hybrid_full_measured_line(sql_payload) or summary
+        ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
         requested_count = 0
         count_match = re.search(r"\b(\d+)\s+actions?\b", _normalize_for_match(pack.question))
         if count_match:
@@ -1274,7 +1367,9 @@ def _compose_route_template_answer(
             except Exception:
                 requested_count = 0
         lines = ["1. Données mesurées", measured, "", "2. Signal ML"]
-        if pack.ml:
+        if pack.ml and ml_status == EVIDENCE_NO_DATA:
+            lines.append("Aucun signal ML élevé n’est enregistré dans les journaux disponibles.")
+        elif pack.ml:
             lines.append(explanation if "Signal ML:" in explanation else f"Signal ML disponible ({str(pack.ml.get('risk_level') or 'UNKNOWN').upper()}).")
         else:
             lines.append("Signal ML indisponible pour cette entité.")
@@ -1390,6 +1485,13 @@ def collapse_user_warning_items(warning_codes: list[str]) -> list[str]:
     codes = sorted(set(str(code or "").strip() for code in warning_codes if str(code or "").strip()))
     if not codes:
         return []
+    technical_codes = [code for code in codes if _warning_category(code) == "TECHNICAL_WARNING"]
+    if "NO_SQL_DATA" in codes:
+        collapsed = [_warning_label("NO_SQL_DATA")]
+        for code in technical_codes:
+            collapsed.append(_warning_label(code))
+        return _dedupe_preserve_order(collapsed)
+
     rag_group = {
         "MISSING_RAG_EVIDENCE",
         "MISSING_RAG_SOURCE",
@@ -1413,6 +1515,8 @@ def collapse_user_warning_items(warning_codes: list[str]) -> list[str]:
     if has_partial_group:
         collapsed.append("Certaines preuves attendues sont partielles ou indisponibles.")
     for code in codes:
+        if code == "MISSING_DATA_SIGNALLED" and "SQL_DATA_INCOMPLETE" in codes:
+            continue
         if code in rag_group or code in partial_group:
             continue
         collapsed.append(_warning_label(code))
@@ -1423,20 +1527,53 @@ def _filter_user_warning_codes(*, pack: EvidencePack, verification: EvidenceVeri
     codes = [str(code or "").strip() for code in warning_codes if str(code or "").strip()]
     if not codes:
         return []
-    route = pack.route
-    sql_payload = pack.sql.get("payload") or {}
-    sql_operation = str(sql_payload.get("operation") or "").strip()
-    row_count = int(sql_payload.get("row_count") or 0)
+    required = {str(item).upper() for item in (pack.plan.required_sources or [])}
+    sql_status = _normalize_evidence_status(pack.sql.get("evidence_status")) or ""
+    rag_status = _normalize_evidence_status(pack.rag.get("evidence_status")) or ""
+    ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
+    proven_no_data = {sql_status, rag_status, ml_status}.intersection({EVIDENCE_NO_DATA})
     sql_complete = (
-        route == AgentRoute.SQL_ONLY
-        and bool(sql_operation)
-        and row_count > 0
+        sql_status == EVIDENCE_HAS
         and "NO_SQL_DATA" not in codes
         and not any(_warning_category(code) == "TECHNICAL_WARNING" for code in codes)
     )
+    skip_if_optional: dict[str, set[str]] = {
+        "RAG": {"MISSING_RAG_SOURCE", "MISSING_RAG_EVIDENCE", "RAG_CONTENT_MISSING", "RAG_QUALITY_INSUFFICIENT", "RAG_EVIDENCE_REJECTED", "WEAK_RETRIEVAL"},
+        "ML": {"MISSING_ML_SOURCE", "MISSING_ML_EVIDENCE", "WEAK_ML_CONFIDENCE", "NO_ML_DATA", "ML_SERVICE_UNAVAILABLE"},
+        "RECOMMENDATION": {"MISSING_RECOMMENDATION_SOURCE", "MISSING_RECOMMENDATION_EVIDENCE"},
+    }
     filtered: list[str] = []
     for code in codes:
+        upper = str(code or "").upper()
+        if "RAG" not in required and upper in skip_if_optional["RAG"]:
+            continue
+        if "ML" not in required and upper in skip_if_optional["ML"]:
+            continue
+        if "RECOMMENDATION" not in required and upper in skip_if_optional["RECOMMENDATION"]:
+            continue
+        if proven_no_data and upper in {
+            "MISSING_DATA_SIGNALLED",
+            "SOURCE_DATA_EMPTY",
+            "NO_SQL_DATA",
+            "SQL_DATA_INCOMPLETE",
+            "INCOMPLETE_SQL_DATA",
+            "WEAK_SOURCE",
+            "WEAK_ML_CONFIDENCE",
+            "MISSING_EXPECTED_ROUTE_EVIDENCE",
+            "MISSING_SQL_EVIDENCE",
+            "MISSING_ML_EVIDENCE",
+            "MISSING_RAG_EVIDENCE",
+        }:
+            continue
         if sql_complete and code in {"PRODUCT_FILTER_IGNORED", "MISSING_DATA_SIGNALLED"}:
+            continue
+        if sql_complete and re.fullmatch(r"[A-Z0-9_]+", code) and code not in {
+            "SQL_ML_CONTRADICTION",
+            "UNMAPPED_SQL_OPERATION",
+            "NO_SQL_DATA",
+            "SQL_DATA_INCOMPLETE",
+            "INCOMPLETE_SQL_DATA",
+        } and _warning_category(code) != "TECHNICAL_WARNING":
             continue
         filtered.append(code)
     return sorted(set(filtered))
@@ -1515,11 +1652,29 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
     plan = pack.plan
     normalized_q = _normalize_for_match(pack.question)
     intent_family = str((plan.answer_contract or {}).get("intent_family") or "").strip().upper()
+    sql_status = _normalize_evidence_status(pack.sql.get("evidence_status")) or ""
+    ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
+    rag_status = _normalize_evidence_status(pack.rag.get("evidence_status")) or ""
+    op = str(plan.operation or "")
     if "UNMAPPED_SQL_OPERATION" in set(pack.warnings or []):
         return "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
     contract = plan.answer_contract or {}
     def _q_has(*tokens: str) -> bool:
         return any(token in normalized_q for token in tokens)
+    if op == "avg_paid_invoices_current_quarter" and sql_status == EVIDENCE_NO_DATA:
+        return f"Aucune facture payée n’est enregistrée pour ce trimestre ({_current_quarter_label()})."
+    if op == "ml_high_signal_count" and ml_status == EVIDENCE_NO_DATA:
+        return "Aucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré."
+    if op == "max_anomaly_score_lot" and ml_status == EVIDENCE_NO_DATA:
+        return "Aucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré."
+    if plan.answer_type == "explanation" and rag_status == EVIDENCE_NO_DATA:
+        return "Aucun contenu documentaire exploitable n’est enregistré pour cette question dans les sources RAG disponibles."
+    if (
+        intent_family == "FOLLOW_UP"
+        and _q_has("ce lot", "pour ce lot")
+        and not (sql_payload.get("material_balance") or sql_payload.get("batch_summary") or sql_payload.get("stage_loss_analysis"))
+    ):
+        return "De quel lot parlez-vous ? Indiquez une référence comme LOT-MILX-001."
     if sql_payload.get("collecte_traceability_summary") is not None and _q_has("collecte", "input", "bl", "justificatif"):
         srows = sql_payload.get("collecte_traceability_summary") or []
         drows = sql_payload.get("collecte_traceability") or []
@@ -2216,6 +2371,9 @@ def _compose_explanation(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
         if sql_line:
             return (sql_line + " Le contexte documentaire est insuffisant pour expliquer les causes avec certitude.").strip()
 
+    ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
+    if pack.route in {AgentRoute.HYBRID_SQL_ML, AgentRoute.ML_ONLY} and pack.ml and ml_status == EVIDENCE_NO_DATA:
+        return "Aucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré."
     if pack.route in {AgentRoute.HYBRID_SQL_ML, AgentRoute.ML_ONLY} and pack.ml:
         return (
             f"Signal ML: risque {str(pack.ml.get('risk_level') or 'UNKNOWN').upper()} | "
@@ -2284,7 +2442,8 @@ def _build_answer_contract(
 
 
 def _compose_table_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> dict[str, Any] | None:
-    intent_family = str(((pack.plan.answer_contract or {}).get("intent_family") or "")).upper()
+    trace = sql_payload.get("sql_dispatch_trace") if isinstance(sql_payload, dict) else {}
+    intent_family = str(((pack.plan.answer_contract or {}).get("intent_family") or (trace or {}).get("intent_family") or "")).upper()
     qn = _normalize_for_match(pack.question)
     if intent_family == "STOCK_CURRENT" and sql_payload.get("current_stock") is not None:
         rows = list(sql_payload.get("current_stock") or [])
@@ -2292,10 +2451,12 @@ def _compose_table_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
         return {
             "type": "table",
             "title": "Stock actuel par produit",
-            "columns": ["Produit", "Disponible", "Restant", "Grade A", "Grade B", "Grade C", "Unité"],
+            "columns": ["Produit", "Total", "Réservé", "Disponible", "Restant", "Grade A", "Grade B", "Grade C", "Unité"],
             "rows": [
                 [
                     _fr_product(r.get("product")),
+                    f"{float(r.get('total_stock_kg', r.get('available_stock_kg', 0.0)) or 0.0):.1f}",
+                    f"{float(r.get('reserved_in_lots_kg', 0.0) or 0.0):.1f}",
                     f"{float(r.get('available_stock_kg', r.get('restant_kg', 0.0)) or 0.0):.1f}",
                     f"{float(r.get('restant_kg', r.get('available_stock_kg', 0.0)) or 0.0):.1f}",
                     f"{float((r.get('grades') or {}).get('A', 0.0) or 0.0):.1f}",
@@ -2399,6 +2560,147 @@ def _compose_table_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
                     for r in rows[:15]
                 ],
             }
+
+    if sql_payload.get("stock_movements_journal") is not None:
+        rows = sql_payload.get("stock_movements_journal") or []
+        return {
+            "type": "table",
+            "title": "Journal des mouvements de stock",
+            "columns": ["Date", "Type", "Produit", "Quantité", "Source", "Lot", "BL"],
+            "rows": [
+                [
+                    str(row.get("movement_date") or ""),
+                    str(row.get("movement_type") or row.get("action_type") or ""),
+                    _fr_product(row.get("product")),
+                    f"{float(row.get('quantity_kg', 0.0) or 0.0):.1f} kg",
+                    str(row.get("source") or ""),
+                    str(row.get("batch_ref") or "N/A"),
+                    str(row.get("bl_number") or "N/A"),
+                ]
+                for row in rows[:10]
+            ],
+        }
+
+    if sql_payload.get("collections_summary") is not None:
+        rows = sql_payload.get("collections_summary") or []
+        return {
+            "type": "table",
+            "title": "Collectes par produit",
+            "columns": ["Produit", "Quantité totale", "Enregistrements"],
+            "rows": [
+                [
+                    _fr_product(row.get("product")),
+                    f"{float(row.get('total_quantity_kg', 0.0) or 0.0):.1f} kg",
+                    int(row.get("records", 0) or 0),
+                ]
+                for row in rows
+            ],
+        }
+
+    if sql_payload.get("parcels_list") is not None:
+        rows = sql_payload.get("parcels_list") or []
+        return {
+            "type": "table",
+            "title": "Producteurs et parcelles",
+            "columns": ["Producteur", "Parcelle", "Produit/Culture", "Surface"],
+            "rows": [
+                [
+                    str(row.get("member_name") or ""),
+                    str(row.get("parcel_name") or ""),
+                    str(row.get("main_culture") or row.get("product") or ""),
+                    f"{float(row.get('surface_ha', 0.0) or 0.0):.2f} ha",
+                ]
+                for row in rows
+            ],
+        }
+
+    if sql_payload.get("top_farmers") is not None:
+        rows = sql_payload.get("top_farmers") or []
+        return {
+            "type": "table",
+            "title": "Producteurs par quantité livrée",
+            "columns": ["Producteur", "Code", "Quantité livrée"],
+            "rows": [
+                [
+                    str(row.get("member_name") or ""),
+                    str(row.get("member_code") or ""),
+                    f"{float(row.get('total_quantity_kg', 0.0) or 0.0):.1f} kg",
+                ]
+                for row in rows
+            ],
+        }
+
+    if sql_payload.get("treasury_traceability") is not None:
+        rows = sql_payload.get("treasury_traceability") or []
+        return {
+            "type": "table",
+            "title": "Traçabilité trésorerie",
+            "columns": ["Référence", "Statut", "Montant", "Justificatif", "Receipt reference", "Source"],
+            "rows": [
+                [
+                    str(row.get("reference") or ""),
+                    str(row.get("status") or ""),
+                    f"{float(row.get('amount_fcfa', 0.0) or 0.0):.0f} FCFA",
+                    "oui" if bool(row.get("has_justificatif")) else "non",
+                    str(row.get("receipt_reference") or "N/A"),
+                    str(row.get("source_type") or "N/A"),
+                ]
+                for row in rows[:20]
+            ],
+        }
+
+    if sql_payload.get("commercial_invoice_linkage") is not None:
+        rows = sql_payload.get("commercial_invoice_linkage") or []
+        return {
+            "type": "table",
+            "title": "Lien commandes / factures / trésorerie",
+            "columns": ["Commande", "Statut commande", "Facture", "Statut facture", "Treasury ref", "Receipt reference"],
+            "rows": [
+                [
+                    str(row.get("order_number") or "N/A"),
+                    str(row.get("order_status") or "N/A"),
+                    str(row.get("invoice_number") or "N/A"),
+                    str(row.get("invoice_status") or "N/A"),
+                    str(row.get("treasury_reference") or "N/A"),
+                    str(row.get("receipt_reference") or "N/A"),
+                ]
+                for row in rows[:20]
+            ],
+        }
+
+    if sql_payload.get("invoices_summary") is not None:
+        rows = sql_payload.get("invoices_summary") or []
+        return {
+            "type": "table",
+            "title": "Factures par statut de paiement",
+            "columns": ["Facture", "Statut paiement", "Montant", "Date"],
+            "rows": [
+                [
+                    str(row.get("invoice_number") or ""),
+                    str(row.get("status") or ""),
+                    f"{float(row.get('total_amount_fcfa', 0.0) or 0.0):.0f} FCFA",
+                    str(row.get("issue_date") or ""),
+                ]
+                for row in rows
+            ],
+        }
+
+    if sql_payload.get("commercial_orders") is not None:
+        rows = sql_payload.get("commercial_orders") or []
+        return {
+            "type": "table",
+            "title": "Commandes commerciales par statut",
+            "columns": ["Commande", "Statut", "Montant", "Date"],
+            "rows": [
+                [
+                    str(row.get("order_number") or ""),
+                    str(row.get("status") or ""),
+                    f"{float(row.get('total_amount_fcfa', 0.0) or 0.0):.0f} FCFA",
+                    str(row.get("received_at") or ""),
+                ]
+                for row in rows
+            ],
+        }
 
     if pack.plan.answer_type not in {"list", "ranking", "comparison", "risk_list", "hybrid_analysis", "chart_stock", "chart_stock_multi", "chart_stage_loss", "chart_lot_loss", "chart_lot_critical", "chart_product_loss", "chart_low_efficiency_lots", "chart_ml_anomaly_lots", "chart_recommendation_risk"}:
         return None
@@ -3210,6 +3512,74 @@ def _compact(text: str, limit: int) -> str:
     return value[:limit].rstrip() + "..."
 
 
+def _normalize_evidence_status(value: Any) -> str | None:
+    raw = str(value or "").strip().upper()
+    if raw in {EVIDENCE_HAS, EVIDENCE_NO_DATA, EVIDENCE_PARTIAL, EVIDENCE_TOOL_ERROR, EVIDENCE_UNSUPPORTED}:
+        return raw
+    return None
+
+
+def _derive_sql_evidence_status(*, sql_data: dict[str, Any], warnings: list[str]) -> str:
+    trace = sql_data.get("sql_dispatch_trace") if isinstance(sql_data, dict) else {}
+    trace = trace if isinstance(trace, dict) else {}
+    status = _normalize_evidence_status(trace.get("evidence_status"))
+    if status:
+        return status
+    operation = str(trace.get("sql_operation") or "").strip()
+    row_count = int(trace.get("evidence_row_count") or trace.get("row_count") or 0)
+    warning_set = {str(item or "").strip().upper() for item in ([*warnings, *(trace.get("warnings") or [])])}
+    if operation.startswith("UNSUPPORTED_"):
+        return EVIDENCE_UNSUPPORTED
+    if any(code.endswith("_ERROR") or code.endswith("_EXCEPTION") or code.startswith("DB_") for code in warning_set):
+        return EVIDENCE_TOOL_ERROR
+    if row_count > 0 and not {"SQL_DATA_INCOMPLETE", "INCOMPLETE_SQL_DATA"}.intersection(warning_set):
+        return EVIDENCE_HAS
+    if row_count > 0:
+        return EVIDENCE_PARTIAL
+    if operation:
+        return EVIDENCE_NO_DATA
+    return EVIDENCE_PARTIAL
+
+
+def _derive_ml_evidence_status(*, ml_data: dict[str, Any], warnings: list[str]) -> str:
+    if not isinstance(ml_data, dict):
+        return EVIDENCE_PARTIAL
+    status = _normalize_evidence_status(ml_data.get("evidence_status"))
+    if status:
+        return status
+    warning_set = {str(item or "").strip().upper() for item in warnings}
+    if any(code.endswith("_ERROR") or code.endswith("_EXCEPTION") for code in warning_set):
+        return EVIDENCE_TOOL_ERROR
+    if "NO_ML_DATA" in warning_set:
+        return EVIDENCE_NO_DATA
+    if ml_data:
+        return EVIDENCE_HAS
+    return EVIDENCE_PARTIAL
+
+
+def _derive_rag_evidence_status(*, rag_data: dict[str, Any], warnings: list[str]) -> str:
+    if not isinstance(rag_data, dict):
+        return EVIDENCE_PARTIAL
+    status = _normalize_evidence_status(rag_data.get("evidence_status"))
+    if status:
+        return status
+    warning_set = {str(item or "").strip().upper() for item in warnings}
+    chunks = rag_data.get("chunks") or []
+    if chunks:
+        if "WEAK_RETRIEVAL" in warning_set:
+            return EVIDENCE_PARTIAL
+        return EVIDENCE_HAS
+    if "NO_RAG_RESULTS" in warning_set:
+        return EVIDENCE_NO_DATA
+    return EVIDENCE_PARTIAL
+
+
+def _current_quarter_label() -> str:
+    today = date.today()
+    quarter = ((today.month - 1) // 3) + 1
+    return f"T{quarter} {today.year}"
+
+
 def _warning_label(code: str) -> str:
     value = str(code or "").strip()
     mapping = {
@@ -3233,6 +3603,7 @@ def _warning_label(code: str) -> str:
         "CONTRADICTORY_CONTEXT_POSSIBLE": "Des informations contradictoires peuvent exister dans les sources.",
         "INCOMPLETE_SQL_DATA": "Les données SQL sont incomplètes.",
         "UNMAPPED_SQL_OPERATION": "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
+        "NO_ML_DATA": "Aucun signal ML élevé n’est enregistré dans les journaux disponibles.",
     }
     if value in mapping:
         return mapping[value]
@@ -3265,7 +3636,7 @@ def _warning_category(code: str) -> str:
         "SQL_ML_CONTRADICTION",
     }:
         return "EVIDENCE_WARNING"
-    if value in {"NO_SQL_DATA", "SQL_DATA_INCOMPLETE", "INCOMPLETE_SQL_DATA", "PRODUCT_FILTER_IGNORED", "MISSING_DATA_SIGNALLED", "UNMAPPED_SQL_OPERATION"}:
+    if value in {"NO_SQL_DATA", "SQL_DATA_INCOMPLETE", "INCOMPLETE_SQL_DATA", "PRODUCT_FILTER_IGNORED", "MISSING_DATA_SIGNALLED", "UNMAPPED_SQL_OPERATION", "NO_ML_DATA"}:
         return "BUSINESS_WARNING"
     return "BUSINESS_INFO"
 

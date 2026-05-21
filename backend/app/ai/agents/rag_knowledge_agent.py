@@ -7,6 +7,10 @@ from app.ai.agents.base_agent import BaseAgent
 from app.ai.schemas.agent_schemas import AgentContext, AgentResult
 from app.ai.tools.rag_tools import RAGTools
 
+EVIDENCE_HAS = "HAS_EVIDENCE"
+EVIDENCE_NO_DATA = "PROVEN_NO_DATA"
+EVIDENCE_PARTIAL = "PARTIAL_EVIDENCE"
+
 
 class RAGKnowledgeAgent(BaseAgent):
     name = "RAGKnowledgeAgent"
@@ -46,6 +50,7 @@ class RAGKnowledgeAgent(BaseAgent):
                     "chunks": payload.get("chunks", []),
                     "evidence_items": assessed,
                     "weak_retrieval": payload.get("weak_retrieval", False),
+                    "evidence_status": EVIDENCE_PARTIAL,
                 },
                 sources=payload.get("sources", []),
                 confidence=0.42,
@@ -58,8 +63,9 @@ class RAGKnowledgeAgent(BaseAgent):
                 "RAG indisponible actuellement: aucun chunk indexé n’est disponible pour cette coopérative. "
                 "Les réponses peuvent seulement s’appuyer sur SQL/ML/recommandations."
             )
-            confidence = 0.35
+            confidence = 0.7
             warnings = sorted(set([*warnings, "NO_RAG_RESULTS"]))
+            evidence_status = EVIDENCE_NO_DATA
         else:
             answer = _compose_practical_advice(
                 raw_query=query,
@@ -68,6 +74,7 @@ class RAGKnowledgeAgent(BaseAgent):
             )
             has_strong = any(str(item.get("quality_status")) == "STRONG" for item in strong_or_partial)
             confidence = 0.82 if has_strong and "WEAK_RETRIEVAL" not in warnings else 0.55
+            evidence_status = EVIDENCE_HAS if has_strong else EVIDENCE_PARTIAL
 
         return AgentResult(
             agent_name=self.name,
@@ -79,6 +86,7 @@ class RAGKnowledgeAgent(BaseAgent):
                 "chunks": payload.get("chunks", []),
                 "evidence_items": assessed,
                 "weak_retrieval": payload.get("weak_retrieval", False),
+                "evidence_status": evidence_status,
             },
             sources=payload.get("sources", []),
             confidence=confidence,

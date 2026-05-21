@@ -353,8 +353,7 @@ def run_audit() -> dict[str, Any]:
         else:
             rag_quality_counts["REJECTED"] += 1
 
-    rec_cases = [r for r in rows if r["category"] == "Recommendations" or r["expect_reco"] if False]
-    rec_cases = [r for r in rows if r["category"] == "Recommendations" or r["qid"].startswith("F02")]
+    rec_cases = [r for r in rows if r["category"] == "Recommendations" or r["qid"] == "F02"]
     rec_cov = sum(1 for r in rec_cases if r["recommendation_refs_count"] > 0) / (len(rec_cases) or 1)
     avg_refs = statistics.mean([r["recommendation_refs_count"] for r in rec_cases]) if rec_cases else 0.0
     unsupported_rec_rate = sum(1 for r in rec_cases if r["recommendation_refs_count"] <= 0) / (len(rec_cases) or 1)

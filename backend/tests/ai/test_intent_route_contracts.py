@@ -250,6 +250,21 @@ def test_lot_specific_recommendation_routes_hybrid_full():
     assert decision.detected_entities.get("intent_family") == "LOT_SPECIFIC_RECOMMENDATION"
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Que dois-je faire concrètement pour LOT-MILX-001 ?",
+        "Quelles actions fiables peut-on appliquer sur LOT-MILX-001 selon les preuves ?",
+        "Que recommandes-tu pour LOT-MILX-001 ?",
+        "Comment réduire les pertes de LOT-MILX-001 ?",
+    ],
+)
+def test_lot_specific_recommendation_paraphrases_route_hybrid_full(query: str):
+    decision = router.classify(query)
+    assert decision.route == AgentRoute.HYBRID_FULL
+    assert decision.detected_entities.get("intent_family") == "LOT_SPECIFIC_RECOMMENDATION"
+
+
 def test_negative_available_lots_not_loss_ranking():
     decision = router.classify("lots disponibles")
     assert decision.detected_entities.get("intent_family") == "POSTHARVEST_AVAILABLE_LOTS"
@@ -289,7 +304,15 @@ def test_followup_changes_product_avoids_unsafe_reuse():
 def test_followup_marker_with_recommendation_prefers_followup_route():
     decision = router.classify("Et pour ce lot, quelles actions appliquer ?")
     assert decision.detected_entities.get("intent_family") == "FOLLOW_UP"
-    assert decision.route == AgentRoute.HYBRID_FULL
+    assert decision.route == AgentRoute.SQL_ONLY
+    assert decision.detected_entities.get("needs_batch_clarification") is True
+
+
+def test_followup_recommendation_without_previous_context_requests_lot_clarification():
+    decision = router.classify("Donne les recommandations disponibles pour ce lot sans inventer.")
+    assert decision.detected_entities.get("intent_family") == "FOLLOW_UP"
+    assert decision.route == AgentRoute.SQL_ONLY
+    assert decision.detected_entities.get("needs_batch_clarification") is True
 
 
 def test_reset_phrase_avoids_followup_and_routes_stock():

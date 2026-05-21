@@ -10,6 +10,12 @@ from app.ai.agents.base_agent import BaseAgent
 from app.ai.schemas.agent_schemas import AgentContext, AgentResult
 from app.ai.tools.sql_tools import SQLTools
 
+EVIDENCE_HAS = "HAS_EVIDENCE"
+EVIDENCE_NO_DATA = "PROVEN_NO_DATA"
+EVIDENCE_PARTIAL = "PARTIAL_EVIDENCE"
+EVIDENCE_TOOL_ERROR = "TOOL_ERROR"
+EVIDENCE_UNSUPPORTED = "UNSUPPORTED"
+
 
 class SQLAnalyticsAgent(BaseAgent):
     name = "SQLAnalyticsAgent"
@@ -40,7 +46,11 @@ class SQLAnalyticsAgent(BaseAgent):
         module = entities.get("module", "global")
         member_name = entities.get("member_name")
 
-        asks_member_ranking = any(
+        member_subject_hint = any(
+            token in normalized
+            for token in ("membre", "membres", "member", "members", "farmer", "farmers", "producteur", "producteurs")
+        )
+        asks_member_ranking = member_subject_hint and any(
             token in normalized
             for token in (
                 "quel membre a livré le plus",
@@ -197,12 +207,52 @@ class SQLAnalyticsAgent(BaseAgent):
                 days = _extract_days(lowered, default_days=30)
                 r = self.sql_tools.process_stage_loss_ranking(days=days)
                 payload["process_stage_loss_ranking"] = r.get("items", [])
+            elif op == "get_stock_movements_journal":
+                r = self.sql_tools.get_stock_movements_journal(product=product_for_query, batch_ref=batch_ref, limit=5 if re.search(r"\b5\b|cinq", normalized) else 30)
+                payload["stock_movements_journal"] = r.get("items", [])
+            elif op == "get_collections_summary":
+                r = self.sql_tools.get_collections_summary(product=product_for_query, date_range=effective_date_range)
+                payload["collections_summary"] = r.get("items", [])
+            elif op == "get_top_farmers":
+                r = self.sql_tools.get_top_farmers(product=product_for_query, date_range=effective_date_range)
+                payload["top_farmers"] = r.get("items", [])
+            elif op == "get_parcels_list":
+                r = self.sql_tools.get_parcels_list(product=product_for_query)
+                payload["parcels_list"] = r.get("items", [])
+            elif op == "get_commercial_invoice_linkage":
+                r = self.sql_tools.get_commercial_invoice_linkage()
+                payload["commercial_invoice_linkage"] = r.get("items", [])
+                payload["commercial_invoice_linkage_summary"] = r.get("summary", [])
+            elif op == "get_treasury_traceability":
+                r = self.sql_tools.get_treasury_traceability()
+                payload["treasury_traceability"] = r.get("items", [])
+                payload["treasury_traceability_summary"] = r.get("summary", [])
             else:
                 r = {"items": [], "sources": [], "warnings": []}
             sources.extend(r.get("sources", []))
             warnings.extend(r.get("warnings", []))
+            op_rows = r.get("items", []) if isinstance(r, dict) else []
+            payload["sql_dispatch_trace"] = {
+                "intent_family": intent_family or "FACTUAL_SQL",
+                "route": str(context.route.value if hasattr(context.route, "value") else context.route),
+                "sql_operation": op,
+                "tool_name": f"SQLTools.{op}",
+                "tool_function": f"SQLTools.{op}",
+                "module": module,
+                "cooperative_id": str(self.sql_tools.cooperative_id),
+                "filters": {
+                    "product": product_for_query,
+                    "batch_ref": batch_ref,
+                    "module": module,
+                },
+                "row_count": len(op_rows) if isinstance(op_rows, list) else 0,
+                "evidence_row_count": len(op_rows) if isinstance(op_rows, list) else 0,
+                "evidence_type": "SQL",
+                "evidence_status": EVIDENCE_HAS if op_rows else EVIDENCE_NO_DATA,
+                "warnings": sorted(set(warnings)),
+            }
             answer_part = _build_sql_answer(payload)
-            confidence = 0.9 if r.get("items") else 0.4
+            confidence = 0.9 if op_rows else 0.72
             return AgentResult(
                 agent_name=self.name,
                 route=context.route,
@@ -386,6 +436,7 @@ class SQLAnalyticsAgent(BaseAgent):
                 "receipt_reference",
                 "enregistre_complet",
                 "transaction sans justificatif",
+                "transactions sans justificatif",
                 "transactions missing justificatif",
                 "transaction complete",
                 "transaction verrouillee",
@@ -489,7 +540,12 @@ class SQLAnalyticsAgent(BaseAgent):
             sources.extend(available_lots.get("sources", []))
             warnings.extend(available_lots.get("warnings", []))
 
-        if (batch_ref or any(token in normalized for token in ("lot", "batch"))) and not reset_lot_context and (not preharvest_lot_intent or mixed_pre_post_intent):
+        allow_batch_summary = (
+            module in {"post_harvest", "material_balance", "lots", "cooperative_summary", "global"}
+            or intent_family in {"LOSS_RANKING", "INPUT_OUTPUT_GAP", "LOT_COMPARISON", "STAGE_LOSS_ANALYSIS", "RISK_ANALYSIS"}
+            or postharvest_analytics_intent
+        )
+        if (batch_ref or any(token in normalized for token in ("lot", "batch"))) and allow_batch_summary and not reset_lot_context and (not preharvest_lot_intent or mixed_pre_post_intent):
             batch = (
                 self.sql_tools.get_postharvest_batch_summary(batch_ref=batch_ref, product=product)
                 if postharvest_analytics_intent
@@ -628,10 +684,10 @@ class SQLAnalyticsAgent(BaseAgent):
             warnings.extend(balance.get("warnings", []))
 
         contains_member_top_intent = bool(
-            re.search(r"\b(top|classement|classer|plus\s+gros)\b", normalized)
-            or (
-                re.search(r"\bmeilleur(?:e|es)?\b", normalized)
-                and re.search(r"\b(membre|producteur|farmer)s?\b", normalized)
+            re.search(r"\b(membre|producteur|farmer)s?\b", normalized)
+            and (
+                re.search(r"\b(top|classement|classer|plus\s+gros)\b", normalized)
+                or re.search(r"\bmeilleur(?:e|es)?\b", normalized)
             )
         )
         if contains_member_top_intent and not payload.get("top_farmers"):
@@ -681,14 +737,50 @@ class SQLAnalyticsAgent(BaseAgent):
         if all(not value for key, value in payload.items() if key not in {"detected_module", "query_text", "requested_batch_ref"}):
             warnings.append("SQL_DATA_INCOMPLETE")
         payload = _apply_post_aggregation_checks(payload)
+        _ensure_sql_dispatch_trace(
+            payload=payload,
+            intent_family=intent_family or "FACTUAL_SQL",
+            route=context.route,
+            module=module,
+            product=product,
+            batch_ref=batch_ref,
+            cooperative_id=self.sql_tools.cooperative_id,
+            warnings=warnings,
+        )
 
         if context.route.value == "SQL_ONLY" and _is_operational_sql_query(normalized):
-            warnings.append("UNMAPPED_SQL_OPERATION")
-            answer_part = "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable. Reformulez la demande (stock, lots disponibles, bilan matière, étape critique) ou précisez l’entité ciblée."
-            confidence = 0.2
+            trace = payload.get("sql_dispatch_trace") or {}
+            if not trace.get("sql_operation"):
+                unsupported_module = _normalize_module_for_unsupported(module, normalized=normalized)
+                trace["sql_operation"] = f"UNSUPPORTED_{unsupported_module}_CAPABILITY"
+                trace["tool_name"] = "SQLTools.unsupported"
+                trace["tool_function"] = "SQLTools.unsupported"
+                trace["module"] = module
+                trace["row_count"] = 0
+                trace["evidence_row_count"] = 0
+                trace["evidence_status"] = EVIDENCE_UNSUPPORTED
+                trace["warnings"] = sorted(set([*warnings, "SQL_CAPABILITY_UNSUPPORTED"]))
+                payload["sql_dispatch_trace"] = trace
+                warnings.append("SQL_CAPABILITY_UNSUPPORTED")
+            answer_part = "Cette capacité SQL n’est pas encore prise en charge pour ce module. Reformulez avec une opération disponible (stock, lots, bilan matière, commandes, factures, trésorerie)."
+            confidence = 0.25
         else:
             answer_part = _build_sql_answer(payload)
-            confidence = 0.88 if "SQL_DATA_INCOMPLETE" not in warnings and "NO_SQL_DATA" not in warnings else 0.48
+            trace = payload.get("sql_dispatch_trace") or {}
+            trace_status = _derive_sql_evidence_status(trace=trace, warnings=warnings)
+            trace["evidence_status"] = trace_status
+            payload["sql_dispatch_trace"] = trace
+            evidence_rows = int(trace.get("evidence_row_count") or trace.get("row_count") or 0)
+            if trace_status == EVIDENCE_UNSUPPORTED:
+                confidence = 0.25
+            elif trace_status == EVIDENCE_TOOL_ERROR:
+                confidence = 0.2
+            elif trace_status == EVIDENCE_NO_DATA:
+                confidence = 0.72
+            elif trace_status == EVIDENCE_PARTIAL:
+                confidence = 0.48
+            else:
+                confidence = 0.88 if evidence_rows > 0 else 0.48
 
         return AgentResult(
             agent_name=self.name,
@@ -715,6 +807,18 @@ class SQLAnalyticsAgent(BaseAgent):
         sources: list[dict[str, Any]],
         start: float,
     ) -> AgentResult | None:
+        if bool(entities.get("needs_batch_clarification")):
+            return AgentResult(
+                agent_name=self.name,
+                route=context.route,
+                answer_part="De quel lot parlez-vous ? Indiquez une référence comme LOT-MILX-001.",
+                data={"sql_dispatch_trace": {"intent_family": "FOLLOW_UP", "sql_operation": "clarification_required", "row_count": 0}},
+                sources=[],
+                confidence=0.35,
+                warnings=[],
+                execution_time_ms=int((time.perf_counter() - start) * 1000),
+            )
+
         if intent_family not in {
             "STOCK_CURRENT",
             "POSTHARVEST_AVAILABLE_LOTS",
@@ -812,7 +916,9 @@ class SQLAnalyticsAgent(BaseAgent):
             "intent_family": intent_family,
             "route": str(context.route.value if hasattr(context.route, "value") else context.route),
             "sql_operation": sql_operation,
+            "tool_name": tool_function,
             "tool_function": tool_function,
+            "module": entities.get("module"),
             "cooperative_id": str(self.sql_tools.cooperative_id),
             "filters": {
                 "product": product,
@@ -820,7 +926,9 @@ class SQLAnalyticsAgent(BaseAgent):
                 "module": entities.get("module"),
             },
             "row_count": len(primary_rows),
+            "evidence_row_count": len(primary_rows),
             "evidence_type": "SQL",
+            "evidence_status": EVIDENCE_HAS if primary_rows else EVIDENCE_NO_DATA,
             "warnings": sorted(set(warnings)),
         }
         payload["sql_dispatch_trace"] = trace
@@ -829,7 +937,12 @@ class SQLAnalyticsAgent(BaseAgent):
             warnings.append("NO_SQL_DATA")
 
         answer_part = _build_sql_answer(payload)
-        confidence = 0.88 if "NO_SQL_DATA" not in warnings and "SQL_DATA_INCOMPLETE" not in warnings else 0.48
+        if primary_rows and "SQL_DATA_INCOMPLETE" not in warnings:
+            confidence = 0.88
+        elif primary_rows:
+            confidence = 0.48
+        else:
+            confidence = 0.72
         return AgentResult(
             agent_name=self.name,
             route=context.route,
@@ -878,6 +991,28 @@ def _extract_days(text: str, default_days: int) -> int:
 
 
 def _detect_deterministic_operation(normalized: str) -> str | None:
+    if "stock" in normalized and any(token in normalized for token in ("mouvement", "mouvements", "journal", "historique", "nature", "origine")):
+        return "get_stock_movements_journal"
+    if any(token in normalized for token in ("collecte", "collectes", "collecte", "collectees", "collectées")) and not any(
+        token in normalized for token in ("bl", "justificatif", "traceabil", "preuve", "lot lie", "lot lié")
+    ) and any(token in normalized for token in ("par produit", "quantite", "quantité", "cumulee", "cumulée", "agreg", "agrèg", "domine")):
+        return "get_collections_summary"
+    if any(token in normalized for token in ("producteur", "producteurs", "membre", "membres")) and any(
+        token in normalized for token in ("livre", "livré", "livrer", "volume", "quantite", "quantité")
+    ) and any(token in normalized for token in ("plus", "top", "classement", "grand")):
+        return "get_top_farmers"
+    if any(token in normalized for token in ("producteurs actifs", "producteur actifs", "membres actifs")) and any(
+        token in normalized for token in ("parcelle", "parcelles", "produit", "produits")
+    ):
+        return "get_parcels_list"
+    if any(token in normalized for token in ("commande", "commandes")) and any(token in normalized for token in ("payee", "payées", "payees", "payé", "paye")) and any(
+        token in normalized for token in ("sans facture", "facture rattachee", "facture rattachée", "facture liee", "facture liée")
+    ):
+        return "get_commercial_invoice_linkage"
+    if any(token in normalized for token in ("tresorerie", "trésorerie", "transaction", "transactions")) and any(
+        token in normalized for token in ("justificatif", "recu", "reçu", "receipt_reference", "reference", "référence", "preuve")
+    ):
+        return "get_treasury_traceability"
     if (
         "trimestre" in normalized
         and re.search(r"\bmoyenn?e?s?\b", normalized)
@@ -885,7 +1020,12 @@ def _detect_deterministic_operation(normalized: str) -> str | None:
         and re.search(r"\b(pay\w*|regl\w*)\b", normalized)
     ):
         return "avg_paid_invoices_current_quarter"
-    if "client" in normalized and ("plus gros cumul" in normalized or "plus de commandes" in normalized):
+    if "client" in normalized and (
+        "plus gros cumul" in normalized
+        or "plus de commandes" in normalized
+        or "cumul de commandes" in normalized
+        or "top client" in normalized
+    ):
         return "top_customer_by_orders"
     if "charges globales" in normalized and (
         "vs" in normalized
@@ -946,6 +1086,167 @@ def _normalize_text(value: str) -> str:
     raw = unicodedata.normalize("NFKD", raw)
     raw = "".join(ch for ch in raw if not unicodedata.combining(ch))
     return " ".join(raw.split())
+
+
+def _normalize_module_for_unsupported(module: str, *, normalized: str) -> str:
+    value = str(module or "").strip().upper()
+    if value and value != "GLOBAL":
+        return re.sub(r"[^A-Z0-9]+", "_", value).strip("_")
+    if any(token in normalized for token in ("facture", "invoice")):
+        return "INVOICES"
+    if any(token in normalized for token in ("commande", "vente", "commercial")):
+        return "COMMERCIAL"
+    if any(token in normalized for token in ("tresorerie", "trésorerie", "finance", "charge")):
+        return "FINANCE"
+    if any(token in normalized for token in ("collecte", "input", "bl", "justificatif")):
+        return "INPUTS"
+    if any(token in normalized for token in ("membre", "farmer", "producteur")):
+        return "MEMBERS"
+    if any(token in normalized for token in ("lot", "batch", "bilan", "matiere", "étape", "etape")):
+        return "POST_HARVEST"
+    if "stock" in normalized:
+        return "STOCKS"
+    return "SQL"
+
+
+def _first_list_payload(payload: dict[str, Any], keys: list[str]) -> tuple[str | None, list[dict[str, Any]]]:
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, list):
+            return key, value
+    return None, []
+
+
+def _infer_sql_operation_from_payload(payload: dict[str, Any], *, module: str) -> tuple[str | None, str | None, int]:
+    query_operation = str(payload.get("query_operation") or "").strip()
+    if query_operation:
+        rows = payload.get(query_operation)
+        if isinstance(rows, list):
+            return query_operation, f"SQLTools.{query_operation}", len(rows)
+        return query_operation, f"SQLTools.{query_operation}", 0
+
+    op_key_map = {
+        "collecte_traceability": "get_collecte_traceability",
+        "uploaded_files_evidence": "get_uploaded_files_evidence",
+        "treasury_traceability": "get_treasury_traceability",
+        "commercial_invoice_linkage": "get_commercial_invoice_linkage",
+        "commercial_orders": "get_commercial_orders_summary",
+        "commercial_totals": "get_commercial_totals",
+        "invoices_summary": "get_invoices_summary",
+        "finance_expenses": "get_finance_expenses",
+        "top_customer_by_orders": "top_customer_by_orders",
+        "current_stock": "get_current_stock",
+        "low_stock_alerts": "get_low_stock_alerts",
+        "stock_movements_journal": "get_stock_movements_journal",
+        "available_postharvest_lots": "get_available_postharvest_lots",
+        "material_balance": "get_canonical_material_balance",
+        "stage_loss_analysis": "get_stage_loss_analysis",
+        "process_step_losses": "get_process_step_losses",
+        "stage_efficiency_summary": "get_stage_efficiency_summary",
+        "collections_summary": "get_collections_summary",
+        "members_list": "get_members_list",
+        "top_farmers": "get_top_farmers",
+        "top_members_by_cost": "get_top_members_by_cost",
+        "cooperative_overview": "get_cooperative_overview",
+        "farmer_advances_traceability": "get_farmer_advances_traceability",
+        "top_grade_by_volume": "top_grade_by_volume",
+        "top_collection_days": "top_collection_days",
+        "lowest_nonzero_member_contributor": "lowest_nonzero_member_contributor",
+        "largest_parcel_by_product": "largest_parcel_by_product",
+        "available_stock_gap": "available_stock_gap",
+        "oldest_open_lot": "oldest_open_lot",
+        "process_stage_loss_ranking": "process_stage_loss_ranking",
+        "avg_paid_invoices_current_quarter": "avg_paid_invoices_current_quarter",
+        "top_customer_by_orders": "top_customer_by_orders",
+        "month_vs_month_charges": "month_vs_month_charges",
+        "preharvest_status": "preharvest.get_parcel_preharvest_status",
+        "parcel_status": "preharvest.get_parcel_preharvest_status",
+        "parcels_list": "get_parcels_list",
+        "batch_summary": "get_batch_summary",
+    }
+    for key, op in op_key_map.items():
+        value = payload.get(key)
+        if isinstance(value, list) and (value or key in {"invoices_summary", "commercial_orders", "commercial_totals", "finance_expenses"}):
+            return op, f"SQLTools.{op}", len(value)
+        if value is not None and not isinstance(value, list):
+            return op, f"SQLTools.{op}", 1
+    fallback_key, fallback_rows = _first_list_payload(payload, list(op_key_map.keys()))
+    if fallback_key:
+        op = op_key_map[fallback_key]
+        return op, f"SQLTools.{op}", len(fallback_rows)
+    if module:
+        norm_module = re.sub(r"[^A-Z0-9]+", "_", str(module).upper()).strip("_") or "SQL"
+        return f"UNSUPPORTED_{norm_module}_CAPABILITY", "SQLTools.unsupported", 0
+    return None, None, 0
+
+
+def _ensure_sql_dispatch_trace(
+    *,
+    payload: dict[str, Any],
+    intent_family: str,
+    route: Any,
+    module: str,
+    product: str | None,
+    batch_ref: str | None,
+    cooperative_id: Any,
+    warnings: list[str],
+) -> None:
+    existing = payload.get("sql_dispatch_trace")
+    if isinstance(existing, dict) and existing.get("sql_operation"):
+        if "evidence_row_count" not in existing:
+            existing["evidence_row_count"] = int(existing.get("row_count") or 0)
+        if "tool_name" not in existing:
+            existing["tool_name"] = existing.get("tool_function")
+        if "module" not in existing:
+            existing["module"] = module
+        if "evidence_status" not in existing:
+            existing["evidence_status"] = _derive_sql_evidence_status(trace=existing, warnings=warnings)
+        payload["sql_dispatch_trace"] = existing
+        return
+
+    op, tool_name, row_count = _infer_sql_operation_from_payload(payload, module=module)
+    payload["sql_dispatch_trace"] = {
+        "intent_family": intent_family,
+        "route": str(route.value if hasattr(route, "value") else route),
+        "sql_operation": op or f"UNSUPPORTED_{_normalize_module_for_unsupported(module, normalized=_normalize_text(str(payload.get('query_text') or '')))}_CAPABILITY",
+        "tool_name": tool_name or "SQLTools.unsupported",
+        "tool_function": tool_name or "SQLTools.unsupported",
+        "module": module,
+        "cooperative_id": str(cooperative_id),
+        "filters": {
+            "product": product,
+            "batch_ref": batch_ref,
+            "module": module,
+        },
+        "row_count": int(row_count),
+        "evidence_row_count": int(row_count),
+        "evidence_type": "SQL",
+        "evidence_status": EVIDENCE_HAS if int(row_count) > 0 else (EVIDENCE_UNSUPPORTED if str(op or "").startswith("UNSUPPORTED_") else EVIDENCE_NO_DATA),
+        "warnings": sorted(set(warnings)),
+    }
+
+
+def _derive_sql_evidence_status(*, trace: dict[str, Any], warnings: list[str]) -> str:
+    sql_operation = str(trace.get("sql_operation") or "").strip()
+    row_count = int(trace.get("evidence_row_count") or trace.get("row_count") or 0)
+    warning_set = {str(item or "").strip().upper() for item in warnings}
+    if sql_operation.startswith("UNSUPPORTED_"):
+        return EVIDENCE_UNSUPPORTED
+    if any(
+        code.startswith("SQL_TOOL_EXCEPTION")
+        or code.endswith("_EXCEPTION")
+        or code.endswith("_ERROR")
+        or code.startswith("DB_")
+        for code in warning_set
+    ):
+        return EVIDENCE_TOOL_ERROR
+    if row_count > 0 and not {"SQL_DATA_INCOMPLETE", "INCOMPLETE_SQL_DATA"}.intersection(warning_set):
+        return EVIDENCE_HAS
+    if row_count > 0:
+        return EVIDENCE_PARTIAL
+    if sql_operation:
+        return EVIDENCE_NO_DATA
+    return EVIDENCE_PARTIAL
 
 
 def _has_word(text: str, word: str) -> bool:
@@ -1254,12 +1555,7 @@ def _build_sql_answer(payload: dict[str, Any]) -> str:
         return "Toutes les parcelles ont les données requises."
 
     if payload.get("top_farmers") is not None and (
-        "classe" in str(payload.get("query_text", "")).lower()
-        or "livré" in str(payload.get("query_text", "")).lower()
-        or "livre" in str(payload.get("query_text", "")).lower()
-        or "plus de kg" in str(payload.get("query_text", "")).lower()
-        or "premier" in str(payload.get("query_text", "")).lower()
-        or "top" in str(payload.get("query_text", "")).lower()
+        re.search(r"\b(membre|membres|producteur|producteurs|farmer|farmers)\b", str(payload.get("query_text", "")).lower())
         or ("detected_module" in payload and str(payload.get("detected_module") or "") == "members")
     ):
         rows = payload.get("top_farmers", [])

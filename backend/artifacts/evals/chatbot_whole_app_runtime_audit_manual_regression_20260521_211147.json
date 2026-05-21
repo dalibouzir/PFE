@@ -1,0 +1,822 @@
+{
+  "audit_name": "chatbot_whole_app_runtime_audit_manual_regression",
+  "audit_mode": "manual-regression",
+  "generated_at": "2026-05-21T20:11:47.917248+00:00",
+  "total_cases": 18,
+  "counts": {
+    "PASS": 4,
+    "PARTIAL": 0,
+    "FAIL": 14
+  },
+  "score_by_module": {
+    "stocks": {
+      "PASS": 1,
+      "PARTIAL": 0,
+      "FAIL": 1
+    },
+    "stock_movements": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 1
+    },
+    "collectes": {
+      "PASS": 1,
+      "PARTIAL": 0,
+      "FAIL": 2
+    },
+    "members": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 2
+    },
+    "lots": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 1
+    },
+    "material_balance": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 1
+    },
+    "process_steps": {
+      "PASS": 1,
+      "PARTIAL": 0,
+      "FAIL": 1
+    },
+    "commercial": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 2
+    },
+    "invoices": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 1
+    },
+    "treasury": {
+      "PASS": 1,
+      "PARTIAL": 0,
+      "FAIL": 1
+    },
+    "ml": {
+      "PASS": 0,
+      "PARTIAL": 0,
+      "FAIL": 1
+    }
+  },
+  "score_by_failure_category": {
+    "NO_FAILURE": 4,
+    "WRONG_RESPONSE_SHAPE": 11,
+    "INTENT_MISMATCH": 2,
+    "ROUTING_ERROR": 1
+  },
+  "top_10_p0_failures": [
+    {
+      "qid": "MR17",
+      "module_group": "treasury",
+      "question": "Quelles transactions manquent de justificatif ou de référence de reçu ?",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_treasury_traceability",
+      "expected_evidence_source": "sql:treasury_transactions",
+      "expected_response_shape": "table:treasury_missing_proof_or_receipt",
+      "actual_route": "RAG_ONLY",
+      "actual_intent_family": "explanation",
+      "actual_sql_operation_tool": null,
+      "evidence_status_sql": "",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "PARTIAL_EVIDENCE",
+      "agents_called": [
+        "RAGKnowledgeAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Le contexte documentaire est limité pour cette question."
+      ],
+      "confidence": 0.39999999999999997,
+      "final_answer_text": "Je n’ai pas assez de contexte documentaire fiable pour répondre précisément à cette question.",
+      "latency_ms": 17426.71,
+      "status": "FAIL",
+      "failure_category": "ROUTING_ERROR",
+      "reason": "expected route SQL_ONLY, got RAG_ONLY"
+    },
+    {
+      "qid": "MR08",
+      "module_group": "material_balance",
+      "question": "Classe les lots selon la perte matière en kilogrammes.",
+      "expected_module": "material_balance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "INPUT_OUTPUT_GAP",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_canonical_material_balance",
+      "expected_evidence_source": "sql:process_steps,batches",
+      "expected_response_shape": "ranking:kg_loss",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "LOSS_RANKING",
+      "actual_sql_operation_tool": "get_canonical_material_balance",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 2,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLe lot le plus critique est LOT-MILX-001 avec 74.1% de perte et une efficacité de 25.9%.\n\n2. Interprétation\nClassement établi par perte (%) et efficacité (%).\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11439.77,
+      "status": "FAIL",
+      "failure_category": "INTENT_MISMATCH",
+      "reason": "expected intent INPUT_OUTPUT_GAP, got LOSS_RANKING"
+    },
+    {
+      "qid": "MR07",
+      "module_group": "lots",
+      "question": "Quels lots sont disponibles pour passer en post-récolte ?",
+      "expected_module": "lots",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "POSTHARVEST_AVAILABLE_LOTS",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_available_postharvest_lots",
+      "expected_evidence_source": "sql:batches",
+      "expected_response_shape": "table:postharvest_lots",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": "get_batch_summary",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 3,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.31,
+      "final_answer_text": "1. Réponse directe\nLe lot LOT-BISS-001 présente une perte de 100.0% et une efficacité de 0.0%.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- ML: ml_signal\n\n4. Action recommandée\nPrioriser le lot LOT-BISS-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11138.03,
+      "status": "FAIL",
+      "failure_category": "INTENT_MISMATCH",
+      "reason": "expected intent POSTHARVEST_AVAILABLE_LOTS, got FACTUAL_SQL"
+    }
+  ],
+  "results": [
+    {
+      "qid": "MR01",
+      "module_group": "stocks",
+      "question": "Présente l’inventaire disponible par article et qualité.",
+      "expected_module": "stocks",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "STOCK_CURRENT",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_current_stock",
+      "expected_evidence_source": "sql:stocks,products",
+      "expected_response_shape": "table:stock_by_grade",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STOCK_CURRENT",
+      "actual_sql_operation_tool": "get_current_stock",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLes stocks actuels (4 produits) sont:\n- Arachide: 59.0 kg disponibles\n- Bissap: 78.0 kg disponibles\n- Mangue: 43.0 kg disponibles\n- Mil: 43.0 kg disponibles\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 13040.99,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "MR02",
+      "module_group": "stock_movements",
+      "question": "Donne les derniers mouvements de stock avec nature, produit, quantité et origine.",
+      "expected_module": "stock_movements",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_stock_movements_journal",
+      "expected_evidence_source": "sql:stock_movements",
+      "expected_response_shape": "table:stock_movements",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STOCK_CURRENT",
+      "actual_sql_operation_tool": "get_current_stock",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLa coopérative dispose actuellement de 223.0 kg de stock disponible répartis sur 4 produits. Le produit le plus disponible est Bissap avec 78.0 kg. Détail qualité: Grade A 78.0 kg, Grade B 0.0 kg, Grade C 0.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11697.74,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "expected sql_operation get_stock_movements_journal, got get_current_stock"
+    },
+    {
+      "qid": "MR03",
+      "module_group": "collectes",
+      "question": "Agrège les quantités collectées par produit.",
+      "expected_module": "inputs",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_collections_summary",
+      "expected_evidence_source": "sql:inputs,products",
+      "expected_response_shape": "table:collected_by_product",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": "get_collecte_traceability",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 1,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nLes données de collecte sont disponibles, avec 1 collecte traçable accompagnée d'un bon de livraison, 1 avec justificatif et 1 liée à un lot. Les fichiers pour le producteur et le produit sont présents, mais il est important de noter que les informations peuvent être partielles ou insuffisantes pour une analyse complète.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: inputs\n- SQL: members\n- SQL: products\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 13073.27,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "expected sql_operation get_collections_summary, got get_collecte_traceability"
+    },
+    {
+      "qid": "MR04",
+      "module_group": "collectes",
+      "question": "Montre la traçabilité des collectes: bon de livraison, preuve et lot associé.",
+      "expected_module": "inputs",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_collecte_traceability",
+      "expected_evidence_source": "sql:inputs,uploaded_files,batches",
+      "expected_response_shape": "table:collecte_traceability",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": "get_collecte_traceability",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 1,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.31,
+      "final_answer_text": "1. Réponse directe\nCollectes traçables: 1 avec BL, 1 avec justificatif, 1 liées à un lot. Producteur/produit/statut fichier: 1/1 fichiers présents.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: inputs\n- SQL: members\n- SQL: products\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11128.11,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "MR05",
+      "module_group": "members",
+      "question": "Liste les producteurs actifs avec leurs parcelles ou produits liés.",
+      "expected_module": "parcels",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_parcels_list",
+      "expected_evidence_source": "sql:members,parcels,products",
+      "expected_response_shape": "table:active_producers",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "PREHARVEST_STEPS",
+      "actual_sql_operation_tool": "get_parcel_preharvest_status",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 5,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nJe n’ai pas trouvé de preuve opérationnelle exploitable pour répondre précisément à cette demande.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: parcels\n- SQL: pre_harvest_steps\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11360.24,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "expected sql_operation get_parcels_list, got get_parcel_preharvest_status"
+    },
+    {
+      "qid": "MR06",
+      "module_group": "members",
+      "question": "Quel producteur a livré le plus grand volume ?",
+      "expected_module": "members",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_top_farmers",
+      "expected_evidence_source": "sql:members,inputs",
+      "expected_response_shape": "ranking:delivered_quantity",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": "get_members_list",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nAvances producteurs: 5 avances, 1 avec devis, 5 synchronisées trésorerie.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: farmer_advances\n- SQL: members\n- SQL: parcels\n- SQL: products\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11632.47,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "expected sql_operation get_top_farmers, got get_members_list"
+    },
+    {
+      "qid": "MR07",
+      "module_group": "lots",
+      "question": "Quels lots sont disponibles pour passer en post-récolte ?",
+      "expected_module": "lots",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "POSTHARVEST_AVAILABLE_LOTS",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_available_postharvest_lots",
+      "expected_evidence_source": "sql:batches",
+      "expected_response_shape": "table:postharvest_lots",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": "get_batch_summary",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 3,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.31,
+      "final_answer_text": "1. Réponse directe\nLe lot LOT-BISS-001 présente une perte de 100.0% et une efficacité de 0.0%.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- ML: ml_signal\n\n4. Action recommandée\nPrioriser le lot LOT-BISS-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11138.03,
+      "status": "FAIL",
+      "failure_category": "INTENT_MISMATCH",
+      "reason": "expected intent POSTHARVEST_AVAILABLE_LOTS, got FACTUAL_SQL"
+    },
+    {
+      "qid": "MR08",
+      "module_group": "material_balance",
+      "question": "Classe les lots selon la perte matière en kilogrammes.",
+      "expected_module": "material_balance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "INPUT_OUTPUT_GAP",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_canonical_material_balance",
+      "expected_evidence_source": "sql:process_steps,batches",
+      "expected_response_shape": "ranking:kg_loss",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "LOSS_RANKING",
+      "actual_sql_operation_tool": "get_canonical_material_balance",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 2,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLe lot le plus critique est LOT-MILX-001 avec 74.1% de perte et une efficacité de 25.9%.\n\n2. Interprétation\nClassement établi par perte (%) et efficacité (%).\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11439.77,
+      "status": "FAIL",
+      "failure_category": "INTENT_MISMATCH",
+      "reason": "expected intent INPUT_OUTPUT_GAP, got LOSS_RANKING"
+    },
+    {
+      "qid": "MR09",
+      "module_group": "process_steps",
+      "question": "Quelle étape génère la plus forte perte matière ?",
+      "expected_module": "process_steps",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "STAGE_LOSS_ANALYSIS",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_stage_loss_analysis",
+      "expected_evidence_source": "sql:process_steps,batches",
+      "expected_response_shape": "summary:stage_loss",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STAGE_LOSS_ANALYSIS",
+      "actual_sql_operation_tool": "get_stage_loss_analysis",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 3,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nÉtape la moins efficace: Tri (efficacité moyenne 25.9%).\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 10551.33,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "MR10",
+      "module_group": "commercial",
+      "question": "Répartis les commandes commerciales par statut.",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_orders_summary",
+      "expected_evidence_source": "sql:commercial_orders",
+      "expected_response_shape": "table:orders_by_status",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": "get_commercial_orders_summary",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nActuellement, nous avons un total de 4 commandes commerciales disponibles. Veuillez noter que ces informations peuvent être partielles ou insuffisantes pour une analyse complète.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_orders\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11850.35,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "commercial orders by status missing status breakdown"
+    },
+    {
+      "qid": "MR11",
+      "module_group": "invoices",
+      "question": "Répartis les factures selon leur statut de paiement.",
+      "expected_module": "invoices",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_invoices_summary",
+      "expected_evidence_source": "sql:commercial_invoices",
+      "expected_response_shape": "table:invoices_by_payment_status",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": "get_invoices_summary",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nActuellement, nous avons 4 factures disponibles. Veuillez noter que les informations peuvent être partielles ou insuffisantes pour cette requête.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 11781.84,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "invoices by payment status missing status breakdown"
+    },
+    {
+      "qid": "MR12",
+      "module_group": "treasury",
+      "question": "Affiche les opérations de trésorerie qui n’ont pas de justificatif.",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_treasury_traceability",
+      "expected_evidence_source": "sql:treasury_transactions",
+      "expected_response_shape": "table:treasury_without_proof",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": "get_treasury_traceability",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 10,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nActuellement, nous avons 0 enregistrements complets, 0 opérations avec référence de justificatif et 8 opérations de trésorerie sans justificatif. Veuillez noter que ces informations peuvent être partielles ou insuffisantes pour une analyse complète.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: global_charges\n- SQL: treasury_transactions\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 13252.55,
+      "status": "PASS",
+      "failure_category": "NO_FAILURE",
+      "reason": "ok"
+    },
+    {
+      "qid": "MR13",
+      "module_group": "stocks",
+      "question": "Pour chaque produit, distingue total, disponible et réservé si l’information existe.",
+      "expected_module": "stocks",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "STOCK_CURRENT",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_current_stock",
+      "expected_evidence_source": "sql:stocks",
+      "expected_response_shape": "table:stock_total_available_reserved",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STOCK_CURRENT",
+      "actual_sql_operation_tool": "get_current_stock",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "chart",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Données mesurées\nLes stocks actuels (4 produits) sont:\n- Arachide: 59.0 kg disponibles\n- Bissap: 78.0 kg disponibles\n- Mangue: 43.0 kg disponibles\n- Mil: 43.0 kg disponibles\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 10720.71,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "stock total/available/reserved distinction missing or unclear"
+    },
+    {
+      "qid": "MR14",
+      "module_group": "collectes",
+      "question": "Quel produit domine les collectes et avec quelle quantité cumulée ?",
+      "expected_module": "inputs",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_collections_summary",
+      "expected_evidence_source": "sql:inputs,products",
+      "expected_response_shape": "summary:top_collected_product",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": "get_collecte_traceability",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 1,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "table",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Aucune donnée SQL exploitable n’a été trouvée."
+      ],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nCollectes traçables: 1 avec BL, 1 avec justificatif, 1 liées à un lot. Producteur/produit/statut fichier: 1/1 fichiers présents.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: inputs\n- SQL: members\n- SQL: products\n- ML: ml_signal\n\n4. Action recommandée\nPrioriser le lot domine les collectes et avec quelle quantité cumulée ?: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Aucune donnée SQL exploitable n’a été trouvée.",
+      "latency_ms": 11317.92,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "expected sql_operation get_collections_summary, got get_collecte_traceability"
+    },
+    {
+      "qid": "MR15",
+      "module_group": "process_steps",
+      "question": "Quelle étape cause le plus de pertes en kg et sur quels lots ?",
+      "expected_module": "process_steps",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "STAGE_LOSS_ANALYSIS",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_stage_loss_analysis",
+      "expected_evidence_source": "sql:process_steps,batches",
+      "expected_response_shape": "table:stage_loss_with_lots",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "STAGE_LOSS_ANALYSIS",
+      "actual_sql_operation_tool": "get_stage_loss_analysis",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 3,
+      "response_blocks": [
+        "summary",
+        "warnings"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "Étape la moins efficace: Tri | efficacité moyenne 25.9% | perte moyenne 74.1%.",
+      "latency_ms": 13677.72,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "stage loss with lots missing stage/lot/kg columns"
+    },
+    {
+      "qid": "MR16",
+      "module_group": "commercial",
+      "question": "Existe-t-il des commandes payées sans facture rattachée ?",
+      "expected_module": "commercial",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_commercial_invoice_linkage",
+      "expected_evidence_source": "sql:commercial_orders,commercial_invoices",
+      "expected_response_shape": "summary:paid_orders_without_invoice",
+      "actual_route": "SQL_ONLY",
+      "actual_intent_family": "factual_sql",
+      "actual_sql_operation_tool": "get_commercial_orders_summary",
+      "evidence_status_sql": "HAS_EVIDENCE",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "SQLAnalyticsAgent"
+      ],
+      "evidence_row_count": 4,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.94,
+      "final_answer_text": "1. Réponse directe\nActuellement, nous avons 4 facture(s) disponible(s) liées au module commercial. Veuillez noter que les informations peuvent être partielles ou insuffisantes pour cette requête.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- SQL: commercial_orders\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.",
+      "latency_ms": 18806.88,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "expected sql_operation get_commercial_invoice_linkage, got get_commercial_orders_summary"
+    },
+    {
+      "qid": "MR17",
+      "module_group": "treasury",
+      "question": "Quelles transactions manquent de justificatif ou de référence de reçu ?",
+      "expected_module": "finance",
+      "expected_route": "SQL_ONLY",
+      "expected_intent_family": "factual_sql",
+      "expected_tool_agent": "SQLAnalyticsAgent:get_treasury_traceability",
+      "expected_evidence_source": "sql:treasury_transactions",
+      "expected_response_shape": "table:treasury_missing_proof_or_receipt",
+      "actual_route": "RAG_ONLY",
+      "actual_intent_family": "explanation",
+      "actual_sql_operation_tool": null,
+      "evidence_status_sql": "",
+      "evidence_status_ml": "",
+      "evidence_status_rag": "PARTIAL_EVIDENCE",
+      "agents_called": [
+        "RAGKnowledgeAgent"
+      ],
+      "evidence_row_count": 0,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [
+        "Le contexte documentaire est limité pour cette question."
+      ],
+      "confidence": 0.39999999999999997,
+      "final_answer_text": "Je n’ai pas assez de contexte documentaire fiable pour répondre précisément à cette question.",
+      "latency_ms": 17426.71,
+      "status": "FAIL",
+      "failure_category": "ROUTING_ERROR",
+      "reason": "expected route SQL_ONLY, got RAG_ONLY"
+    },
+    {
+      "qid": "MR18",
+      "module_group": "ml",
+      "question": "Combien de signaux ML élevés sont enregistrés dans les journaux ?",
+      "expected_module": "ml_logs",
+      "expected_route": "ML_ONLY",
+      "expected_intent_family": "risk_ml",
+      "expected_tool_agent": "MLLossAgent:ml_high_signal_count",
+      "expected_evidence_source": "ml:ml_prediction_logs",
+      "expected_response_shape": "summary:ml_signal_count",
+      "actual_route": "ML_ONLY",
+      "actual_intent_family": "risk_ml",
+      "actual_sql_operation_tool": null,
+      "evidence_status_sql": "",
+      "evidence_status_ml": "HAS_EVIDENCE",
+      "evidence_status_rag": "",
+      "agents_called": [
+        "MLLossAgent"
+      ],
+      "evidence_row_count": 1,
+      "response_blocks": [
+        "summary",
+        "kpi_cards",
+        "sources",
+        "warnings",
+        "limits_block"
+      ],
+      "warnings": [],
+      "confidence": 0.9500000000000001,
+      "final_answer_text": "1. Réponse directe\nSignal ML: risque HIGH | anomalie oui.\n\n2. Interprétation opérationnelle\nSignal ML: risque HIGH | anomalie oui | anomaly_score 0.0000; les mesures SQL restent la vérité opérationnelle.\n\n3. Preuves\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- Des lignes attendues sont manquantes dans les données SQL.",
+      "latency_ms": 3482.93,
+      "status": "FAIL",
+      "failure_category": "WRONG_RESPONSE_SHAPE",
+      "reason": "expected sql_operation ml_high_signal_count, got none"
+    }
+  ],
+  "files": {
+    "cases": "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/reports/chatbot/whole_app_runtime_audit_cases_manual_regression.json",
+    "json_report": "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/artifacts/evals/chatbot_whole_app_runtime_audit_manual_regression_20260521_211147.json",
+    "md_report": "/Users/mohamedalibouzir/Desktop/Stage PFE/Pfe project/backend/artifacts/evals/chatbot_whole_app_runtime_audit_manual_regression_20260521_211147.md"
+  }
+}

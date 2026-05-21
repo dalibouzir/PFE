@@ -109,7 +109,9 @@ function mapTransactionsForExport(transactions: TreasuryTransaction[]): ExportTr
     note: transaction.note?.trim() || "—",
     justificatif: transaction.justificatif_file
       ? `Fichier: ${transaction.justificatif_file.filename}`
-      : transaction.justificatif_status,
+      : transaction.linked_advance_devis_file
+        ? `Devis avance: ${transaction.linked_advance_devis_file.filename}`
+        : transaction.justificatif_status,
   }));
 }
 
@@ -297,7 +299,10 @@ export default function TreasuryPage() {
     setFormError(null);
     setUploadingTransactionId(transaction.id);
     try {
-      await uploadJustificatif.mutateAsync({ id: transaction.id, file });
+      const updated = await uploadJustificatif.mutateAsync({ id: transaction.id, file });
+      setDetailTransaction((current) => (current?.id === updated.id ? updated : current));
+      void transactionsQuery.refetch();
+      void statsQuery.refetch();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Impossible d'uploader le justificatif.");
     } finally {
@@ -465,8 +470,8 @@ export default function TreasuryPage() {
         </section>
       ) : (
         <section className="premium-card reveal overflow-hidden rounded-2xl" style={{ ["--delay" as string]: "90ms" }}>
-          <div className="thin-scrollbar overflow-x-auto">
-            <table className="wf-table min-w-full text-left text-sm">
+          <div className="thin-scrollbar w-full overflow-x-auto">
+            <table className="wf-table w-full min-w-[1180px] text-left text-sm">
               <thead>
                 <tr>
                   <th className="px-5 py-3.5">Référence</th>
@@ -484,7 +489,7 @@ export default function TreasuryPage() {
                 {pagedTransactions.map((transaction) => {
                   const type = typeBadge[transaction.type] ?? { label: transaction.type, tone: "danger" as const };
                   const status = statusBadge[transaction.status] ?? { label: transaction.status, tone: "info" as const };
-                  const hasJustificatif = Boolean(transaction.justificatif_file);
+                  const hasJustificatif = Boolean(transaction.justificatif_file || transaction.linked_advance_devis_file);
 
                   return (
                     <tr key={transaction.id}>

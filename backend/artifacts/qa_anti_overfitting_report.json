@@ -1,0 +1,258 @@
+{
+  "timestamp": "2026-05-21T14:37:57.883198",
+  "summary": {
+    "total_tests": 14,
+    "passed": 2,
+    "failed": 12,
+    "pass_rate": 14.285714285714285
+  },
+  "latency_metrics": {
+    "p50_ms": 25,
+    "p90_ms": 1639,
+    "p95_ms": 1832,
+    "average_ms": 621.9285714285714,
+    "max_ms": 1832
+  },
+  "llm_metrics": {
+    "fallback_count": 6,
+    "fallback_rate": 0.42857142857142855,
+    "provider_distribution": {
+      "OpenRouter": 6,
+      "unknown": 8
+    }
+  },
+  "test_results": [
+    {
+      "question_id": 1,
+      "question": "Classe les lots selon la quantit\u00e9 r\u00e9ellement perdue.",
+      "category": "GAP_PARAPHRASE",
+      "route": "SQL_ONLY",
+      "provider": "OpenRouter",
+      "fallback_used": true,
+      "latency_ms": 1639,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Route mismatch: expected HYBRID_FULL, got SQL_ONLY",
+      "blocks_count": 7,
+      "warnings": []
+    },
+    {
+      "question_id": 2,
+      "question": "Quel lot a l'\u00e9cart mati\u00e8re le plus important en kilogrammes ?",
+      "category": "GAP_PARAPHRASE",
+      "route": "SQL_ONLY",
+      "provider": "OpenRouter",
+      "fallback_used": true,
+      "latency_ms": 1381,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Route mismatch: expected HYBRID_FULL, got SQL_ONLY",
+      "blocks_count": 7,
+      "warnings": []
+    },
+    {
+      "question_id": 3,
+      "question": "Montre-moi les lots avec la plus grande diff\u00e9rence entre entr\u00e9e et sortie.",
+      "category": "GAP_PARAPHRASE",
+      "route": "SQL_ONLY",
+      "provider": "OpenRouter",
+      "fallback_used": true,
+      "latency_ms": 1233,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Route mismatch: expected HYBRID_FULL, got SQL_ONLY",
+      "blocks_count": 7,
+      "warnings": []
+    },
+    {
+      "question_id": 4,
+      "question": "Entre LOT-MILX-001 et LOT-MANG-001, lequel a le meilleur rendement ?",
+      "category": "COMPARISON_PARAPHRASE",
+      "route": "SQL_ONLY",
+      "provider": "unknown",
+      "fallback_used": false,
+      "latency_ms": 9,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Route mismatch: expected LOT_COMPARISON, got SQL_ONLY",
+      "blocks_count": 2,
+      "warnings": [
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les donn\u00e9es SQL sont incompl\u00e8tes.",
+        "Aucune donn\u00e9e SQL exploitable n\u2019a \u00e9t\u00e9 trouv\u00e9e."
+      ]
+    },
+    {
+      "question_id": 5,
+      "question": "Compare ces deux lots sur la perte, la sortie et l'efficacit\u00e9 : LOT-MILX-001, LOT-MANG-001.",
+      "category": "COMPARISON_PARAPHRASE",
+      "route": "SQL_ONLY",
+      "provider": "unknown",
+      "fallback_used": false,
+      "latency_ms": 9,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Route mismatch: expected LOT_COMPARISON, got SQL_ONLY",
+      "blocks_count": 2,
+      "warnings": [
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les donn\u00e9es SQL sont incompl\u00e8tes.",
+        "Aucune donn\u00e9e SQL exploitable n\u2019a \u00e9t\u00e9 trouv\u00e9e."
+      ]
+    },
+    {
+      "question_id": 6,
+      "question": "Lequel est le plus risqu\u00e9 entre LOT-MILX-001 et LOT-MANG-001 ?",
+      "category": "COMPARISON_PARAPHRASE",
+      "route": "SQL_ONLY",
+      "provider": "unknown",
+      "fallback_used": false,
+      "latency_ms": 6,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Route mismatch: expected LOT_COMPARISON, got SQL_ONLY",
+      "blocks_count": 2,
+      "warnings": [
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les donn\u00e9es SQL sont incompl\u00e8tes.",
+        "Aucune donn\u00e9e SQL exploitable n\u2019a \u00e9t\u00e9 trouv\u00e9e."
+      ]
+    },
+    {
+      "question_id": 7,
+      "question": "Que faut-il faire maintenant pour LOT-MILX-001 ?",
+      "category": "RECOMMENDATION",
+      "route": "HYBRID_FULL",
+      "provider": "unknown",
+      "fallback_used": false,
+      "latency_ms": 25,
+      "llm_duration_ms": 0,
+      "pass_fail": "pass",
+      "failure_reason": "",
+      "blocks_count": 2,
+      "warnings": [
+        "Le contexte documentaire est limit\u00e9 pour cette question.",
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les donn\u00e9es SQL sont incompl\u00e8tes.",
+        "Avertissement de fiabilit\u00e9: informations partielles ou insuffisantes pour cette requ\u00eate.",
+        "Aucune donn\u00e9e SQL exploitable n\u2019a \u00e9t\u00e9 trouv\u00e9e."
+      ]
+    },
+    {
+      "question_id": 8,
+      "question": "Propose uniquement les actions prouv\u00e9es pour LOT-MILX-001.",
+      "category": "RECOMMENDATION",
+      "route": "SQL_ONLY",
+      "provider": "unknown",
+      "fallback_used": false,
+      "latency_ms": 10,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Route mismatch: expected HYBRID_FULL, got SQL_ONLY",
+      "blocks_count": 2,
+      "warnings": [
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Les donn\u00e9es SQL sont incompl\u00e8tes.",
+        "La r\u00e9ponse signale une donn\u00e9e manquante.",
+        "Aucune donn\u00e9e SQL exploitable n\u2019a \u00e9t\u00e9 trouv\u00e9e.",
+        "Cette requ\u00eate op\u00e9rationnelle n\u2019est pas encore mapp\u00e9e \u00e0 une op\u00e9ration SQL fiable."
+      ]
+    },
+    {
+      "question_id": 9,
+      "question": "Quelles mesures fiables peut-on prendre sur LOT-MILX-001 ?",
+      "category": "RECOMMENDATION",
+      "route": "OUT_OF_SCOPE",
+      "provider": "unknown",
+      "fallback_used": false,
+      "latency_ms": 3,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Route mismatch: expected HYBRID_FULL, got OUT_OF_SCOPE",
+      "blocks_count": 0,
+      "warnings": []
+    },
+    {
+      "question_id": 10,
+      "question": "Quel lot a la perte la plus \u00e9lev\u00e9e ?",
+      "category": "FOLLOW_UP_MEMORY",
+      "route": "SQL_ONLY",
+      "provider": "OpenRouter",
+      "fallback_used": true,
+      "latency_ms": 1186,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Route mismatch: expected HYBRID_FULL, got SQL_ONLY",
+      "blocks_count": 7,
+      "warnings": []
+    },
+    {
+      "question_id": 11,
+      "question": "Et quelles actions prouv\u00e9es pour ce lot ?",
+      "category": "FOLLOW_UP_MEMORY",
+      "route": "SQL_ONLY",
+      "provider": "unknown",
+      "fallback_used": false,
+      "latency_ms": 10,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Route mismatch: expected HYBRID_FULL, got SQL_ONLY",
+      "blocks_count": 2,
+      "warnings": [
+        "La r\u00e9ponse signale une donn\u00e9e manquante.",
+        "Avertissement de fiabilit\u00e9: informations partielles ou insuffisantes pour cette requ\u00eate."
+      ]
+    },
+    {
+      "question_id": 12,
+      "question": "Oublie ce lot et montre-moi le stock de mangue.",
+      "category": "FOLLOW_UP_MEMORY",
+      "route": "SQL_ONLY",
+      "provider": "OpenRouter",
+      "fallback_used": true,
+      "latency_ms": 1357,
+      "llm_duration_ms": 0,
+      "pass_fail": "pass",
+      "failure_reason": "",
+      "blocks_count": 7,
+      "warnings": []
+    },
+    {
+      "question_id": 13,
+      "question": "Et maintenant donne les recommandations pour ce lot.",
+      "category": "FOLLOW_UP_MEMORY",
+      "route": "HYBRID_FULL",
+      "provider": "OpenRouter",
+      "fallback_used": true,
+      "latency_ms": 1832,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Missing: 'mangue'",
+      "blocks_count": 6,
+      "warnings": [
+        "Le contexte documentaire est limit\u00e9 pour cette question.",
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Avertissement de fiabilit\u00e9: informations partielles ou insuffisantes pour cette requ\u00eate.",
+        "Les signaux SQL et ML ne sont pas totalement coh\u00e9rents."
+      ]
+    },
+    {
+      "question_id": 14,
+      "question": "Donne une checklist courte avant l'emballage des mangues.",
+      "category": "RAG_LLM_FALLBACK",
+      "route": "RAG_ONLY",
+      "provider": "unknown",
+      "fallback_used": false,
+      "latency_ms": 7,
+      "llm_duration_ms": 0,
+      "pass_fail": "fail",
+      "failure_reason": "Missing: 'mangue'",
+      "blocks_count": 3,
+      "warnings": [
+        "Le contexte documentaire est limit\u00e9 pour cette question.",
+        "Certaines preuves attendues sont partielles ou indisponibles.",
+        "Avertissement de fiabilit\u00e9: informations partielles ou insuffisantes pour cette requ\u00eate."
+      ]
+    }
+  ]
+}

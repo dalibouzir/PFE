@@ -60,12 +60,29 @@ class AgentOrchestrator:
         started_at = time.perf_counter()
         route_started_at = time.perf_counter()
         previous_user_query = self._get_previous_user_message(conversation_id) if conversation_id else None
+        pre_route_entities: dict = {}
+        if conversation_id and _needs_pre_route_memory_handoff(message):
+            pre_route_entities = await self._pre_route_memory_entities(
+                message=message,
+                conversation_id=conversation_id,
+                language=language,
+            )
+            memory_batch_ref = str(pre_route_entities.get("batch_ref") or "").strip().upper()
+            if memory_batch_ref:
+                if previous_user_query:
+                    previous_user_query = f"{previous_user_query} || {memory_batch_ref}"
+                else:
+                    previous_user_query = memory_batch_ref
         decision: IntentRouteDecision = self.router.classify(
             message,
             language_hint=language,
             known_batch_refs=self._known_batch_refs(),
             previous_user_query=previous_user_query,
         )
+        if pre_route_entities:
+            merged_detected = dict(pre_route_entities)
+            merged_detected.update(decision.detected_entities or {})
+            decision.detected_entities = merged_detected
         route_ms = int((time.perf_counter() - route_started_at) * 1000)
 
         context_started_at = time.perf_counter()
@@ -261,10 +278,14 @@ class AgentOrchestrator:
             "total_duration_ms": execution_time_ms,
             "conversation_id": conversation_id,
             "detected_entities": context.detected_entities,
+            "intent_family": (context.detected_entities or {}).get("intent_family"),
             "route_explanation": decision.explanation,
             "route_confidence": decision.confidence,
             "warning_codes": warning_codes,
             "source_contract_warnings": source_contract_warnings,
+            "sql_dispatch_trace": _extract_sql_dispatch_trace(agent_results),
+            "evidence_status": _extract_evidence_status_summary(agent_results),
+            "final_response_source": "evidence_pipeline",
             "timing_ms": {
                 "route_planning": route_ms,
                 "context_build": context_ms,
@@ -332,6 +353,36 @@ class AgentOrchestrator:
         )
 
         return response
+
+    async def _pre_route_memory_entities(self, *, message: str, conversation_id: str, language: str | None) -> dict:
+        try:
+            bootstrap_decision = IntentRouteDecision(
+                route=AgentRoute.SQL_ONLY,
+                confidence=0.0,
+                detected_entities=self.router.entity_extractor.extract(
+                    message,
+                    language_hint=language,
+                    known_batch_refs=self._known_batch_refs(),
+                ).as_dict(),
+                required_agents=["MemoryAgent"],
+                explanation="pre-route-memory-handoff",
+            )
+            bootstrap_context = build_agent_context(
+                query=message,
+                language=bootstrap_decision.detected_entities.get("language") or (language or "fr"),
+                decision=bootstrap_decision,
+                conversation_id=conversation_id,
+                user_id=None,
+                previous_messages=None,
+            )
+            memory_result = await asyncio.wait_for(
+                self.registry.memory_agent.run(message, bootstrap_context),
+                timeout=_memory_timeout_seconds(),
+            )
+            entities = memory_result.data.get("entities")
+            return dict(entities) if isinstance(entities, dict) else {}
+        except Exception:
+            return {}
 
     def _known_batch_refs(self) -> set[str]:
         if self.current_user.cooperative_id is None:
@@ -735,3 +786,52 @@ def _sum_agent_ms(agent_timings: list[dict[str, int | str]], agent_name: str) ->
         except Exception:
             continue
     return total
+
+
+def _extract_sql_dispatch_trace(agent_results: list[AgentResult]) -> dict:
+    for result in agent_results:
+        if result.agent_name != "SQLAnalyticsAgent" or not isinstance(result.data, dict):
+            continue
+        trace = result.data.get("sql_dispatch_trace")
+        if isinstance(trace, dict):
+            return {
+                key: trace.get(key)
+                for key in ("route", "intent_family", "sql_operation", "tool_name", "module", "row_count", "evidence_status")
+                if key in trace
+            }
+    return {}
+
+
+def _extract_evidence_status_summary(agent_results: list[AgentResult]) -> dict[str, str]:
+    statuses: dict[str, str] = {}
+    for result in agent_results:
+        if not isinstance(result.data, dict):
+            continue
+        if result.agent_name == "SQLAnalyticsAgent":
+            trace = result.data.get("sql_dispatch_trace") or {}
+            if isinstance(trace, dict) and trace.get("evidence_status"):
+                statuses["sql"] = str(trace.get("evidence_status"))
+        elif result.agent_name == "RAGKnowledgeAgent" and result.data.get("evidence_status"):
+            statuses["rag"] = str(result.data.get("evidence_status"))
+        elif result.agent_name == "MLLossAgent" and result.data.get("evidence_status"):
+            statuses["ml"] = str(result.data.get("evidence_status"))
+    return statuses
+
+
+def _needs_pre_route_memory_handoff(message: str) -> bool:
+    lowered = str(message or "").lower()
+    has_followup_ref = any(token in lowered for token in ("ce lot", "pour ce lot", "celui-ci", "celui ci"))
+    has_recommendation_intent = any(
+        token in lowered
+        for token in (
+            "recommand",
+            "action",
+            "actions",
+            "que faire",
+            "que dois-je faire",
+            "que dois je faire",
+            "sans inventer",
+        )
+    )
+    has_reset = any(token in lowered for token in ("oublie ce lot", "oublier ce lot", "change de sujet", "maintenant oublie"))
+    return has_followup_ref and has_recommendation_intent and not has_reset

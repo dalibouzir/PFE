@@ -576,7 +576,7 @@ export default function CommercialisationPage() {
           ) : (
             <section className="premium-card overflow-hidden rounded-2xl">
               <div className="thin-scrollbar overflow-x-auto">
-                <table className="wf-table min-w-full text-sm">
+                <table className="wf-table w-full min-w-[980px] text-sm">
                   <thead>
                     <tr>
                       <th className="px-4 py-3 text-left">Produit</th>
@@ -783,7 +783,7 @@ export default function CommercialisationPage() {
               </p>
             </div>
             <div className="thin-scrollbar overflow-x-auto">
-              <table className="wf-table min-w-full text-sm">
+              <table className="wf-table w-full min-w-[980px] text-sm">
                 <thead>
                   <tr>
                     <th className="px-4 py-3 text-left">N°</th>

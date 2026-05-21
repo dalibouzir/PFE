@@ -4,6 +4,12 @@ from statistics import fmean
 
 from app.ai.schemas.agent_schemas import AgentResult
 
+EVIDENCE_HAS = "HAS_EVIDENCE"
+EVIDENCE_NO_DATA = "PROVEN_NO_DATA"
+EVIDENCE_PARTIAL = "PARTIAL_EVIDENCE"
+EVIDENCE_TOOL_ERROR = "TOOL_ERROR"
+EVIDENCE_UNSUPPORTED = "UNSUPPORTED"
+
 
 def compute_final_confidence(
     *,
@@ -22,6 +28,10 @@ def compute_final_confidence(
     ml_evidence = _has_ml_evidence(agent_results)
     recommendation_evidence = _has_recommendation_evidence(agent_results)
     partial_recommendation_evidence = _has_partial_recommendation_evidence(agent_results)
+    sql_status = _sql_evidence_status(agent_results)
+    rag_status = _rag_evidence_status(agent_results)
+    ml_status = _ml_evidence_status(agent_results)
+    statuses = {sql_status, rag_status, ml_status}
     evidence_count = sum([sql_evidence, rag_evidence, ml_evidence, recommendation_evidence])
 
     bonus = 0.0
@@ -51,8 +61,15 @@ def compute_final_confidence(
     final_score = max(0.0, min(1.0, base + bonus - penalty))
 
     # Keep confidence low when evidence is missing.
-    if evidence_count == 0:
+    has_proven_no_data = EVIDENCE_NO_DATA in statuses
+    has_tool_or_unsupported = any(status in {EVIDENCE_TOOL_ERROR, EVIDENCE_UNSUPPORTED} for status in statuses)
+    if evidence_count == 0 and not has_proven_no_data:
         final_score = min(final_score, 0.4)
+    if has_proven_no_data and not has_tool_or_unsupported:
+        final_score = max(final_score, 0.68)
+        final_score = min(final_score, 0.85)
+    if has_tool_or_unsupported:
+        final_score = min(final_score, 0.35)
     # Keep confidence constrained when critical contradictions remain.
     if contradiction:
         final_score = min(final_score, 0.55)
@@ -65,6 +82,10 @@ def _has_sql_evidence(agent_results: list[AgentResult]) -> bool:
     sql_result = next((item for item in agent_results if item.agent_name == "SQLAnalyticsAgent"), None)
     if not sql_result or not isinstance(sql_result.data, dict):
         return False
+    trace = sql_result.data.get("sql_dispatch_trace") or {}
+    status = str(trace.get("evidence_status") or "").strip().upper()
+    if status in {EVIDENCE_HAS, EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}:
+        return True
     ignored_keys = {"detected_module", "query_text", "requested_batch_ref"}
     for key, value in sql_result.data.items():
         if key in ignored_keys:
@@ -82,6 +103,10 @@ def _has_rag_evidence(agent_results: list[AgentResult]) -> bool:
     rag_result = next((item for item in agent_results if item.agent_name == "RAGKnowledgeAgent"), None)
     if not rag_result:
         return False
+    if isinstance(rag_result.data, dict):
+        status = str(rag_result.data.get("evidence_status") or "").strip().upper()
+        if status in {EVIDENCE_HAS, EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}:
+            return True
     if rag_result.sources:
         return True
     if not isinstance(rag_result.data, dict):
@@ -95,6 +120,9 @@ def _has_ml_evidence(agent_results: list[AgentResult]) -> bool:
     if not ml_result or not isinstance(ml_result.data, dict):
         return False
     payload = ml_result.data
+    status = str(payload.get("evidence_status") or "").strip().upper()
+    if status in {EVIDENCE_HAS, EVIDENCE_NO_DATA, EVIDENCE_PARTIAL}:
+        return True
     return any(payload.get(key) not in (None, "", []) for key in ("risk_level", "anomaly_detected", "predicted_loss_pct", "observed_loss_pct"))
 
 
@@ -145,3 +173,25 @@ def _has_unmapped_sql_operation(agent_results: list[AgentResult]) -> bool:
     if trace and not str(trace.get("sql_operation") or "").strip():
         return True
     return False
+
+
+def _sql_evidence_status(agent_results: list[AgentResult]) -> str:
+    sql_result = next((item for item in agent_results if item.agent_name == "SQLAnalyticsAgent"), None)
+    if not sql_result or not isinstance(sql_result.data, dict):
+        return ""
+    trace = sql_result.data.get("sql_dispatch_trace") or {}
+    return str(trace.get("evidence_status") or "").strip().upper()
+
+
+def _rag_evidence_status(agent_results: list[AgentResult]) -> str:
+    rag_result = next((item for item in agent_results if item.agent_name == "RAGKnowledgeAgent"), None)
+    if not rag_result or not isinstance(rag_result.data, dict):
+        return ""
+    return str(rag_result.data.get("evidence_status") or "").strip().upper()
+
+
+def _ml_evidence_status(agent_results: list[AgentResult]) -> str:
+    ml_result = next((item for item in agent_results if item.agent_name == "MLLossAgent"), None)
+    if not ml_result or not isinstance(ml_result.data, dict):
+        return ""
+    return str(ml_result.data.get("evidence_status") or "").strip().upper()

@@ -87,28 +87,17 @@ export function useUploadFarmerAdvanceDevis() {
   const queryClient = useQueryClient();
   const scope = useQueryScope();
   return useMutation({
-    mutationFn: async ({ id, file }: { id: string; file: File }) => {
+    mutationFn: ({ id, file }: { id: string; file: File }) => {
       const formData = new FormData();
       formData.append("file", file);
-      const token = typeof window !== "undefined" ? localStorage.getItem("weefarm_token") : null;
-      const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:8000";
-      const response = await fetch(`${base}${endpoints.farmerAdvances.devis(id)}`, {
+      return apiFetch<FarmerAdvance>(endpoints.farmerAdvances.devis(id), {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: formData,
       });
-      if (!response.ok) {
-        let message = "Upload devis échoué.";
-        try {
-          const payload = await response.json();
-          message = payload?.detail || message;
-        } catch {}
-        throw new Error(message);
-      }
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: scopePrefix("farmer-advances", scope) });
+      queryClient.invalidateQueries({ queryKey: scopePrefix("treasury", scope) });
     },
   });
 }

@@ -28,6 +28,7 @@ export function LoginExperience() {
   const router = useRouter();
   const { login } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -41,17 +42,21 @@ export function LoginExperience() {
 
   const submitForm = handleSubmit(async (values) => {
     setFormError(null);
+    setFormSuccess(null);
     try {
       const profile = await login(values.email, values.password);
-      if (profile.role === "super_admin") {
-        router.push("/super-admin/dashboard");
-        return;
-      }
-      if (profile.role === "institution_admin") {
-        router.push("/institution-admin/dashboard");
-        return;
-      }
-      router.push(profile.role === "admin" ? "/admin/dashboard" : "/manager/dashboard");
+      setFormSuccess("Connexion réussie. Redirection vers votre espace…");
+      const nextPath =
+        profile.role === "super_admin"
+          ? "/super-admin/dashboard"
+          : profile.role === "institution_admin"
+            ? "/institution-admin/dashboard"
+            : profile.role === "admin"
+              ? "/admin/dashboard"
+              : "/manager/dashboard";
+      window.setTimeout(() => {
+        router.push(nextPath);
+      }, 350);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Connexion impossible.");
     }
@@ -155,6 +160,11 @@ export function LoginExperience() {
                     {formError && (
                       <p className="rounded-lg border border-[#f2c7c7] bg-[#fff1f1] px-3 py-2 text-xs text-[#8f2f2f]">
                         {formError}
+                      </p>
+                    )}
+                    {formSuccess && (
+                      <p className="rounded-lg border border-[#c7dfcf] bg-[#f2faf5] px-3 py-2 text-xs text-[#24523b]">
+                        {formSuccess}
                       </p>
                     )}
                   </form>

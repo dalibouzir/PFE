@@ -81,6 +81,8 @@ def _public_treasury_status(status: TreasuryTransactionStatus) -> TreasuryTransa
 def serialize_treasury_transaction(transaction: TreasuryTransaction, farmer_name: str | None = None) -> TreasuryTransactionRead:
     normalized_status = _public_treasury_status(transaction.status)
     is_locked = normalized_status == TreasuryTransactionStatus.ENREGISTRE_COMPLET
+    linked_farmer_advance = transaction.farmer_advance if transaction.source_type == FARMER_ADVANCE_SOURCE else None
+    has_linked_advance_devis = linked_farmer_advance is not None and linked_farmer_advance.devis_file_id is not None
     has_generated_ref = bool((transaction.receipt_reference or "").strip()) or (
         transaction.type == TreasuryTransactionType.INCOME
         and transaction.source_type in {"commercial_invoice", "commercial_order", "commercial_payment"}
@@ -88,11 +90,12 @@ def serialize_treasury_transaction(transaction: TreasuryTransaction, farmer_name
     )
     if transaction.justificatif_file_id is not None:
         justificatif_status = "justificatif_uploadé"
+    elif has_linked_advance_devis:
+        justificatif_status = "devis_avance_uploadé"
     elif has_generated_ref:
         justificatif_status = "référence_générée"
     else:
         justificatif_status = "manquant"
-    linked_farmer_advance = transaction.farmer_advance if transaction.source_type == FARMER_ADVANCE_SOURCE else None
     return TreasuryTransactionRead(
         id=transaction.id,
         cooperative_id=transaction.cooperative_id,
@@ -190,6 +193,8 @@ def _require_treasury_transaction(db: Session, manager: User, transaction_id):
 def _has_completion_evidence(transaction: TreasuryTransaction) -> bool:
     if transaction.justificatif_file_id is not None:
         return True
+    if transaction.source_type == FARMER_ADVANCE_SOURCE and transaction.farmer_advance is not None:
+        return transaction.farmer_advance.devis_file_id is not None
     if transaction.receipt_reference and transaction.receipt_reference.strip():
         return True
     if (
@@ -389,6 +394,8 @@ def upload_treasury_justificatif(db: Session, manager: User, transaction_id, fil
         file=file,
     )
     transaction.justificatif_file_id = uploaded.id
+    if transaction.status in {TreasuryTransactionStatus.NON_ENREGISTRE, TreasuryTransactionStatus.ENREGISTRE_SANS_JUSTIFICATIF, TreasuryTransactionStatus.RECORDED}:
+        transaction.status = TreasuryTransactionStatus.ENREGISTRE_COMPLET
     db.commit()
     db.refresh(transaction)
     return serialize_treasury_transaction(transaction)

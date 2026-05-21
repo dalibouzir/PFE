@@ -68,9 +68,11 @@ def _normalize_source_entry(source: dict[str, Any]) -> dict[str, Any]:
         "confidence": confidence,
         "used_for": used_for,
         "warning": warning,
+        "evidence_status": str(base.get("evidence_status") or ""),
         # Keep compatibility fields used by existing response adapters/tests.
         "table": base.get("table"),
         "label": str(base.get("label") or source_name),
+        "record_count": base.get("record_count"),
         "document_id": base.get("document_id"),
         "chunk_id": base.get("chunk_id"),
         "title": str(base.get("title") or source_name) if source_type_raw == "rag" else base.get("title"),
@@ -119,6 +121,9 @@ def _used_for(source_type_raw: str) -> str:
 
 
 def _source_level_warning(*, base: dict[str, Any], source_type_raw: str) -> str | None:
+    evidence_status = str(base.get("evidence_status") or "").strip().upper()
+    if evidence_status == "PROVEN_NO_DATA":
+        return None
     if source_type_raw == "rag":
         score = base.get("score")
         if isinstance(score, (int, float)) and float(score) < 0.35:
