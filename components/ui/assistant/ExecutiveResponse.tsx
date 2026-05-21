@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AssistantChatResponse, ChatMetricFact, ChatUIBlock } from "@/lib/api/types";
 import { BarChart3, ChevronDown, Database, FileText, FlaskConical, TriangleAlert } from "lucide-react";
 
@@ -87,6 +87,231 @@ function normalizeSummaryText(text: string, hasTable: boolean): string {
   return clean;
 }
 
+function firstNumber(value: string): number | null {
+  const match = String(value || "").match(/-?\d+(?:[.,]\d+)?/);
+  if (!match) return null;
+  const parsed = Number(match[0].replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatFrNumber(value: number): string {
+  return value.toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: Number.isInteger(value) ? 0 : 1 });
+}
+
+function firstUpper(value: string): string {
+  const clean = String(value || "").trim();
+  if (!clean) return clean;
+  return `${clean.charAt(0).toUpperCase()}${clean.slice(1)}`;
+}
+
+type ParsedTable = {
+  block: ChatUIBlock;
+  title: string;
+  columns: string[];
+  rows: string[][];
+};
+
+function parseTableBlock(block: ChatUIBlock): ParsedTable | null {
+  const payload = blockPayload(block);
+  const columns = asArray(payload.columns).map((column) => String(column).toLowerCase());
+  const rows = asArray(payload.rows).map((row) => (Array.isArray(row) ? row.map((cell) => String(cell ?? "")) : []));
+  if (!rows.length) return null;
+  return {
+    block,
+    title: String(block.title || "").toLowerCase(),
+    columns,
+    rows,
+  };
+}
+
+function deriveComparisonSummary(table: ParsedTable): string | null {
+  const { columns, rows } = table;
+  const idx = (needle: string[]) => columns.findIndex((column) => needle.some((token) => column.includes(token)));
+  const batchIdx = idx(["lot", "batch"]);
+  const lossIdx = idx(["perte %", "loss %", "loss_pct", "taux de perte"]);
+  const effIdx = idx(["efficacité", "efficiency"]);
+  if (rows.length >= 2 && batchIdx >= 0 && lossIdx >= 0 && effIdx >= 0) {
+    const sorted = [...rows].sort((a, b) => (firstNumber(a[lossIdx] || "") ?? 0) - (firstNumber(b[lossIdx] || "") ?? 0));
+    const better = sorted[0];
+    const worse = sorted[sorted.length - 1];
+    if ((worse[batchIdx] || "") !== (better[batchIdx] || "")) {
+      const worseLoss = firstNumber(worse[lossIdx] || "");
+      const betterLoss = firstNumber(better[lossIdx] || "");
+      const worseEff = firstNumber(worse[effIdx] || "");
+      const betterEff = firstNumber(better[effIdx] || "");
+      if (worseLoss !== null && betterLoss !== null && worseEff !== null && betterEff !== null) {
+        return `${worse[batchIdx]} performe moins bien que ${better[batchIdx]} : ${formatFrNumber(worseLoss)}% de perte contre ${formatFrNumber(betterLoss)}%, avec une efficacité de ${formatFrNumber(worseEff)}% contre ${formatFrNumber(betterEff)}%.`;
+      }
+    }
+  }
+  return null;
+}
+
+function deriveGapSummary(table: ParsedTable): string | null {
+  const { columns, rows } = table;
+  const idx = (needle: string[]) => columns.findIndex((column) => needle.some((token) => column.includes(token)));
+  const batchIdx = idx(["lot", "batch"]);
+  const gapIdx = idx(["écart", "gap", "perte kg", "kg perd", "difference entree sortie", "différence entrée sortie"]);
+  if (batchIdx >= 0 && gapIdx >= 0) {
+    const sorted = [...rows].sort((a, b) => (firstNumber(b[gapIdx] || "") ?? 0) - (firstNumber(a[gapIdx] || "") ?? 0));
+    const lead = sorted[0];
+    const batch = lead[batchIdx] || "N/A";
+    const gap = firstNumber(lead[gapIdx] || "");
+    if (gap !== null) {
+      return `${batch} présente le plus grand écart matière : ${formatFrNumber(gap)} kg perdus entre l’entrée et la sortie.`;
+    }
+  }
+  return null;
+}
+
+function deriveLossSummary(table: ParsedTable): string | null {
+  const { columns, rows } = table;
+  const idx = (needle: string[]) => columns.findIndex((column) => needle.some((token) => column.includes(token)));
+  const batchIdx = idx(["lot", "batch"]);
+  const lossIdx = idx(["perte %", "loss %", "loss_pct", "taux de perte"]);
+  const effIdx = idx(["efficacité", "efficiency"]);
+  if (batchIdx >= 0 && lossIdx >= 0) {
+    const sorted = [...rows].sort((a, b) => (firstNumber(b[lossIdx] || "") ?? 0) - (firstNumber(a[lossIdx] || "") ?? 0));
+    const lead = sorted[0];
+    const batch = lead[batchIdx] || "N/A";
+    const loss = firstNumber(lead[lossIdx] || "");
+    const eff = effIdx >= 0 ? firstNumber(lead[effIdx] || "") : null;
+    if (loss !== null && eff !== null) {
+      return `Le lot le plus critique est ${batch} avec ${formatFrNumber(loss)}% de perte et une efficacité de ${formatFrNumber(eff)}%.`;
+    }
+  }
+  return null;
+}
+
+function deriveStageSummary(table: ParsedTable): string | null {
+  const { columns, rows } = table;
+  const idx = (needle: string[]) => columns.findIndex((column) => needle.some((token) => column.includes(token)));
+  const batchIdx = idx(["lot", "batch"]);
+  const gapIdx = idx(["écart", "gap", "perte kg", "kg perd"]);
+  const stageIdx = idx(["étape", "stage"]);
+  const lossIdx = idx(["perte %", "loss %", "loss_pct", "taux de perte"]);
+  if (stageIdx >= 0 && lossIdx >= 0) {
+    const sorted = [...rows].sort((a, b) => (firstNumber(b[lossIdx] || "") ?? 0) - (firstNumber(a[lossIdx] || "") ?? 0));
+    const lead = sorted[0];
+    const stage = lead[stageIdx] || "N/A";
+    const batch = batchIdx >= 0 ? lead[batchIdx] : "";
+    const gap = gapIdx >= 0 ? firstNumber(lead[gapIdx] || "") : null;
+    const loss = firstNumber(lead[lossIdx] || "");
+    const leadTarget = batch ? `de ${batch}` : "";
+    if (gap !== null && loss !== null) {
+      return `La perte principale ${leadTarget} se situe à l’étape ${stage}, avec ${formatFrNumber(gap)} kg perdus et ${formatFrNumber(loss)}% de perte.`;
+    }
+    return `La perte principale ${leadTarget} se situe à l’étape ${stage}.`.replace(/\s+/g, " ").trim();
+  }
+  return null;
+}
+
+function deriveStockSummary(table: ParsedTable): string | null {
+  const { columns, rows } = table;
+  const idx = (needle: string[]) => columns.findIndex((column) => needle.some((token) => column.includes(token)));
+  const productIdx = idx(["produit", "product"]);
+  const qtyIdx = idx(["restant", "disponible", "available", "stock"]);
+  if (productIdx < 0 || qtyIdx < 0) return null;
+  const ranked = [...rows].sort((a, b) => (firstNumber(b[qtyIdx] || "") ?? 0) - (firstNumber(a[qtyIdx] || "") ?? 0));
+  if (!ranked.length) return null;
+  const lead = ranked[0];
+  const total = ranked.reduce((acc, row) => acc + (firstNumber(row[qtyIdx] || "") ?? 0), 0);
+  const leadQty = firstNumber(lead[qtyIdx] || "");
+  if (leadQty === null) return null;
+  return `La coopérative dispose actuellement de ${formatFrNumber(total)} kg de stock disponible répartis sur ${ranked.length} produits. Le produit le plus disponible est ${lead[productIdx]} avec ${formatFrNumber(leadQty)} kg. Le détail par produit et par qualité est présenté ci-dessous.`;
+}
+
+function deriveSummaryFromRecommendations(blocks: ChatUIBlock[]): string | null {
+  const recommendationBlock = blocks.find((block) => block.type === "recommendation_cards" || block.type === "recommendations");
+  if (!recommendationBlock) return null;
+  const items = asArray(asObject(recommendationBlock.payload).items).map((item) => asObject(item));
+  if (!items.length) return null;
+  const first = items[0];
+  const action = asString(first.action || first.title, "action prioritaire")
+    .replace(/\s+/g, " ")
+    .replace(/[.:;,\s]+$/g, "")
+    .trim();
+  const lot = asString(first.affected_lot || first.related_batch || first.batch_ref, "").trim();
+  const cleanLot = lot.replace(/^lot\s+/i, "").trim();
+  if (items.length === 1) {
+    if (cleanLot) {
+      return `Avec les preuves disponibles, une seule action fiable peut être proposée pour ${cleanLot} : ${firstUpper(action)}. Les autres actions ne sont pas générées car le contexte documentaire est limité.`;
+    }
+    return `Avec les preuves disponibles, une seule action fiable peut être proposée : ${firstUpper(action)}. Les autres actions ne sont pas générées car le contexte documentaire est limité.`;
+  }
+  const target = cleanLot || asString(first.affected_product || first.target, "la coopérative");
+  return `Voici les actions prioritaires proposées pour ${target}, chacune liée à des preuves disponibles.`;
+}
+
+function pickExecutiveSummary(response: AssistantChatResponse | undefined, blocks: ChatUIBlock[], fallbackText: string): string {
+  const summaryBlock = blocks.find((block) => block.type === "executive_summary");
+  const summaryFromBlock = asString(asObject(summaryBlock?.payload).text, "").trim();
+  const summaryFromMessage = asString(response?.message, "").trim();
+  const genericSummary = /bilan matière global|^stock:\s*\d+\s*produit|^conclusion:|^action prioritaire:/i;
+  if (summaryFromBlock && !genericSummary.test(summaryFromBlock)) return summaryFromBlock;
+
+  const recommendationSummary = deriveSummaryFromRecommendations(blocks);
+  if (recommendationSummary) return recommendationSummary;
+
+  const parsedTables = blocks
+    .filter((block) => block.type === "comparison_table" || block.type === "table")
+    .map(parseTableBlock)
+    .filter((value): value is ParsedTable => Boolean(value));
+
+  const comparisonTable = parsedTables.find((table) => table.block.type === "comparison_table" || table.title.includes("compar"));
+  if (comparisonTable) {
+    const summary = deriveComparisonSummary(comparisonTable);
+    if (summary) return summary;
+  }
+
+  const gapTable = parsedTables.find((table) => {
+    const merged = `${table.title} ${table.columns.join(" ")}`;
+    return /écart|gap|kg|entrée|sortie|matière|difference|différence/.test(merged);
+  });
+  if (gapTable) {
+    const summary = deriveGapSummary(gapTable);
+    if (summary) return summary;
+  }
+
+  const lossTable = parsedTables.find((table) => {
+    const merged = `${table.title} ${table.columns.join(" ")}`;
+    return /perte|loss|efficacité|efficiency|rendement/.test(merged);
+  });
+  if (lossTable) {
+    const summary = deriveLossSummary(lossTable);
+    if (summary) return summary;
+  }
+
+  const stageTable = parsedTables.find((table) => {
+    const merged = `${table.title} ${table.columns.join(" ")}`;
+    return /étape|stage/.test(merged);
+  });
+  if (stageTable) {
+    const summary = deriveStageSummary(stageTable);
+    if (summary) return summary;
+  }
+
+  const stockTable = parsedTables.find((table) => {
+    const merged = `${table.title} ${table.columns.join(" ")}`;
+    return /stock|produit|grade|qualité|qualite|disponible|restant/.test(merged);
+  });
+  if (stockTable) {
+    const summary = deriveStockSummary(stockTable);
+    if (summary) return summary;
+  }
+
+  if (summaryFromMessage && !genericSummary.test(summaryFromMessage)) {
+    const firstSentence = summaryFromMessage
+      .replace(/Détail qualité\s*:\s*[^.]+\.?/gi, "Le détail par produit et par qualité est présenté ci-dessous.")
+      .split(/\n|(?<=[.!?])\s+/)
+      .find((line) => line.trim().length > 15);
+    if (firstSentence) return firstSentence.trim();
+    return summaryFromMessage;
+  }
+  if (summaryFromBlock) return summaryFromBlock;
+  return summaryFromMessage || fallbackText;
+}
+
 function toReadableBullets(input: string): string[] {
   const compact = String(input || "").replace(/\s+/g, " ").trim();
   if (!compact) return [];
@@ -148,6 +373,19 @@ function extractWarningItems(blocks: ChatUIBlock[]): string[] {
     }
   }
   return items.filter(Boolean);
+}
+
+function extractLimitItems(block?: ChatUIBlock): string[] {
+  const payload = asObject(block?.payload);
+  const items = asArray(payload.items).map((item) => String(item || "").trim()).filter(Boolean);
+  return items;
+}
+
+function normalizeWarningText(value: string): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function sourceIcon(role: string) {
@@ -213,6 +451,14 @@ function TechnicalDetailsSection({
   const sourceCount = response.citations?.length || 0;
   const agentCount = Number(metric(metrics, "agent.agents_count")?.value || 0);
   const confidencePct = Math.round(Math.max(0, Math.min(100, Number(confidenceMetric?.value || 0) * 100)));
+  const sqlMs = Number(metric(metrics, "orchestration.sql_duration_ms")?.value || 0);
+  const ragMs = Number(metric(metrics, "orchestration.rag_duration_ms")?.value || 0);
+  const llmMs = Number(metric(metrics, "orchestration.llm_duration_ms")?.value || 0);
+  const totalMs = Number(metric(metrics, "orchestration.total_duration_ms")?.value || 0);
+  const warningText = warnings.join(" ").toLowerCase();
+  const sqlLayer = sourceCount > 0 ? "fiables" : "limitées";
+  const ragLayer = warningText.includes("documentaire") ? "limité" : "disponible";
+  const mlLayer = warningText.includes("ml") ? "indicatif/limité" : "indicatif";
 
   return (
     <details className="group rounded-2xl border border-[var(--line)] bg-white/90 p-4">
@@ -225,6 +471,9 @@ function TechnicalDetailsSection({
         <p>Confiance: {Number.isFinite(confidencePct) ? `${confidencePct}%` : "N/A"}</p>
         <p>Agents mobilisés: {agentCount || "N/A"}</p>
         <p>Citations: {sourceCount}</p>
+        <p>Durée totale: {totalMs > 0 ? `${Math.round(totalMs)} ms` : "N/A"}</p>
+        <p>SQL/RAG/LLM: {sqlMs > 0 ? `${Math.round(sqlMs)} ms` : "-"} / {ragMs > 0 ? `${Math.round(ragMs)} ms` : "-"} / {llmMs > 0 ? `${Math.round(llmMs)} ms` : "-"}</p>
+        <p className="sm:col-span-2">Lecture par couche: Données SQL {sqlLayer} | RAG documentaire {ragLayer} | ML {mlLayer}</p>
         <p className="sm:col-span-2">Avertissements: {warnings.length ? warnings.join(" | ") : "Aucun"}</p>
       </div>
     </details>
@@ -283,6 +532,51 @@ function RecommendationsSection({ block }: { block: ChatUIBlock }) {
   );
 }
 
+function KpiCardsSection({ block }: { block: ChatUIBlock }) {
+  const payload = asObject(block.payload);
+  const items = asArray(payload.items).map((item) => asObject(item));
+  if (!items.length) return null;
+  const statusTone = (status: string) => {
+    const s = status.toLowerCase();
+    if (s.includes("critical") || s.includes("alert")) return "border-[#ef4444]/30 bg-[#fff1f2] text-[#9f1239]";
+    if (s.includes("warning")) return "border-[#f59e0b]/25 bg-[#fffbeb] text-[#92400e]";
+    return "border-[#16a34a]/25 bg-[#f0fdf4] text-[#166534]";
+  };
+  return (
+    <section className="rounded-2xl border border-[var(--line)] bg-white/90 p-4">
+      <h3 className="text-sm font-semibold text-[#173324]">{block.title || "Indicateurs clés"}</h3>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {items.map((item, index) => (
+          <article key={`kpi-${index}`} className="rounded-xl border border-[#d7e6da] bg-[#f8fcf8] p-3">
+            <p className="text-[11px] uppercase tracking-[0.06em] text-[#4f705d]">{asString(item.title || item.label || "Indicateur")}</p>
+            <p className="mt-1 text-xl font-semibold text-[#173324]">{String(item.value ?? "-")} {asString(item.unit)}</p>
+            {asString(item.explanation) ? <p className="mt-1 text-xs text-[#557a66]">{asString(item.explanation)}</p> : null}
+            <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusTone(asString(item.status || "neutral"))}`}>
+              {asString(item.status || "neutral")}
+            </span>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LimitsSection({ block }: { block: ChatUIBlock }) {
+  const payload = asObject(block.payload);
+  const items = asArray(payload.items).map((item) => String(item)).filter(Boolean);
+  if (!items.length) return null;
+  return (
+    <section className="rounded-2xl border border-[#f59e0b]/20 bg-[#fffdf6] p-3">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.06em] text-[#92400e]">{block.title || "Limites"}</h3>
+      <ul className="mt-1.5 space-y-1 text-xs text-[#7c5c2f]">
+        {items.map((item, index) => (
+          <li key={`limit-${index}`}>• {item}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function BestPracticesSection({ block }: { block: ChatUIBlock }) {
   const payload = asObject(block.payload);
   const items = asArray(payload.items).map((item) => String(item)).filter(Boolean);
@@ -320,7 +614,7 @@ function TablesSection({ blocks }: { blocks: ChatUIBlock[] }) {
         return (
           <section key={`table-${index}`} className="rounded-2xl border border-[var(--line)] bg-white/90 p-4">
             <h3 className="text-sm font-semibold text-[#173324]">{block.title || "Tableau"}</h3>
-            <div className="mt-3 overflow-auto">
+            <div className="wf-mobile-scroll mt-3 overflow-auto">
               <table className="wf-table min-w-full text-left text-sm">
                 <thead>
                   <tr>
@@ -461,7 +755,7 @@ function ChartsSection({ blocks }: { blocks: ChatUIBlock[] }) {
             ) : (
               <div className="mt-3 rounded-xl border border-[#e3eadf] bg-[#f9fcf9] p-3">
                 <p className="text-xs text-[#4f705d]">Données graphiques incomplètes. Affichage tabulaire de secours.</p>
-                <div className="mt-2 overflow-auto">
+                <div className="wf-mobile-scroll mt-2 overflow-auto">
                   <table className="wf-table min-w-full text-left text-xs">
                     <thead>
                       <tr>
@@ -497,37 +791,116 @@ function ChartsSection({ blocks }: { blocks: ChatUIBlock[] }) {
 }
 
 export function ExecutiveResponse({ response, fallbackText, hideMetaSections = false }: Props) {
-  if (!response) {
-    return <p className="whitespace-pre-wrap text-sm leading-7 text-[#173324]">{fallbackText}</p>;
-  }
+  const blocks = response?.ui_blocks || [];
 
-  if (isNonOperationalMode(response.mode)) {
-    return <p className="whitespace-pre-wrap text-sm leading-7 text-[#173324]">{safeNonOperationalText(response.mode, fallbackText)}</p>;
-  }
-
-  const blocks = response.ui_blocks || [];
-  if (!blocks.length) {
-    return <p className="whitespace-pre-wrap text-sm leading-7 text-[#173324]">{fallbackText}</p>;
-  }
-
-  const summaryBlock = blocks.find((block) => block.type === "executive_summary");
-  const tableBlocks = blocks.filter((block) => block.type === "table");
+  const kpiBlock = blocks.find((block) => block.type === "kpi_cards");
+  const tableBlocks = blocks.filter((block) => block.type === "table" || block.type === "comparison_table");
   const chartBlocks = blocks.filter((block) => block.type === "bar_chart" || block.type === "line_chart" || block.type === "chart");
   const recommendationBlock = blocks.find((block) => block.type === "recommendation_cards" || block.type === "recommendations");
   const bestPracticesBlock = blocks.find((block) => block.type === "best_practices");
+  const limitsBlock = blocks.find((block) => block.type === "limits_block");
   const sourcesBlock = blocks.find((block) => block.type === "sources");
-  const warningItems = extractWarningItems(blocks);
+  const warningItemsRaw = extractWarningItems(blocks);
+  const limitItems = extractLimitItems(limitsBlock);
+  const limitKeySet = new Set(limitItems.map(normalizeWarningText));
+  const mode = String(response?.mode || "").toUpperCase();
+  const warningItems = warningItemsRaw
+    .filter((item) => !limitKeySet.has(normalizeWarningText(item)))
+    .filter((item) => {
+      const normalized = normalizeWarningText(item);
+      if (!mode.includes("SQL_ONLY")) return true;
+      if (!tableBlocks.length && !kpiBlock) return true;
+      if (normalized.includes("partielles") || normalized.includes("insuffisantes")) return false;
+      return true;
+    });
 
-  const summaryTextRaw = asString(asObject(summaryBlock?.payload).text, response.message || fallbackText);
+  const summaryTextRaw = pickExecutiveSummary(response, blocks, fallbackText);
   const summaryText = normalizeSummaryText(summaryTextRaw, tableBlocks.length > 0);
-  const sourceCount = response.citations?.length || 0;
+  const sourceCount = response?.citations?.length || 0;
   const summaryWasShortened = summaryText.trim() !== summaryTextRaw.trim();
+  const sectionCount = [
+    Boolean(kpiBlock),
+    tableBlocks.length > 0,
+    chartBlocks.length > 0,
+    Boolean(recommendationBlock),
+    Boolean(bestPracticesBlock),
+    Boolean(limitsBlock),
+  ].filter(Boolean).length;
+  const [visibleSections, setVisibleSections] = useState(0);
+  const [typedSummary, setTypedSummary] = useState("");
+  const [showMetaSections, setShowMetaSections] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => setReducedMotion(Boolean(media.matches));
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      setVisibleSections(6);
+      setShowMetaSections(true);
+      return;
+    }
+    setVisibleSections(0);
+    setShowMetaSections(false);
+    const t1 = window.setTimeout(() => setVisibleSections((v) => Math.max(v, 1)), 150);
+    const t2 = window.setTimeout(() => setVisibleSections((v) => Math.max(v, 3)), 300);
+    const t3 = window.setTimeout(() => setVisibleSections((v) => Math.max(v, 4)), 450);
+    const t4 = window.setTimeout(() => setVisibleSections((v) => Math.max(v, 6)), 600);
+    const t5 = window.setTimeout(() => setShowMetaSections(true), 700);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+      window.clearTimeout(t4);
+      window.clearTimeout(t5);
+    };
+  }, [response?.message, sectionCount, reducedMotion]);
+
+  useEffect(() => {
+    const text = String(summaryText || "");
+    if (!text) {
+      setTypedSummary("");
+      return;
+    }
+    if (reducedMotion) {
+      setTypedSummary(text);
+      return;
+    }
+    setTypedSummary("");
+    let index = 0;
+    const id = window.setInterval(() => {
+      index += 3;
+      setTypedSummary(text.slice(0, index));
+      if (index >= text.length) window.clearInterval(id);
+    }, 8);
+    return () => window.clearInterval(id);
+  }, [summaryText, reducedMotion]);
+
+  const summaryDisplay = useMemo(() => (typedSummary || summaryText), [typedSummary, summaryText]);
+  const revealClass = (show: boolean) =>
+    `transition-all duration-300 ease-out ${show ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 translate-y-1"}`;
+
+  if (!response) {
+    return <p className="whitespace-pre-wrap text-sm leading-7 text-[#173324]">{fallbackText}</p>;
+  }
+  if (isNonOperationalMode(response.mode)) {
+    return <p className="whitespace-pre-wrap text-sm leading-7 text-[#173324]">{safeNonOperationalText(response.mode, fallbackText)}</p>;
+  }
+  if (!blocks.length) {
+    return <p className="whitespace-pre-wrap text-sm leading-7 text-[#173324]">{fallbackText}</p>;
+  }
 
   return (
     <div className="space-y-3">
       <section className="rounded-2xl border border-[var(--line)] bg-white/90 p-5 shadow-[0_8px_26px_rgba(0,0,0,0.05)]">
         <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[#3f6b52]">Résumé exécutif</h3>
-        <p className="mt-2 whitespace-pre-wrap text-[15px] leading-7 text-[#173324]">{summaryText}</p>
+        <p className="mt-2 whitespace-pre-wrap text-[15px] leading-7 text-[#173324]">{summaryDisplay}</p>
         {summaryWasShortened ? (
           <details className="group mt-2">
             <summary className="cursor-pointer text-xs font-medium text-[#0a8f43] underline-offset-2 hover:underline">
@@ -538,10 +911,12 @@ export function ExecutiveResponse({ response, fallbackText, hideMetaSections = f
         ) : null}
       </section>
 
-      {tableBlocks.length ? <TablesSection blocks={tableBlocks} /> : null}
-      {chartBlocks.length ? <ChartsSection blocks={chartBlocks} /> : null}
-      {recommendationBlock ? <RecommendationsSection block={recommendationBlock} /> : null}
-      {bestPracticesBlock ? <BestPracticesSection block={bestPracticesBlock} /> : null}
+      {kpiBlock ? <div className={revealClass(visibleSections >= 1)}><KpiCardsSection block={kpiBlock} /></div> : null}
+      {tableBlocks.length ? <div className={revealClass(visibleSections >= 2)}><TablesSection blocks={tableBlocks} /></div> : null}
+      {chartBlocks.length ? <div className={revealClass(visibleSections >= 3)}><ChartsSection blocks={chartBlocks} /></div> : null}
+      {recommendationBlock ? <div className={revealClass(visibleSections >= 4)}><RecommendationsSection block={recommendationBlock} /></div> : null}
+      {bestPracticesBlock ? <div className={revealClass(visibleSections >= 5)}><BestPracticesSection block={bestPracticesBlock} /></div> : null}
+      {limitsBlock ? <div className={revealClass(visibleSections >= 6)}><LimitsSection block={limitsBlock} /></div> : null}
 
       {warningItems.length ? (
         <section className="rounded-2xl border border-[#f59e0b]/20 bg-[#fffdf6] p-3">
@@ -559,7 +934,7 @@ export function ExecutiveResponse({ response, fallbackText, hideMetaSections = f
         </section>
       ) : null}
 
-      {!hideMetaSections ? (
+      {!hideMetaSections && showMetaSections ? (
         <>
           <SourcesSection block={sourcesBlock} citationsCount={sourceCount} />
           <TechnicalDetailsSection response={response} warnings={warningItems} />

@@ -111,6 +111,7 @@ type ChatComposerProps = {
   pending: boolean;
   onChange: (value: string) => void;
   onSend: () => void;
+  inputRef?: { current: HTMLTextAreaElement | null };
 };
 
 type PreviousChatsMenuProps = {
@@ -349,6 +350,11 @@ function mapAgentBlocksToUIBlocks(response: AgentChatResponse): ChatUIBlock[] {
 function adaptAgentResponseToAssistant(response: AgentChatResponse): AssistantChatResponse {
   const conversationId = String(response.metadata?.conversation_id || "");
   const warnings = Array.isArray(response.warnings) ? response.warnings : [];
+  const timing = (response.metadata?.durations_ms as Record<string, unknown>) || {};
+  const asMs = (value: unknown) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
   const citations = (Array.isArray(response.sources) ? response.sources : []).map((source, index) => ({
     source_id: String(source.title || source.table || source.model || `source-${index + 1}`),
     source_url: "",
@@ -410,6 +416,62 @@ function adaptAgentResponseToAssistant(response: AgentChatResponse): AssistantCh
         unit: "count",
         notes: Array.isArray(response.agents_used) ? response.agents_used.join(" | ") : "",
       },
+      ...(asMs(timing.total_duration_ms) !== null
+        ? [
+            {
+              source_id: "agent",
+              region: "cooperative",
+              crop: "multi",
+              metric: "orchestration.total_duration_ms",
+              period: "current",
+              value: Number(asMs(timing.total_duration_ms)),
+              unit: "ms",
+              notes: "total request duration",
+            },
+          ]
+        : []),
+      ...(asMs(timing.sql_duration_ms) !== null
+        ? [
+            {
+              source_id: "agent",
+              region: "cooperative",
+              crop: "multi",
+              metric: "orchestration.sql_duration_ms",
+              period: "current",
+              value: Number(asMs(timing.sql_duration_ms)),
+              unit: "ms",
+              notes: "",
+            },
+          ]
+        : []),
+      ...(asMs(timing.rag_duration_ms) !== null
+        ? [
+            {
+              source_id: "agent",
+              region: "cooperative",
+              crop: "multi",
+              metric: "orchestration.rag_duration_ms",
+              period: "current",
+              value: Number(asMs(timing.rag_duration_ms)),
+              unit: "ms",
+              notes: "",
+            },
+          ]
+        : []),
+      ...(asMs(timing.llm_duration_ms) !== null
+        ? [
+            {
+              source_id: "agent",
+              region: "cooperative",
+              crop: "multi",
+              metric: "orchestration.llm_duration_ms",
+              period: "current",
+              value: Number(asMs(timing.llm_duration_ms)),
+              unit: "ms",
+              notes: "",
+            },
+          ]
+        : []),
     ],
     dashboard: null,
     ui_blocks: mapAgentBlocksToUIBlocks(response),
@@ -946,16 +1008,17 @@ function PreviousChatsMenu({ items, activeId, pendingCreate, deletingSessionId, 
   );
 }
 
-function ChatComposer({ value, pending, onChange, onSend }: ChatComposerProps) {
+function ChatComposer({ value, pending, onChange, onSend, inputRef }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const effectiveRef = inputRef ?? textareaRef;
 
   useEffect(() => {
-    const textarea = textareaRef.current;
+    const textarea = effectiveRef.current;
     if (!textarea) return;
     const maxHeight = 96; // ~4 lines with current line-height/padding
     textarea.style.height = "0px";
     textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
-  }, [value]);
+  }, [value, effectiveRef]);
 
   return (
     <div className="mx-auto w-full max-w-4xl shrink-0 rounded-[26px] border border-[rgba(15,35,24,0.16)] bg-white px-2.5 py-2 shadow-[0_6px_16px_rgba(15,35,24,0.06)]">
@@ -969,7 +1032,7 @@ function ChatComposer({ value, pending, onChange, onSend }: ChatComposerProps) {
         </button>
 
         <textarea
-          ref={textareaRef}
+          ref={effectiveRef}
           rows={1}
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -1005,14 +1068,16 @@ export default function AssistantIAPage() {
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [loadingStepIndex, setLoadingStepIndex] = useState(0);
+  const [chatNotice, setChatNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const streamEndRef = useRef<HTMLDivElement>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const shouldAutoScrollRef = useRef(false);
   const loadingSteps = [
-    "Analyse de la question",
-    "Consultation des données",
-    "Vérification des preuves",
-    "Préparation de la réponse",
+    "Analyse de la question…",
+    "Recherche des données coopérative…",
+    "Vérification des preuves…",
+    "Préparation de la réponse…",
   ];
 
 
@@ -1069,7 +1134,11 @@ export default function AssistantIAPage() {
   }, [sessionsQuery.data, activeSessionId]);
 
   useEffect(() => {
-    const persisted = (messagesQuery.data ?? []).map(fromStoredMessage).filter(Boolean) as ConversationMessage[];
+    const rawPersisted = messagesQuery.data ?? [];
+    const persisted = rawPersisted
+      .filter((message) => !activeSessionId || message.session_id === activeSessionId)
+      .map(fromStoredMessage)
+      .filter(Boolean) as ConversationMessage[];
     if (persisted.length) {
       setMessages(persisted);
       return;
@@ -1132,11 +1201,13 @@ export default function AssistantIAPage() {
       const title = previousChats.length === 0 ? "Conversation test" : "Nouvelle conversation";
       const created = await createSessionMutation.mutateAsync({ title });
       setActiveSessionId(created.id);
+      setActiveRequestId("");
       setMessages([createWelcomeMessage()]);
       shouldAutoScrollRef.current = true;
       await sessionsQuery.refetch();
+      window.setTimeout(() => composerInputRef.current?.focus(), 0);
     } catch {
-      // ignore menu creation errors to keep interaction lightweight
+      setChatNotice({ kind: "error", text: "Impossible de créer une nouvelle conversation pour le moment." });
     }
   };
 
@@ -1165,6 +1236,7 @@ export default function AssistantIAPage() {
   const sendMessage = async () => {
     const message = draft.trim();
     if (!message || askMutation.isPending) return;
+    setChatNotice(null);
 
     let sessionId = activeSessionId;
     if (!sessionId) {
@@ -1251,6 +1323,11 @@ export default function AssistantIAPage() {
           onDelete={deleteConversation}
         />
       </div>
+      {chatNotice ? (
+        <div className={`mb-3 rounded-xl border px-3 py-2 text-sm ${chatNotice.kind === "error" ? "border-[#f2c7c7] bg-[#fff1f1] text-[#8f2f2f]" : "border-[#c7dfcf] bg-[#f2faf5] text-[#24523b]"}`}>
+          {chatNotice.text}
+        </div>
+      ) : null}
 
       <section className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_56px]">
         <div className="min-h-0 min-w-0">
@@ -1304,7 +1381,7 @@ export default function AssistantIAPage() {
             )}
 
             <div className="absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+0.4rem)] z-20 bg-gradient-to-t from-[#f3f7fb] via-[#f3f7fb]/96 to-transparent pb-0 pt-3">
-              <ChatComposer value={draft} pending={askMutation.isPending} onChange={setDraft} onSend={sendMessage} />
+          <ChatComposer value={draft} pending={askMutation.isPending} onChange={setDraft} onSend={sendMessage} inputRef={composerInputRef} />
               <p className="pointer-events-none mt-2 text-center text-[11px] font-medium tracking-[0.01em] text-[var(--primary)]/80 [text-shadow:0_0_10px_rgba(0,126,47,0.2)]">
                 Notre assistant peut faire des erreurs. Vérifiez les informations critiques.
               </p>
