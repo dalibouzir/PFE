@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import time
@@ -15,13 +16,21 @@ from app.ai.orchestrator.agent_types import IntentRouteDecision
 from app.ai.orchestrator.audit_logger import AuditLogger
 from app.ai.orchestrator.confidence import compute_final_confidence
 from app.ai.orchestrator.intent_router import IntentRouter
-from app.ai.orchestrator.evidence_pipeline import build_evidence_pack, compose_answer, plan_answer, verify_evidence
+from app.ai.orchestrator.evidence_pipeline import (
+    build_evidence_pack,
+    collapse_user_warning_items,
+    compose_answer,
+    plan_answer,
+    verify_evidence,
+)
 from app.ai.orchestrator.response_verifier import ResponseVerifier
 from app.ai.orchestrator.source_formatter import build_source_contract, merge_and_dedupe_sources
 from app.ai.schemas.agent_schemas import AgentResult, AgentRoute, FinalAgentResponse
 from app.models.user import User
 from app.models.batch import Batch
 from app.models.chat import ChatMessage
+
+logger = logging.getLogger(__name__)
 
 
 class AgentOrchestrator:
@@ -208,7 +217,12 @@ class AgentOrchestrator:
         )
         verify_ms = int((time.perf_counter() - verify_started_at) * 1000)
 
-        if verification.missing_expected_source and decision.route not in {AgentRoute.SMALL_TALK, AgentRoute.OUT_OF_SCOPE}:
+        rag_insufficient_answer = "Je n’ai pas assez de contexte documentaire fiable pour répondre précisément à cette question."
+        if (
+            verification.missing_expected_source
+            and decision.route not in {AgentRoute.SMALL_TALK, AgentRoute.OUT_OF_SCOPE}
+            and str(answer or "").strip() != rag_insufficient_answer
+        ):
             if "Les données disponibles ne permettent pas de confirmer ce point." not in answer:
                 answer = f"{answer}\n\nLes données disponibles ne permettent pas de confirmer ce point."
 
@@ -232,11 +246,19 @@ class AgentOrchestrator:
         source_contract_ms = int((time.perf_counter() - source_started_at) * 1000)
         agents_used = [item.agent_name for item in agent_results]
         warning_codes = sorted(set([*verification.warnings, *source_contract_warnings, *warnings_from_runtime]))
-        french_warnings = [_humanize_warning(warning) for warning in warning_codes]
+        # Internal formatting marker: keep in metadata traces if needed upstream, but hide from user warning list.
+        warning_codes = [code for code in warning_codes if code != "MISSING_OPERATION_RESULT"]
+        french_warnings = collapse_user_warning_items(warning_codes)
 
         execution_time_ms = int((time.perf_counter() - started_at) * 1000)
+        sql_ms = _sum_agent_ms(agent_timings, "SQLAnalyticsAgent")
+        rag_ms = _sum_agent_ms(agent_timings, "RAGKnowledgeAgent")
+        ml_ms = _sum_agent_ms(agent_timings, "MLLossAgent")
+        recommendation_ms = _sum_agent_ms(agent_timings, "RecommendationAgent")
+        llm_ms = compose_ms
         metadata = {
             "execution_time_ms": execution_time_ms,
+            "total_duration_ms": execution_time_ms,
             "conversation_id": conversation_id,
             "detected_entities": context.detected_entities,
             "route_explanation": decision.explanation,
@@ -257,8 +279,27 @@ class AgentOrchestrator:
                 "source_contract": source_contract_ms,
                 "total": execution_time_ms,
             },
+            "durations_ms": {
+                "routing_duration_ms": route_ms,
+                "sql_duration_ms": sql_ms,
+                "rag_duration_ms": rag_ms,
+                "ml_duration_ms": ml_ms,
+                "recommendation_duration_ms": recommendation_ms,
+                "llm_duration_ms": llm_ms,
+                "composition_duration_ms": compose_ms,
+                "total_duration_ms": execution_time_ms,
+            },
             **evidence_metadata,
         }
+
+        if execution_time_ms > 5000:
+            logger.warning("chat.slow_request total_ms=%s route=%s", execution_time_ms, decision.route.value)
+        if sql_ms > 1000:
+            logger.warning("chat.slow_sql duration_ms=%s route=%s", sql_ms, decision.route.value)
+        if rag_ms > 2000:
+            logger.warning("chat.slow_rag duration_ms=%s route=%s", rag_ms, decision.route.value)
+        if llm_ms > 3000:
+            logger.warning("chat.slow_llm duration_ms=%s route=%s", llm_ms, decision.route.value)
 
         if os.environ.get("AI_AUDIT_DEBUG") == "1":
             metadata["agent_debug"] = _build_agent_debug(agent_results)
@@ -577,11 +618,27 @@ def _humanize_warning(value) -> str:
         "CONTRADICTORY_CONTEXT_POSSIBLE": "Les sources récupérées peuvent contenir des informations contradictoires.",
         "NO_HIGH_RISK_BATCH_FOUND": "Aucun lot à risque confirmé n’a été trouvé avec les données disponibles.",
         "INCOMPLETE_DATA": "Certaines données nécessaires sont incomplètes.",
+        "MISSING_EXPECTED_ROUTE_EVIDENCE": "Certaines preuves attendues pour cette route sont indisponibles.",
+        "PRODUCT_FILTER_IGNORED": "Le filtre produit détecté était ambigu et a été ignoré.",
+        "MISSING_OPERATION_RESULT": "Le format de réponse attendu n’a pas été entièrement produit.",
+        "RAG_QUALITY_INSUFFICIENT": "Le contexte documentaire est insuffisant pour répondre avec certitude.",
+        "RAG_EVIDENCE_REJECTED": "Une partie des preuves documentaires a été rejetée pour faible qualité.",
     }
     if text in mapping:
         return mapping[text]
-    if re.fullmatch(r"[A-Z0-9_]+", text):
+    technical = (
+        text.startswith("AGENT_ERROR_")
+        or text.startswith("AGENT_TIMEOUT_")
+        or text.endswith("_ERROR")
+        or text.endswith("_TIMEOUT")
+        or text.endswith("_EXCEPTION")
+        or text.startswith("DB_")
+        or text.startswith("LLM_PROVIDER_")
+    )
+    if technical:
         return "Un avertissement technique a été détecté. Les détails sont disponibles dans les métadonnées."
+    if re.fullmatch(r"[A-Z0-9_]+", text):
+        return "Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
     return text
 
 
@@ -666,3 +723,15 @@ def _build_agent_debug(agent_results: list[AgentResult]) -> dict:
 
         debug[result.agent_name] = entry
     return debug
+
+
+def _sum_agent_ms(agent_timings: list[dict[str, int | str]], agent_name: str) -> int:
+    total = 0
+    for item in agent_timings:
+        if str(item.get("agent") or "") != agent_name:
+            continue
+        try:
+            total += int(item.get("execution_ms") or 0)
+        except Exception:
+            continue
+    return total

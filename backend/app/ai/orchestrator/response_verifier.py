@@ -77,18 +77,10 @@ class ResponseVerifier:
                 warnings.append("RECOMMENDATION_WITHOUT_EVIDENCE")
 
         lowered_answer = (answer or "").lower()
-        if any(
-            token in lowered_answer
-            for token in (
-                "inconnu",
-                "non disponible",
-                "aucun ",
-                "aucune ",
-                "ne permettent pas de confirmer",
-                "données insuffisantes",
-            )
-        ):
+        if _signals_missing_data(lowered_answer):
             warnings.append("MISSING_DATA_SIGNALLED")
+        if _sql_side_succeeded(route=route, results=results):
+            warnings = [item for item in warnings if item != "MISSING_DATA_SIGNALLED"]
 
         contradiction = False
         if has_sql and has_ml:
@@ -243,6 +235,42 @@ def _has_operational_numeric_claim(answer: str) -> bool:
     return bool(OPERATIONAL_NUMBER_PATTERN.search(cleaned))
 
 
+def _signals_missing_data(lowered_answer: str) -> bool:
+    probes = (
+        "donnee non disponible",
+        "donnée non disponible",
+        "donnees insuffisantes",
+        "données insuffisantes",
+        "aucune donnee",
+        "aucune donnée",
+        "aucun resultat",
+        "aucun résultat",
+        "pas de donnees",
+        "pas de données",
+        "ne permettent pas de confirmer",
+        "insuffisant pour repondre",
+        "insuffisant pour répondre",
+    )
+    return any(token in lowered_answer for token in probes)
+
+
+def _sql_side_succeeded(*, route: AgentRoute, results: list[AgentResult]) -> bool:
+    if route not in {AgentRoute.SQL_ONLY, AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_SQL_ML, AgentRoute.HYBRID_FULL}:
+        return False
+    sql_result = next((res for res in results if res.agent_name == "SQLAnalyticsAgent"), None)
+    if not sql_result or not isinstance(sql_result.data, dict):
+        return False
+    trace = sql_result.data.get("sql_dispatch_trace") or {}
+    try:
+        row_count = int(trace.get("row_count")) if trace.get("row_count") is not None else None
+    except (TypeError, ValueError):
+        row_count = None
+    has_operation = bool(str(trace.get("sql_operation") or "").strip())
+    if has_operation and row_count is not None and row_count > 0:
+        return True
+    return False
+
+
 def _has_prompt_injection(results: list[AgentResult]) -> bool:
     for res in results:
         chunks = res.data.get("chunks") if isinstance(res.data, dict) else None
@@ -319,6 +347,9 @@ def _has_recommendation_evidence_refs(rec: dict) -> bool:
     for ref in refs:
         if not isinstance(ref, dict):
             continue
-        if str(ref.get("type") or "").upper() in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
+        ref_type = str(ref.get("type") or "").upper()
+        if ref_type == "RAG" and str(ref.get("quality_status") or "").upper() in {"WEAK", "REJECTED"}:
+            continue
+        if ref_type in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
             return True
     return False

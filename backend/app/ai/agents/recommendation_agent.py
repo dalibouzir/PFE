@@ -120,6 +120,9 @@ def _has_valid_evidence_refs(rec: dict) -> bool:
     for ref in refs:
         if not isinstance(ref, dict):
             continue
-        if str(ref.get("type") or "").upper() in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
+        ref_type = str(ref.get("type") or "").upper()
+        if ref_type == "RAG" and str(ref.get("quality_status") or "").upper() in {"WEAK", "REJECTED"}:
+            continue
+        if ref_type in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
             return True
     return False

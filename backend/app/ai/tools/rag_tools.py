@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from sqlalchemy import select
@@ -52,33 +53,51 @@ class RAGTools:
         advice_knowledge_missing = False
         if pure_advice_query:
             ranked, advice_knowledge_missing = _strict_advice_selection(ranked, top_k=top_k)
-        formatted = format_chunks_for_llm(ranked)
+        assessed_items = _assess_rag_evidence_items(
+            query=query,
+            detected_entities=detected_entities,
+            items=ranked,
+        )
+        usable_items = [item for item in assessed_items if str(item.get("quality_status")) in {"STRONG", "PARTIAL"}][:top_k]
+        formatted = format_chunks_for_llm(usable_items)
 
         sources = [
             {
                 "type": "rag",
+                "source_id": item.get("source_id"),
                 "document_id": item.get("document_id"),
                 "chunk_id": item.get("chunk_id"),
                 "title": item.get("title"),
-                "score": round(float(item.get("final_score") or item.get("hybrid_score") or 0.0), 4),
+                "score": round(float(item.get("relevance_score") or item.get("final_score") or item.get("hybrid_score") or 0.0), 4),
                 "topic": (item.get("metadata") or {}).get("topic") or (item.get("metadata") or {}).get("chunk_type"),
+                "source_type": item.get("source_type"),
+                "product_tags": item.get("product_tags"),
+                "stage_tags": item.get("stage_tags"),
+                "usable_for": item.get("usable_for"),
+                "quality_status": item.get("quality_status"),
+                "content_excerpt": item.get("content_excerpt"),
             }
-            for item in ranked
+            for item in usable_items
         ]
 
-        weak = not ranked or float(ranked[0].get("final_score") or 0.0) < 0.35
+        weak = not usable_items or float(usable_items[0].get("relevance_score") or 0.0) < 0.42
         warnings = list(formatted.get("warnings", []))
+        if any(str(item.get("quality_status")) == "REJECTED" for item in assessed_items):
+            warnings.append("RAG_EVIDENCE_REJECTED")
         if weak:
             warnings.append("WEAK_RETRIEVAL")
         if advice_knowledge_missing:
             warnings.append("ADVICE_KNOWLEDGE_MISSING")
+        if not usable_items and assessed_items:
+            warnings.append("RAG_QUALITY_INSUFFICIENT")
         return {
             "rewrite": rewritten,
             "filters": {
                 key: sorted(list(value)) if isinstance(value, set) else value
                 for key, value in filters.items()
             },
-            "chunks": ranked,
+            "chunks": usable_items,
+            "all_chunks_assessed": assessed_items,
             "formatted_chunks": formatted.get("chunks", []),
             "warnings": sorted(set(warnings)),
             "weak_retrieval": weak,
@@ -164,12 +183,16 @@ class RAGTools:
         result = self.search(query=query, detected_entities=detected_entities, top_k=5)
         data = [
             {
+                "source_id": item.get("source_id"),
                 "document_id": item.get("document_id"),
                 "chunk_id": item.get("chunk_id"),
                 "title": item.get("title"),
-                "content": item.get("content"),
+                "content_excerpt": item.get("content_excerpt"),
+                "sanitized_summary": item.get("sanitized_summary"),
                 "metadata": item.get("metadata") or {},
-                "score": float(item.get("final_score") or item.get("hybrid_score") or 0.0),
+                "score": float(item.get("relevance_score") or item.get("final_score") or item.get("hybrid_score") or 0.0),
+                "usable_for": item.get("usable_for"),
+                "quality_status": item.get("quality_status"),
             }
             for item in result.get("chunks", [])
         ]
@@ -293,3 +316,141 @@ def _strict_advice_selection(items: list[dict[str, Any]], *, top_k: int) -> tupl
     if strict:
         return strict[:top_k], False
     return [], True
+
+
+def _assess_rag_evidence_items(*, query: str, detected_entities: dict[str, Any], items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    assessed: list[dict[str, Any]] = []
+    normalized_query = _normalize_text(query)
+    expects_operational_fact = any(token in normalized_query for token in ("stock", "lots disponibles", "combien", "quantite", "quantité", "écart", "ecart", "entrée", "entree", "sortie"))
+    query_tokens = {token for token in normalized_query.split() if len(token) >= 4}
+    for idx, item in enumerate(items):
+        content = str(item.get("content") or "")
+        sanitized = _sanitize_chunk_text(content)
+        score = float(item.get("final_score") or item.get("hybrid_score") or 0.0)
+        metadata = item.get("metadata") or {}
+        source_type = str(item.get("source_type") or metadata.get("source_table") or "")
+        overlap = _token_overlap_ratio(query_tokens, _normalize_text(sanitized))
+        is_noise = _looks_like_raw_noise(sanitized)
+        operational_like = _is_operational_source(source_type)
+        quality_status = "STRONG"
+        reasons: list[str] = []
+        if score < 0.25 or overlap < 0.08 or is_noise:
+            quality_status = "REJECTED"
+            reasons.append("low_relevance_or_noise")
+        elif score < 0.42 or overlap < 0.14:
+            quality_status = "WEAK"
+            reasons.append("weak_relevance")
+        elif score < 0.58:
+            quality_status = "PARTIAL"
+            reasons.append("partial_relevance")
+        if expects_operational_fact and operational_like:
+            # prevent RAG from appearing as operational source-of-truth for fact queries
+            quality_status = "REJECTED"
+            reasons.append("operational_sql_required")
+
+        usable_for = _derive_usable_for(query=normalized_query, metadata=metadata, sanitized=sanitized)
+        assessed.append(
+            {
+                **item,
+                "source_id": str(item.get("document_id") or item.get("chunk_id") or f"rag:{idx}"),
+                "content_excerpt": _compact(sanitized, 180),
+                "sanitized_summary": _compact(sanitized, 280),
+                "relevance_score": round(score, 4),
+                "source_type": source_type or "knowledge_chunks",
+                "product_tags": _listify_tags(metadata.get("product"), metadata.get("product_name"), metadata.get("crop")),
+                "stage_tags": _listify_tags(metadata.get("stage"), metadata.get("stage_canonical")),
+                "usable_for": usable_for,
+                "quality_status": quality_status,
+                "quality_reasons": reasons,
+            }
+        )
+    return assessed
+
+
+def _sanitize_chunk_text(text: str) -> str:
+    value = str(text or "")
+    value = re.sub(r"```.*?```", " ", value, flags=re.DOTALL)
+    value = re.sub(r"^\s*#{1,6}\s+.*$", " ", value, flags=re.MULTILINE)
+    value = re.sub(r"\[[^\]]*\]\(([^)]+)\)", " ", value)
+    value = re.sub(r"(source|file|path|document|url)\s*[:=]\s*\S+", " ", value, flags=re.IGNORECASE)
+    value = re.sub(r"\|\s*[-:]+\s*\|", " ", value)
+    value = re.sub(r"\s+", " ", value).strip()
+    return value
+
+
+def _looks_like_raw_noise(text: str) -> bool:
+    lowered = str(text or "").lower()
+    if not lowered or len(lowered) < 25:
+        return True
+    noisy_markers = ("chapter", "table of contents", "copyright", "all rights reserved", "http://", "https://", "source:", "file:")
+    if any(marker in lowered for marker in noisy_markers):
+        return True
+    alpha_chars = sum(1 for ch in lowered if ch.isalpha())
+    return alpha_chars < max(20, int(len(lowered) * 0.35))
+
+
+def _normalize_text(value: str) -> str:
+    lowered = str(value or "").lower()
+    lowered = lowered.replace("’", "'")
+    lowered = lowered.replace("é", "e").replace("è", "e").replace("ê", "e").replace("à", "a").replace("ù", "u").replace("î", "i").replace("ô", "o")
+    lowered = re.sub(r"[^a-z0-9\\s-]", " ", lowered)
+    return " ".join(lowered.split())
+
+
+def _token_overlap_ratio(query_tokens: set[str], text: str) -> float:
+    if not query_tokens:
+        return 0.0
+    tokens = {token for token in str(text).split() if len(token) >= 4}
+    if not tokens:
+        return 0.0
+    overlap = len(query_tokens.intersection(tokens))
+    return overlap / max(1.0, len(query_tokens))
+
+
+def _derive_usable_for(*, query: str, metadata: dict[str, Any], sanitized: str) -> str:
+    lowered = query
+    if any(token in lowered for token in ("pourquoi", "explique", "cause", "why")):
+        return "explanation"
+    if any(token in lowered for token in ("conseil", "bonnes pratiques", "check-list", "checklist", "eviter", "éviter")):
+        return "best_practice"
+    if any(token in lowered for token in ("recommand", "action", "plan")):
+        return "recommendation_support"
+    if any(token in lowered for token in ("attention", "risque", "warning")):
+        return "warning"
+    if str(metadata.get("chunk_type") or "").lower() in {"agronomic_knowledge", "benchmark_reference"}:
+        return "documentation"
+    if len(sanitized.split()) < 12:
+        return "documentation"
+    return "best_practice"
+
+
+def _compact(value: str, limit: int) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "..."
+
+
+def _listify_tags(*values: Any) -> list[str]:
+    tags: list[str] = []
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, list):
+            for v in value:
+                vv = str(v or "").strip()
+                if vv:
+                    tags.append(vv)
+        else:
+            vv = str(value or "").strip()
+            if vv:
+                tags.append(vv)
+    seen: set[str] = set()
+    unique: list[str] = []
+    for tag in tags:
+        key = tag.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(tag)
+    return unique

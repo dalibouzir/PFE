@@ -21,6 +21,7 @@ class SQLAnalyticsAgent(BaseAgent):
     async def run(self, query: str, context: AgentContext) -> AgentResult:
         start = time.perf_counter()
         entities = context.detected_entities or {}
+        intent_family = str(entities.get("intent_family") or "").strip().upper()
         product = _pick_first(entities.get("product"))
         stage = _pick_first(entities.get("stage"))
         batch_ref = entities.get("batch_ref")
@@ -142,6 +143,21 @@ class SQLAnalyticsAgent(BaseAgent):
         if batch_ref:
             payload["requested_batch_ref"] = batch_ref
         sources: list[dict[str, Any]] = []
+
+        contract_result = self._run_contract_sql_dispatch(
+            intent_family=intent_family,
+            query=query,
+            context=context,
+            entities=entities,
+            product=product,
+            batch_ref=batch_ref,
+            payload=payload,
+            warnings=warnings,
+            sources=sources,
+            start=start,
+        )
+        if contract_result is not None:
+            return contract_result
 
         # Deterministic high-precision operations for defense-critical queries.
         op = _detect_deterministic_operation(normalized)
@@ -666,8 +682,13 @@ class SQLAnalyticsAgent(BaseAgent):
             warnings.append("SQL_DATA_INCOMPLETE")
         payload = _apply_post_aggregation_checks(payload)
 
-        answer_part = _build_sql_answer(payload)
-        confidence = 0.88 if "SQL_DATA_INCOMPLETE" not in warnings and "NO_SQL_DATA" not in warnings else 0.48
+        if context.route.value == "SQL_ONLY" and _is_operational_sql_query(normalized):
+            warnings.append("UNMAPPED_SQL_OPERATION")
+            answer_part = "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable. Reformulez la demande (stock, lots disponibles, bilan matière, étape critique) ou précisez l’entité ciblée."
+            confidence = 0.2
+        else:
+            answer_part = _build_sql_answer(payload)
+            confidence = 0.88 if "SQL_DATA_INCOMPLETE" not in warnings and "NO_SQL_DATA" not in warnings else 0.48
 
         return AgentResult(
             agent_name=self.name,
@@ -679,6 +700,163 @@ class SQLAnalyticsAgent(BaseAgent):
             warnings=sorted(set(warnings)),
             execution_time_ms=int((time.perf_counter() - start) * 1000),
         )
+
+    def _run_contract_sql_dispatch(
+        self,
+        *,
+        intent_family: str,
+        query: str,
+        context: AgentContext,
+        entities: dict[str, Any],
+        product: str | None,
+        batch_ref: str | None,
+        payload: dict[str, Any],
+        warnings: list[str],
+        sources: list[dict[str, Any]],
+        start: float,
+    ) -> AgentResult | None:
+        if intent_family not in {
+            "STOCK_CURRENT",
+            "POSTHARVEST_AVAILABLE_LOTS",
+            "LOSS_RANKING",
+            "INPUT_OUTPUT_GAP",
+            "LOT_COMPARISON",
+            "STAGE_LOSS_ANALYSIS",
+            "PREHARVEST_STEPS",
+            "EXPLANATION_CAUSAL",
+            "RISK_ANALYSIS",
+            "RECOMMENDATION",
+            "LOT_SPECIFIC_RECOMMENDATION",
+            "FOLLOW_UP",
+        }:
+            return None
+
+        sql_operation = ""
+        tool_function = ""
+
+        if intent_family == "STOCK_CURRENT":
+            sql_operation = "get_current_stock"
+            tool_function = "SQLTools.get_current_stock"
+            result = self.sql_tools.get_current_stock(product=product)
+            payload["current_stock"] = result.get("items", [])
+        elif intent_family == "POSTHARVEST_AVAILABLE_LOTS":
+            sql_operation = "get_available_postharvest_lots"
+            tool_function = "SQLTools.get_available_postharvest_lots"
+            result = self.sql_tools.get_available_postharvest_lots(product=product)
+            payload["available_postharvest_lots"] = result.get("items", [])
+        elif intent_family in {"LOSS_RANKING", "INPUT_OUTPUT_GAP"}:
+            sql_operation = "get_canonical_material_balance"
+            tool_function = "SQLTools.get_canonical_material_balance"
+            result = self.sql_tools.get_canonical_material_balance(batch_ref=batch_ref, product=product)
+            rows = result.get("items", []) or []
+            rows = [row for row in rows if row.get("validity_status") == "VALID"]
+            sort_key = "loss_pct" if intent_family == "LOSS_RANKING" else "gap_qty"
+            payload["material_balance"] = sorted(
+                rows,
+                key=lambda item: float(item.get(sort_key, 0.0) or 0.0),
+                reverse=True,
+            )
+        elif intent_family == "LOT_COMPARISON":
+            sql_operation = "get_canonical_material_balance_for_lots"
+            tool_function = "SQLTools.get_canonical_material_balance_for_lots"
+            lot_refs = _extract_lot_refs(query, explicit=batch_ref)
+            result = self.sql_tools.get_canonical_material_balance_for_lots(lot_refs)
+            payload["material_balance"] = result.get("items", [])
+            payload["comparison_lot_refs"] = lot_refs
+        elif intent_family == "STAGE_LOSS_ANALYSIS":
+            sql_operation = "get_stage_loss_analysis"
+            tool_function = "SQLTools.get_stage_loss_analysis"
+            stage = _pick_first(entities.get("stage"))
+            result = self.sql_tools.get_stage_loss_analysis(batch_ref=batch_ref, product=product, stage=stage)
+            payload["stage_loss_analysis"] = result.get("items", [])
+        elif intent_family == "PREHARVEST_STEPS":
+            sql_operation = "get_parcel_preharvest_status"
+            tool_function = "SQLTools.preharvest.get_parcel_preharvest_status"
+            result = self.sql_tools.preharvest.get_parcel_preharvest_status(product=product)
+            payload["preharvest_status"] = result.get("data", [])
+        elif intent_family == "EXPLANATION_CAUSAL":
+            stage = _pick_first(entities.get("stage"))
+            normalized_q = query.lower()
+            if stage or any(token in normalized_q for token in ("sechage", "séchage", "tri", "emballage", "conditionnement", "etape", "étape")):
+                sql_operation = "get_stage_loss_analysis"
+                tool_function = "SQLTools.get_stage_loss_analysis"
+                result = self.sql_tools.get_stage_loss_analysis(batch_ref=batch_ref, product=product, stage=stage)
+                payload["stage_loss_analysis"] = result.get("items", [])
+            else:
+                sql_operation = "get_canonical_material_balance"
+                tool_function = "SQLTools.get_canonical_material_balance"
+                result = self.sql_tools.get_canonical_material_balance(batch_ref=batch_ref, product=product)
+                payload["material_balance"] = result.get("items", [])
+        elif intent_family == "RISK_ANALYSIS":
+            sql_operation = "get_canonical_material_balance"
+            tool_function = "SQLTools.get_canonical_material_balance"
+            result = self.sql_tools.get_canonical_material_balance(batch_ref=batch_ref, product=product)
+            rows = result.get("items", []) or []
+            payload["high_risk_lots"] = sorted(
+                [row for row in rows if row.get("validity_status") == "VALID"],
+                key=lambda item: float(item.get("loss_pct", 0.0) or 0.0),
+                reverse=True,
+            )[:10]
+        else:  # RECOMMENDATION / LOT_SPECIFIC_RECOMMENDATION / FOLLOW_UP
+            sql_operation = "get_canonical_material_balance"
+            tool_function = "SQLTools.get_canonical_material_balance"
+            result = self.sql_tools.get_canonical_material_balance(batch_ref=batch_ref, product=product)
+            payload["material_balance"] = result.get("items", [])
+
+        sources.extend(result.get("sources", []))
+        warnings.extend(result.get("warnings", []))
+        payload = _apply_post_aggregation_checks(payload)
+
+        primary_rows = self._primary_rows_for_intent(payload, intent_family)
+        trace = {
+            "intent_family": intent_family,
+            "route": str(context.route.value if hasattr(context.route, "value") else context.route),
+            "sql_operation": sql_operation,
+            "tool_function": tool_function,
+            "cooperative_id": str(self.sql_tools.cooperative_id),
+            "filters": {
+                "product": product,
+                "batch_ref": batch_ref,
+                "module": entities.get("module"),
+            },
+            "row_count": len(primary_rows),
+            "evidence_type": "SQL",
+            "warnings": sorted(set(warnings)),
+        }
+        payload["sql_dispatch_trace"] = trace
+
+        if not primary_rows and "NO_SQL_DATA" not in warnings:
+            warnings.append("NO_SQL_DATA")
+
+        answer_part = _build_sql_answer(payload)
+        confidence = 0.88 if "NO_SQL_DATA" not in warnings and "SQL_DATA_INCOMPLETE" not in warnings else 0.48
+        return AgentResult(
+            agent_name=self.name,
+            route=context.route,
+            answer_part=answer_part,
+            data=payload,
+            sources=sources,
+            confidence=confidence,
+            warnings=sorted(set(warnings)),
+            execution_time_ms=int((time.perf_counter() - start) * 1000),
+        )
+
+    def _primary_rows_for_intent(self, payload: dict[str, Any], intent_family: str) -> list[dict[str, Any]]:
+        if intent_family == "STOCK_CURRENT":
+            return list(payload.get("current_stock") or [])
+        if intent_family == "POSTHARVEST_AVAILABLE_LOTS":
+            return list(payload.get("available_postharvest_lots") or [])
+        if intent_family == "STAGE_LOSS_ANALYSIS":
+            return list(payload.get("stage_loss_analysis") or [])
+        if intent_family in {"LOSS_RANKING", "INPUT_OUTPUT_GAP", "EXPLANATION_CAUSAL", "RECOMMENDATION", "FOLLOW_UP"}:
+            return list(payload.get("material_balance") or [])
+        if intent_family in {"LOT_COMPARISON", "LOT_SPECIFIC_RECOMMENDATION"}:
+            return list(payload.get("material_balance") or [])
+        if intent_family == "PREHARVEST_STEPS":
+            return list(payload.get("preharvest_status") or [])
+        if intent_family == "RISK_ANALYSIS":
+            return list(payload.get("high_risk_lots") or [])
+        return []
 
 
 def _pick_first(value):
@@ -788,6 +966,44 @@ def _detect_product_from_text(normalized: str) -> str | None:
     if "bissap" in normalized:
         return "bissap"
     return None
+
+
+def _extract_lot_refs(query: str, explicit: str | None = None) -> list[str]:
+    refs: list[str] = []
+    if explicit:
+        refs.append(str(explicit).upper())
+    matches = re.findall(r"\b(?:LOT|BATCH|MANG|MANGO|ARA|ARACH|MIL|BISS)[-_][A-Z0-9][A-Z0-9\-_]*\b", str(query or ""), flags=re.IGNORECASE)
+    for item in matches:
+        token = str(item or "").upper()
+        if token not in refs:
+            refs.append(token)
+    return refs
+
+
+def _is_operational_sql_query(normalized: str) -> bool:
+    return any(
+        token in normalized
+        for token in (
+            "stock",
+            "lot",
+            "lots",
+            "post-recolte",
+            "post recolte",
+            "perte",
+            "efficacite",
+            "rendement",
+            "entree",
+            "sortie",
+            "bilan",
+            "etape",
+            "tri",
+            "sechage",
+            "emballage",
+            "transformation",
+            "matiere",
+            "kg",
+        )
+    )
 
 
 def _build_sql_answer(payload: dict[str, Any]) -> str:
@@ -971,6 +1187,23 @@ def _build_sql_answer(payload: dict[str, Any]) -> str:
         rows = payload.get("process_stage_loss_ranking", [])
         if rows:
             return f"Étape la plus pénalisante: {rows[0].get('stage')} avec {float(rows[0].get('kg_loss', 0.0)):.1f} kg perdus."
+        return "Donnée non disponible pour cette requête précise."
+    if payload.get("stage_loss_analysis") is not None:
+        rows = payload.get("stage_loss_analysis", [])
+        if rows:
+            top = rows[0]
+            if top.get("batch_ref"):
+                return (
+                    f"Étape la plus critique pour {top.get('batch_ref')}: {top.get('stage_name')} | "
+                    f"entrée {float(top.get('input_qty', 0.0) or 0.0):.1f} kg | "
+                    f"sortie {float(top.get('output_qty', 0.0) or 0.0):.1f} kg | "
+                    f"perte {float(top.get('loss_pct', 0.0) or 0.0):.1f}%."
+                )
+            return (
+                f"Étape la moins efficace: {top.get('stage_name')} | "
+                f"efficacité moyenne {float(top.get('efficiency_pct', 0.0) or 0.0):.1f}% | "
+                f"perte moyenne {float(top.get('loss_pct', 0.0) or 0.0):.1f}%."
+            )
         return "Donnée non disponible pour cette requête précise."
 
     if payload.get("requested_batch_ref") and not payload.get("batch_summary"):
@@ -1225,17 +1458,17 @@ def _build_sql_answer(payload: dict[str, Any]) -> str:
         item = payload["material_balance_global"]
         return (
             "Bilan matière global: "
-            f"entrée {float(item.get('input_quantity', 0.0)):.1f} kg, "
-            f"sortie {float(item.get('output_quantity', 0.0)):.1f} kg, "
-            f"perte {float(item.get('loss_percentage', 0.0)):.1f}%."
+            f"entrée {float(item.get('input_quantity', item.get('input_qty', 0.0))):.1f} kg, "
+            f"sortie {float(item.get('output_quantity', item.get('output_qty', 0.0))):.1f} kg, "
+            f"perte {float(item.get('loss_percentage', item.get('loss_pct', 0.0))):.1f}%."
         )
 
     if payload.get("material_balance"):
         item = payload["material_balance"][0]
         return (
             f"Le bilan matière du lot {_display_batch_ref(item.get('batch_ref'))} montre une perte de "
-            f"{float(item.get('loss_percentage', 0.0)):.1f} % et une efficacité de "
-            f"{float(item.get('efficiency_percentage', 0.0)):.1f} %."
+            f"{float(item.get('loss_percentage', item.get('loss_pct', 0.0))):.1f} % et une efficacité de "
+            f"{float(item.get('efficiency_percentage', item.get('efficiency_pct', 0.0))):.1f} %."
         )
     if payload.get("top_process_stage"):
         item = payload.get("top_process_stage") or {}
@@ -1349,8 +1582,18 @@ def _apply_post_aggregation_checks(payload: dict[str, Any]) -> dict[str, Any]:
 
     balance_rows = data.get("material_balance")
     if isinstance(balance_rows, list) and balance_rows:
-        in_kg = float(sum(float((row or {}).get("input_quantity", 0.0) or 0.0) for row in balance_rows))
-        out_kg = float(sum(float((row or {}).get("output_quantity", 0.0) or 0.0) for row in balance_rows))
+        in_kg = float(
+            sum(
+                float((row or {}).get("input_quantity", (row or {}).get("input_qty", 0.0)) or 0.0)
+                for row in balance_rows
+            )
+        )
+        out_kg = float(
+            sum(
+                float((row or {}).get("output_quantity", (row or {}).get("output_qty", 0.0)) or 0.0)
+                for row in balance_rows
+            )
+        )
         loss_pct = ((in_kg - out_kg) / in_kg * 100.0) if in_kg > 0 else 0.0
         data["material_balance_global"] = {
             "input_quantity": in_kg,

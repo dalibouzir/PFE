@@ -146,7 +146,7 @@ class EntityExtractor:
         if re.search(r"\b(lot|batch)\b", lowered):
             for token in TOKEN_PATTERN.findall(raw):
                 upper = token.upper()
-                if "-" in upper and upper not in NORMAL_FRENCH_REFERENCE_STOPWORDS:
+                if "-" in upper and upper not in NORMAL_FRENCH_REFERENCE_STOPWORDS and _looks_like_lot_token(upper):
                     return None, upper, False
 
         return None, None, False

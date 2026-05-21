@@ -71,40 +71,105 @@ class SQLTools:
 
     def get_current_stock(self, product: str | None = None) -> dict[str, Any]:
         stmt = (
-            select(Product.name, Stock.total_stock_kg, Stock.reserved_in_lots_kg, Stock.threshold, Stock.unit)
+            select(
+                Product.id,
+                Product.name,
+                Stock.grade,
+                Stock.total_stock_kg,
+                Stock.reserved_in_lots_kg,
+                Stock.processed_output_kg,
+                Stock.threshold,
+                Stock.unit,
+            )
             .join(Product, Product.id == Stock.product_id)
             .where(Stock.cooperative_id == self.cooperative_id)
-            .order_by(Product.name.asc())
+            .order_by(Product.name.asc(), Stock.grade.asc())
         )
         rows = self.db.execute(stmt).all()
-        items = []
-        for name, total, reserved, threshold, unit in rows:
-            if product and _canonical_product_name(name) != _canonical_product_name(product):
+        normalized_filter = _canonical_product_name(product) if product else None
+        known_products = {_canonical_product_name(name) for _, name, *_ in rows}
+        filter_is_valid = bool(normalized_filter) and normalized_filter in known_products
+
+        # Ignore low-quality product extraction (e.g. trailing phrase fragments).
+        if normalized_filter and not filter_is_valid:
+            normalized_filter = None
+
+        grouped: dict[str, dict[str, Any]] = {}
+        for product_id, name, grade, total, reserved, processed_output, threshold, unit in rows:
+            if normalized_filter and _canonical_product_name(name) != normalized_filter:
                 continue
-            available = float(total or 0.0) - float(reserved or 0.0)
-            items.append(
+            key = str(product_id)
+            item = grouped.setdefault(
+                key,
                 {
+                    "product_id": key,
                     "product": str(name),
-                    "total_stock_kg": float(total or 0.0),
-                    "reserved_in_lots_kg": float(reserved or 0.0),
-                    "available_stock_kg": available,
-                    "threshold_kg": float(threshold or 0.0),
+                    "status": "stable",
+                    "stock_total_kg": 0.0,
+                    "sorties_vente_kg": 0.0,
+                    "pertes_kg": 0.0,
+                    "restant_kg": 0.0,
+                    "alloue_en_lot_kg": 0.0,
                     "unit": str(unit or "kg"),
-                    "is_low": available < float(threshold or 0.0),
+                    "threshold_kg": 0.0,
+                    "grades": {"A": 0.0, "B": 0.0, "C": 0.0},
+                    "grade_rows": [],
+                },
+            )
+            total_val = float(total or 0.0)
+            reserved_val = float(reserved or 0.0)
+            available = max(total_val - reserved_val, 0.0)
+            processed_val = float(processed_output or 0.0)
+            threshold_val = float(threshold or 0.0)
+            grade_label = str(grade or "Non spécifié")
+
+            item["stock_total_kg"] += total_val
+            item["sorties_vente_kg"] += processed_val
+            item["restant_kg"] += available
+            item["alloue_en_lot_kg"] += reserved_val
+            item["threshold_kg"] += threshold_val
+            if grade_label in {"A", "B", "C"}:
+                item["grades"][grade_label] += available
+            item["grade_rows"].append(
+                {
+                    "grade": grade_label,
+                    "total_stock_kg": total_val,
+                    "available_stock_kg": available,
+                    "reserved_in_lots_kg": reserved_val,
+                    "processed_output_kg": processed_val,
                 }
             )
+
+        items: list[dict[str, Any]] = []
+        for data in grouped.values():
+            data["available_stock_kg"] = float(data["restant_kg"])
+            data["total_stock_kg"] = float(data["stock_total_kg"])
+            data["reserved_in_lots_kg"] = float(data["alloue_en_lot_kg"])
+            data["is_low"] = float(data["restant_kg"]) < float(data["threshold_kg"])
+            data["status"] = "critical" if data["is_low"] else "stable"
+            items.append(data)
+        items.sort(key=lambda row: str(row.get("product") or "").lower())
+
+        warnings = []
+        if normalized_filter and not items:
+            warnings.append("NO_SQL_DATA")
+        elif not items:
+            warnings.append("NO_SQL_DATA")
+        if product and not filter_is_valid:
+            warnings.append("PRODUCT_FILTER_IGNORED")
+
         return {
             "items": items,
             "sources": [
                 {
                     "type": "sql",
-                    "table": "stocks",
+                    "table": "stocks,products",
                     "label": "Stocks courants par produit",
                     "record_count": len(items),
                     "related_product": product,
                 }
             ],
-            "warnings": ["NO_SQL_DATA"] if not items else [],
+            "warnings": warnings,
         }
 
     def get_available_postharvest_lots(self, product: str | None = None) -> dict[str, Any]:
@@ -619,6 +684,154 @@ class SQLTools:
                 }
             ],
             "warnings": sorted(set(warnings)),
+        }
+
+    def get_canonical_material_balance(self, batch_ref: str | None = None, product: str | None = None) -> dict[str, Any]:
+        """Canonical material-balance source for loss/gap/efficiency facts."""
+        postharvest = self.get_postharvest_material_balance(batch_ref=batch_ref, product=product)
+        rows = postharvest.get("items", []) or []
+        canonical: list[dict[str, Any]] = []
+        for row in rows:
+            input_qty = row.get("input_quantity")
+            output_qty = row.get("output_quantity")
+            input_val = float(input_qty or 0.0) if input_qty is not None else 0.0
+            output_val = float(output_qty or 0.0) if output_qty is not None else 0.0
+            gap = input_val - output_val if input_qty is not None and output_qty is not None else None
+            canonical.append(
+                {
+                    "batch_id": row.get("batch_id"),
+                    "batch_ref": row.get("batch_ref"),
+                    "product": row.get("product"),
+                    "input_qty": input_qty,
+                    "output_qty": output_qty,
+                    "gap_qty": gap,
+                    "loss_pct": row.get("loss_percentage"),
+                    "efficiency_pct": row.get("efficiency_percentage"),
+                    "source_tables": ["process_steps", "batches"],
+                    "validity_status": "VALID" if bool(row.get("is_consistent")) else str(row.get("consistency_issue") or "INVALID"),
+                }
+            )
+        return {
+            "items": canonical,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "process_steps,batches",
+                    "label": "Bilan matière canonique",
+                    "record_count": len(canonical),
+                    "related_batch": batch_ref,
+                    "related_product": product,
+                }
+            ],
+            "warnings": list(postharvest.get("warnings", [])),
+        }
+
+    def get_canonical_material_balance_for_lots(self, batch_refs: list[str]) -> dict[str, Any]:
+        refs = {str(item or "").strip().upper() for item in (batch_refs or []) if str(item or "").strip()}
+        base = self.get_canonical_material_balance(batch_ref=None, product=None)
+        rows = [row for row in (base.get("items") or []) if str(row.get("batch_ref") or "").strip().upper() in refs]
+        warnings = list(base.get("warnings", []))
+        if refs and not rows:
+            warnings.append("NO_SQL_DATA")
+        return {
+            "items": rows,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "process_steps,batches",
+                    "label": "Bilan matière canonique (comparaison lots)",
+                    "record_count": len(rows),
+                    "related_batches": sorted(refs),
+                }
+            ],
+            "warnings": sorted(set(warnings)),
+        }
+
+    def get_stage_loss_analysis(
+        self,
+        *,
+        batch_ref: str | None = None,
+        product: str | None = None,
+        stage: str | None = None,
+    ) -> dict[str, Any]:
+        rows = self.get_postharvest_process_step_losses(batch_ref=batch_ref, product=product, stage=stage).get("items", [])
+        if batch_ref:
+            items = []
+            for row in rows:
+                q_in = float(row.get("qty_in", 0.0) or 0.0)
+                q_out = float(row.get("qty_out", 0.0) or 0.0)
+                items.append(
+                    {
+                        "batch_ref": row.get("batch_ref"),
+                        "product": row.get("product"),
+                        "stage_name": row.get("stage"),
+                        "input_qty": q_in,
+                        "output_qty": q_out,
+                        "gap_qty": q_in - q_out,
+                        "loss_pct": float(row.get("loss_pct", 0.0) or 0.0),
+                        "efficiency_pct": float(row.get("efficiency_pct", 0.0) or 0.0),
+                        "validity_status": "VALID" if q_in >= q_out else "INVALID_OUTPUT_GT_INPUT",
+                        "source_tables": ["process_steps", "batches"],
+                    }
+                )
+            items.sort(key=lambda item: float(item.get("loss_pct", 0.0) or 0.0), reverse=True)
+        else:
+            buckets: dict[str, dict[str, float | int | str]] = {}
+            for row in rows:
+                stage_name = str(row.get("stage") or "").strip() or "N/A"
+                q_in = float(row.get("qty_in", 0.0) or 0.0)
+                q_out = float(row.get("qty_out", 0.0) or 0.0)
+                bucket = buckets.setdefault(
+                    stage_name,
+                    {
+                        "input_qty": 0.0,
+                        "output_qty": 0.0,
+                        "loss_pct_sum": 0.0,
+                        "efficiency_pct_sum": 0.0,
+                        "count": 0,
+                    },
+                )
+                bucket["input_qty"] = float(bucket["input_qty"] or 0.0) + q_in
+                bucket["output_qty"] = float(bucket["output_qty"] or 0.0) + q_out
+                bucket["loss_pct_sum"] = float(bucket["loss_pct_sum"] or 0.0) + float(row.get("loss_pct", 0.0) or 0.0)
+                bucket["efficiency_pct_sum"] = float(bucket["efficiency_pct_sum"] or 0.0) + float(row.get("efficiency_pct", 0.0) or 0.0)
+                bucket["count"] = int(bucket["count"] or 0) + 1
+            items = []
+            for stage_name, bucket in buckets.items():
+                count = int(bucket["count"] or 0)
+                if count <= 0:
+                    continue
+                input_qty = float(bucket["input_qty"] or 0.0)
+                output_qty = float(bucket["output_qty"] or 0.0)
+                items.append(
+                    {
+                        "batch_ref": None,
+                        "product": product or "global",
+                        "stage_name": stage_name,
+                        "input_qty": input_qty,
+                        "output_qty": output_qty,
+                        "gap_qty": input_qty - output_qty,
+                        "loss_pct": float(bucket["loss_pct_sum"] or 0.0) / count,
+                        "efficiency_pct": float(bucket["efficiency_pct_sum"] or 0.0) / count,
+                        "validity_status": "VALID",
+                        "source_tables": ["process_steps", "batches"],
+                    }
+                )
+            items.sort(key=lambda item: float(item.get("efficiency_pct", 100.0) or 100.0))
+        return {
+            "items": items,
+            "sources": [
+                {
+                    "type": "sql",
+                    "table": "process_steps,batches",
+                    "label": "Analyse pertes/efficacité par étape",
+                    "record_count": len(items),
+                    "related_batch": batch_ref,
+                    "related_stage": stage,
+                    "related_product": product,
+                }
+            ],
+            "warnings": ["NO_SQL_DATA"] if not items else [],
         }
 
     def get_postharvest_batch_summary(self, batch_ref: str | None = None, product: str | None = None) -> dict[str, Any]:

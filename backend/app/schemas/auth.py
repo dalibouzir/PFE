@@ -25,5 +25,8 @@ class AuthUserResponse(ORMModel):
     role: str
     status: str
     cooperative_id: Optional[UUID]
+    cooperative_name: Optional[str] = None
+    institution_id: Optional[UUID] = None
+    institution_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime

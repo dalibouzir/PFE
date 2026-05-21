@@ -14,11 +14,11 @@ def test_recommendation_with_sql_evidence_passes():
         query="Que recommandes-tu pour réduire les pertes ?",
         sql_results={
             "data": {
-                "batch_summary": [
-                    {"batch_ref": "MANG-004", "product": "mango", "loss_pct": 14.2, "efficiency_pct": 81.0, "critical_stage": "drying"}
+                "material_balance": [
+                    {"batch_ref": "MANG-004", "product": "mango", "loss_pct": 14.2, "efficiency_pct": 81.0}
                 ]
             },
-            "sources": [{"type": "sql", "table": "batches", "label": "batch summary"}],
+            "sources": [{"type": "sql", "table": "process_steps,batches", "label": "canonical material balance"}],
         },
         rag_results=[],
         ml_results={},
@@ -63,8 +63,8 @@ def test_rule_evidence_requires_triggering_fact():
     recs = tools.build_recommendations(
         query="Que faire ?",
         sql_results={
-            "data": {"batch_summary": [{"batch_ref": "MANG-004", "product": "mango", "loss_pct": 13.0, "efficiency_pct": 82.0}]},
-            "sources": [{"type": "sql", "table": "batches", "label": "batch summary"}],
+            "data": {"material_balance": [{"batch_ref": "MANG-004", "product": "mango", "loss_pct": 13.0, "efficiency_pct": 82.0}]},
+            "sources": [{"type": "sql", "table": "process_steps,batches", "label": "canonical material balance"}],
         },
         rag_results=[],
         ml_results={},
@@ -133,13 +133,34 @@ def test_lot_specific_recommendation_not_global_scope():
     tools = RecommendationTools(db=None, current_user=None)
     recs = tools.build_recommendations(
         query="Actions pour le lot MANG-004",
-        sql_results={"data": {"batch_summary": [{"batch_ref": "MANG-004", "product": "mango", "loss_pct": 13.0, "efficiency_pct": 80.0}]}, "sources": []},
+        sql_results={"data": {"material_balance": [{"batch_ref": "MANG-004", "product": "mango", "loss_pct": 13.0, "efficiency_pct": 80.0}]}, "sources": []},
         rag_results=[],
         ml_results={},
         detected_entities={"batch_ref": "MANG-004", "scope": "batch", "module": "recommendations"},
     )
     assert recs
     assert all(str(rec.get("scope")) != "GLOBAL_COOPERATIVE" for rec in recs)
+
+
+def test_recommendation_uses_canonical_loss_value_for_same_lot():
+    tools = RecommendationTools(db=None, current_user=None)
+    recs = tools.build_recommendations(
+        query="Et pour ce lot, quelles actions appliquer ?",
+        sql_results={
+            "data": {
+                "material_balance": [{"batch_ref": "LOT-MILX-001", "product": "mil", "loss_pct": 74.1, "efficiency_pct": 25.9}],
+                "batch_summary": [{"batch_ref": "LOT-MILX-001", "product": "mil", "loss_pct": 83.3, "efficiency_pct": 16.7}],
+            },
+            "sources": [],
+        },
+        rag_results=[],
+        ml_results={},
+        detected_entities={"batch_ref": "LOT-MILX-001", "scope": "batch", "module": "recommendations"},
+    )
+    sql_refs = [ref for rec in recs for ref in (rec.get("evidence_refs") or []) if isinstance(ref, dict) and ref.get("type") == "SQL"]
+    assert sql_refs
+    assert any(abs(float(ref.get("metric_value", 0.0) or 0.0) - 74.1) < 0.01 for ref in sql_refs)
+    assert all(abs(float(ref.get("metric_value", 0.0) or 0.0) - 83.3) > 0.01 for ref in sql_refs)
 
 
 def test_global_recommendation_declares_global_scope(monkeypatch):

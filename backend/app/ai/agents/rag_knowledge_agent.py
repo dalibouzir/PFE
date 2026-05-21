@@ -19,16 +19,22 @@ class RAGKnowledgeAgent(BaseAgent):
         start = time.perf_counter()
         payload = self.rag_tools.search(query=query, detected_entities=context.detected_entities, top_k=5)
         chunks = payload.get("formatted_chunks", [])
+        assessed = payload.get("all_chunks_assessed", []) or []
+        strong_or_partial = [
+            item
+            for item in assessed
+            if isinstance(item, dict) and str(item.get("quality_status") or "") in {"STRONG", "PARTIAL"}
+        ]
         if not chunks:
             raw_chunks = payload.get("chunks", []) or []
             for chunk in raw_chunks[:3]:
-                content = str((chunk or {}).get("content") or "").strip()
+                content = str((chunk or {}).get("sanitized_summary") or (chunk or {}).get("content_excerpt") or "").strip()
                 if not content:
                     continue
                 title = str((chunk or {}).get("title") or "Source")
                 chunks.append(f"[Source: {title}]\n{content}")
         warnings = payload.get("warnings", [])
-        if "ADVICE_KNOWLEDGE_MISSING" in warnings:
+        if "ADVICE_KNOWLEDGE_MISSING" in warnings or "RAG_QUALITY_INSUFFICIENT" in warnings:
             answer = "Le contexte documentaire disponible est insuffisant pour répondre précisément avec des bonnes pratiques fiables."
             return AgentResult(
                 agent_name=self.name,
@@ -38,6 +44,7 @@ class RAGKnowledgeAgent(BaseAgent):
                     "rewrite": payload.get("rewrite"),
                     "filters": payload.get("filters"),
                     "chunks": payload.get("chunks", []),
+                    "evidence_items": assessed,
                     "weak_retrieval": payload.get("weak_retrieval", False),
                 },
                 sources=payload.get("sources", []),
@@ -46,7 +53,7 @@ class RAGKnowledgeAgent(BaseAgent):
                 execution_time_ms=int((time.perf_counter() - start) * 1000),
             )
 
-        if not chunks:
+        if not chunks or not strong_or_partial:
             answer = (
                 "RAG indisponible actuellement: aucun chunk indexé n’est disponible pour cette coopérative. "
                 "Les réponses peuvent seulement s’appuyer sur SQL/ML/recommandations."
@@ -54,8 +61,13 @@ class RAGKnowledgeAgent(BaseAgent):
             confidence = 0.35
             warnings = sorted(set([*warnings, "NO_RAG_RESULTS"]))
         else:
-            answer = _compose_practical_advice(raw_query=query, chunks=payload.get("chunks", []), weak_retrieval="WEAK_RETRIEVAL" in warnings)
-            confidence = 0.82 if "WEAK_RETRIEVAL" not in warnings else 0.55
+            answer = _compose_practical_advice(
+                raw_query=query,
+                chunks=strong_or_partial,
+                weak_retrieval="WEAK_RETRIEVAL" in warnings or any(str(item.get("quality_status")) == "PARTIAL" for item in strong_or_partial),
+            )
+            has_strong = any(str(item.get("quality_status")) == "STRONG" for item in strong_or_partial)
+            confidence = 0.82 if has_strong and "WEAK_RETRIEVAL" not in warnings else 0.55
 
         return AgentResult(
             agent_name=self.name,
@@ -65,6 +77,7 @@ class RAGKnowledgeAgent(BaseAgent):
                 "rewrite": payload.get("rewrite"),
                 "filters": payload.get("filters"),
                 "chunks": payload.get("chunks", []),
+                "evidence_items": assessed,
                 "weak_retrieval": payload.get("weak_retrieval", False),
             },
             sources=payload.get("sources", []),
@@ -112,7 +125,7 @@ def _extract_practices(chunks: list[dict], *, limit: int) -> list[str]:
     candidates: list[str] = []
     seen: set[str] = set()
     for chunk in chunks[:5]:
-        content = str((chunk or {}).get("content") or "")
+        content = str((chunk or {}).get("sanitized_summary") or (chunk or {}).get("content_excerpt") or (chunk or {}).get("content") or "")
         for sentence in re.split(r"[.\n;]", content):
             line = " ".join(sentence.strip().split())
             if len(line) < 24 or len(line) > 180:
@@ -133,7 +146,7 @@ def _extract_practices(chunks: list[dict], *, limit: int) -> list[str]:
 
 def _extract_vigilance(chunks: list[dict]) -> str | None:
     for chunk in chunks[:4]:
-        content = str((chunk or {}).get("content") or "").lower()
+        content = str((chunk or {}).get("sanitized_summary") or (chunk or {}).get("content_excerpt") or (chunk or {}).get("content") or "").lower()
         if "humidit" in content:
             return "Le principal risque est la reprise d’humidité après séchage et pendant stockage."
         if "casse" in content:

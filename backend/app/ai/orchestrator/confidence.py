@@ -56,6 +56,8 @@ def compute_final_confidence(
     # Keep confidence constrained when critical contradictions remain.
     if contradiction:
         final_score = min(final_score, 0.55)
+    if _has_unmapped_sql_operation(agent_results):
+        final_score = min(final_score, 0.3)
     return max(0.0, min(1.0, final_score))
 
 
@@ -120,9 +122,26 @@ def _rec_has_refs(item: dict) -> bool:
     refs = item.get("evidence_refs") if isinstance(item, dict) else None
     if not isinstance(refs, list) or not refs:
         return False
-    return any(
-        isinstance(ref, dict)
-        and str(ref.get("type") or "").upper() in {"SQL", "RAG", "ML", "RULE"}
-        and str(ref.get("source_id") or "").strip()
-        for ref in refs
-    )
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        ref_type = str(ref.get("type") or "").upper()
+        if ref_type == "RAG" and str(ref.get("quality_status") or "").upper() in {"WEAK", "REJECTED"}:
+            continue
+        if ref_type in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
+            return True
+    return False
+
+
+def _has_unmapped_sql_operation(agent_results: list[AgentResult]) -> bool:
+    sql_result = next((item for item in agent_results if item.agent_name == "SQLAnalyticsAgent"), None)
+    if not sql_result:
+        return False
+    if "UNMAPPED_SQL_OPERATION" in (sql_result.warnings or []):
+        return True
+    if not isinstance(sql_result.data, dict):
+        return False
+    trace = sql_result.data.get("sql_dispatch_trace") or {}
+    if trace and not str(trace.get("sql_operation") or "").strip():
+        return True
+    return False

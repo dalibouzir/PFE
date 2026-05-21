@@ -17,6 +17,8 @@ from app.models.recommendation import Recommendation
 from app.models.stock import Stock
 from app.models.user import User
 
+POST_HARVEST_STAGES = {"cleaning", "drying", "sorting", "packaging"}
+
 
 class RecommendationTools:
     def __init__(self, db: Session | None = None, current_user: User | None = None):
@@ -46,9 +48,21 @@ class RecommendationTools:
         snapshot = self._build_snapshot() if use_global_snapshot else {}
         scope_label = "GLOBAL_COOPERATIVE" if use_global_snapshot else "ACTIVE_QUERY"
 
-        batch_rows = []
+        batch_rows: list[dict[str, Any]] = []
         if isinstance(sql_payload, dict):
-            batch_rows = [row for row in (sql_payload.get("batch_summary") or []) if isinstance(row, dict)]
+            canonical_rows = [row for row in (sql_payload.get("material_balance") or []) if isinstance(row, dict)]
+            if canonical_rows:
+                batch_rows = [
+                    {
+                        "batch_ref": row.get("batch_ref"),
+                        "product": row.get("product"),
+                        "loss_pct": float(row.get("loss_pct", row.get("loss_percentage", 0.0)) or 0.0),
+                        "efficiency_pct": float(row.get("efficiency_pct", row.get("efficiency_percentage", 0.0)) or 0.0),
+                    }
+                    for row in canonical_rows
+                ]
+            else:
+                batch_rows = [row for row in (sql_payload.get("batch_summary") or []) if isinstance(row, dict)]
         if batch_ref:
             batch_rows = [row for row in batch_rows if str(row.get("batch_ref") or row.get("lot_code") or "").upper() == str(batch_ref).upper()] or batch_rows
         if product:
@@ -202,8 +216,8 @@ class RecommendationTools:
                 top = global_rows[0]
                 gref = _sql_evidence_ref(
                     label="SQL global lot risk snapshot",
-                    short_fact=f"Global coop: lot {top.get('batch_ref')} perte {float(top.get('loss_pct', 0.0) or 0.0):.1f}%",
-                    table="batches",
+                    short_fact=f"Global coop: lot {top.get('batch_ref')} perte {float(top.get('loss_pct', 0.0) or 0.0):.1f}% (source canonique)",
+                    table="process_steps,batches",
                     batch_ref=top.get("batch_ref"),
                     product=top.get("product"),
                     metric_name="loss_pct",
@@ -241,25 +255,40 @@ class RecommendationTools:
 
         cooperative_id = self.current_user.cooperative_id
 
-        # Batches risk/efficiency
-        batch_rows = self.db.execute(
-            select(Batch.code, Product.name, Batch.initial_qty, Batch.current_qty)
+        # Canonical batch risk/efficiency from process_steps + batches.
+        step_rows = self.db.execute(
+            select(Batch.code, Product.name, ProcessStep.type, ProcessStep.qty_in, ProcessStep.qty_out, ProcessStep.date, ProcessStep.sequence_order)
+            .join(ProcessStep, ProcessStep.batch_id == Batch.id)
             .join(Product, Product.id == Batch.product_id)
             .where(Batch.cooperative_id == cooperative_id)
-            .order_by(Batch.creation_date.desc())
+            .order_by(Batch.code.asc(), ProcessStep.date.asc(), ProcessStep.sequence_order.asc())
         ).all()
-        lot_metrics: list[dict[str, Any]] = []
-        for code, product_name, initial_qty, current_qty in batch_rows:
-            initial = float(initial_qty or 0.0)
-            current = float(current_qty or 0.0)
-            if initial <= 0:
+        grouped: dict[str, dict[str, Any]] = {}
+        for code, product_name, step_type, qty_in, qty_out, _, _ in step_rows:
+            batch_key = str(code or "").strip()
+            if not batch_key:
                 continue
-            loss_pct = ((initial - current) / initial) * 100.0
-            eff_pct = (current / initial) * 100.0
+            stage = str(step_type or "").strip().lower()
+            if stage not in POST_HARVEST_STAGES:
+                continue
+            entry = grouped.setdefault(batch_key, {"product": str(product_name or ""), "steps": []})
+            entry["steps"].append({"qty_in": float(qty_in or 0.0), "qty_out": float(qty_out or 0.0), "stage": stage})
+
+        lot_metrics: list[dict[str, Any]] = []
+        for code, data in grouped.items():
+            steps = data.get("steps") or []
+            if not steps:
+                continue
+            input_qty = float(steps[0].get("qty_in", 0.0) or 0.0)
+            output_qty = float(steps[-1].get("qty_out", 0.0) or 0.0)
+            if input_qty <= 0 or output_qty > input_qty:
+                continue
+            loss_pct = ((input_qty - output_qty) / input_qty) * 100.0
+            eff_pct = (output_qty / input_qty) * 100.0
             lot_metrics.append(
                 {
-                    "batch_ref": str(code),
-                    "product": str(product_name),
+                    "batch_ref": code,
+                    "product": data.get("product"),
                     "loss_pct": loss_pct,
                     "efficiency_pct": eff_pct,
                     "critical_stage": "séchage" if loss_pct >= 12.0 else None,
@@ -276,13 +305,13 @@ class RecommendationTools:
         )[:5]
 
         # Process stages with highest average loss
-        step_rows = self.db.execute(
+        step_rows_agg = self.db.execute(
             select(ProcessStep.type, ProcessStep.qty_in, ProcessStep.qty_out)
             .join(Batch, Batch.id == ProcessStep.batch_id)
             .where(Batch.cooperative_id == cooperative_id)
         ).all()
         stage_buckets: dict[str, dict[str, float]] = {}
-        for step_type, qty_in, qty_out in step_rows:
+        for step_type, qty_in, qty_out in step_rows_agg:
             q_in = float(qty_in or 0.0)
             q_out = float(qty_out or 0.0)
             if q_in <= 0:

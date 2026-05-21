@@ -1189,6 +1189,27 @@ def _contract_route_decision(
     previous_entities: dict,
     previous_module_hint: str | None,
 ) -> IntentRouteDecision | None:
+    reset_context = any(
+        token in lowered
+        for token in (
+            "oublie ce lot",
+            "oublier ce lot",
+            "ignore ce lot",
+            "ignore ce lot",
+            "change de sujet",
+            "changeons de sujet",
+            "maintenant parle-moi seulement de",
+            "maintenant parle moi seulement de",
+            "seulement le stock de",
+            "on passe au stock de",
+        )
+    )
+    if reset_context:
+        entities.pop("batch_ref", None)
+        entities.pop("batch_ref_candidate", None)
+        entities["specific_batch_requested"] = False
+        entities["scope"] = "global"
+
     has_batch = bool(entities.get("batch_ref"))
     has_operational_anchor = has_batch or bool(entities.get("product")) or bool(entities.get("stage"))
     asks_current_scope = any(
@@ -1203,6 +1224,8 @@ def _contract_route_decision(
             "quelle action",
             "actions à appliquer",
             "actions a appliquer",
+            "actions concretes",
+            "actions concrètes",
             "plan d'action",
             "plan d action",
             "on fait quoi",
@@ -1224,6 +1247,14 @@ def _contract_route_decision(
             "bonnes pratiques",
             "meilleures pratiques",
             "best practices",
+            "erreurs à éviter",
+            "erreurs a eviter",
+            "faut-il éviter",
+            "faut il eviter",
+            "checklist",
+            "check-list",
+            "précautions",
+            "precautions",
             "avant l'emballage",
             "avant emballage",
             "procedure",
@@ -1236,26 +1267,159 @@ def _contract_route_decision(
             "comment reduire",
         )
     )
-    asks_loss = any(token in lowered for token in ("perte", "pertes", "loss", "efficacite", "efficacité", "efficac", "rendement", "penalis", "pénalis"))
+    asks_loss = any(
+        token in lowered
+        for token in ("perte", "pertes", "loss", "efficacite", "efficacité", "efficac", "rendement", "penalis", "pénalis", "perdu", "perdus")
+    )
     asks_gap = bool(
         re.search(r"\b(ecarts?|écarts?|gap|difference)\b.*\b(entree|entrée|input)\b.*\b(sortie|output)\b", lowered)
         or re.search(r"\b(entree|entrée|input)\b.*\b(sortie|output)\b", lowered)
         or "écart matière" in lowered
         or "ecart matiere" in lowered
+        or "différence entrée sortie" in lowered
+        or "difference entree sortie" in lowered
+        or re.search(r"\b(quantite|quantité)\s+perdu", lowered)
+        or re.search(r"\bperdu\s+le\s+plus\s+de\s+(quantite|quantité)\b", lowered)
+        or re.search(r"\bplus\s+de\s+(quantite|quantité)\s+perdue?\b", lowered)
+        or re.search(r"\bperte\s+en\s+kg\b", lowered)
+        or re.search(r"\becart\s+de\s+matiere\b", lowered)
+        or re.search(r"\bécart\s+de\s+matière\b", lowered)
+        or re.search(r"\brange\s+les\s+lots\s+selon\s+la\s+quantite\s+perdue\b", lowered)
+        or re.search(r"\bclasse\s+les\s+lots\s+par\s+(ecart|écart|difference|différence)\b", lowered)
+    )
+    asks_gap_by_qty = asks_gap and any(
+        token in lowered
+        for token in (
+            "kg",
+            "quantite",
+            "quantité",
+            "matiere",
+            "matière",
+            "ecart",
+            "écart",
+            "difference entree sortie",
+            "différence entrée sortie",
+        )
     )
     asks_available_lots = any(
         token in lowered
-        for token in ("lots disponibles", "lots post-récolte", "lots post recolte", "post-harvest lots", "postharvest lots", "lots enregistres", "lots enregistrés")
-    )
-    asks_stock = "stock" in lowered or ("inventaire" in lowered)
-    asks_preharvest = any(token in lowered for token in ("pré-récolte", "pre-recolte", "pre-harvest", "parcelle", "parcelles", "lifecycle"))
-    asks_ranking = any(token in lowered for token in ("plus élev", "plus eleve", "plus grand", "top", "classement", "ranking", "worst", "pire", "moins"))
-
-    referential_followup = (bool(previous_entities) or bool(previous_module_hint)) and (
-        bool(FOLLOWUP_REFERENCE_PATTERN.search(lowered)) or any(
-        token in lowered for token in ("same product", "meme produit", "même produit", "ce lot", "celui-ci", "celui ci", "et pour le meme produit", "et pour le même produit")
+        for token in (
+            "lots disponibles",
+            "lots post-récolte",
+            "lots post recolte",
+            "post-harvest lots",
+            "postharvest lots",
+            "lots enregistres",
+            "lots enregistrés",
+            "lots prêts pour post-récolte",
+            "lots prets pour post-recolte",
+            "lots utilisables pour transformation",
+            "lots encore utilisables pour lancer une transformation",
+            "lots prêts à transformer",
+            "lots prets a transformer",
+            "lots disponibles à traiter",
+            "lots disponibles a traiter",
+            "lots prets a traiter",
+            "lots prêts à traiter",
+            "quantité restante pour transformation",
+            "quantite restante pour transformation",
+            "lancer une transformation",
+            "prêts pour la post-récolte",
+            "prets pour la post-recolte",
+            "utilisables",
+            "transformer",
         )
     )
+    asks_available_lots = asks_available_lots or bool(
+        re.search(r"\blots?\b.*\b(pret|prêt|prets|prêts|utilisable|disponible)\b.*\b(trait|transform)\w*", lowered)
+    )
+    asks_low_remaining_qty = bool(
+        re.search(r"\b(peu|faible|petite)\b.{0,24}\b(quantite|quantité|restante?|reste)\b", lowered)
+        or ("quantite restante" in lowered)
+        or ("quantité restante" in lowered)
+    )
+    if asks_available_lots and asks_low_remaining_qty:
+        entities["sort_by"] = "current_qty"
+        entities["sort_order"] = "asc"
+    asks_stock = "stock" in lowered or ("inventaire" in lowered)
+    asks_preharvest = any(token in lowered for token in ("pré-récolte", "pre-recolte", "pre-harvest", "parcelle", "parcelles", "lifecycle"))
+    asks_ranking = any(
+        token in lowered
+        for token in (
+            "plus élev",
+            "plus eleve",
+            "plus fortes",
+            "plus fort",
+            "plus grand",
+            "top",
+            "classement",
+            "classe ",
+            "ranking",
+            "worst",
+            "pire",
+            "moins",
+            "pourcentage",
+            "taux de perte",
+        )
+    )
+    explicit_loss_analytics = asks_loss or asks_gap or any(
+        token in lowered for token in ("classement par perte", "taux de perte", "rendement", "efficacité", "efficacite")
+    )
+    explicit_no_loss = any(
+        token in lowered for token in ("sans parler des pertes", "sans analyse de perte", "sans perte", "pas les pertes", "pas de pertes")
+    )
+    asks_stage_loss = any(
+        token in lowered
+        for token in (
+            "a quelle etape",
+            "à quelle étape",
+            "quelle etape",
+            "quelle étape",
+            "etape perd le plus",
+            "étape perd le plus",
+            "plus mauvaise efficacite",
+            "plus mauvaise efficacité",
+            "pire efficacite",
+            "pire efficacité",
+            "process-step",
+            "process step",
+        )
+    ) and any(token in lowered for token in ("etape", "étape", "tri", "sechage", "séchage", "nettoyage", "emballage", "conditionnement"))
+    asks_lot_comparison = (
+        any(token in lowered for token in ("compare", "compar", "versus", " vs ", "entre "))
+        and len(re.findall(r"\b(?:LOT|BATCH|MANG|MANGO|ARA|ARACH|MIL|BISS)[-_][A-Z0-9][A-Z0-9\-_]*\b", lowered, flags=re.IGNORECASE)) >= 2
+    )
+    asks_lot_specific_recommendation = asks_recommendation and (
+        has_batch
+        or "pour ce lot" in lowered
+        or bool(re.search(r"\b(?:lot|batch)[-_][a-z0-9][a-z0-9\-_]*\b", lowered))
+    )
+    asks_advisory_loss_process = (
+        any(
+            token in lowered
+            for token in (
+                "comment reduire les pertes",
+                "comment réduire les pertes",
+                "comment ameliorer le rendement",
+                "comment améliorer le rendement",
+                "que faire pour limiter les pertes",
+                "pourquoi les pertes sont elevees",
+                "pourquoi les pertes sont élevées",
+                "conseils pour reduire les pertes",
+                "conseils pour réduire les pertes",
+            )
+        )
+        and any(token in lowered for token in ("sechage", "séchage", "tri", "emballage", "post-recolte", "post-récolte"))
+    )
+
+    referential_marker = bool(FOLLOWUP_REFERENCE_PATTERN.search(lowered)) or any(
+        token in lowered for token in ("same product", "meme produit", "même produit", "ce lot", "celui-ci", "celui ci", "et pour le meme produit", "et pour le même produit")
+    )
+    referential_followup = ((bool(previous_entities) or bool(previous_module_hint)) and referential_marker) or (
+        referential_marker and asks_recommendation
+    )
+    if reset_context:
+        referential_followup = False
     if referential_followup:
         safe_to_reuse = not (
             (entities.get("product") and previous_entities.get("product") and entities.get("product") != previous_entities.get("product"))
@@ -1290,37 +1454,70 @@ def _contract_route_decision(
             )
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Follow-up operational request.", 0.85)
 
+    if asks_lot_comparison and not asks_risk:
+        entities["intent_family"] = "LOT_COMPARISON"
+        entities["module"] = "material_balance"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Lot comparison on canonical material balance.", 0.92)
+
+    if asks_stage_loss and not asks_recommendation and not asks_risk:
+        entities["intent_family"] = "STAGE_LOSS_ANALYSIS"
+        entities["module"] = "post_harvest"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Stage/process loss analysis intent.", 0.91)
+
+    if asks_advisory_loss_process and not asks_risk:
+        entities["intent_family"] = "EXPLANATION_CAUSAL"
+        entities["module"] = "post_harvest"
+        return _decision(
+            AgentRoute.HYBRID_SQL_RAG,
+            entities,
+            ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
+            "Advisory loss/process question requires SQL grounding plus RAG advice.",
+            0.9,
+        )
+
     if asks_stock and not asks_best_practice and not asks_why and not asks_risk and not asks_recommendation:
         entities["intent_family"] = "STOCK_CURRENT"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Current stock intent.", 0.93)
 
-    if asks_available_lots and not asks_loss and not asks_gap and not asks_risk:
+    if asks_available_lots and (not explicit_loss_analytics or explicit_no_loss) and not asks_risk:
         entities["intent_family"] = "POSTHARVEST_AVAILABLE_LOTS"
         entities["module"] = "post_harvest"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Available post-harvest lots intent.", 0.93)
+
+    if asks_loss and asks_ranking and not asks_gap_by_qty and not asks_risk and not asks_recommendation and not asks_best_practice:
+        entities["intent_family"] = "LOSS_RANKING"
+        entities["module"] = "post_harvest"
+        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Loss/efficiency ranking intent.", 0.92)
 
     if asks_gap and not asks_risk:
         entities["intent_family"] = "INPUT_OUTPUT_GAP"
         entities["module"] = "material_balance"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Input-output gap intent.", 0.92)
 
-    if asks_loss and asks_ranking and not asks_risk and not asks_recommendation and not asks_best_practice:
-        entities["intent_family"] = "LOSS_RANKING"
-        entities["module"] = "post_harvest"
-        return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Loss/efficiency ranking intent.", 0.92)
-
     if asks_preharvest and not asks_risk and not asks_recommendation:
         entities["intent_family"] = "PREHARVEST_STEPS"
         entities["module"] = "pre_harvest"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Pre-harvest lifecycle intent.", 0.9)
 
-    if asks_best_practice and not asks_risk and not asks_recommendation and not asks_current_scope and not asks_loss and not asks_stock:
+    if asks_best_practice and not asks_risk and not asks_recommendation and not explicit_loss_analytics:
         entities["intent_family"] = "BEST_PRACTICES"
+        if asks_current_scope or has_batch:
+            return _decision(AgentRoute.HYBRID_SQL_RAG, entities, ["SQLAnalyticsAgent", "RAGKnowledgeAgent"], "Advice with current operational scope.", 0.88)
         return _decision(AgentRoute.RAG_ONLY, entities, ["RAGKnowledgeAgent"], "General best-practices intent.", 0.9)
 
     if asks_risk:
         entities["intent_family"] = "RISK_ANALYSIS"
         return _decision(AgentRoute.HYBRID_SQL_ML, entities, ["SQLAnalyticsAgent", "MLLossAgent"], "Risk/anomaly intent.", 0.92)
+
+    if asks_lot_specific_recommendation:
+        entities["intent_family"] = "LOT_SPECIFIC_RECOMMENDATION"
+        return _decision(
+            AgentRoute.HYBRID_FULL,
+            entities,
+            ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
+            "Lot-specific recommendation intent.",
+            0.9,
+        )
 
     if asks_recommendation:
         entities["intent_family"] = "RECOMMENDATION"

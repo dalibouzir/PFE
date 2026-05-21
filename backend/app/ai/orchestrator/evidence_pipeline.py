@@ -553,89 +553,230 @@ def _build_llm_grounding_prompt(pack: EvidencePack, sql_payload: dict[str, Any])
     return "\n".join(lines)
 
 
-def _validate_llm_answer(answer: str, pack: EvidencePack, sql_payload: dict[str, Any]) -> list[str]:
-    """Validate LLM answer for hallucinations."""
+def _validate_llm_summary(
+    answer: str,
+    *,
+    pack: EvidencePack,
+    sql_payload: dict[str, Any],
+    deterministic_summary: str,
+    limitations: list[str] | None = None,
+) -> list[str]:
+    """Validate LLM-polished summary for hallucinations/regressions."""
     issues = []
     # Check for raw RAG headers only
     if "agronomic knowledge reference" in answer.lower():
         issues.append("RAW_RAG_HEADER")
+    if any(token in answer.lower() for token in ("source:", "topic:", "ref-know", "chunk_id", "document_id")):
+        issues.append("RAW_SOURCE_MARKERS")
     locked_count = len([item for item in (pack.recommendations.get("actions") or []) if isinstance(item, dict)])
     if locked_count > 0:
         bullets = [line for line in str(answer or "").splitlines() if line.strip().startswith("-")]
         if len(bullets) > locked_count + 1:
             issues.append("LLM_ADDED_EXTRA_RECOMMENDATIONS")
+    # Keep numeric and identifier integrity for manager-facing summaries.
+    expected_numbers = set(re.findall(r"\d+(?:[.,]\d+)?", deterministic_summary))
+    got_numbers = set(re.findall(r"\d+(?:[.,]\d+)?", str(answer or "")))
+    if expected_numbers and not expected_numbers.issubset(got_numbers):
+        issues.append("LLM_CHANGED_NUMBERS")
+    expected_lots = {token.upper() for token in re.findall(r"\bLOT[-A-Z0-9]+\b", deterministic_summary, flags=re.IGNORECASE)}
+    got_lots = {token.upper() for token in re.findall(r"\bLOT[-A-Z0-9]+\b", str(answer or ""), flags=re.IGNORECASE)}
+    if expected_lots and not expected_lots.issubset(got_lots):
+        issues.append("LLM_CHANGED_LOT_REFS")
+    expected_products = {
+        _fr_product(name)
+        for name in re.findall(
+            r"\b(?:mil|mangue|arachide|bissap|riz|ma[iï]s|mais|sorgho|ni[eé]b[eé])\b",
+            deterministic_summary,
+            flags=re.IGNORECASE,
+        )
+    }
+    if expected_products:
+        answer_low = str(answer or "").lower()
+        for product in expected_products:
+            if product and product.lower() not in answer_low:
+                issues.append("LLM_CHANGED_PRODUCT_NAMES")
+                break
+    if limitations:
+        lowered = str(answer or "").lower()
+        needs_limit = any("documentaire" in str(item).lower() or "insuffisant" in str(item).lower() for item in limitations)
+        if needs_limit and not any(token in lowered for token in ("limité", "insuffisant", "preuves disponibles")):
+            issues.append("LLM_DROPPED_LIMITATION")
     return issues
 
 
-def _compose_llm_answer(pack: EvidencePack, sql_payload: dict[str, Any]) -> str | None:
-    """Compose answer using Groq LLM with grounding."""
+def _validate_llm_answer(
+    answer: str,
+    pack: EvidencePack | None = None,
+    sql_payload: dict[str, Any] | None = None,
+    deterministic_summary: str | None = None,
+    limitations: list[str] | None = None,
+) -> list[str]:
+    """Backward-compatible alias for legacy tests/imports."""
+    pack = pack or EvidencePack(
+        question="",
+        plan=AnswerPlan(
+            module="global",
+            intent="factual_sql",
+            answer_type="analysis",
+            required_sources=[],
+            required_fields=[],
+            completeness_rules=[],
+            output_blocks_needed=[],
+            operation="generic",
+        ),
+        route=AgentRoute.SQL_ONLY,
+        sql={"tables_used": [], "rows": [], "metrics": {}, "calculations": {}, "payload": {}},
+        rag={"chunks": [], "titles": [], "content_snippets": [], "scores": [], "topics": []},
+        ml={},
+        recommendations={"actions": [], "insufficient_evidence": False},
+        warnings=[],
+        confidence=0.0,
+        module_registry={},
+    )
+    sql_payload = sql_payload or {}
+    deterministic_summary = deterministic_summary or str(answer or "")
+    return _validate_llm_summary(
+        answer,
+        pack=pack,
+        sql_payload=sql_payload,
+        deterministic_summary=deterministic_summary,
+        limitations=limitations,
+    )
+
+
+def _compose_llm_summary(
+    *,
+    pack: EvidencePack,
+    sql_payload: dict[str, Any],
+    deterministic_summary: str,
+    limitations: list[str] | None = None,
+) -> str | None:
+    """Compose manager-friendly opening summary using locked evidence only."""
     try:
         grounding = _build_llm_grounding_prompt(pack, sql_payload)
+        limitations_text = "\n".join(f"- {item}" for item in (limitations or [])[:3]) or "- aucune"
         client = get_llm_client()
         messages = [
-            {"role": "system", "content": "Tu es un assistant spécialisé en gestion agricole. Réponds UNIQUEMENT sur la base des données fournies. Pas d'invention de nombres, produits, lots ou étapes. Si information manque, dis-le clairement. Sois concis et pratique."},
-            {"role": "user", "content": grounding},
+            {
+                "role": "system",
+                "content": (
+                    "Tu écris uniquement un résumé d'ouverture pour un manager de coopérative, en français naturel. "
+                    "Ne change aucun chiffre, unité, nom de produit, référence de lot, pourcentage ou action verrouillée. "
+                    "N'ajoute aucune recommandation non présente. Une seule phrase ou deux phrases courtes maximum."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"{grounding}\n\nRésumé déterministe:\n{deterministic_summary}\n\n"
+                    f"Limites à préserver si pertinentes:\n{limitations_text}\n\n"
+                    "Réécris seulement le résumé d'ouverture en style manager."
+                ),
+            },
         ]
         response = client.chat(messages)
-        llm_answer = response.content.strip()
-        if not llm_answer or len(llm_answer) < 10:
+        llm_summary = response.content.strip()
+        if not llm_summary or len(llm_summary) < 10:
             return None
-        validation_issues = _validate_llm_answer(llm_answer, pack, sql_payload)
+        validation_issues = _validate_llm_summary(
+            llm_summary,
+            pack=pack,
+            sql_payload=sql_payload,
+            deterministic_summary=deterministic_summary,
+            limitations=limitations,
+        )
         if validation_issues:
             logger.warning(f"LLM validation failed: {validation_issues}")
             return None
-        logger.info(f"LLM composed answer for {pack.route}")
-        return llm_answer
+        logger.info(f"LLM composed summary for {pack.route}")
+        return llm_summary
     except Exception as e:
-        logger.warning(f"LLM error: {str(e)}, fallback to deterministic")
+        logger.warning(f"LLM summary error: {str(e)}, fallback to deterministic")
         return None
 
 
 def _generate_kpi_cards(sql_payload: dict[str, Any], pack: EvidencePack) -> dict[str, Any] | None:
-    """Generate KPI cards for detailed analysis."""
-    cards = []
-    
-    # Loss KPI
-    if sql_payload.get("batch_summary"):
-        row = (sql_payload.get("batch_summary") or [{}])[0]
-        if isinstance(row, dict):
-            loss = float(row.get("loss_pct", 0.0) or 0.0)
-            cards.append({
-                "label": "Perte",
-                "value": f"{loss:.1f}%",
-                "status": "alert" if loss > 10 else ("warning" if loss > 5 else "ok")
-            })
-    
-    # Efficiency KPI
-    if sql_payload.get("batch_summary"):
-        row = (sql_payload.get("batch_summary") or [{}])[0]
-        if isinstance(row, dict):
-            eff = float(row.get("efficiency_pct", 100.0) or 100.0)
-            cards.append({
-                "label": "Efficacité",
-                "value": f"{eff:.1f}%",
-                "status": "ok" if eff > 90 else ("warning" if eff > 80 else "alert")
-            })
-    
-    # Stock KPI
+    cards: list[dict[str, Any]] = []
+    intent_family = str((pack.plan.answer_contract or {}).get("intent_family") or "").upper()
+
     if sql_payload.get("current_stock"):
         rows = sql_payload.get("current_stock") or []
-        total = sum(float(r.get("available_stock_kg", 0.0) or 0.0) for r in rows)
-        cards.append({
-            "label": "Stock net",
-            "value": f"{total:.0f} kg",
-            "status": "ok" if total > 0 else "alert"
-        })
-    
-    # ML Signal KPI
+        total = sum(float(r.get("available_stock_kg", r.get("restant_kg", 0.0)) or 0.0) for r in rows)
+        cards.append(
+            {
+                "title": "Stock disponible total",
+                "value": round(total, 1),
+                "unit": "kg",
+                "status": "good" if total > 0 else "critical",
+                "explanation": f"Somme des quantités disponibles sur {len(rows)} produit(s).",
+                "evidence_refs": [{"type": "SQL", "source_id": "stocks:current_stock"}],
+            }
+        )
+
+    if sql_payload.get("available_postharvest_lots") is not None:
+        rows = sql_payload.get("available_postharvest_lots") or []
+        cards.append(
+            {
+                "title": "Lots disponibles",
+                "value": len(rows),
+                "unit": "lot",
+                "status": "good" if rows else "warning",
+                "explanation": "Nombre de lots post-récolte exploitables.",
+                "evidence_refs": [{"type": "SQL", "source_id": "batches:available_postharvest_lots"}],
+            }
+        )
+
+    mb_rows = (sql_payload.get("batch_summary") or sql_payload.get("material_balance") or [])
+    if mb_rows and isinstance(mb_rows, list):
+        avg_loss = sum(float(r.get("loss_pct", 0.0) or 0.0) for r in mb_rows) / max(1, len(mb_rows))
+        avg_eff = sum(float(r.get("efficiency_pct", 0.0) or 0.0) for r in mb_rows) / max(1, len(mb_rows))
+        cards.append(
+            {
+                "title": "Perte moyenne",
+                "value": round(avg_loss, 1),
+                "unit": "%",
+                "status": "critical" if avg_loss >= 20 else ("warning" if avg_loss >= 10 else "good"),
+                "explanation": "Moyenne des pertes sur les lots analysés.",
+                "evidence_refs": [{"type": "SQL", "source_id": "material_balance:batch_summary"}],
+            }
+        )
+        cards.append(
+            {
+                "title": "Efficacité moyenne",
+                "value": round(avg_eff, 1),
+                "unit": "%",
+                "status": "good" if avg_eff >= 85 else ("warning" if avg_eff >= 70 else "critical"),
+                "explanation": "Moyenne d’efficacité sur les lots analysés.",
+                "evidence_refs": [{"type": "SQL", "source_id": "material_balance:batch_summary"}],
+            }
+        )
+
     if pack.ml:
-        ml_status = pack.ml.get("anomaly_type", "normal")
-        cards.append({
-            "label": "Signal ML",
-            "value": ml_status.replace("_", " ").capitalize(),
-            "status": "alert" if "anomaly" in ml_status.lower() else "ok"
-        })
-    
+        risk = str(pack.ml.get("risk_level") or "UNKNOWN").upper()
+        cards.append(
+            {
+                "title": "Signal ML",
+                "value": risk,
+                "unit": "",
+                "status": "critical" if risk == "HIGH" else ("warning" if risk == "MEDIUM" else "good"),
+                "explanation": "Signal advisory ML (non autorité factuelle).",
+                "evidence_refs": [{"type": "ML", "source_id": str(pack.ml.get("model_version") or "ml_signal")}],
+            }
+        )
+
+    if intent_family in {"RECOMMENDATION", "LOT_SPECIFIC_RECOMMENDATION", "FOLLOW_UP"}:
+        recs = pack.recommendations.get("actions") or []
+        cards.append(
+            {
+                "title": "Actions validées",
+                "value": len(recs),
+                "unit": "action",
+                "status": "good" if recs else "warning",
+                "explanation": "Recommandations avec preuves exploitables.",
+                "evidence_refs": [{"type": "RULE", "source_id": "recommendation:evidence_refs"}],
+            }
+        )
+
     if cards:
         return {
             "type": "kpi_cards",
@@ -702,24 +843,47 @@ def _generate_summary_interpretation(llm_answer: str | None, pack: EvidencePack,
 
 def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     missing_required = [item for item in verification.issues if item.startswith("MISSING_") and item.endswith("_EVIDENCE")]
+    missing_set = set(missing_required)
+    degraded_missing_set: set[str] = set()
+    can_degrade_hybrid = False
+    if pack.route == AgentRoute.HYBRID_SQL_RAG and missing_set <= {"MISSING_RAG_EVIDENCE"} and bool(
+        pack.sql.get("rows") or pack.sql.get("metrics") or (pack.sql.get("payload") or {})
+    ):
+        can_degrade_hybrid = True
+    if pack.route == AgentRoute.HYBRID_FULL and missing_set and "MISSING_SQL_EVIDENCE" not in missing_set:
+        # Keep grounded SQL answer path when SQL evidence exists, and expose missing layers in limitations.
+        if bool(pack.sql.get("rows") or pack.sql.get("metrics") or (pack.sql.get("payload") or {})):
+            # Recommendation evidence remains mandatory for recommendation-only asks.
+            if "MISSING_RECOMMENDATION_EVIDENCE" not in missing_set:
+                can_degrade_hybrid = True
     if missing_required:
-        message = _missing_evidence_message(pack.route, missing_required)
-        return (
-            message,
-            [
-                {"type": "summary", "title": "Résumé", "content": message},
-                {"type": "warnings", "title": "Avertissements", "items": [_warning_label(i) for i in missing_required]},
-            ],
-            {
-                "answer_type": pack.plan.answer_type,
-                "evidence_roles": _evidence_roles(pack),
-                "module_registry": pack.module_registry,
-                "required_evidence_types": list(pack.plan.required_sources),
-                "missing_evidence_types": sorted(set(item.replace("MISSING_", "").replace("_EVIDENCE", "") for item in missing_required)),
-                "found_evidence_types": _found_evidence_types(pack),
-                "confidence_reason": "missing_required_evidence",
-            },
-        )
+        if can_degrade_hybrid:
+            degraded_missing_set = set(missing_set)
+            verification = EvidenceVerification(ok=True, issues=[i for i in verification.issues if i not in missing_set])
+        else:
+            message = _missing_evidence_message(pack.route, missing_required)
+            extra_blocks = []
+            if pack.route == AgentRoute.RAG_ONLY:
+                extra_blocks.append({"type": "limits_block", "title": "Limites", "items": ["Le contexte documentaire est insuffisant ou indisponible pour cette question."]})
+            return (
+                message,
+                [
+                    {"type": "summary", "title": "Résumé", "content": message},
+                    {"type": "warnings", "title": "Avertissements", "items": [_warning_label(i) for i in missing_required]},
+                    *extra_blocks,
+                ],
+                {
+                    "answer_type": pack.plan.answer_type,
+                    "evidence_roles": _evidence_roles(pack),
+                    "module_registry": pack.module_registry,
+                    "answer_contract": pack.plan.answer_contract or {},
+                    "required_evidence_types": list(pack.plan.required_sources),
+                    "missing_evidence_types": sorted(set(item.replace("MISSING_", "").replace("_EVIDENCE", "") for item in missing_required)),
+                    "found_evidence_types": _found_evidence_types(pack),
+                    "confidence_reason": "missing_required_evidence",
+                    "warning_categories": {code: _warning_category(code) for code in sorted(set(missing_required))},
+                },
+            )
     has_any_evidence = bool(
         pack.sql.get("rows")
         or pack.sql.get("metrics")
@@ -738,10 +902,12 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
                 "answer_type": pack.plan.answer_type,
                 "evidence_roles": _evidence_roles(pack),
                 "module_registry": pack.module_registry,
+                "answer_contract": pack.plan.answer_contract or {},
                 "required_evidence_types": list(pack.plan.required_sources),
                 "missing_evidence_types": sorted(set(item.replace("MISSING_", "").replace("_EVIDENCE", "") for item in verification.issues if item.startswith("MISSING_") and item.endswith("_EVIDENCE"))),
                 "found_evidence_types": _found_evidence_types(pack),
                 "confidence_reason": "no_verified_evidence",
+                "warning_categories": {"NO_VERIFIED_EVIDENCE": _warning_category("NO_VERIFIED_EVIDENCE")},
             },
         )
     if not verification.ok and pack.plan.operation != "generic":
@@ -751,13 +917,32 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
                 {"type": "summary", "title": "Résumé", "content": "Donnée non disponible pour cette requête précise."},
                 {"type": "warnings", "title": "Avertissements", "items": [_warning_label(i) for i in verification.issues]},
             ],
-            {"answer_type": pack.plan.answer_type, "evidence_roles": _evidence_roles(pack), "module_registry": pack.module_registry},
+            {
+                "answer_type": pack.plan.answer_type,
+                "evidence_roles": _evidence_roles(pack),
+                "module_registry": pack.module_registry,
+                "answer_contract": pack.plan.answer_contract or {},
+                "required_evidence_types": list(pack.plan.required_sources),
+                "missing_evidence_types": sorted(
+                    set(
+                        item.replace("MISSING_", "").replace("_EVIDENCE", "")
+                        for item in verification.issues
+                        if str(item).startswith("MISSING_") and str(item).endswith("_EVIDENCE")
+                    )
+                ),
+                "found_evidence_types": _found_evidence_types(pack),
+                "confidence_reason": "verification_failed",
+                "warning_categories": {code: _warning_category(code) for code in sorted(set(verification.issues))},
+            },
         )
     sql_payload = pack.sql.get("payload") or {}
     blocks: list[dict[str, Any]] = []
 
     summary = _compose_summary(pack=pack, sql_payload=sql_payload)
-    blocks.append({"type": "summary", "title": "Résumé", "content": summary})
+
+    kpi_block = _generate_kpi_cards(sql_payload=sql_payload, pack=pack)
+    if kpi_block:
+        blocks.append(kpi_block)
 
     table_block = _compose_table_block(pack=pack, sql_payload=sql_payload)
     if table_block:
@@ -797,63 +982,76 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
         }
     )
 
-    warning_items = [
-        _warning_label(item)
-        for item in sorted(set([*pack.warnings, *verification.issues]))
-        if item
-    ]
-    blocks.append({"type": "warnings", "title": "Avertissements", "items": warning_items})
+    warning_codes = sorted(set([*pack.warnings, *verification.issues]))
+    warning_codes = _filter_user_warning_codes(pack=pack, verification=verification, warning_codes=warning_codes)
+    warning_items = collapse_user_warning_items(warning_codes)
+    if warning_items:
+        blocks.append({"type": "warnings", "title": "Avertissements", "items": warning_items})
 
     explanation = _compose_explanation(pack=pack, sql_payload=sql_payload)
     next_action = _compose_next_action(pack=pack, recommendation_block=recommendation_block, sql_payload=sql_payload)
     limitations = _compose_limitations(pack=pack, verification=verification, warning_items=warning_items)
+    if limitations:
+        blocks.append({"type": "limits_block", "title": "Limites", "items": limitations})
     normalized_q = _normalize_for_match(pack.question)
+    reset_phrase = any(
+        token in normalized_q
+        for token in (
+            "oublie ce lot",
+            "oublier ce lot",
+            "ignore ce lot",
+            "change de sujet",
+            "changeons de sujet",
+            "maintenant parle-moi seulement",
+            "maintenant parle moi seulement",
+            "seulement le stock de",
+            "on passe au stock de",
+        )
+    )
     if "le premier" in normalized_q and summary:
         summary = f"Le premier élément demandé: {summary}"
-    elif "ce lot" in normalized_q and summary:
+    elif "ce lot" in normalized_q and summary and not reset_phrase:
         summary = f"Pour ce lot: {summary}"
     elif "ce produit" in normalized_q and summary:
         summary = f"Pour ce produit: {summary}"
     if "conclusion" in normalized_q and not summary.lower().startswith("conclusion"):
         summary = f"Conclusion: {summary}"
 
-    # Try LLM for HYBRID routes
-    llm_answer = None
-    if pack.route in [AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_SQL_ML, AgentRoute.HYBRID_FULL, AgentRoute.RAG_ONLY]:
-        llm_answer = _compose_llm_answer(pack, sql_payload)
+    # Apply manager-friendly summary polish from locked evidence across all business routes.
+    llm_summary = None
+    if not degraded_missing_set and not missing_required and "UNMAPPED_SQL_OPERATION" not in set(pack.warnings or []):
+        llm_summary = _compose_llm_summary(
+            pack=pack,
+            sql_payload=sql_payload,
+            deterministic_summary=summary,
+            limitations=limitations,
+        )
+    if llm_summary:
+        summary = llm_summary
+
+    blocks.insert(0, {"type": "summary", "title": "Résumé", "content": summary})
     
-    if llm_answer:
-        answer = llm_answer
-    else:
-        # Deterministic fallback
-        answer_lines = [
-            "1. Réponse directe",
-            summary,
-            "",
-            "2. Interprétation opérationnelle",
-            explanation,
-            "",
-            "3. Preuves",
-        ]
-
-        source_items = blocks[-2].get("items", [])
-        if source_items:
-            for item in source_items[:6]:
-                answer_lines.append(f"- {item.get('role')}: {item.get('source')}")
-        else:
-            answer_lines.append("- Aucune source exploitable n’a été récupérée.")
-
-        answer_lines.extend(["", "4. Action recommandée", next_action, "", "5. Limitation"])
-        if limitations:
-            for item in limitations:
-                answer_lines.append(f"- {item}")
-        else:
-            answer_lines.append("- Aucune limite critique signalée.")
-
-        answer = "\n".join(answer_lines)
+    source_block_items = next((block.get("items", []) for block in reversed(blocks) if block.get("type") == "sources"), [])
+    answer = _compose_route_template_answer(
+        pack=pack,
+        summary=summary,
+        explanation=explanation,
+        next_action=next_action,
+        limitations=limitations,
+        source_items=source_block_items,
+        recommendation_block=recommendation_block,
+        sql_payload=sql_payload,
+    )
     answer, post_warnings = post_validate_answer(answer=answer, pack=pack)
     if post_warnings:
-        blocks[-1]["items"] = sorted(set([*blocks[-1].get("items", []), *post_warnings]))
+        merged_codes = sorted(set([*warning_codes, *post_warnings]))
+        merged_codes = _filter_user_warning_codes(pack=pack, verification=verification, warning_codes=merged_codes)
+        merged_items = collapse_user_warning_items(merged_codes)
+        if blocks and blocks[-1].get("type") == "warnings":
+            blocks[-1]["items"] = merged_items
+        elif merged_items:
+            blocks.append({"type": "warnings", "title": "Avertissements", "items": merged_items})
+        warning_codes = merged_codes
 
     metadata = {
         "answer_type": pack.plan.answer_type,
@@ -864,12 +1062,18 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
         "missing_evidence_types": sorted(
             set(
                 item.replace("MISSING_", "").replace("_EVIDENCE", "")
-                for item in verification.issues
-                if item.startswith("MISSING_") and item.endswith("_EVIDENCE")
+                for item in [*verification.issues, *degraded_missing_set]
+                if str(item).startswith("MISSING_") and str(item).endswith("_EVIDENCE")
             )
         ),
         "found_evidence_types": _found_evidence_types(pack),
+        "recommendation_refs_count": sum(
+            len((item.get("evidence_refs") or []))
+            for item in (pack.recommendations.get("actions") or [])
+            if isinstance(item, dict)
+        ),
         "confidence_reason": "warnings_present" if verification.issues else "evidence_verified",
+        "warning_categories": {code: _warning_category(code) for code in warning_codes},
     }
 
     return answer, blocks, metadata
@@ -893,7 +1097,7 @@ def _missing_evidence_message(route: AgentRoute, missing: list[str]) -> str:
     if route == AgentRoute.SQL_ONLY or "MISSING_SQL_EVIDENCE" in missing_set:
         return "Donnée non disponible pour cette requête précise."
     if route == AgentRoute.RAG_ONLY or "MISSING_RAG_EVIDENCE" in missing_set:
-        return "Le contexte documentaire disponible est insuffisant pour répondre précisément avec des bonnes pratiques fiables."
+        return "Je n’ai pas assez de contexte documentaire fiable pour répondre précisément à cette question."
     if route == AgentRoute.HYBRID_SQL_ML and "MISSING_ML_EVIDENCE" in missing_set:
         return "Aucun signal ML exploitable n’est disponible actuellement; réponse limitée aux faits SQL."
     if route in {AgentRoute.HYBRID_FULL, AgentRoute.RECOMMENDATION_ONLY, AgentRoute.HYBRID_RAG_RECOMMENDATION} and "MISSING_RECOMMENDATION_EVIDENCE" in missing_set:
@@ -970,7 +1174,7 @@ def _compose_limitations(*, pack: EvidencePack, verification: EvidenceVerificati
     if "SQL" in required and not has_sql:
         limits.append("Données SQL indisponibles pour cette demande.")
     if "RAG" in required and not has_rag:
-        limits.append("Connaissances RAG indisponibles pour cette demande.")
+        limits.append("Le contexte documentaire est insuffisant pour expliquer les causes avec certitude.")
     if "ML" in required and not has_ml:
         limits.append("Signal ML indisponible pour cette entité.")
     if "RECOMMENDATION" in required and not has_reco:
@@ -981,8 +1185,8 @@ def _compose_limitations(*, pack: EvidencePack, verification: EvidenceVerificati
         limits.append("Données SQL indisponibles pour cette demande.")
     if layers.get("ml") and not has_ml and "Signal ML indisponible pour cette entité." not in limits:
         limits.append("Signal ML indisponible pour cette entité.")
-    if layers.get("rag") and not has_rag and "Connaissances RAG indisponibles pour cette demande." not in limits:
-        limits.append("Connaissances RAG indisponibles pour cette demande.")
+    if layers.get("rag") and not has_rag and "Le contexte documentaire est insuffisant pour expliquer les causes avec certitude." not in limits:
+        limits.append("Le contexte documentaire est insuffisant pour expliquer les causes avec certitude.")
     if layers.get("recommendation") and not has_reco and "Recommandation exploitable indisponible pour cette entité." not in limits:
         limits.append("Recommandation exploitable indisponible pour cette entité.")
 
@@ -992,10 +1196,262 @@ def _compose_limitations(*, pack: EvidencePack, verification: EvidenceVerificati
             if label and label not in limits:
                 limits.append(label)
 
-    for item in warning_items[:3]:
-        if item and item not in limits:
+    has_technical = any(_warning_category(code) == "TECHNICAL_WARNING" for code in [*pack.warnings, *verification.issues])
+    for item in warning_items[:4]:
+        if not item:
+            continue
+        if "avertissement technique" in item.lower() and not has_technical:
+            continue
+        if item not in limits:
             limits.append(item)
+    rag_limit_markers = (
+        "context documentaire",
+        "contexte documentaire",
+        "source rag",
+        "rag est faible",
+        "rag",
+    )
+    if any(any(marker in str(limit).lower() for marker in rag_limit_markers) for limit in limits):
+        limits = [limit for limit in limits if not any(marker in str(limit).lower() for marker in rag_limit_markers)]
+        limits.insert(0, "Le contexte documentaire est limité pour cette question.")
+    limits = _dedupe_preserve_order(limits)
     return limits
+
+
+def _compose_route_template_answer(
+    *,
+    pack: EvidencePack,
+    summary: str,
+    explanation: str,
+    next_action: str,
+    limitations: list[str],
+    source_items: list[dict[str, Any]],
+    recommendation_block: dict[str, Any] | None,
+    sql_payload: dict[str, Any],
+) -> str:
+    intent_family = str(((pack.plan.answer_contract or {}).get("intent_family") or "")).upper()
+    if pack.route == AgentRoute.RAG_ONLY:
+        if not (pack.rag.get("chunks") or pack.rag.get("content_snippets")):
+            return "Je n’ai pas assez de contexte documentaire fiable pour répondre précisément à cette question."
+        checklist = _build_checklist_points(pack.rag.get("content_snippets") or [])
+        erreurs = _build_error_points(pack.rag.get("content_snippets") or [])
+        lines = [
+            "Résumé",
+            summary,
+            "",
+            "Checklist pratique",
+        ]
+        lines.extend([f"- {item}" for item in checklist] or ["- Aucun point pratique exploitable."])
+        lines.extend(["", "Erreurs à éviter"])
+        lines.extend([f"- {item}" for item in erreurs] or ["- Aucune erreur spécifique confirmée."])
+        lines.extend(["", "Limites / sources"])
+        if limitations:
+            lines.extend([f"- {item}" for item in limitations])
+        if source_items:
+            lines.extend([f"- {item.get('role')}: {item.get('source')}" for item in source_items[:4]])
+        return "\n".join(lines)
+
+    if pack.route == AgentRoute.HYBRID_SQL_RAG:
+        lines = [
+            "1. Données mesurées",
+            summary,
+            "",
+            "2. Analyse",
+            explanation,
+            "",
+            "3. Limites",
+        ]
+        lines.extend([f"- {item}" for item in limitations] or ["- Aucune limite critique signalée."])
+        return "\n".join(lines)
+
+    if pack.route == AgentRoute.HYBRID_FULL and recommendation_block and recommendation_block.get("items"):
+        measured = _hybrid_full_measured_line(sql_payload) or summary
+        requested_count = 0
+        count_match = re.search(r"\b(\d+)\s+actions?\b", _normalize_for_match(pack.question))
+        if count_match:
+            try:
+                requested_count = int(count_match.group(1))
+            except Exception:
+                requested_count = 0
+        lines = ["1. Données mesurées", measured, "", "2. Signal ML"]
+        if pack.ml:
+            lines.append(explanation if "Signal ML:" in explanation else f"Signal ML disponible ({str(pack.ml.get('risk_level') or 'UNKNOWN').upper()}).")
+        else:
+            lines.append("Signal ML indisponible pour cette entité.")
+        lines.extend(["", "3. Recommandations validées"])
+        for item in recommendation_block.get("items", [])[:5]:
+            refs_count = int(item.get("evidence_refs_count") or 0)
+            ref_types = ", ".join(item.get("evidence") or [])
+            lines.append(
+                f"- {item.get('action')} ({str(item.get('priority') or 'MEDIUM').upper()}) | preuves: {refs_count}"
+                + (f" [{ref_types}]" if ref_types else "")
+            )
+        for item in recommendation_block.get("items", [])[:5]:
+            ref_summaries = item.get("evidence_ref_summary") or []
+            if ref_summaries:
+                lines.append("  preuves -> " + " ; ".join(ref_summaries[:3]))
+        if requested_count > 0 and len(recommendation_block.get("items", [])) < requested_count:
+            lines.append(
+                f"- Je peux proposer {len(recommendation_block.get('items', []))} action fiable avec les preuves disponibles. "
+                "Les autres actions ne sont pas générées car le contexte documentaire est limité."
+            )
+        lines.extend(["", "4. Limites"])
+        lines.extend([f"- {item}" for item in limitations] or ["- Aucune limite critique signalée."])
+        return "\n".join(lines)
+
+    if pack.route == AgentRoute.SQL_ONLY and intent_family in {
+        "STOCK_CURRENT",
+        "POSTHARVEST_AVAILABLE_LOTS",
+        "LOSS_RANKING",
+        "INPUT_OUTPUT_GAP",
+        "LOT_COMPARISON",
+        "STAGE_LOSS_ANALYSIS",
+    }:
+        lines = ["1. Données mesurées", summary, "", "2. Interprétation"]
+        if intent_family == "INPUT_OUTPUT_GAP":
+            lines.append("Classement établi par écart de quantité (kg), puis perte (%).")
+        elif intent_family == "LOSS_RANKING":
+            lines.append("Classement établi par perte (%) et efficacité (%).")
+        elif intent_family == "LOT_COMPARISON":
+            lines.append("Comparaison côte à côte des lots demandés sur les mêmes métriques.")
+        else:
+            lines.append(explanation)
+        lines.extend(["", "3. Limites"])
+        lines.extend([f"- {item}" for item in limitations] or ["- Aucune limite critique signalée."])
+        return "\n".join(lines)
+
+    answer_lines = [
+        "1. Réponse directe",
+        summary,
+        "",
+        "2. Interprétation opérationnelle",
+        explanation,
+        "",
+        "3. Preuves",
+    ]
+    if source_items:
+        for item in source_items[:6]:
+            answer_lines.append(f"- {item.get('role')}: {item.get('source')}")
+    else:
+        answer_lines.append("- Aucune source exploitable n’a été récupérée.")
+    answer_lines.extend(["", "4. Action recommandée", next_action, "", "5. Limitation"])
+    if limitations:
+        for item in limitations:
+            answer_lines.append(f"- {item}")
+    else:
+        answer_lines.append("- Aucune limite critique signalée.")
+    return "\n".join(answer_lines)
+
+
+def _build_checklist_points(snippets: list[str]) -> list[str]:
+    if not snippets:
+        return []
+    points = _best_practice_points(snippets[0])[:4]
+    return _dedupe_preserve_order(points)
+
+
+def _build_error_points(snippets: list[str]) -> list[str]:
+    if not snippets:
+        return []
+    text = " ".join(snippets).lower()
+    errors: list[str] = []
+    if "humidit" in text:
+        errors.append("Éviter toute reprise d’humidité après séchage.")
+    if "tri" in text:
+        errors.append("Éviter un tri sans contrôle qualité visuel régulier.")
+    if "emball" in text or "conditionnement" in text:
+        errors.append("Éviter l’emballage sur produit insuffisamment sec.")
+    if not errors:
+        errors.append("Éviter les écarts de procédure non tracés entre étapes.")
+    return _dedupe_preserve_order(errors)
+
+
+def _hybrid_full_measured_line(sql_payload: dict[str, Any]) -> str | None:
+    rows = sql_payload.get("material_balance") or []
+    if rows and isinstance(rows[0], dict):
+        row = rows[0]
+        return (
+            f"Lot {row.get('batch_ref')}: entrée {float(row.get('input_qty', 0.0) or 0.0):.1f} kg, "
+            f"sortie {float(row.get('output_qty', 0.0) or 0.0):.1f} kg, "
+            f"perte {float(row.get('loss_pct', 0.0) or 0.0):.1f}%."
+        )
+    rows = sql_payload.get("batch_summary") or []
+    if rows and isinstance(rows[0], dict):
+        row = rows[0]
+        return (
+            f"Lot {row.get('batch_ref') or row.get('lot_code')}: "
+            f"perte {float(row.get('loss_pct', 0.0) or 0.0):.1f}% et "
+            f"efficacité {float(row.get('efficiency_pct', 0.0) or 0.0):.1f}%."
+        )
+    return None
+
+
+def collapse_user_warning_items(warning_codes: list[str]) -> list[str]:
+    codes = sorted(set(str(code or "").strip() for code in warning_codes if str(code or "").strip()))
+    if not codes:
+        return []
+    rag_group = {
+        "MISSING_RAG_EVIDENCE",
+        "MISSING_RAG_SOURCE",
+        "RAG_CONTENT_MISSING",
+        "RAG_QUALITY_INSUFFICIENT",
+        "RAG_EVIDENCE_REJECTED",
+        "WEAK_RETRIEVAL",
+    }
+    partial_group = {
+        "MISSING_EXPECTED_ROUTE_EVIDENCE",
+        "MISSING_SQL_EVIDENCE",
+        "MISSING_ML_EVIDENCE",
+        "MISSING_RECOMMENDATION_EVIDENCE",
+        "SOURCE_DATA_EMPTY",
+    }
+    collapsed: list[str] = []
+    has_rag_group = any(code in rag_group for code in codes)
+    has_partial_group = any(code in partial_group for code in codes)
+    if has_rag_group:
+        collapsed.append("Le contexte documentaire est limité pour cette question.")
+    if has_partial_group:
+        collapsed.append("Certaines preuves attendues sont partielles ou indisponibles.")
+    for code in codes:
+        if code in rag_group or code in partial_group:
+            continue
+        collapsed.append(_warning_label(code))
+    return _dedupe_preserve_order(collapsed)
+
+
+def _filter_user_warning_codes(*, pack: EvidencePack, verification: EvidenceVerification, warning_codes: list[str]) -> list[str]:
+    codes = [str(code or "").strip() for code in warning_codes if str(code or "").strip()]
+    if not codes:
+        return []
+    route = pack.route
+    sql_payload = pack.sql.get("payload") or {}
+    sql_operation = str(sql_payload.get("operation") or "").strip()
+    row_count = int(sql_payload.get("row_count") or 0)
+    sql_complete = (
+        route == AgentRoute.SQL_ONLY
+        and bool(sql_operation)
+        and row_count > 0
+        and "NO_SQL_DATA" not in codes
+        and not any(_warning_category(code) == "TECHNICAL_WARNING" for code in codes)
+    )
+    filtered: list[str] = []
+    for code in codes:
+        if sql_complete and code in {"PRODUCT_FILTER_IGNORED", "MISSING_DATA_SIGNALLED"}:
+            continue
+        filtered.append(code)
+    return sorted(set(filtered))
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        key = str(item or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
 
 
 def post_validate_answer(*, answer: str, pack: EvidencePack) -> tuple[str, list[str]]:
@@ -1011,15 +1467,56 @@ def post_validate_answer(*, answer: str, pack: EvidencePack) -> tuple[str, list[
         )
         warnings.append("GENERIC_RAG_REPLACED")
 
-    if pack.plan.answer_type in {"list", "ranking", "comparison", "risk_list"} and "table" not in pack.plan.output_blocks_needed:
-        warnings.append("RESPONSE_BLOCK_TABLE_MISSING")
+    if pack.route in {AgentRoute.RAG_ONLY, AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_FULL}:
+        sanitized = _sanitize_rag_answer_body(updated_answer)
+        if sanitized != updated_answer:
+            updated_answer = sanitized
+            warnings.append("RAG_SOURCE_LEAKAGE_SANITIZED")
 
     return updated_answer, warnings
+
+
+def _sanitize_rag_answer_body(text: str) -> str:
+    value = str(text or "")
+    if not value:
+        return value
+    patterns = [
+        r"(?im)^\s*agronomic knowledge reference.*$",
+        r"(?im)^\s*source\s*:\s*.*$",
+        r"(?im)^\s*topic\s*:\s*.*$",
+        r"(?im)^\s*ref-?know[^\n]*$",
+        r"(?im)^\s*chunk[_\-\s]*id\s*:\s*.*$",
+        r"(?im)^\s*document[_\-\s]*id\s*:\s*.*$",
+        r"(?im)^\s*(path|file|fichier)\s*:\s*.*$",
+        r"(?im)^\s*metadata\s*:\s*.*$",
+        r"(?im)^\s*title\s*:\s*.*$",
+        r"(?i)\bref-?know[-_a-z0-9]*\b",
+        r"(?i)\bchunk[-_][a-z0-9][a-z0-9\-_]*\b",
+        r"(?i)\bdoc[-_][a-z0-9][a-z0-9\-_]*\b",
+    ]
+    for pat in patterns:
+        value = re.sub(pat, "", value)
+    inline_patterns = [
+        r"(?i)agronomic knowledge reference",
+        r"(?i)source\s*:\s*",
+        r"(?i)topic\s*:\s*",
+    ]
+    for pat in inline_patterns:
+        value = re.sub(pat, "", value)
+    value = re.sub(r"\n{3,}", "\n\n", value).strip()
+    # Fallback clean insufficiency if sanitized content becomes source-like shell.
+    low = value.lower()
+    if low and all(tok in low for tok in ("sources", "connaissance")) and len(value) < 140:
+        return "Je n’ai pas assez de contexte documentaire fiable pour répondre précisément à cette question."
+    return value
 
 
 def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
     plan = pack.plan
     normalized_q = _normalize_for_match(pack.question)
+    intent_family = str((plan.answer_contract or {}).get("intent_family") or "").strip().upper()
+    if "UNMAPPED_SQL_OPERATION" in set(pack.warnings or []):
+        return "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
     contract = plan.answer_contract or {}
     def _q_has(*tokens: str) -> bool:
         return any(token in normalized_q for token in tokens)
@@ -1047,8 +1544,102 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
         return f"Collectes: {len(rows)} enregistrements, quantité totale {total:.1f} kg."
     if _q_has("stock disponible", "stock par produit", "stock net", "stock") and sql_payload.get("current_stock"):
         rows = sql_payload.get("current_stock") or []
-        total = sum(float(r.get("available_stock_kg", 0.0) or 0.0) for r in rows)
-        return f"Stock: {len(rows)} produit(s), disponible total {total:.1f} kg."
+        if intent_family == "STOCK_CURRENT" and _q_has("plus de stock", "stock maximum", "stock max", "le plus de stock"):
+            ranked = sorted(
+                rows,
+                key=lambda r: float(r.get("available_stock_kg", r.get("restant_kg", 0.0)) or 0.0),
+                reverse=True,
+            )
+            lead = ranked[0]
+            lead_qty = float(lead.get("available_stock_kg", lead.get("restant_kg", 0.0)) or 0.0)
+            return (
+                f"Le produit avec le plus de stock disponible est {_fr_product(lead.get('product'))} avec {lead_qty:.1f} kg. "
+                f"Le classement complet des {len(ranked)} produits est présenté ci-dessous."
+            )
+        total = sum(float(r.get("available_stock_kg", r.get("restant_kg", 0.0)) or 0.0) for r in rows)
+        ranked = sorted(
+            rows,
+            key=lambda r: float(r.get("available_stock_kg", r.get("restant_kg", 0.0)) or 0.0),
+            reverse=True,
+        )
+        head = ranked[0]
+        lead_qty = float(head.get("available_stock_kg", head.get("restant_kg", 0.0)) or 0.0)
+        grades = head.get("grades") or {}
+        grade_summary = ", ".join(
+            [
+                f"Grade A {float(grades.get('A', 0.0) or 0.0):.1f} kg",
+                f"Grade B {float(grades.get('B', 0.0) or 0.0):.1f} kg",
+                f"Grade C {float(grades.get('C', 0.0) or 0.0):.1f} kg",
+            ]
+        )
+        return (
+            f"La coopérative dispose actuellement de {total:.1f} kg de stock disponible répartis sur {len(rows)} produits. "
+            f"Le produit le plus disponible est {_fr_product(head.get('product'))} avec {lead_qty:.1f} kg. "
+            f"Détail qualité: {grade_summary}."
+        )
+    if sql_payload.get("available_postharvest_lots") is not None:
+        rows = sql_payload.get("available_postharvest_lots") or []
+        if rows:
+            if intent_family == "POSTHARVEST_AVAILABLE_LOTS" and _q_has("peu de quantite", "peu de quantité", "faible quantite", "faible quantité", "quantite restante", "quantité restante"):
+                rows = sorted(rows, key=lambda r: float(r.get("current_qty", r.get("available_qty", 0.0)) or 0.0))
+            top = rows[0]
+            return (
+                f"Lots post-récolte disponibles: {len(rows)}. "
+                f"Exemple {top.get('batch_ref')} ({_fr_product(top.get('product'))}) "
+                f"{float(top.get('initial_qty', 0.0) or 0.0):.1f} kg -> {float(top.get('current_qty', 0.0) or 0.0):.1f} kg."
+            )
+        return "Aucun lot post-récolte disponible pour cette coopérative."
+    if intent_family == "LOSS_RANKING" and sql_payload.get("batch_summary") is not None:
+        rows = sorted(
+            (sql_payload.get("batch_summary") or []),
+            key=lambda r: float(r.get("loss_pct", 0.0) or 0.0),
+            reverse=True,
+        )
+        if rows:
+            lead = rows[0]
+            return (
+                f"Le lot le plus critique est {lead.get('batch_ref')} avec {float(lead.get('loss_pct', 0.0) or 0.0):.1f}% de perte "
+                f"et {float(lead.get('efficiency_pct', 0.0) or 0.0):.1f}% d’efficacité."
+            )
+    if intent_family == "INPUT_OUTPUT_GAP" and sql_payload.get("batch_summary") is not None:
+        rows = sorted(
+            (sql_payload.get("batch_summary") or []),
+            key=lambda r: float(r.get("gap_qty", 0.0) or 0.0),
+            reverse=True,
+        )
+        if rows:
+            lead = rows[0]
+            return (
+                f"{lead.get('batch_ref')} présente le plus grand écart matière: "
+                f"{float(lead.get('gap_qty', 0.0) or 0.0):.1f} kg perdus entre l’entrée ({float(lead.get('input_qty', 0.0) or 0.0):.1f} kg) "
+                f"et la sortie ({float(lead.get('output_qty', 0.0) or 0.0):.1f} kg)."
+            )
+    if intent_family == "LOT_COMPARISON" and sql_payload.get("batch_summary") is not None:
+        rows = sql_payload.get("batch_summary") or []
+        if len(rows) >= 2:
+            a, b = rows[0], rows[1]
+            worse = a if float(a.get("loss_pct", 0.0) or 0.0) >= float(b.get("loss_pct", 0.0) or 0.0) else b
+            return (
+                f"{worse.get('batch_ref')} performe moins bien sur la perte/efficacité. "
+                f"Comparaison: {a.get('batch_ref')} ({float(a.get('loss_pct', 0.0) or 0.0):.1f}% perte, {float(a.get('efficiency_pct', 0.0) or 0.0):.1f}% efficacité) "
+                f"vs {b.get('batch_ref')} ({float(b.get('loss_pct', 0.0) or 0.0):.1f}% perte, {float(b.get('efficiency_pct', 0.0) or 0.0):.1f}% efficacité)."
+            )
+    if sql_payload.get("stage_loss_analysis") is not None:
+        rows = sql_payload.get("stage_loss_analysis") or []
+        if rows:
+            top = rows[0]
+            if top.get("batch_ref"):
+                return (
+                    f"La perte principale de {top.get('batch_ref')} se situe à l’étape {top.get('stage_name')}: "
+                    f"entrée {float(top.get('input_qty', 0.0) or 0.0):.1f} kg, "
+                    f"sortie {float(top.get('output_qty', 0.0) or 0.0):.1f} kg, "
+                    f"perte {float(top.get('loss_pct', 0.0) or 0.0):.1f}%."
+                )
+            return (
+                f"Étape la moins efficace: {top.get('stage_name')} "
+                f"(efficacité moyenne {float(top.get('efficiency_pct', 0.0) or 0.0):.1f}%)."
+            )
+        return "Donnée non disponible pour cette requête précise."
     if _q_has("commande") and _q_has("facture") and _q_has("trésorer", "tresorer", "receipt", "écriture", "ecriture") and sql_payload.get("commercial_invoice_linkage_summary") is not None:
         rows = sql_payload.get("commercial_invoice_linkage_summary") or []
         if rows:
@@ -1264,10 +1855,22 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
         if rec_actions:
             high_count = sum(1 for item in rec_actions if str(item.get("priority") or "").upper() == "HIGH")
             lead = rec_actions[0]
+            requested_count = 0
+            count_match = re.search(r"\b(\d+)\s+actions?\b", normalized_q)
+            if count_match:
+                try:
+                    requested_count = int(count_match.group(1))
+                except Exception:
+                    requested_count = 0
             target_tokens = [lead.get("related_batch"), lead.get("related_product"), lead.get("related_stage")]
             target = " / ".join([str(token) for token in target_tokens if str(token or "").strip()])
             if target:
                 target = f" (cible: {target})"
+            if requested_count > 0 and len(rec_actions) < requested_count:
+                return (
+                    f"Je peux proposer {len(rec_actions)} action fiable avec les preuves disponibles. "
+                    "Les autres actions ne sont pas générées car le contexte documentaire est limité."
+                )
             return (
                 f"{len(rec_actions)} action(s) priorisée(s) générée(s), dont {high_count} priorité haute. "
                 f"Action principale: {lead.get('action')}{target}."
@@ -1305,6 +1908,10 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
                 f"{float(row.get('loss_pct', row.get('loss_percentage', 0.0)) or 0.0):.1f}% de perte "
                 f"et {float(row.get('efficiency_pct', row.get('efficiency_percentage', 0.0)) or 0.0):.1f}% d’efficacité."
             )
+        elif rec_actions:
+            rec_target = str((rec_actions[0] or {}).get("related_batch") or "").strip()
+            if rec_target:
+                sql_line = f"Le lot {rec_target} est prioritaire selon les données mesurées disponibles."
         ml_line = "Le signal ML n’est pas disponible pour cette entité."
         if pack.ml:
             ml_batch = str(pack.ml.get("affected_batch") or pack.ml.get("batch_ref") or "").strip()
@@ -1437,17 +2044,31 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
             return "Le bilan matière n’est pas disponible pour cette requête."
         if len(rows) == 1:
             item = rows[0]
+            loss = float(item.get("loss_percentage", item.get("loss_pct", 0.0)) or 0.0)
+            eff = float(item.get("efficiency_percentage", item.get("efficiency_pct", 0.0)) or 0.0)
+            in_qty = float(item.get("input_quantity", item.get("input_qty", 0.0)) or 0.0)
+            out_qty = float(item.get("output_quantity", item.get("output_qty", 0.0)) or 0.0)
             return (
-                f"Le bilan matière du lot {item.get('batch_ref')} montre une perte de {float(item.get('loss_percentage', 0.0) or 0.0):.1f} % "
-                f"et une efficacité de {float(item.get('efficiency_percentage', 0.0) or 0.0):.1f} %."
+                f"Lot {item.get('batch_ref')}: entrée {in_qty:.1f} kg, sortie {out_qty:.1f} kg, "
+                f"perte {loss:.1f}% et efficacité {eff:.1f}%."
             )
-        total_in = sum(float(item.get("input_quantity", 0.0) or 0.0) for item in rows)
-        total_out = sum(float(item.get("output_quantity", 0.0) or 0.0) for item in rows)
-        loss_pct = ((total_in - total_out) / total_in * 100.0) if total_in > 0 else 0.0
-        return (
-            "Bilan matière global: "
-            f"entrée {total_in:.1f} kg, sortie {total_out:.1f} kg, perte {loss_pct:.1f}%."
+        sorted_rows = sorted(
+            rows,
+            key=lambda item: float(item.get("loss_percentage", item.get("loss_pct", 0.0)) or 0.0),
+            reverse=True,
         )
+        lead = sorted_rows[0]
+        lead_loss = float(lead.get("loss_percentage", lead.get("loss_pct", 0.0)) or 0.0)
+        lead_eff = float(lead.get("efficiency_percentage", lead.get("efficiency_pct", 0.0)) or 0.0)
+        if lead.get("batch_ref"):
+            return (
+                f"Le lot le plus critique est {lead.get('batch_ref')} avec {lead_loss:.1f}% de perte "
+                f"et une efficacité de {lead_eff:.1f}%."
+            )
+        total_in = sum(float(item.get("input_quantity", item.get("input_qty", 0.0)) or 0.0) for item in rows)
+        total_out = sum(float(item.get("output_quantity", item.get("output_qty", 0.0)) or 0.0) for item in rows)
+        loss_pct = ((total_in - total_out) / total_in * 100.0) if total_in > 0 else 0.0
+        return f"Synthèse matière: entrée {total_in:.1f} kg, sortie {total_out:.1f} kg, perte moyenne {loss_pct:.1f}%."
 
     if sql_payload.get("process_step_losses"):
         rows = sql_payload.get("process_step_losses") or []
@@ -1573,9 +2194,10 @@ def _compose_explanation(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
         if sql_payload.get("material_balance"):
             item = (sql_payload.get("material_balance") or [{}])[0]
             anchor_lot = str(item.get("batch_ref") or item.get("lot_code") or "").strip() or None
+            loss_val = float(item.get("loss_percentage", item.get("loss_pct", 0.0)) or 0.0)
+            eff_val = float(item.get("efficiency_percentage", item.get("efficiency_pct", 0.0)) or 0.0)
             sql_line = (
-                f"Mesures SQL: perte {float(item.get('loss_percentage', 0.0)):.1f}% et efficacité "
-                f"{float(item.get('efficiency_percentage', 0.0)):.1f}%"
+                f"Mesures SQL: perte {loss_val:.1f}% et efficacité {eff_val:.1f}%"
             )
         elif sql_payload.get("process_step_losses"):
             top = max(
@@ -1592,7 +2214,7 @@ def _compose_explanation(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
             rag_line = "Conseil pratique (RAG): " + _compact(safe or snippets[0], 180)
             return (sql_line + " " + rag_line).strip()
         if sql_line:
-            return sql_line
+            return (sql_line + " Le contexte documentaire est insuffisant pour expliquer les causes avec certitude.").strip()
 
     if pack.route in {AgentRoute.HYBRID_SQL_ML, AgentRoute.ML_ONLY} and pack.ml:
         return (
@@ -1653,6 +2275,7 @@ def _build_answer_contract(
     }
     return {
         "route": route.value,
+        "intent_family": str((detected_entities or {}).get("intent_family") or "").strip().upper() or None,
         "mini_requests": mini_requests,
         "required_layers": layers,
         "requested_fields": requested_fields,
@@ -1661,6 +2284,99 @@ def _build_answer_contract(
 
 
 def _compose_table_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> dict[str, Any] | None:
+    intent_family = str(((pack.plan.answer_contract or {}).get("intent_family") or "")).upper()
+    qn = _normalize_for_match(pack.question)
+    if intent_family == "STOCK_CURRENT" and sql_payload.get("current_stock") is not None:
+        rows = list(sql_payload.get("current_stock") or [])
+        rows.sort(key=lambda r: float(r.get("available_stock_kg", r.get("restant_kg", 0.0)) or 0.0), reverse=True)
+        return {
+            "type": "table",
+            "title": "Stock actuel par produit",
+            "columns": ["Produit", "Disponible", "Restant", "Grade A", "Grade B", "Grade C", "Unité"],
+            "rows": [
+                [
+                    _fr_product(r.get("product")),
+                    f"{float(r.get('available_stock_kg', r.get('restant_kg', 0.0)) or 0.0):.1f}",
+                    f"{float(r.get('restant_kg', r.get('available_stock_kg', 0.0)) or 0.0):.1f}",
+                    f"{float((r.get('grades') or {}).get('A', 0.0) or 0.0):.1f}",
+                    f"{float((r.get('grades') or {}).get('B', 0.0) or 0.0):.1f}",
+                    f"{float((r.get('grades') or {}).get('C', 0.0) or 0.0):.1f}",
+                    str(r.get("unit") or "kg"),
+                ]
+                for r in rows
+            ],
+        }
+
+    if intent_family == "POSTHARVEST_AVAILABLE_LOTS" and sql_payload.get("available_postharvest_lots") is not None:
+        rows = list(sql_payload.get("available_postharvest_lots") or [])
+        if any(token in qn for token in ("peu de quantite", "peu de quantité", "faible quantite", "faible quantité", "quantite restante", "quantité restante")):
+            rows.sort(key=lambda r: float(r.get("current_qty", r.get("available_qty", 0.0)) or 0.0))
+        return {
+            "type": "table",
+            "title": "Lots post-récolte disponibles",
+            "columns": ["Lot", "Produit", "Statut", "Quantité initiale", "Quantité restante"],
+            "rows": [
+                [
+                    str(r.get("batch_ref") or ""),
+                    _fr_product(r.get("product")),
+                    str(r.get("status") or r.get("lifecycle_status") or "N/A"),
+                    f"{float(r.get('initial_qty', 0.0) or 0.0):.1f} kg",
+                    f"{float(r.get('current_qty', r.get('available_qty', 0.0)) or 0.0):.1f} kg",
+                ]
+                for r in rows
+            ],
+        }
+
+    if intent_family in {"LOSS_RANKING", "INPUT_OUTPUT_GAP", "LOT_COMPARISON"} and (sql_payload.get("batch_summary") is not None or sql_payload.get("material_balance") is not None):
+        rows = [r for r in ((sql_payload.get("batch_summary") or sql_payload.get("material_balance") or [])) if isinstance(r, dict)]
+        if intent_family == "LOSS_RANKING":
+            rows.sort(key=lambda r: float(r.get("loss_pct", 0.0) or 0.0), reverse=True)
+            title = "Classement des lots par pertes"
+        elif intent_family == "INPUT_OUTPUT_GAP":
+            rows.sort(key=lambda r: float(r.get("gap_qty", 0.0) or 0.0), reverse=True)
+            title = "Classement des lots par écart entrée/sortie (kg)"
+        else:
+            title = "Comparaison des lots"
+        return {
+            "type": "comparison_table" if intent_family == "LOT_COMPARISON" else "table",
+            "title": title,
+            "columns": ["Lot", "Produit", "Entrée (kg)", "Sortie (kg)", "Écart (kg)", "Perte (%)", "Efficacité (%)"],
+            "rows": [
+                [
+                    str(r.get("batch_ref") or r.get("lot_code") or ""),
+                    _fr_product(r.get("product")),
+                    f"{float(r.get('input_qty', 0.0) or 0.0):.1f}",
+                    f"{float(r.get('output_qty', 0.0) or 0.0):.1f}",
+                    f"{float(r.get('gap_qty', 0.0) or 0.0):.1f}",
+                    f"{float(r.get('loss_pct', 0.0) or 0.0):.1f}",
+                    f"{float(r.get('efficiency_pct', 0.0) or 0.0):.1f}",
+                ]
+                for r in rows
+            ],
+            "highlighted_metric": "loss_pct" if intent_family == "LOT_COMPARISON" else None,
+            "evidence_refs": [{"type": "SQL", "source_id": "material_balance:rows"}],
+        }
+
+    if intent_family == "STAGE_LOSS_ANALYSIS" and sql_payload.get("stage_loss_analysis") is not None:
+        rows = [r for r in (sql_payload.get("stage_loss_analysis") or []) if isinstance(r, dict)]
+        rows.sort(key=lambda r: float(r.get("loss_pct", 0.0) or 0.0), reverse=True)
+        return {
+            "type": "table",
+            "title": "Analyse des pertes par étape",
+            "columns": ["Étape", "Lot", "Entrée (kg)", "Sortie (kg)", "Écart (kg)", "Perte (%)", "Efficacité (%)"],
+            "rows": [
+                [
+                    str(r.get("stage_name") or r.get("stage") or ""),
+                    str(r.get("batch_ref") or ""),
+                    f"{float(r.get('input_qty', 0.0) or 0.0):.1f}",
+                    f"{float(r.get('output_qty', 0.0) or 0.0):.1f}",
+                    f"{float(r.get('gap_qty', 0.0) or 0.0):.1f}",
+                    f"{float(r.get('loss_pct', 0.0) or 0.0):.1f}",
+                    f"{float(r.get('efficiency_pct', 0.0) or 0.0):.1f}",
+                ]
+                for r in rows
+            ],
+        }
     if sql_payload.get("collecte_traceability") is not None and any(
         token in _normalize_for_match(pack.question) for token in ("collecte", "bl", "justificatif", "producteur", "produit", "lot", "fichier")
     ):
@@ -2023,6 +2739,76 @@ def _compose_table_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
 
 
 def _compose_chart_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> dict[str, Any] | None:
+    intent_family = str((pack.plan.answer_contract or {}).get("intent_family") or "").upper()
+    if intent_family == "STOCK_CURRENT" and sql_payload.get("current_stock"):
+        rows = sql_payload.get("current_stock") or []
+        return {
+            "type": "chart",
+            "chart_type": "bar",
+            "title": "Stock disponible par produit",
+            "x_key": "product",
+            "y_key": "available_stock_kg",
+            "unit": "kg",
+            "evidence_refs": [{"type": "SQL", "source_id": "stocks:current_stock"}],
+            "data": [
+                {
+                    "product": _fr_product(row.get("product")),
+                    "available_stock_kg": round(float(row.get("available_stock_kg", row.get("restant_kg", 0.0)) or 0.0), 2),
+                }
+                for row in rows
+            ],
+        }
+    if intent_family == "POSTHARVEST_AVAILABLE_LOTS" and sql_payload.get("available_postharvest_lots"):
+        rows = sql_payload.get("available_postharvest_lots") or []
+        return {
+            "type": "chart",
+            "chart_type": "bar",
+            "title": "Quantité restante par lot",
+            "x_key": "batch_ref",
+            "y_key": "current_qty",
+            "unit": "kg",
+            "evidence_refs": [{"type": "SQL", "source_id": "batches:available_postharvest_lots"}],
+            "data": [
+                {"batch_ref": str(r.get("batch_ref") or ""), "current_qty": round(float(r.get("current_qty", 0.0) or 0.0), 2)}
+                for r in rows
+            ],
+        }
+    if intent_family == "LOSS_RANKING" and (sql_payload.get("batch_summary") or sql_payload.get("material_balance")):
+        rows = sorted((sql_payload.get("batch_summary") or sql_payload.get("material_balance") or []), key=lambda r: float(r.get("loss_pct", 0.0) or 0.0), reverse=True)
+        return {
+            "type": "chart",
+            "chart_type": "bar",
+            "title": "Pertes (%) par lot",
+            "x_key": "batch_ref",
+            "y_key": "loss_pct",
+            "unit": "%",
+            "evidence_refs": [{"type": "SQL", "source_id": "material_balance:rows"}],
+            "data": [{"batch_ref": str(r.get("batch_ref") or ""), "loss_pct": round(float(r.get("loss_pct", 0.0) or 0.0), 2)} for r in rows],
+        }
+    if intent_family == "INPUT_OUTPUT_GAP" and (sql_payload.get("batch_summary") or sql_payload.get("material_balance")):
+        rows = sorted((sql_payload.get("batch_summary") or sql_payload.get("material_balance") or []), key=lambda r: float(r.get("gap_qty", 0.0) or 0.0), reverse=True)
+        return {
+            "type": "chart",
+            "chart_type": "bar",
+            "title": "Écart matière (kg) par lot",
+            "x_key": "batch_ref",
+            "y_key": "gap_qty",
+            "unit": "kg",
+            "evidence_refs": [{"type": "SQL", "source_id": "material_balance:rows"}],
+            "data": [{"batch_ref": str(r.get("batch_ref") or ""), "gap_qty": round(float(r.get("gap_qty", 0.0) or 0.0), 2)} for r in rows],
+        }
+    if intent_family == "STAGE_LOSS_ANALYSIS" and sql_payload.get("stage_loss_analysis"):
+        rows = sorted(sql_payload.get("stage_loss_analysis") or [], key=lambda r: float(r.get("loss_pct", 0.0) or 0.0), reverse=True)
+        return {
+            "type": "chart",
+            "chart_type": "bar",
+            "title": "Perte (%) par étape",
+            "x_key": "stage_name",
+            "y_key": "loss_pct",
+            "unit": "%",
+            "evidence_refs": [{"type": "SQL", "source_id": "process_steps:stage_loss_analysis"}],
+            "data": [{"stage_name": str(r.get("stage_name") or r.get("stage") or ""), "loss_pct": round(float(r.get("loss_pct", 0.0) or 0.0), 2)} for r in rows],
+        }
     if pack.plan.answer_type == "chart_stock_multi":
         rows = sql_payload.get("current_stock") or []
         if not rows:
@@ -2216,6 +3002,12 @@ def _compose_recommendation_block(*, pack: EvidencePack) -> dict[str, Any] | Non
                 "reason": str(action.get("reason") or ""),
                 "evidence": [str(ref.get("type") or "").upper() for ref in refs if str(ref.get("type") or "").strip()],
                 "evidence_details": [str(ref.get("short_fact") or ref.get("label") or "") for ref in refs],
+                "evidence_ref_summary": [
+                    f"{str(ref.get('type') or '').upper()}:{str(ref.get('source_id') or ref.get('label') or '').strip()}"
+                    for ref in refs
+                    if str(ref.get("type") or "").strip()
+                ],
+                "evidence_refs_count": len(refs),
                 "evidence_refs": refs,
                 "affected_lot": action.get("related_batch"),
                 "affected_product": action.get("related_product"),
@@ -2228,6 +3020,8 @@ def _compose_recommendation_block(*, pack: EvidencePack) -> dict[str, Any] | Non
     return {
         "type": "recommendations",
         "title": "Actions recommandées",
+        "recommendation_count": len(items),
+        "evidence_refs_total": sum(int(item.get("evidence_refs_count") or 0) for item in items),
         "items": items,
     }
 
@@ -2432,15 +3226,48 @@ def _warning_label(code: str) -> str:
         "NUMERIC_CLAIMS_NOT_GROUNDED": "Certaines valeurs numériques ne sont pas correctement justifiées.",
         "MISSING_RAG_SOURCE": "Aucune source RAG fiable n’a été trouvée.",
         "MISSING_RECOMMENDATION_SOURCE": "Aucune source de recommandation n’a été trouvée.",
+        "MISSING_EXPECTED_ROUTE_EVIDENCE": "Certaines preuves attendues pour cette route sont indisponibles.",
+        "MISSING_DATA_SIGNALLED": "La réponse signale une donnée manquante.",
+        "PRODUCT_FILTER_IGNORED": "Le filtre produit détecté était ambigu et a été ignoré.",
         "SQL_ML_CONTRADICTION": "Les signaux SQL et ML ne sont pas totalement cohérents.",
         "CONTRADICTORY_CONTEXT_POSSIBLE": "Des informations contradictoires peuvent exister dans les sources.",
         "INCOMPLETE_SQL_DATA": "Les données SQL sont incomplètes.",
+        "UNMAPPED_SQL_OPERATION": "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable.",
     }
     if value in mapping:
         return mapping[value]
-    if re.fullmatch(r"[A-Z0-9_]+", value):
+    if _warning_category(value) == "TECHNICAL_WARNING":
         return "Un avertissement technique a été détecté. Voir les métadonnées pour le détail."
+    if re.fullmatch(r"[A-Z0-9_]+", value):
+        return "Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
     return value
+
+
+def _warning_category(code: str) -> str:
+    value = str(code or "").strip().upper()
+    if not value:
+        return "BUSINESS_INFO"
+    if any(
+        value.startswith(prefix)
+        for prefix in ("AGENT_ERROR_", "AGENT_TIMEOUT_", "LLM_PROVIDER_ERROR", "SQL_TOOL_EXCEPTION", "DB_", "SERIALIZATION_")
+    ) or value.endswith("_EXCEPTION") or value.endswith("_ERROR") or value.endswith("_TIMEOUT"):
+        return "TECHNICAL_WARNING"
+    if value in {
+        "MISSING_EXPECTED_ROUTE_EVIDENCE",
+        "MISSING_SQL_EVIDENCE",
+        "MISSING_RAG_EVIDENCE",
+        "MISSING_ML_EVIDENCE",
+        "MISSING_RECOMMENDATION_EVIDENCE",
+        "MISSING_RAG_SOURCE",
+        "MISSING_RECOMMENDATION_SOURCE",
+        "WEAK_RETRIEVAL",
+        "RAG_CONTENT_MISSING",
+        "SQL_ML_CONTRADICTION",
+    }:
+        return "EVIDENCE_WARNING"
+    if value in {"NO_SQL_DATA", "SQL_DATA_INCOMPLETE", "INCOMPLETE_SQL_DATA", "PRODUCT_FILTER_IGNORED", "MISSING_DATA_SIGNALLED", "UNMAPPED_SQL_OPERATION"}:
+        return "BUSINESS_WARNING"
+    return "BUSINESS_INFO"
 
 
 def _evidence_roles(pack: EvidencePack) -> list[str]:
@@ -2463,7 +3290,10 @@ def _has_recommendation_evidence_refs(item: dict[str, Any]) -> bool:
     for ref in refs:
         if not isinstance(ref, dict):
             continue
-        if str(ref.get("type") or "").upper() in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
+        ref_type = str(ref.get("type") or "").upper()
+        if ref_type == "RAG" and str(ref.get("quality_status") or "").upper() in {"WEAK", "REJECTED"}:
+            continue
+        if ref_type in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
             return True
     return False
 

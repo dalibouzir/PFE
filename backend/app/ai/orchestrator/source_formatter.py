@@ -143,6 +143,10 @@ def _build_recommendation_source(agent_results: list[AgentResult]) -> dict[str, 
             if isinstance(refs, list) and any(
                 isinstance(ref, dict)
                 and str(ref.get("type") or "").upper() in {"SQL", "RAG", "ML", "RULE"}
+                and not (
+                    str(ref.get("type") or "").upper() == "RAG"
+                    and str(ref.get("quality_status") or "").upper() in {"WEAK", "REJECTED"}
+                )
                 and str(ref.get("source_id") or "").strip()
                 for ref in refs
             ):
