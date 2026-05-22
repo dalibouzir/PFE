@@ -440,11 +440,9 @@ function responseHasCleanSqlEvidence(response?: AssistantChatResponse): boolean 
   const route = `${response?.mode || ""} ${metricText(metrics, "orchestration.route")}`.toUpperCase();
   const sqlStatus = metricText(metrics, "sql_dispatch_trace.evidence_status") || metricText(metrics, "evidence_status.sql");
   const normalizedStatus = sqlStatus.toUpperCase();
-  const warningCount = Number(metric(metrics, "orchestration.warning_count")?.value || 0);
   return (
     route.includes("SQL_ONLY") &&
-    ["HAS_EVIDENCE", "PROVEN_NO_DATA"].includes(normalizedStatus) &&
-    warningCount === 0
+    ["HAS_EVIDENCE", "PROVEN_NO_DATA"].includes(normalizedStatus)
   );
 }
 

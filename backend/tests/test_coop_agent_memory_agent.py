@@ -29,6 +29,12 @@ def test_should_not_reuse_for_unrelated_reset_query():
     assert agent.should_reuse_context(query="Quelle meteo demain a Tunis ?", current_entities=current, previous_entities=previous) is False
 
 
+def test_combined_reset_and_ambiguous_lot_query_is_detected():
+    agent = _agent()
+    assert agent._is_combined_reset_and_ambiguous_lot_query("Oublie ce lot. Et celui-ci, quelle est sa perte ?") is True
+    assert agent._is_combined_reset_and_ambiguous_lot_query("Et celui-ci, quelle est sa perte ?") is False
+
+
 def test_merge_drops_previous_batch_on_product_change():
     agent = _agent()
     current = {"product": ["peanut"]}

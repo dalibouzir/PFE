@@ -16,7 +16,11 @@ from app.models.user import User
 STAGE_PATTERN = re.compile(r"\b(cleaning|drying|sorting|packaging|nettoyage|séchage|sechage|tri|emballage)\b", re.IGNORECASE)
 PRODUCT_PATTERN = re.compile(r"\b(mango|mangue|peanut|arachide|millet|mil)\b", re.IGNORECASE)
 REFERENCE_PRONOUN_PATTERN = re.compile(
-    r"\b(ce lot|celui-ci|celui ci|ces risques|ce risque|cette étape|cette etape|ceux-ci|cela|et celui-ci|et celui ci)\b",
+    r"\b(ce lot|ce produit|ce producteur|celui-ci|celui ci|ces risques|ce risque|cette étape|cette etape|ceux-ci|cela|et celui-ci|et celui ci|le premier)\b",
+    re.IGNORECASE,
+)
+AMBIGUOUS_LOT_REFERENCE_PATTERN = re.compile(
+    r"\b(celui-ci|celui ci|celui-là|celui la|ce lot|ceci|sa perte|ses pertes|le precedent|le précédent|ce meme lot|ce même lot)\b",
     re.IGNORECASE,
 )
 FOLLOWUP_PRODUCT_PATTERN = re.compile(
@@ -51,6 +55,24 @@ class MemoryAgent(BaseAgent):
             )
 
         previous = self.get_recent_conversation_context(context.conversation_id)
+        if self._is_combined_reset_and_ambiguous_lot_query(query):
+            # Reset + ambiguous lot reference in the same user turn must never reuse stale lot context.
+            sanitized_entities = dict(context.detected_entities or {})
+            sanitized_entities.pop("batch_ref", None)
+            sanitized_entities.pop("batch_ref_candidate", None)
+            sanitized_entities["needs_batch_clarification"] = True
+            return AgentResult(
+                agent_name=self.name,
+                route=context.route,
+                answer_part="",
+                data={
+                    "entities": sanitized_entities,
+                    "history_count": len(previous),
+                    "memory_reused": False,
+                },
+                confidence=0.78,
+                execution_time_ms=3,
+            )
         previous_entities = self.extract_last_entities_from_history(previous, current_query=query)
         should_reuse = self.should_reuse_context(query=query, current_entities=context.detected_entities, previous_entities=previous_entities)
         merged = self.merge_entities(context.detected_entities, previous_entities) if should_reuse else dict(context.detected_entities or {})
@@ -137,7 +159,7 @@ class MemoryAgent(BaseAgent):
         if current_module and previous_module and current_module != "global" and previous_module != "global" and current_module != previous_module:
             return False
 
-        # Reuse only when current turn is underspecified.
+        # Reuse only on explicit follow-up markers.
         has_explicit_entity = bool(
             (current_entities or {}).get("batch_ref")
             or (current_entities or {}).get("member_name")
@@ -146,7 +168,7 @@ class MemoryAgent(BaseAgent):
         has_only_product = bool((current_entities or {}).get("product")) and not has_explicit_entity
         if has_only_product and lowered.startswith(("pour ", "et pour ")):
             return True
-        return not has_explicit_entity
+        return False
 
     def merge_entities(self, current_entities: dict, previous_entities: dict) -> dict:
         merged = dict(previous_entities)
@@ -171,3 +193,7 @@ class MemoryAgent(BaseAgent):
         except Exception:
             return set()
         return {str(row).upper() for row in rows if str(row or "").strip()}
+
+    def _is_combined_reset_and_ambiguous_lot_query(self, query: str) -> bool:
+        lowered = str(query or "").lower().strip()
+        return bool(RESET_CONTEXT_PATTERN.search(lowered) and AMBIGUOUS_LOT_REFERENCE_PATTERN.search(lowered))

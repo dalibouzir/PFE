@@ -4,12 +4,23 @@ from app.ai.orchestrator.evidence_pipeline import AnswerPlan, EvidencePack, comp
 from app.ai.schemas.agent_schemas import AgentRoute
 
 
-def _pack(route: AgentRoute, question: str, sql_payload: dict, *, intent_family: str, rag_chunks: list[dict] | None = None, recs: list[dict] | None = None) -> EvidencePack:
+def _pack(
+    route: AgentRoute,
+    question: str,
+    sql_payload: dict,
+    *,
+    intent_family: str,
+    rag_chunks: list[dict] | None = None,
+    recs: list[dict] | None = None,
+    ml_payload: dict | None = None,
+) -> EvidencePack:
     operation = str(sql_payload.get("operation") or "")
     payload = dict(sql_payload)
     if operation and operation not in payload:
         if operation == "get_current_stock":
             payload[operation] = payload.get("current_stock") or []
+        elif operation == "get_members_list":
+            payload[operation] = payload.get("members_list") or []
         elif operation == "get_available_postharvest_lots":
             payload[operation] = payload.get("available_postharvest_lots") or []
         elif operation in {"get_canonical_material_balance", "get_canonical_material_balance_for_lots"}:
@@ -18,6 +29,9 @@ def _pack(route: AgentRoute, question: str, sql_payload: dict, *, intent_family:
             payload[operation] = payload.get("stage_loss_analysis") or []
         else:
             payload[operation] = []
+    sql_rows = [{"id": 1}] if payload else []
+    if operation == "get_members_list":
+        sql_rows = list(payload.get("members_list") or [])
     return EvidencePack(
         question=question,
         plan=AnswerPlan(
@@ -32,9 +46,9 @@ def _pack(route: AgentRoute, question: str, sql_payload: dict, *, intent_family:
             answer_contract={"route": route.value, "intent_family": intent_family},
         ),
         route=route,
-        sql={"tables_used": ["batches"], "rows": [{"id": 1}] if payload else [], "metrics": {}, "calculations": {}, "payload": payload},
+        sql={"tables_used": ["batches"], "rows": sql_rows, "metrics": {}, "calculations": {}, "payload": payload},
         rag={"chunks": rag_chunks or [], "titles": [c.get("title", "") for c in (rag_chunks or [])], "content_snippets": [c.get("content", "") for c in (rag_chunks or [])], "scores": [0.8] * len(rag_chunks or []), "topics": []},
-        ml={},
+        ml=ml_payload or {},
         recommendations={"actions": recs or [], "insufficient_evidence": False},
         warnings=[],
         confidence=0.9,
@@ -136,3 +150,47 @@ def test_best_practices_weak_rag_returns_clean_insufficiency():
     )
     answer, _, _ = compose_answer(pack, verify_evidence(pack))
     assert answer == "Je n’ai pas assez de contexte documentaire fiable pour répondre précisément à cette question."
+
+
+def test_members_list_question_returns_members_table_block():
+    pack = _pack(
+        AgentRoute.SQL_ONLY,
+        "lister notre membres",
+        {
+            "operation": "get_members_list",
+            "row_count": 2,
+            "members_list": [
+                {"member_name": "Awa Diop", "member_code": "MEM-001", "phone": "+221700000001", "status": "active", "main_product": "mango"},
+                {"member_name": "Moussa Kane", "member_code": "MEM-002", "phone": "+221700000002", "status": "active", "main_product": "peanut"},
+            ],
+            "sql_dispatch_trace": {"sql_operation": "get_members_list", "row_count": 2},
+        },
+        intent_family="factual_sql",
+    )
+    answer, blocks, _ = compose_answer(pack, verify_evidence(pack))
+    assert "voici la liste des membres disponibles" in answer.lower()
+    table = next(b for b in blocks if b.get("type") == "table")
+    assert table.get("title") == "Liste des membres / producteurs"
+    assert table.get("columns") == ["Nom", "Code", "Contact", "Statut", "Produit/Parcelle"]
+    assert len(table.get("rows") or []) == 2
+
+
+def test_sql_only_sources_do_not_include_ml_when_ml_not_materially_used():
+    pack = _pack(
+        AgentRoute.SQL_ONLY,
+        "affiche la liste des membres",
+        {
+            "operation": "get_members_list",
+            "row_count": 1,
+            "members_list": [
+                {"member_name": "Awa Diop", "member_code": "MEM-001", "phone": "+221700000001", "status": "active", "main_product": "mango"},
+            ],
+            "sql_dispatch_trace": {"sql_operation": "get_members_list", "row_count": 1},
+        },
+        intent_family="factual_sql",
+        ml_payload={"evidence_status": "PROVEN_NO_DATA", "model_version": "ml_signal"},
+    )
+    _, blocks, _ = compose_answer(pack, verify_evidence(pack))
+    source_block = next((b for b in blocks if b.get("type") == "sources"), {"items": []})
+    roles = [str((item or {}).get("role") or "") for item in (source_block.get("items") or [])]
+    assert "ML" not in roles

@@ -752,6 +752,53 @@ def _compose_llm_summary(
         return None, metadata
 
 
+def _should_use_llm_summary(
+    *,
+    pack: EvidencePack,
+    summary: str,
+    limitations: list[str],
+    degraded_missing_set: set[str],
+    missing_required: list[str],
+) -> bool:
+    if degraded_missing_set or missing_required:
+        return False
+    if "UNMAPPED_SQL_OPERATION" in set(pack.warnings or []):
+        return False
+    sql_trace = (pack.sql.get("payload") or {}).get("sql_dispatch_trace") or {}
+    sql_operation = str(sql_trace.get("sql_operation") or "").strip()
+    if sql_operation == "clarification_required":
+        return False
+
+    intent_family = str(((pack.plan.answer_contract or {}).get("intent_family") or "")).upper()
+    lowered_q = _normalize_for_match(pack.question)
+    explanation_markers = ("explique", "pourquoi", "que faire", "comment", "conseil", "recommand")
+    asks_explanation = any(token in lowered_q for token in explanation_markers)
+    sql_status = _normalize_evidence_status(pack.sql.get("evidence_status"))
+
+    if pack.route == AgentRoute.SQL_ONLY and not asks_explanation:
+        if sql_operation in {"get_top_farmers", "get_low_stock_alerts"}:
+            return False
+        simple_sql_intents = {
+            "FACTUAL_SQL",
+            "STOCK_CURRENT",
+            "POSTHARVEST_AVAILABLE_LOTS",
+            "LOSS_RANKING",
+            "INPUT_OUTPUT_GAP",
+            "LOT_COMPARISON",
+            "STAGE_LOSS_ANALYSIS",
+        }
+        if intent_family in simple_sql_intents:
+            return False
+        if sql_status == EVIDENCE_NO_DATA and len(limitations or []) <= 2 and len(str(summary or "")) <= 220:
+            return False
+
+    if pack.route in {AgentRoute.RAG_ONLY, AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_FULL}:
+        return True
+    if pack.route in {AgentRoute.RECOMMENDATION_ONLY, AgentRoute.HYBRID_RAG_RECOMMENDATION}:
+        return True
+    return asks_explanation
+
+
 def _generate_kpi_cards(sql_payload: dict[str, Any], pack: EvidencePack) -> dict[str, Any] | None:
     cards: list[dict[str, Any]] = []
     intent_family = str((pack.plan.answer_contract or {}).get("intent_family") or "").upper()
@@ -1044,7 +1091,7 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
                 }
                 for title in (pack.rag.get("titles") or [])[:5]
             ]
-            + ([{"source": str(pack.ml.get("model_version") or "ml_signal"), "role": "ML"}] if pack.ml else []),
+            + ([{"source": str(pack.ml.get("model_version") or "ml_signal"), "role": "ML"}] if _has_material_ml_evidence(pack=pack) else []),
         }
     )
 
@@ -1086,7 +1133,13 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
     # Apply manager-friendly summary polish from locked evidence across all business routes.
     llm_summary = None
     llm_metadata = {"llm_attempted": False, "fallback_used": False, "llm_duration_ms": 0, "provider": "unknown"}
-    if not degraded_missing_set and not missing_required and "UNMAPPED_SQL_OPERATION" not in set(pack.warnings or []):
+    if _should_use_llm_summary(
+        pack=pack,
+        summary=summary,
+        limitations=limitations,
+        degraded_missing_set=degraded_missing_set,
+        missing_required=missing_required,
+    ):
         llm_summary, llm_metadata = _compose_llm_summary(
             pack=pack,
             sql_payload=sql_payload,
@@ -1193,12 +1246,16 @@ def _compose_next_action(*, pack: EvidencePack, recommendation_block: dict[str, 
         lead = recommendation_block.get("items", [])[0]
         priority = str(lead.get("priority") or "MEDIUM").upper()
         reason = str(lead.get("reason") or "").strip()
+        proof_count = int(lead.get("evidence_refs_count") or 0)
         target_tokens = [lead.get("affected_lot"), lead.get("affected_product"), lead.get("affected_stage")]
         target = " / ".join([str(token) for token in target_tokens if str(token or "").strip()])
         target_suffix = f" (cible: {target})" if target else ""
+        action_text = str(lead.get("action") or "").strip()
         if reason:
-            return f"[{priority}] {lead.get('action')}{target_suffix}. Justification: {reason}"
-        return f"[{priority}] {lead.get('action')}{target_suffix}."
+            return _clean_french_text(
+                f"[{priority}] {action_text}{target_suffix}. Raison: {reason}. Preuve: {proof_count} référence(s) vérifiée(s)."
+            )
+        return _clean_french_text(f"[{priority}] {action_text}{target_suffix}. Preuve: {proof_count} référence(s) vérifiée(s).")
 
     anchor_lot: str | None = None
     if sql_payload.get("process_step_losses"):
@@ -1321,6 +1378,9 @@ def _compose_route_template_answer(
     recommendation_block: dict[str, Any] | None,
     sql_payload: dict[str, Any],
 ) -> str:
+    sql_trace = sql_payload.get("sql_dispatch_trace") or {}
+    if str(sql_trace.get("sql_operation") or "").strip() == "clarification_required":
+        return "De quel lot parlez-vous ? Indiquez une référence comme LOT-MILX-001."
     intent_family = str(((pack.plan.answer_contract or {}).get("intent_family") or "")).upper()
     if pack.route == AgentRoute.RAG_ONLY:
         if not (pack.rag.get("chunks") or pack.rag.get("content_snippets")):
@@ -1435,7 +1495,7 @@ def _compose_route_template_answer(
             answer_lines.append(f"- {item}")
     else:
         answer_lines.append("- Aucune limite critique signalée.")
-    return "\n".join(answer_lines)
+    return _clean_french_text("\n".join(answer_lines))
 
 
 def _build_checklist_points(snippets: list[str]) -> list[str]:
@@ -1565,6 +1625,8 @@ def _filter_user_warning_codes(*, pack: EvidencePack, verification: EvidenceVeri
             "MISSING_RAG_EVIDENCE",
         }:
             continue
+        if proven_no_data and re.fullmatch(r"[A-Z0-9_]+", upper) and _warning_category(upper) != "TECHNICAL_WARNING":
+            continue
         if sql_complete and code in {"PRODUCT_FILTER_IGNORED", "MISSING_DATA_SIGNALLED"}:
             continue
         if sql_complete and re.fullmatch(r"[A-Z0-9_]+", code) and code not in {
@@ -1656,6 +1718,8 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
     ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
     rag_status = _normalize_evidence_status(pack.rag.get("evidence_status")) or ""
     op = str(plan.operation or "")
+    sql_trace = sql_payload.get("sql_dispatch_trace") if isinstance(sql_payload, dict) else {}
+    sql_operation = str((sql_trace or {}).get("sql_operation") or "").strip()
     if "UNMAPPED_SQL_OPERATION" in set(pack.warnings or []):
         return "Cette requête opérationnelle n’est pas encore mappée à une opération SQL fiable."
     contract = plan.answer_contract or {}
@@ -1667,14 +1731,33 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
         return "Aucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré."
     if op == "max_anomaly_score_lot" and ml_status == EVIDENCE_NO_DATA:
         return "Aucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré."
+    if (op == "get_low_stock_alerts" or sql_operation == "get_low_stock_alerts") and sql_status == EVIDENCE_NO_DATA:
+        return "Aucun produit n’est actuellement sous le seuil critique de stock."
+    if (op == "get_top_farmers" or sql_operation == "get_top_farmers"):
+        rows = sql_payload.get("top_farmers") or []
+        if isinstance(rows, list) and rows:
+            lead = rows[0] or {}
+            member_name = str(lead.get("member_name") or "N/A").strip()
+            delivered_kg = float(lead.get("total_quantity_kg", 0.0) or 0.0)
+            return f"{member_name} est le producteur ayant livré la plus grande quantité, avec {delivered_kg:.1f} kg."
     if plan.answer_type == "explanation" and rag_status == EVIDENCE_NO_DATA:
         return "Aucun contenu documentaire exploitable n’est enregistré pour cette question dans les sources RAG disponibles."
     if (
         intent_family == "FOLLOW_UP"
-        and _q_has("ce lot", "pour ce lot")
+        and _q_has("ce lot", "pour ce lot", "celui-ci", "celui ci", "ceci")
         and not (sql_payload.get("material_balance") or sql_payload.get("batch_summary") or sql_payload.get("stage_loss_analysis"))
     ):
         return "De quel lot parlez-vous ? Indiquez une référence comme LOT-MILX-001."
+    if sql_payload.get("commercial_orders_status_summary"):
+        grouped = sql_payload.get("commercial_orders_status_summary") or []
+        if grouped and _q_has("uniquement", "une seule", "dominant", "plus importante", "plus important"):
+            top = max(grouped, key=lambda row: float(row.get("total_amount_fcfa", 0.0) or 0.0))
+            return f"Statut dominant des commandes: {top.get('status')} ({int(top.get('count', 0) or 0)} commande(s), {float(top.get('total_amount_fcfa', 0.0) or 0.0):.0f} FCFA)."
+    if sql_payload.get("invoices_status_summary"):
+        grouped = sql_payload.get("invoices_status_summary") or []
+        if grouped and _q_has("uniquement", "une seule", "dominant", "plus importante", "plus important"):
+            top = max(grouped, key=lambda row: float(row.get("total_amount_fcfa", 0.0) or 0.0))
+            return f"Statut dominant des factures: {top.get('status')} ({int(top.get('count', 0) or 0)} facture(s), {float(top.get('total_amount_fcfa', 0.0) or 0.0):.0f} FCFA)."
     if sql_payload.get("collecte_traceability_summary") is not None and _q_has("collecte", "input", "bl", "justificatif"):
         srows = sql_payload.get("collecte_traceability_summary") or []
         drows = sql_payload.get("collecte_traceability") or []
@@ -1690,6 +1773,15 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
                 f"{int(row.get('linked_to_lot', 0) or 0)} liées à un lot. "
                 f"Producteur/produit/statut fichier: {file_status}."
             )
+    if (
+        (_q_has("difference", "différence", "écart", "ecart") and _q_has("etape", "étape", "lot"))
+        and sql_payload.get("process_step_losses")
+        and (sql_payload.get("material_balance") or sql_payload.get("batch_summary"))
+    ):
+        return (
+            "Les valeurs peuvent différer: l’analyse par étape mesure une perte locale au niveau process, "
+            "alors que le bilan lot agrège l’ensemble entrée-sortie du lot."
+        )
     # Count/ranking first-sentence strictness: make requested noun/value explicit.
     if _q_has("parcelle") and sql_payload.get("parcel_count") is not None:
         return f"Parcelles: {int(sql_payload.get('parcel_count', 0) or 0)}."
@@ -2114,9 +2206,25 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
     if sql_payload.get("parcel_count") is not None:
         return f"La coopérative compte {int(sql_payload.get('parcel_count', 0) or 0)} parcelle(s) enregistrée(s)."
 
-    if sql_payload.get("members_list") is not None and plan.module == "members":
+    if sql_payload.get("members_list") is not None and (plan.module == "members" or sql_operation == "get_members_list"):
         members = sql_payload.get("members_list") or []
-        return f"La coopérative compte {len(members)} membre(s) inscrit(s)."
+        if not members:
+            return "Aucun membre n’est enregistré pour cette coopérative."
+        if _q_has(
+            "liste les membres",
+            "lister notre membres",
+            "lister nos membres",
+            "affiche les membres",
+            "montre les producteurs",
+            "donne la liste des membres",
+            "liste des membres",
+            "lister",
+            "liste",
+            "membres",
+            "producteurs",
+        ):
+            return f"La coopérative compte {len(members)} membres inscrits. Voici la liste des membres disponibles."
+        return f"La coopérative compte {len(members)} membres inscrits."
 
     ranking_rows = _ranking_rows(sql_payload)
     if ranking_rows and plan.answer_type in {"ranking", "list"}:
@@ -2441,6 +2549,28 @@ def _build_answer_contract(
     }
 
 
+def _has_material_ml_evidence(*, pack: EvidencePack) -> bool:
+    if pack.route in {AgentRoute.ML_ONLY, AgentRoute.HYBRID_SQL_ML}:
+        return True
+    if pack.route != AgentRoute.HYBRID_FULL:
+        return False
+
+    ml_payload = pack.ml or {}
+    meaningful_ml_keys = [k for k in ml_payload.keys() if k not in {"evidence_status"}]
+    for key in meaningful_ml_keys:
+        value = ml_payload.get(key)
+        if value not in (None, "", [], {}, "UNKNOWN"):
+            return True
+
+    for action in (pack.recommendations.get("actions") or []):
+        if not isinstance(action, dict):
+            continue
+        refs = action.get("evidence_refs") or []
+        if any(str((ref or {}).get("type") or "").upper() == "ML" for ref in refs if isinstance(ref, dict)):
+            return True
+    return False
+
+
 def _compose_table_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> dict[str, Any] | None:
     trace = sql_payload.get("sql_dispatch_trace") if isinstance(sql_payload, dict) else {}
     intent_family = str(((pack.plan.answer_contract or {}).get("intent_family") or (trace or {}).get("intent_family") or "")).upper()
@@ -2597,6 +2727,24 @@ def _compose_table_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
             ],
         }
 
+    if sql_payload.get("members_list") is not None:
+        rows = sql_payload.get("members_list") or []
+        return {
+            "type": "table",
+            "title": "Liste des membres / producteurs",
+            "columns": ["Nom", "Code", "Contact", "Statut", "Produit/Parcelle"],
+            "rows": [
+                [
+                    str(row.get("member_name") or "N/A"),
+                    str(row.get("member_code") or "N/A"),
+                    str(row.get("phone") or row.get("contact") or "N/A"),
+                    str(row.get("status") or "N/A"),
+                    str(row.get("main_product") or row.get("parcel_summary") or row.get("parcels_summary") or row.get("village") or "N/A"),
+                ]
+                for row in rows
+            ],
+        }
+
     if sql_payload.get("parcels_list") is not None:
         rows = sql_payload.get("parcels_list") or []
         return {
@@ -2669,6 +2817,17 @@ def _compose_table_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
         }
 
     if sql_payload.get("invoices_summary") is not None:
+        grouped = sql_payload.get("invoices_status_summary") or []
+        if grouped:
+            return {
+                "type": "table",
+                "title": "Factures par statut de paiement",
+                "columns": ["Statut", "Nombre", "Montant total"],
+                "rows": [
+                    [str(row.get("status") or ""), str(int(row.get("count", 0) or 0)), f"{float(row.get('total_amount_fcfa', 0.0) or 0.0):.0f} FCFA"]
+                    for row in grouped
+                ],
+            }
         rows = sql_payload.get("invoices_summary") or []
         return {
             "type": "table",
@@ -2686,6 +2845,17 @@ def _compose_table_block(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
         }
 
     if sql_payload.get("commercial_orders") is not None:
+        grouped = sql_payload.get("commercial_orders_status_summary") or []
+        if grouped:
+            return {
+                "type": "table",
+                "title": "Commandes commerciales par statut",
+                "columns": ["Statut", "Nombre", "Montant total"],
+                "rows": [
+                    [str(row.get("status") or ""), str(int(row.get("count", 0) or 0)), f"{float(row.get('total_amount_fcfa', 0.0) or 0.0):.0f} FCFA"]
+                    for row in grouped
+                ],
+            }
         rows = sql_payload.get("commercial_orders") or []
         return {
             "type": "table",
@@ -3612,6 +3782,15 @@ def _warning_label(code: str) -> str:
     if re.fullmatch(r"[A-Z0-9_]+", value):
         return "Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
     return value
+
+
+def _clean_french_text(value: str) -> str:
+    text = str(value or "")
+    text = text.replace("L'l", "L’").replace("l'l", "l’").replace("L’l’", "L’").replace("l’l’", "l’")
+    text = re.sub(r"\b[Ll][’']\s*[Ll][’']", "l’", text)
+    text = re.sub(r"\s+([,;:.!?])", r"\1", text)
+    text = re.sub(r"([,;:.!?]){2,}", r"\1", text)
+    return text.strip()
 
 
 def _warning_category(code: str) -> str:

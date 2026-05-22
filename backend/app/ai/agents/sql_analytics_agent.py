@@ -46,6 +46,7 @@ class SQLAnalyticsAgent(BaseAgent):
         module = entities.get("module", "global")
         member_name = entities.get("member_name")
 
+        requested_limit = _extract_requested_limit(normalized)
         member_subject_hint = any(
             token in normalized
             for token in ("membre", "membres", "member", "members", "farmer", "farmers", "producteur", "producteurs")
@@ -332,7 +333,8 @@ class SQLAnalyticsAgent(BaseAgent):
 
         if asks_member_ranking:
             top_farmers = self.sql_tools.get_top_farmers(product=product, date_range=effective_date_range)
-            payload["top_farmers"] = top_farmers.get("items", [])
+            top_items = top_farmers.get("items", [])
+            payload["top_farmers"] = top_items[:requested_limit] if requested_limit else top_items
             sources.extend(top_farmers.get("sources", []))
             warnings.extend(top_farmers.get("warnings", []))
 
@@ -356,6 +358,7 @@ class SQLAnalyticsAgent(BaseAgent):
             payload["invoices_module_available"] = self.sql_tools.module_available("commercial_invoices")
             invoices = self.sql_tools.get_invoices_summary()
             payload["invoices_summary"] = invoices.get("items", [])
+            payload["invoices_status_summary"] = invoices.get("status_summary", [])
             sources.extend(invoices.get("sources", []))
             warnings.extend(invoices.get("warnings", []))
 
@@ -366,6 +369,7 @@ class SQLAnalyticsAgent(BaseAgent):
             orders = self.sql_tools.get_commercial_orders_summary()
             totals = self.sql_tools.get_commercial_totals()
             payload["commercial_orders"] = orders.get("items", [])
+            payload["commercial_orders_status_summary"] = orders.get("status_summary", [])
             payload["commercial_totals"] = totals.get("items", [])
             sources.extend(orders.get("sources", []))
             sources.extend(totals.get("sources", []))
@@ -421,9 +425,8 @@ class SQLAnalyticsAgent(BaseAgent):
                 "farmer advance",
                 "treasury sync",
                 "devis status",
-                "producteur",
-                "producer",
-                "parcelle",
+                "avance producteur",
+                "avances producteur",
             )
         )
         phase3_treasury_intent = any(
@@ -818,6 +821,18 @@ class SQLAnalyticsAgent(BaseAgent):
                 warnings=[],
                 execution_time_ms=int((time.perf_counter() - start) * 1000),
             )
+        normalized = _normalize_text(query)
+        if ("efficacite" in normalized) and any(token in normalized for token in ("producteur", "producteurs", "membre", "membres")):
+            return AgentResult(
+                agent_name=self.name,
+                route=context.route,
+                answer_part="Cette efficacité producteur n’est pas calculable de manière fiable avec les données disponibles. Données manquantes: sorties/pertes attribuées par producteur sur la même période.",
+                data={"sql_dispatch_trace": {"intent_family": intent_family, "sql_operation": "producer_efficiency_unsupported", "row_count": 0, "evidence_status": EVIDENCE_UNSUPPORTED}},
+                sources=[],
+                confidence=0.55,
+                warnings=[],
+                execution_time_ms=int((time.perf_counter() - start) * 1000),
+            )
 
         if intent_family not in {
             "STOCK_CURRENT",
@@ -990,9 +1005,27 @@ def _extract_days(text: str, default_days: int) -> int:
     return default_days
 
 
+def _extract_requested_limit(text: str) -> int | None:
+    normalized = _normalize_text(text)
+    m = re.search(r"\btop\s*(\d+)\b", normalized)
+    if m:
+        return max(1, int(m.group(1)))
+    if "une seule" in normalized or "uniquement" in normalized or "seulement" in normalized:
+        return 1
+    if "top 1" in normalized or "premier" in normalized:
+        return 1
+    return None
+
+
 def _detect_deterministic_operation(normalized: str) -> str | None:
     if "stock" in normalized and any(token in normalized for token in ("mouvement", "mouvements", "journal", "historique", "nature", "origine")):
         return "get_stock_movements_journal"
+    if ("stock" in normalized or "produit" in normalized) and any(token in normalized for token in ("seuil", "rupture", "sous le seuil", "proche du seuil")):
+        return "get_low_stock_alerts"
+    if ("stock" in normalized or "produit" in normalized) and all(token in normalized for token in ("total", "disponible")):
+        return "get_current_stock"
+    if any(token in normalized for token in ("disponible", "reserve", "restant")) and any(token in normalized for token in ("mangue", "arachide", "mil", "bissap", "produit")):
+        return "get_current_stock"
     if any(token in normalized for token in ("collecte", "collectes", "collecte", "collectees", "collectées")) and not any(
         token in normalized for token in ("bl", "justificatif", "traceabil", "preuve", "lot lie", "lot lié")
     ) and any(token in normalized for token in ("par produit", "quantite", "quantité", "cumulee", "cumulée", "agreg", "agrèg", "domine")):
@@ -1699,6 +1732,16 @@ def _build_sql_answer(payload: dict[str, Any]) -> str:
         return "\n".join(lines)
 
     if payload.get("invoices_summary") is not None:
+        grouped = payload.get("invoices_status_summary") or []
+        normalized_query = _normalize_text(str(payload.get("query_text") or ""))
+        if grouped and any(token in normalized_query for token in ("statut", "status", "regroupe", "regroup", "paiement")):
+            if any(token in normalized_query for token in ("une seule", "uniquement", "seulement", "plus importante")):
+                top = max(grouped, key=lambda row: float(row.get("total_amount_fcfa", 0.0) or 0.0))
+                return f"Statut dominant des factures: {top.get('status')} ({int(top.get('count', 0))} facture(s), {float(top.get('total_amount_fcfa', 0.0)):.0f} FCFA)."
+            return "Factures par statut: " + "; ".join(
+                f"{row.get('status')} ({int(row.get('count', 0))}, {float(row.get('total_amount_fcfa', 0.0)):.0f} FCFA)"
+                for row in grouped
+            ) + "."
         rows = payload.get("invoices_summary", [])
         if rows:
             lines = [f"Factures ({len(rows)}):"]
@@ -1712,6 +1755,16 @@ def _build_sql_answer(payload: dict[str, Any]) -> str:
         return "Aucune facture n’est disponible dans les données actuelles."
 
     if payload.get("commercial_orders") is not None:
+        grouped = payload.get("commercial_orders_status_summary") or []
+        normalized_query = _normalize_text(str(payload.get("query_text") or ""))
+        if grouped and any(token in normalized_query for token in ("statut", "status", "regroupe", "regroup")):
+            if any(token in normalized_query for token in ("une seule", "uniquement", "seulement", "plus importante")):
+                top = max(grouped, key=lambda row: float(row.get("total_amount_fcfa", 0.0) or 0.0))
+                return f"Statut dominant des commandes: {top.get('status')} ({int(top.get('count', 0))} commande(s), {float(top.get('total_amount_fcfa', 0.0)):.0f} FCFA)."
+            return "Commandes par statut: " + "; ".join(
+                f"{row.get('status')} ({int(row.get('count', 0))}, {float(row.get('total_amount_fcfa', 0.0)):.0f} FCFA)"
+                for row in grouped
+            ) + "."
         rows = payload.get("commercial_orders", [])
         totals = payload.get("commercial_totals", [])
         if rows:

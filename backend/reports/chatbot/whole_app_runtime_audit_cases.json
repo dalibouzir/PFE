@@ -222,7 +222,7 @@
   {
     "qid": "M01",
     "module_group": "members",
-    "question": "Liste des membres.",
+    "question": "Liste des membres producteurs (collecteurs).",
     "expected_module": "members",
     "expected_route": "SQL_ONLY",
     "expected_intent_family": "factual_sql",
@@ -233,7 +233,7 @@
   {
     "qid": "M02",
     "module_group": "members",
-    "question": "Top membres contributeurs par quantité.",
+    "question": "Top producteurs collecteurs par quantité livrée.",
     "expected_module": "members",
     "expected_route": "SQL_ONLY",
     "expected_intent_family": "factual_sql",

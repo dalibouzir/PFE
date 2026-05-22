@@ -16,6 +16,8 @@ SOURCE_TYPE_CANONICAL = {
 def build_source_contract(*, route: AgentRoute, agent_results: list[AgentResult]) -> tuple[list[dict[str, Any]], list[str]]:
     raw_sources = _merge_and_dedupe_sources(*[item.sources for item in agent_results])
     normalized = [_normalize_source_entry(source) for source in raw_sources]
+    if route == AgentRoute.SQL_ONLY:
+        normalized = [item for item in normalized if str(item.get("type") or "").lower() != "ml"]
 
     recommendation_source = _build_recommendation_source(agent_results)
     if recommendation_source:

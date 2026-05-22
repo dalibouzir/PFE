@@ -1,0 +1,1144 @@
+{
+  "generated_at": "2026-05-22T11:17:55.452975+00:00",
+  "deployed_base_url": "https://weefarm-backend-app.prouddune-c85ebf6e.germanywestcentral.azurecontainerapps.io",
+  "total_cases": 20,
+  "same_cases": 18,
+  "diff_cases": 2,
+  "results": [
+    {
+      "case_id": "P01",
+      "question": "Quels produits sont sous le seuil critique de stock ?",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_low_stock_alerts",
+        "evidence_status": {
+          "sql": "PROVEN_NO_DATA"
+        },
+        "evidence_rows": 0,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [
+          "MISSING_SQL_SOURCE"
+        ],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7652,
+        "raw_answer": "1. Réponse directe\nJe n’ai pas trouvé de preuve opérationnelle exploitable pour répondre précisément à cette demande.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "STOCK_CURRENT",
+        "sql_operation": "get_current_stock",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2734,
+        "raw_answer": "1. Données mesurées\nLa coopérative dispose actuellement de 223.0 kg de stock disponible répartis sur 4 produits. Le produit le plus disponible est Bissap avec 78.0 kg. Détail qualité: Grade A 78.0 kg, Grade B 0.0 kg, Grade C 0.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": false,
+      "diagnosis": "mismatch_intent_family"
+    },
+    {
+      "case_id": "P02",
+      "question": "Montre les derniers mouvements de stock avec type, produit, quantité, source et date.",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_stock_movements_journal",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 10,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7568,
+        "raw_answer": "1. Réponse directe\nJournal mouvements (10): type out | produit Mil | quantité 2.0 kg | source post_harvest_step | lot LOT-MILX-001 | collecte N/A.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: inputs\n- SQL: members\n- SQL: products\n- SQL: stock_movements\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_stock_movements_journal",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 10,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2734,
+        "raw_answer": "1. Réponse directe\nJournal mouvements (10): type out | produit Mil | quantité 2.0 kg | source post_harvest_step | lot LOT-MILX-001 | collecte N/A.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: inputs\n- SQL: members\n- SQL: products\n- SQL: stock_movements\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P03",
+      "question": "Total collecté par produit sur la période disponible.",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "STOCK_CURRENT",
+        "sql_operation": "get_current_stock",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [
+          "PRODUCT_FILTER_IGNORED"
+        ],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7174,
+        "raw_answer": "1. Données mesurées\nLes stocks actuels (4 produits) sont:\n- Arachide: 59.0 kg disponibles\n- Bissap: 78.0 kg disponibles\n- Mangue: 43.0 kg disponibles\n- Mil: 43.0 kg disponibles\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "STOCK_CURRENT",
+        "sql_operation": "get_current_stock",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [
+          "PRODUCT_FILTER_IGNORED"
+        ],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2511,
+        "raw_answer": "1. Données mesurées\nLes stocks actuels (4 produits) sont:\n- Arachide: 59.0 kg disponibles\n- Bissap: 78.0 kg disponibles\n- Mangue: 43.0 kg disponibles\n- Mil: 43.0 kg disponibles\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P04",
+      "question": "Liste les membres producteurs actifs.",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_members_list",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7164,
+        "raw_answer": "1. Réponse directe\nLa coopérative compte 4 membre(s) inscrit(s).\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: members\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_members_list",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql",
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2646,
+        "raw_answer": "1. Réponse directe\nAvances producteurs: 5 avances, 1 avec devis, 5 synchronisées trésorerie.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: farmer_advances\n- SQL: members\n- SQL: parcels\n- SQL: products\n- SQL: treasury_transactions\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P05",
+      "question": "Quel producteur a livré le plus grand volume ?",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_top_farmers",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 1,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7187,
+        "raw_answer": "1. Réponse directe\nJe n’ai pas trouvé de preuve opérationnelle exploitable pour répondre précisément à cette demande.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: inputs\n- SQL: members\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_top_farmers",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 1,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2402,
+        "raw_answer": "1. Réponse directe\nJe n’ai pas trouvé de preuve opérationnelle exploitable pour répondre précisément à cette demande.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: inputs\n- SQL: members\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P06",
+      "question": "Quels lots sont prêts pour la post-récolte ?",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "POSTHARVEST_AVAILABLE_LOTS",
+        "sql_operation": "get_available_postharvest_lots",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 2,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7200,
+        "raw_answer": "1. Données mesurées\nLots post-récolte disponibles: 2. Exemple LOT-MILX-001 (Mil) 30.0 kg -> 5.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "POSTHARVEST_AVAILABLE_LOTS",
+        "sql_operation": "get_available_postharvest_lots",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 2,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2522,
+        "raw_answer": "1. Données mesurées\nLots post-récolte disponibles: 2. Exemple LOT-MILX-001 (Mil) 30.0 kg -> 5.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P07",
+      "question": "Range les lots par perte matière en kilogrammes.",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "INPUT_OUTPUT_GAP",
+        "sql_operation": "get_canonical_material_balance",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 2,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7280,
+        "raw_answer": "1. Données mesurées\nLe lot le plus critique est LOT-MILX-001 avec 74.1% de perte et une efficacité de 25.9%.\n\n2. Interprétation\nClassement établi par écart de quantité (kg), puis perte (%).\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "INPUT_OUTPUT_GAP",
+        "sql_operation": "get_canonical_material_balance",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 2,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2762,
+        "raw_answer": "1. Données mesurées\nLe lot le plus critique est LOT-MILX-001 avec 74.1% de perte et une efficacité de 25.9%.\n\n2. Interprétation\nClassement établi par écart de quantité (kg), puis perte (%).\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P08",
+      "question": "Quelle étape provoque la perte la plus élevée ?",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "STAGE_LOSS_ANALYSIS",
+        "sql_operation": "get_stage_loss_analysis",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 3,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7235,
+        "raw_answer": "1. Données mesurées\nÉtape la moins efficace: Tri (efficacité moyenne 25.9%).\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "STAGE_LOSS_ANALYSIS",
+        "sql_operation": "get_stage_loss_analysis",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 3,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2427,
+        "raw_answer": "1. Données mesurées\nÉtape la moins efficace: Tri (efficacité moyenne 25.9%).\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P09",
+      "question": "Regroupe les commandes commerciales par statut avec nombre et montant total.",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_commercial_orders_summary",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 8841,
+        "raw_answer": "1. Réponse directe\nCommandes commerciales disponibles: 4.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_orders\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_commercial_orders_summary",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2923,
+        "raw_answer": "1. Réponse directe\nCommandes commerciales disponibles: 4.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_orders\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P10",
+      "question": "Regroupe les factures par statut de paiement avec nombre et montant total.",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_invoices_summary",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 8058,
+        "raw_answer": "1. Réponse directe\nFactures disponibles: 4.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_invoices_summary",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2700,
+        "raw_answer": "1. Réponse directe\nFactures disponibles: 4.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P11",
+      "question": "Existe-t-il des commandes payées sans facture associée ?",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_commercial_invoice_linkage",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 8221,
+        "raw_answer": "1. Réponse directe\nCommandes/factures: 0 commandes payées avec facture, 0 factures payées.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- SQL: commercial_orders\n- SQL: treasury_transactions\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_commercial_invoice_linkage",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2863,
+        "raw_answer": "1. Réponse directe\nCommandes/factures: 0 commandes payées avec facture, 0 factures payées.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- SQL: commercial_orders\n- SQL: treasury_transactions\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P12",
+      "question": "Combien de transactions de trésorerie sont sans justificatif ?",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_treasury_traceability",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 10,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7517,
+        "raw_answer": "1. Réponse directe\nTrésorerie: 0 ENREGISTRE_COMPLET, 0 avec receipt_reference, 8 sans justificatif.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: treasury_transactions\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Recommandation exploitable indisponible pour cette entité.\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "get_treasury_traceability",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 10,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2755,
+        "raw_answer": "1. Réponse directe\nTrésorerie: 0 ENREGISTRE_COMPLET, 0 avec receipt_reference, 8 sans justificatif.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: treasury_transactions\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Recommandation exploitable indisponible pour cette entité.\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P13",
+      "question": "Donne une seule action fiable pour LOT-MILX-001 avec preuve.",
+      "local": {
+        "route": "OUT_OF_SCOPE",
+        "intent_family": "unsupported_hr_subjective",
+        "sql_operation": null,
+        "evidence_status": {},
+        "evidence_rows": null,
+        "response_blocks": [],
+        "summary_text": "Je ne peux pas exécuter cette demande ici. Utilisez l’application pour les actions d’interface et posez une question analytique vérifiable.",
+        "warning_codes": [],
+        "source_display": [],
+        "ml_block_present": false,
+        "latency_ms": 328,
+        "raw_answer": "Je ne peux pas exécuter cette demande ici. Utilisez l’application pour les actions d’interface et posez une question analytique vérifiable."
+      },
+      "deployed": {
+        "route": "OUT_OF_SCOPE",
+        "intent_family": "unsupported_hr_subjective",
+        "sql_operation": null,
+        "evidence_status": {},
+        "evidence_rows": null,
+        "response_blocks": [],
+        "summary_text": "Je ne peux pas exécuter cette demande ici. Utilisez l’application pour les actions d’interface et posez une question analytique vérifiable.",
+        "warning_codes": [],
+        "source_display": [],
+        "ml_block_present": false,
+        "latency_ms": 97,
+        "raw_answer": "Je ne peux pas exécuter cette demande ici. Utilisez l’application pour les actions d’interface et posez une question analytique vérifiable."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P14",
+      "question": "Top 3 actions fiables pour LOT-MILX-001, avec preuves.",
+      "local": {
+        "route": "HYBRID_FULL",
+        "intent_family": "LOT_SPECIFIC_RECOMMENDATION",
+        "sql_operation": "get_canonical_material_balance",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE",
+          "ml": "PROVEN_NO_DATA",
+          "rag": "PARTIAL_EVIDENCE"
+        },
+        "evidence_rows": 1,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "recommendations",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [
+          "MISSING_RAG_SOURCE",
+          "NO_ML_DATA",
+          "RAG_EVIDENCE_REJECTED",
+          "RAG_QUALITY_INSUFFICIENT",
+          "SOURCE_DATA_EMPTY",
+          "WEAK_RETRIEVAL"
+        ],
+        "source_display": [
+          "sql",
+          "ml",
+          "sql",
+          "recommendation",
+          "recommendation",
+          "rag"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 10789,
+        "raw_answer": "1. Données mesurées\nLot LOT-MILX-001: entrée 27.0 kg, sortie 7.0 kg, perte 74.1%.\n\n2. Signal ML\nAucun signal ML élevé n’est enregistré dans les journaux disponibles.\n\n3. Recommandations validées\n- Isoler le lot LOT-MILX-001 et renforcer le contrôle à l’étape critique. (HIGH) | preuves: 2 [SQL, RULE]\n  preuves -> SQL:sql:batches:LOT-MILX-001 ; RULE:rule:RULE_LOSS_PRIORITY_FROM_SQL\n- Je peux proposer 1 action fiable avec les preuves disponibles. Les autres actions ne sont pas générées car le contexte documentaire est limité.\n\n4. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "HYBRID_FULL",
+        "intent_family": "LOT_SPECIFIC_RECOMMENDATION",
+        "sql_operation": "get_canonical_material_balance",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE",
+          "ml": "PROVEN_NO_DATA",
+          "rag": "PARTIAL_EVIDENCE"
+        },
+        "evidence_rows": 1,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "recommendations",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [
+          "MISSING_RAG_SOURCE",
+          "NO_ML_DATA",
+          "RAG_EVIDENCE_REJECTED",
+          "RAG_QUALITY_INSUFFICIENT",
+          "SOURCE_DATA_EMPTY",
+          "WEAK_RETRIEVAL"
+        ],
+        "source_display": [
+          "sql",
+          "ml",
+          "sql",
+          "recommendation",
+          "recommendation",
+          "rag"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 16791,
+        "raw_answer": "1. Données mesurées\nLot LOT-MILX-001: entrée 27.0 kg, sortie 7.0 kg, perte 74.1%.\n\n2. Signal ML\nAucun signal ML élevé n’est enregistré dans les journaux disponibles.\n\n3. Recommandations validées\n- Isoler le lot LOT-MILX-001 et renforcer le contrôle à l’étape critique. (HIGH) | preuves: 2 [SQL, RULE]\n  preuves -> SQL:sql:batches:LOT-MILX-001 ; RULE:rule:RULE_LOSS_PRIORITY_FROM_SQL\n- Je peux proposer 1 action fiable avec les preuves disponibles. Les autres actions ne sont pas générées car le contexte documentaire est limité.\n\n4. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P15",
+      "question": "Moyenne des factures payées ce trimestre ; si aucune, dis-le explicitement.",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "avg_paid_invoices_current_quarter",
+        "evidence_status": {
+          "sql": "PROVEN_NO_DATA"
+        },
+        "evidence_rows": 0,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "sources"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [
+          "NO_SQL_DATA",
+          "SOURCE_DATA_EMPTY"
+        ],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7135,
+        "raw_answer": "1. Réponse directe\nAucune facture payée n’est enregistrée pour ce trimestre (T2 2026).\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Aucune limite critique signalée."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "factual_sql",
+        "sql_operation": "avg_paid_invoices_current_quarter",
+        "evidence_status": {
+          "sql": "PROVEN_NO_DATA"
+        },
+        "evidence_rows": 0,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "sources"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [
+          "NO_SQL_DATA",
+          "SOURCE_DATA_EMPTY"
+        ],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2402,
+        "raw_answer": "1. Réponse directe\nAucune facture payée n’est enregistrée pour ce trimestre (T2 2026).\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: commercial_invoices\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Aucune limite critique signalée."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P16",
+      "question": "Combien de signaux ML HIGH sur 30 jours ?",
+      "local": {
+        "route": "ML_ONLY",
+        "intent_family": "risk_ml",
+        "sql_operation": null,
+        "evidence_status": {
+          "ml": "PROVEN_NO_DATA"
+        },
+        "evidence_rows": null,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "sources"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "ml"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 381,
+        "raw_answer": "1. Réponse directe\nAucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré.\n\n2. Interprétation opérationnelle\nAucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré.\n\n3. Preuves\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Aucune limite critique signalée."
+      },
+      "deployed": {
+        "route": "ML_ONLY",
+        "intent_family": "risk_ml",
+        "sql_operation": null,
+        "evidence_status": {
+          "ml": "PROVEN_NO_DATA"
+        },
+        "evidence_rows": null,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "sources"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [],
+        "source_display": [
+          "ml"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 373,
+        "raw_answer": "1. Réponse directe\nAucun signal ML élevé n’est enregistré dans les journaux disponibles, ce qui indique une absence de signal ML enregistré mais ne signifie pas nécessairement une absence de risque.\n\n2. Interprétation opérationnelle\nAucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré.\n\n3. Preuves\n- ML: ml_signal\n\n4. Action recommandée\nAucune action prioritaire robuste n’a pu être confirmée avec les preuves disponibles.\n\n5. Limitation\n- Aucune limite critique signalée."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P17",
+      "question": "Bonnes pratiques de séchage pour réduire les pertes.",
+      "local": {
+        "route": "RAG_ONLY",
+        "intent_family": "BEST_PRACTICES",
+        "sql_operation": null,
+        "evidence_status": {
+          "rag": "PARTIAL_EVIDENCE"
+        },
+        "evidence_rows": null,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "best_practices",
+          "sources",
+          "warnings",
+          "limits_block",
+          "warnings"
+        ],
+        "summary_text": "Résumé",
+        "warning_codes": [],
+        "source_display": [
+          "rag"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2434,
+        "raw_answer": "Résumé\nConseils pratiques basés sur la base de connaissances post-récolte.\n\nChecklist pratique\n-  for Mangue in Thies\n- Senegal. Séchage. DEMOFP-SRC-KNOW-001. [DEMOFP] Contrôler humidité finale < 15% et homogénéiser la circulation d'air pour limiter les pertes\n\nErreurs à éviter\n- Éviter toute reprise d’humidité après séchage.\n\nLimites / sources\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- RAG: Knowledge Mangue - Séchage\n- ML: ml_signal"
+      },
+      "deployed": {
+        "route": "RAG_ONLY",
+        "intent_family": "BEST_PRACTICES",
+        "sql_operation": null,
+        "evidence_status": {
+          "rag": "PARTIAL_EVIDENCE"
+        },
+        "evidence_rows": null,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "best_practices",
+          "sources",
+          "warnings",
+          "limits_block",
+          "warnings"
+        ],
+        "summary_text": "Résumé",
+        "warning_codes": [],
+        "source_display": [
+          "rag"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2334,
+        "raw_answer": "Résumé\nConseils pratiques basés sur la base de connaissances post-récolte.\n\nChecklist pratique\n-  for Mangue in Thies\n- Senegal. Séchage. DEMOFP-SRC-KNOW-001. [DEMOFP] Contrôler humidité finale < 15% et homogénéiser la circulation d'air pour limiter les pertes\n\nErreurs à éviter\n- Éviter toute reprise d’humidité après séchage.\n\nLimites / sources\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête.\n- RAG: Knowledge Mangue - Séchage\n- ML: ml_signal"
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P18",
+      "question": "Stock disponible total actuel de la coopérative ?",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "STOCK_CURRENT",
+        "sql_operation": "get_current_stock",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 7088,
+        "raw_answer": "1. Données mesurées\nLa coopérative dispose actuellement de 223.0 kg de stock disponible répartis sur 4 produits. Le produit le plus disponible est Bissap avec 78.0 kg. Détail qualité: Grade A 78.0 kg, Grade B 0.0 kg, Grade C 0.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "STOCK_CURRENT",
+        "sql_operation": "get_current_stock",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE"
+        },
+        "evidence_rows": 4,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "table",
+          "chart",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2689,
+        "raw_answer": "1. Données mesurées\nLa coopérative dispose actuellement de 223.0 kg de stock disponible répartis sur 4 produits. Le produit le plus disponible est Bissap avec 78.0 kg. Détail qualité: Grade A 78.0 kg, Grade B 0.0 kg, Grade C 0.0 kg.\n\n2. Interprétation\nAucune explication détaillée disponible.\n\n3. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P19",
+      "question": "Recommandations disponibles pour ce lot sans inventer.",
+      "local": {
+        "route": "HYBRID_FULL",
+        "intent_family": "FOLLOW_UP",
+        "sql_operation": "get_canonical_material_balance",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE",
+          "ml": "PROVEN_NO_DATA",
+          "rag": "PARTIAL_EVIDENCE"
+        },
+        "evidence_rows": 1,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "recommendations",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [
+          "MISSING_RAG_SOURCE",
+          "NO_ML_DATA",
+          "RAG_EVIDENCE_REJECTED",
+          "RAG_QUALITY_INSUFFICIENT",
+          "SOURCE_DATA_EMPTY",
+          "WEAK_RETRIEVAL"
+        ],
+        "source_display": [
+          "sql",
+          "ml",
+          "sql",
+          "recommendation",
+          "recommendation",
+          "rag"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 10338,
+        "raw_answer": "1. Données mesurées\nLot LOT-MILX-001: entrée 27.0 kg, sortie 7.0 kg, perte 74.1%.\n\n2. Signal ML\nAucun signal ML élevé n’est enregistré dans les journaux disponibles.\n\n3. Recommandations validées\n- Isoler le lot LOT-MILX-001 et renforcer le contrôle à l’étape critique. (HIGH) | preuves: 2 [SQL, RULE]\n  preuves -> SQL:sql:batches:LOT-MILX-001 ; RULE:rule:RULE_LOSS_PRIORITY_FROM_SQL\n\n4. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "deployed": {
+        "route": "HYBRID_FULL",
+        "intent_family": "FOLLOW_UP",
+        "sql_operation": "get_canonical_material_balance",
+        "evidence_status": {
+          "sql": "HAS_EVIDENCE",
+          "ml": "PROVEN_NO_DATA",
+          "rag": "PARTIAL_EVIDENCE"
+        },
+        "evidence_rows": 1,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "recommendations",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "1. Données mesurées",
+        "warning_codes": [
+          "MISSING_RAG_SOURCE",
+          "NO_ML_DATA",
+          "RAG_EVIDENCE_REJECTED",
+          "RAG_QUALITY_INSUFFICIENT",
+          "SOURCE_DATA_EMPTY",
+          "WEAK_RETRIEVAL"
+        ],
+        "source_display": [
+          "sql",
+          "ml",
+          "sql",
+          "recommendation",
+          "recommendation",
+          "rag"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 3017,
+        "raw_answer": "1. Données mesurées\nLot LOT-MILX-001: entrée 27.0 kg, sortie 7.0 kg, perte 74.1%.\n\n2. Signal ML\nAucun signal ML élevé n’est enregistré dans les journaux disponibles.\n\n3. Recommandations validées\n- Isoler le lot LOT-MILX-001 et renforcer le contrôle à l’étape critique. (HIGH) | preuves: 2 [SQL, RULE]\n  preuves -> SQL:sql:batches:LOT-MILX-001 ; RULE:rule:RULE_LOSS_PRIORITY_FROM_SQL\n\n4. Limites\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": true,
+      "diagnosis": "match"
+    },
+    {
+      "case_id": "P20",
+      "question": "Ce lot ?",
+      "local": {
+        "route": "SQL_ONLY",
+        "intent_family": "FOLLOW_UP",
+        "sql_operation": "clarification_required",
+        "evidence_status": {},
+        "evidence_rows": 0,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "sources",
+          "limits_block"
+        ],
+        "summary_text": "De quel lot parlez-vous ? Indiquez une référence comme LOT-MILX-001.",
+        "warning_codes": [
+          "MISSING_SQL_SOURCE"
+        ],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 6935,
+        "raw_answer": "De quel lot parlez-vous ? Indiquez une référence comme LOT-MILX-001."
+      },
+      "deployed": {
+        "route": "SQL_ONLY",
+        "intent_family": "FOLLOW_UP",
+        "sql_operation": "get_canonical_material_balance",
+        "evidence_status": {
+          "sql": "PROVEN_NO_DATA"
+        },
+        "evidence_rows": 0,
+        "response_blocks": [
+          "summary",
+          "kpi_cards",
+          "sources",
+          "warnings",
+          "limits_block"
+        ],
+        "summary_text": "1. Réponse directe",
+        "warning_codes": [
+          "NO_SQL_DATA",
+          "SOURCE_DATA_EMPTY"
+        ],
+        "source_display": [
+          "sql"
+        ],
+        "ml_block_present": false,
+        "latency_ms": 2448,
+        "raw_answer": "1. Réponse directe\nPour ce lot: De quel lot parlez-vous ? Indiquez une référence comme LOT-MILX-001.\n\n2. Interprétation opérationnelle\nAucune explication détaillée disponible.\n\n3. Preuves\n- SQL: batches\n- SQL: process_steps\n- ML: ml_signal\n\n4. Action recommandée\nPrioriser le lot LOT-BISS-001: vérifier la cause de perte observée, renforcer le contrôle opérationnel sur l’étape concernée et suivre le prochain lot.\n\n5. Limitation\n- Avertissement de fiabilité: informations partielles ou insuffisantes pour cette requête."
+      },
+      "same": false,
+      "diagnosis": "mismatch_sql_operation"
+    }
+  ]
+}

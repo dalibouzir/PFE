@@ -822,7 +822,8 @@ function ChatMessageAI({ id, text, time, response }: ChatMessageAIProps) {
   const confidenceMetric = response?.context_metrics?.find((metric) => metric.metric === "orchestration.confidence_score");
   const confidencePct = confidenceMetric ? Math.round(Math.max(0, Math.min(100, (confidenceMetric.value || 0) * 100))) : null;
   const intentMetric = response?.context_metrics?.find((metric) => metric.metric === "retrieval_plan.intent_type");
-  const responseMode = String(intentMetric?.unit || response?.mode || "HYBRID");
+  const routeMetric = response?.context_metrics?.find((metric) => metric.metric === "orchestration.route");
+  const responseMode = String(routeMetric?.unit || response?.mode || "HYBRID");
   const agentsMetric = response?.context_metrics?.find((metric) => metric.metric === "agent.agents_count");
   const agentCount = Number(agentsMetric?.value || 0);
 

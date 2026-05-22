@@ -526,6 +526,16 @@ class IntentRouter:
                 required_agents=["OutOfScopeAgent"],
                 explanation="Subjective HR/disciplinary decision request outside objective app-data support scope.",
             )
+        if "stock" in lowered and any(token in lowered for token in ("risque de rupture", "rupture", "seuil critique", "sous le seuil", "proche du seuil")):
+            entities["intent_family"] = "factual_sql"
+            entities["module"] = "stocks"
+            return _decision(
+                AgentRoute.SQL_ONLY,
+                entities,
+                ["SQLAnalyticsAgent"],
+                "Stock threshold/rupture question should remain SQL low-stock domain.",
+                0.93,
+            )
         if "anomaly_score" in lowered and any(token in lowered for token in ("ml", "lot", "batch", "top", "max")):
             entities["intent_family"] = "risk_ml"
             return _decision(
@@ -783,6 +793,17 @@ class IntentRouter:
                 ["SQLAnalyticsAgent", "MLLossAgent", "RAGKnowledgeAgent", "RecommendationAgent"],
                 "Product-anchored action request should include hybrid evidence layers.",
                 0.9,
+            )
+
+        if any(token in lowered for token in ("seuil critique", "sous le seuil", "proche du seuil", "risque de rupture")) and "stock" in lowered:
+            entities["intent_family"] = "factual_sql"
+            entities["module"] = "stocks"
+            return _decision(
+                AgentRoute.SQL_ONLY,
+                entities,
+                ["SQLAnalyticsAgent"],
+                "Stock threshold/rupture wording should route to deterministic SQL stock alerts.",
+                0.91,
             )
 
         if asks_anomaly_operational:
@@ -1193,6 +1214,16 @@ def _contract_route_decision(
     previous_module_hint: str | None,
 ) -> IntentRouteDecision | None:
     lowered_ascii = "".join(ch for ch in unicodedata.normalize("NFKD", lowered) if not unicodedata.combining(ch))
+    if "stock" in lowered_ascii and any(token in lowered_ascii for token in ("risque de rupture", "rupture", "seuil critique", "sous le seuil", "proche du seuil")):
+        entities["intent_family"] = "factual_sql"
+        entities["module"] = "stocks"
+        return _decision(
+            AgentRoute.SQL_ONLY,
+            entities,
+            ["SQLAnalyticsAgent"],
+            "Contract guard: stock rupture/threshold query should map to SQL low-stock operation.",
+            0.94,
+        )
     reset_context = any(
         token in lowered
         for token in (
@@ -1374,6 +1405,7 @@ def _contract_route_decision(
         entities["sort_by"] = "current_qty"
         entities["sort_order"] = "asc"
     asks_stock = bool(re.search(r"\bstock(?:s)?\b", lowered_ascii)) or ("inventaire" in lowered_ascii) or ("stockable" in lowered_ascii)
+    asks_stock_threshold = any(token in lowered_ascii for token in ("seuil", "rupture", "sous le seuil", "proche du seuil", "risque de rupture"))
     asks_stock_movements = asks_stock and any(
         token in lowered_ascii
         for token in ("mouvement", "mouvements", "journal", "historique", "nature", "origine")
@@ -1507,7 +1539,27 @@ def _contract_route_decision(
     )
     if reset_context:
         referential_followup = False
+    if referential_marker and not (previous_entities or previous_module_hint) and not has_batch:
+        entities["intent_family"] = "FOLLOW_UP"
+        entities["needs_batch_clarification"] = True
+        return _decision(
+            AgentRoute.SQL_ONLY,
+            entities,
+            ["SQLAnalyticsAgent"],
+            "Ambiguous referential follow-up without prior entity must ask clarification.",
+            0.84,
+        )
     if referential_followup:
+        if ("ce lot" in lowered or "pour ce lot" in lowered or "celui-ci" in lowered or "celui ci" in lowered) and not previous_entities.get("batch_ref") and not has_batch:
+            entities["intent_family"] = "FOLLOW_UP"
+            entities["needs_batch_clarification"] = True
+            return _decision(
+                AgentRoute.SQL_ONLY,
+                entities,
+                ["SQLAnalyticsAgent"],
+                "Lot follow-up requested without prior lot reference; clarification required.",
+                0.85,
+            )
         followup_recommendation_like = asks_recommendation or ("recommand" in lowered) or ("action" in lowered)
         if followup_recommendation_like and not previous_entities and not previous_module_hint and not has_batch:
             entities["intent_family"] = "FOLLOW_UP"
@@ -1557,6 +1609,17 @@ def _contract_route_decision(
                 0.86,
             )
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Follow-up operational request.", 0.85)
+
+    if asks_stock_threshold and not asks_recommendation and not asks_risk:
+        entities["intent_family"] = "factual_sql"
+        entities["module"] = "stocks"
+        return _decision(
+            AgentRoute.SQL_ONLY,
+            entities,
+            ["SQLAnalyticsAgent"],
+            "Stock threshold/rupture wording should stay on SQL low-stock logic.",
+            0.91,
+        )
 
     if asks_lot_comparison and not asks_risk:
         entities["intent_family"] = "LOT_COMPARISON"

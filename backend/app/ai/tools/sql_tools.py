@@ -1032,8 +1032,19 @@ class SQLTools:
             }
             for number, status, total, issue_date in rows
         ]
+        status_map: dict[str, dict[str, float]] = {}
+        for row in items:
+            key = str(row.get("status") or "UNKNOWN")
+            entry = status_map.setdefault(key, {"count": 0.0, "amount": 0.0})
+            entry["count"] += 1.0
+            entry["amount"] += float(row.get("total_amount_fcfa", 0.0) or 0.0)
+        status_summary = [
+            {"status": status, "count": int(values["count"]), "total_amount_fcfa": float(values["amount"])}
+            for status, values in sorted(status_map.items(), key=lambda kv: kv[0])
+        ]
         return {
             "items": items,
+            "status_summary": status_summary,
             "sources": [
                 {
                     "type": "sql",
@@ -1068,8 +1079,19 @@ class SQLTools:
             }
             for number, status, total, received_at in rows
         ]
+        status_map: dict[str, dict[str, float]] = {}
+        for row in items:
+            key = str(row.get("status") or "UNKNOWN")
+            entry = status_map.setdefault(key, {"count": 0.0, "amount": 0.0})
+            entry["count"] += 1.0
+            entry["amount"] += float(row.get("total_amount_fcfa", 0.0) or 0.0)
+        status_summary = [
+            {"status": status, "count": int(values["count"]), "total_amount_fcfa": float(values["amount"])}
+            for status, values in sorted(status_map.items(), key=lambda kv: kv[0])
+        ]
         return {
             "items": items,
+            "status_summary": status_summary,
             "sources": [
                 {
                     "type": "sql",

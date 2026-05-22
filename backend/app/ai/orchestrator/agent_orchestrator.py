@@ -61,7 +61,7 @@ class AgentOrchestrator:
         route_started_at = time.perf_counter()
         previous_user_query = self._get_previous_user_message(conversation_id) if conversation_id else None
         pre_route_entities: dict = {}
-        if conversation_id and _needs_pre_route_memory_handoff(message):
+        if conversation_id and _needs_pre_route_memory_handoff(message) and not _is_reset_phrase(previous_user_query or ""):
             pre_route_entities = await self._pre_route_memory_entities(
                 message=message,
                 conversation_id=conversation_id,
@@ -835,3 +835,8 @@ def _needs_pre_route_memory_handoff(message: str) -> bool:
     )
     has_reset = any(token in lowered for token in ("oublie ce lot", "oublier ce lot", "change de sujet", "maintenant oublie"))
     return has_followup_ref and has_recommendation_intent and not has_reset
+
+
+def _is_reset_phrase(message: str) -> bool:
+    lowered = str(message or "").lower()
+    return any(token in lowered for token in ("oublie ce lot", "oublier ce lot", "change de sujet", "parlons du stock", "passons au stock"))

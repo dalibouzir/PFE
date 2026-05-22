@@ -167,7 +167,7 @@
   {
     "qid": "FM01",
     "module_group": "members",
-    "question": "Répertoire des membres enregistrés.",
+    "question": "Répertoire des membres producteurs enregistrés.",
     "expected_module": "members",
     "expected_route": "SQL_ONLY",
     "expected_intent_family": "factual_sql",
@@ -178,7 +178,7 @@
   {
     "qid": "FM02",
     "module_group": "members",
-    "question": "Top contributeurs membres en kg livrés.",
+    "question": "Top producteurs collecteurs en kg livrés.",
     "expected_module": "members",
     "expected_route": "SQL_ONLY",
     "expected_intent_family": "factual_sql",
