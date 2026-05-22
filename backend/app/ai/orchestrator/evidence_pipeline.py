@@ -946,6 +946,44 @@ def _generate_summary_interpretation(llm_answer: str | None, pack: EvidencePack,
 
 
 def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+    sql_payload = pack.sql.get("payload") or {}
+    contract = pack.plan.answer_contract or {}
+    target = contract.get("target") or {}
+    target_type = str(target.get("type") or "").strip().lower()
+    target_value = str(target.get("value") or "").strip()
+    intent_family = str(contract.get("intent_family") or "").strip().upper()
+    sql_status_probe = _normalize_evidence_status(pack.sql.get("evidence_status")) or ""
+    sql_trace_probe = sql_payload.get("sql_dispatch_trace") or {}
+    sql_row_count_probe = int(sql_trace_probe.get("row_count") or 0)
+    recommendation_like_intent = intent_family in {"RECOMMENDATION", "LOT_SPECIFIC_RECOMMENDATION", "ACTION_RECOMMENDATION", "FOLLOW_UP"}
+    if (
+        recommendation_like_intent
+        and target_type == "lot"
+        and target_value
+        and sql_status_probe == EVIDENCE_NO_DATA
+        and sql_row_count_probe == 0
+    ):
+        message = (
+            f"Je ne trouve pas de lot correspondant à la référence {target_value}. "
+            "Vérifiez la référence (ex. LOT-...) puis redemandez les recommandations pour ce lot."
+        )
+        return (
+            message,
+            [{"type": "summary", "title": "Résumé", "content": message}],
+            {
+                "answer_type": "unknown_lot_reference",
+                "evidence_roles": _evidence_roles(pack),
+                "module_registry": pack.module_registry,
+                "evidence_status_contract": _evidence_status_contract(pack),
+                "answer_contract": contract,
+                "required_evidence_types": list(pack.plan.required_sources),
+                "missing_evidence_types": ["SQL", "RECOMMENDATION"],
+                "found_evidence_types": _found_evidence_types(pack),
+                "confidence_reason": "unknown_lot_reference",
+                "warning_categories": {},
+            },
+        )
+
     missing_required = [item for item in verification.issues if item.startswith("MISSING_") and item.endswith("_EVIDENCE")]
     missing_set = set(missing_required)
     degraded_missing_set: set[str] = set()
@@ -1049,6 +1087,25 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
             },
         )
     sql_payload = pack.sql.get("payload") or {}
+    sql_trace = sql_payload.get("sql_dispatch_trace") or {}
+    if str(sql_trace.get("sql_operation") or "").strip() == "clarification_required":
+        message = "De quel lot parlez-vous ? Indiquez une référence comme LOT-MILX-001."
+        return (
+            message,
+            [{"type": "summary", "title": "Résumé", "content": message}],
+            {
+                "answer_type": "clarification",
+                "evidence_roles": _evidence_roles(pack),
+                "module_registry": pack.module_registry,
+                "evidence_status_contract": _evidence_status_contract(pack),
+                "answer_contract": pack.plan.answer_contract or {},
+                "required_evidence_types": list(pack.plan.required_sources),
+                "missing_evidence_types": [],
+                "found_evidence_types": _found_evidence_types(pack),
+                "confidence_reason": "clarification_required",
+                "warning_categories": {},
+            },
+        )
     blocks: list[dict[str, Any]] = []
 
     summary = _compose_summary(pack=pack, sql_payload=sql_payload)
@@ -3894,15 +3951,24 @@ def _has_recommendation_evidence_refs(item: dict[str, Any]) -> bool:
     refs = item.get("evidence_refs") if isinstance(item, dict) else None
     if not isinstance(refs, list) or not refs:
         return False
+    has_sql_ref = False
+    has_sql_grounded_rule = False
     for ref in refs:
         if not isinstance(ref, dict):
             continue
         ref_type = str(ref.get("type") or "").upper()
         if ref_type == "RAG" and str(ref.get("quality_status") or "").upper() in {"WEAK", "REJECTED"}:
             continue
-        if ref_type in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
-            return True
-    return False
+        source_id = str(ref.get("source_id") or "").strip()
+        if not source_id:
+            continue
+        if ref_type == "SQL":
+            has_sql_ref = True
+        if ref_type == "RULE":
+            triggered_by_type = str(ref.get("triggered_by_type") or "").upper()
+            if triggered_by_type == "SQL" or "FROM_SQL" in str(ref.get("rule_name") or "").upper():
+                has_sql_grounded_rule = True
+    return has_sql_ref or has_sql_grounded_rule
 
 
 def _build_module_registry(*, sql_data: dict[str, Any], tables_used: set[str]) -> dict[str, dict[str, Any]]:

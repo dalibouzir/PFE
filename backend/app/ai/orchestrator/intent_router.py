@@ -113,6 +113,14 @@ RECO_HINTS = {
     "quoi faire concrètement",
     "quelle action",
     "quelles actions",
+    "actions confirmees",
+    "actions confirmées",
+    "recommandations prouvees",
+    "recommandations prouvées",
+    "recommandation prouvee",
+    "recommandation prouvée",
+    "sans te baser uniquement sur ml",
+    "sans se baser uniquement sur ml",
     "reco",
 }
 RECOMMENDATION_REGEXES = (
@@ -517,7 +525,18 @@ class IntentRouter:
                 required_agents=["OutOfScopeAgent"],
                 explanation="Forecasting/external-real-world request outside reliable app-data scope.",
             )
-        if any(token in lowered for token in UNSUPPORTED_HR_SUBJECTIVE_HINTS):
+        unsupported_hr_hit = any(token in lowered for token in UNSUPPORTED_HR_SUBJECTIVE_HINTS)
+        lot_reference_validation_reco = (
+            unsupported_hr_hit
+            and bool(LOT_PATTERN.search(lowered))
+            and (
+                _has_any(lowered, RECO_HINTS)
+                or any(regex.search(lowered) for regex in RECOMMENDATION_REGEXES)
+                or "action" in lowered
+            )
+            and any(token in lowered for token in ("sinon", "invalide", "invalid", "reference", "référence", "introuvable"))
+        )
+        if unsupported_hr_hit and not lot_reference_validation_reco:
             entities["intent_family"] = "unsupported_hr_subjective"
             return IntentRouteDecision(
                 route=AgentRoute.OUT_OF_SCOPE,
@@ -552,7 +571,7 @@ class IntentRouter:
         )
         asks_action = any(token in lowered for token in (" action", " actions", "action ", "actions "))
         if not asks_recommendation and asks_action and any(
-            token in lowered for token in ("donne", "priorit", "faire", "amélior", "amelior", "réduire", "reduire", "situation")
+            token in lowered for token in ("donne", "propose", "proposer", "priorit", "faire", "amélior", "amelior", "réduire", "reduire", "situation", "confirm")
         ):
             asks_recommendation = True
         if not asks_recommendation and "plan" in lowered and any(token in lowered for token in ("perte", "pertes", "loss", "risque", "risk")):
@@ -743,6 +762,17 @@ class IntentRouter:
                 ["RAGKnowledgeAgent"],
                 "Pure best-practice guidance without explicit app-data scope should stay in RAG mode.",
                 0.9,
+            )
+
+        if asks_recommendation and any(token in lowered for token in (" lot", "lots", "batch")) and not entities.get("batch_ref"):
+            entities["intent_family"] = "follow_up"
+            entities["needs_batch_clarification"] = True
+            return _decision(
+                AgentRoute.SQL_ONLY,
+                entities,
+                ["SQLAnalyticsAgent"],
+                "Recommendation request mentions lot/batch without explicit reference; clarification required.",
+                0.89,
             )
 
         if asks_sql_ml_rag_explicit or (asks_manager_full and asks_sql_ml_explicit and asks_recommendation):
@@ -1468,7 +1498,6 @@ def _contract_route_decision(
     )
     asks_lot_specific_recommendation = asks_recommendation and (
         has_batch
-        or "pour ce lot" in lowered
         or bool(re.search(r"\b(?:lot|batch)[-_][a-z0-9][a-z0-9\-_]*\b", lowered))
     )
     asks_lot_specific_recommendation = asks_lot_specific_recommendation or (
@@ -1695,6 +1724,21 @@ def _contract_route_decision(
         entities["module"] = "ml_logs"
         return _decision(AgentRoute.ML_ONLY, entities, ["MLLossAgent"], "Pure ML-log status intent.", 0.91)
 
+    ml_signal_like = (
+        any(token in lowered_ascii for token in ("signaux ml", "signal ml", "alertes ml", "alerte ml", "anomaly_score", "anomal", "risque ml"))
+        and ("ml" in lowered_ascii or "anomaly_score" in lowered_ascii)
+    )
+    if ml_signal_like and not asks_recommendation and not asks_best_practice and not asks_current_scope and not has_batch:
+        entities["intent_family"] = "risk_ml"
+        entities["module"] = "ml_risk"
+        return _decision(
+            AgentRoute.ML_ONLY,
+            entities,
+            ["MLLossAgent"],
+            "ML risk-signal wording without SQL-fact request should stay ML-only advisory.",
+            0.9,
+        )
+
     if any(token in lowered_ascii for token in ("tresorerie", "transaction", "transactions")) and any(
         token in lowered_ascii for token in ("justificatif", "recu", "receipt", "reference", "preuve")
     ):
@@ -1717,6 +1761,16 @@ def _contract_route_decision(
         )
 
     if asks_recommendation:
+        if not has_batch and any(token in lowered_ascii for token in ("lot", "batch")):
+            entities["intent_family"] = "FOLLOW_UP"
+            entities["needs_batch_clarification"] = True
+            return _decision(
+                AgentRoute.SQL_ONLY,
+                entities,
+                ["SQLAnalyticsAgent"],
+                "Recommendation request mentions lot/batch but no explicit reference; clarification required.",
+                0.88,
+            )
         entities["intent_family"] = "RECOMMENDATION"
         if asks_current_scope or has_operational_anchor or asks_loss or asks_risk or (
             has_lot_mention and any(token in lowered_ascii for token in ("critique", "perte", "efficac", "rendement", "risque", "a risque"))
