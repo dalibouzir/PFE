@@ -855,7 +855,7 @@ def _generate_kpi_cards(sql_payload: dict[str, Any], pack: EvidencePack) -> dict
             }
         )
 
-    if pack.ml:
+    if pack.ml and _has_material_ml_evidence(pack=pack):
         risk = str(pack.ml.get("risk_level") or "UNKNOWN").upper()
         cards.append(
             {
@@ -1308,6 +1308,16 @@ def _compose_limitations(*, pack: EvidencePack, verification: EvidenceVerificati
     sql_status = _normalize_evidence_status(pack.sql.get("evidence_status")) or ""
     rag_status = _normalize_evidence_status(pack.rag.get("evidence_status")) or ""
     ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
+    warning_code_pool = [*pack.warnings, *verification.issues]
+
+    # Clean SQL-only responses should not surface generic reliability noise.
+    # Keep limits only when there is a real evidence-quality, capability, or technical reason.
+    if _is_clean_sql_only_payload(
+        pack=pack,
+        verification=verification,
+        warning_items=warning_items,
+    ):
+        return []
 
     has_sql = bool(pack.sql.get("rows") or pack.sql.get("metrics") or pack.sql.get("payload") or sql_status == EVIDENCE_NO_DATA)
     has_rag = bool(pack.rag.get("chunks") or pack.rag.get("content_snippets") or rag_status == EVIDENCE_NO_DATA)
@@ -1339,7 +1349,7 @@ def _compose_limitations(*, pack: EvidencePack, verification: EvidenceVerificati
             if label and label not in limits:
                 limits.append(label)
 
-    has_technical = any(_warning_category(code) == "TECHNICAL_WARNING" for code in [*pack.warnings, *verification.issues])
+    has_technical = any(_warning_category(code) == "TECHNICAL_WARNING" for code in warning_code_pool)
     if (
         {sql_status, rag_status, ml_status}.intersection({EVIDENCE_NO_DATA})
         and not has_technical
@@ -1365,6 +1375,53 @@ def _compose_limitations(*, pack: EvidencePack, verification: EvidenceVerificati
         limits.insert(0, "Le contexte documentaire est limité pour cette question.")
     limits = _dedupe_preserve_order(limits)
     return limits
+
+
+def _is_clean_sql_only_payload(*, pack: EvidencePack, verification: EvidenceVerification, warning_items: list[str]) -> bool:
+    if pack.route != AgentRoute.SQL_ONLY:
+        return False
+
+    sql_status = _normalize_evidence_status(pack.sql.get("evidence_status")) or ""
+    if sql_status not in {EVIDENCE_HAS, EVIDENCE_NO_DATA}:
+        return False
+
+    trace = ((pack.sql.get("payload") or {}).get("sql_dispatch_trace") or {})
+    sql_operation = str(trace.get("sql_operation") or "").strip().lower()
+    if not sql_operation:
+        return False
+    if sql_operation.startswith("unsupported_"):
+        return False
+
+    code_pool = [str(code or "").strip().upper() for code in [*pack.warnings, *verification.issues] if str(code or "").strip()]
+    if any(_warning_category(code) == "TECHNICAL_WARNING" for code in code_pool):
+        return False
+
+    blocked_markers = (
+        "PARTIAL",
+        "TOOL_ERROR",
+        "UNSUPPORTED",
+        "STALE",
+        "UNMAPPED_SQL_OPERATION",
+        "MISSING_EXPECTED_ROUTE_EVIDENCE",
+        "MISSING_SQL_EVIDENCE",
+        "INCOMPLETE_SQL_DATA",
+        "SQL_DATA_INCOMPLETE",
+        "NO_SQL_DATA",
+        "SQL_CAPABILITY_UNSUPPORTED",
+    )
+    if any(any(marker in code for marker in blocked_markers) for code in code_pool):
+        return False
+
+    # If the rendered warning items still include a specific, non-generic message, keep limitations enabled.
+    non_generic_items = [
+        item for item in (warning_items or [])
+        if str(item or "").strip()
+        and "informations partielles ou insuffisantes" not in str(item).lower()
+    ]
+    if non_generic_items:
+        return False
+
+    return True
 
 
 def _compose_route_template_answer(
