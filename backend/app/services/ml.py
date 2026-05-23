@@ -10,7 +10,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ml.features.engineer import build_features
-from app.ml.inference.predictor import assess_for_batch, assess_from_features, predict_from_features
 from app.ml.llm.provider import generate_explanation
 from app.ml.advisory_diagnostics import (
     ADVISORY_CAVEAT,
@@ -27,13 +26,7 @@ from app.ml.readiness import (
     infer_evidence_sources,
     recommendation_mode,
 )
-from app.ml.recommendations.impact_engine import (
-    reliability_status as impact_reliability_status,
-    recommend_action_with_confidence,
-    should_assign_holdout,
-)
 from app.ml.recommendations.rule_engine import LIMITED_CONFIDENCE_SIGNAL, build_recommendation
-from app.ml.training.trainer import train_models
 from app.ml.utils.feature_prep import assign_thresholded_risk_level, get_risk_thresholds
 from app.ml.utils.model_registry import get_active_model_version
 from app.ml.utils.prediction_logging import append_prediction_log
@@ -219,6 +212,8 @@ def _fallback_assess_from_feature_records(feature_records: List[Dict], batch_id:
 
 
 def train(db: Session, run_name: str) -> Dict:
+    from app.ml.training.trainer import train_models
+
     return train_models(db, run_name)
 
 
@@ -230,6 +225,8 @@ def get_features(db: Session, batch_id: UUID) -> List[Dict]:
 
 
 def _attach_confidence_decision(db: Session, recommendation: Dict, context_snapshot: Dict) -> Dict:
+    from app.ml.recommendations.impact_engine import recommend_action_with_confidence
+
     candidate_actions = recommendation.get("recommended_actions") or []
     fallback_action = candidate_actions[0] if candidate_actions else "Continue current process and request manual review."
     decision = recommend_action_with_confidence(
@@ -311,6 +308,8 @@ def predict(
     include_explanation: bool = False,
 ) -> Dict:
     start = time.perf_counter()
+    from app.ml.inference.predictor import predict_from_features
+
     df = pd.DataFrame([item.model_dump() for item in features])
     try:
         prediction = predict_from_features(db, df)
@@ -431,6 +430,8 @@ def assess(
     include_explanation: bool = False,
 ) -> Dict:
     if batch_id:
+        from app.ml.inference.predictor import assess_for_batch
+
         feature_set = build_features(db, batch_id)
         feature_records = feature_set.raw
         try:
@@ -440,6 +441,8 @@ def assess(
                 raise
             assessment = _fallback_assess_from_feature_records(feature_records, batch_id)
     elif features:
+        from app.ml.inference.predictor import assess_from_features
+
         df = pd.DataFrame([item.model_dump() for item in features])
         feature_records = df.to_dict(orient="records")
         try:
@@ -550,6 +553,8 @@ def get_recommendation(db: Session, batch_id: UUID, include_explanation: bool = 
 
 
 def log_feedback(db: Session, payload: RecommendationFeedbackCreate) -> RecommendationFeedbackLog:
+    from app.ml.recommendations.impact_engine import should_assign_holdout
+
     recommendation_log_id = payload.recommendation_log_id
     recommendation_snapshot = dict(payload.recommendation_snapshot)
 
@@ -604,10 +609,14 @@ def log_feedback(db: Session, payload: RecommendationFeedbackCreate) -> Recommen
 
 
 def reliability_status(db: Session) -> Dict:
+    from app.ml.recommendations.impact_engine import reliability_status as impact_reliability_status
+
     return impact_reliability_status(db)
 
 
 def health(db: Session) -> Dict:
+    from app.ml.recommendations.impact_engine import reliability_status as impact_reliability_status
+
     status = artifacts_status()
     compatibility = artifact_compatibility_status()
     reliability = impact_reliability_status(db)

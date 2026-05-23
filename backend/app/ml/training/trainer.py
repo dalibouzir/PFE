@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.ml.constants import MODEL_FILES
 from app.ml.features.engineer import build_features
 from app.ml.recommendations.impact_engine import train_impact_models
 from app.ml.recommendations.rule_engine import NORMAL_PERFORMANCE_SIGNAL, build_recommendation, derive_prediction_signals
@@ -50,14 +51,6 @@ from app.ml.utils.feature_prep import (
 from app.models.batch import Batch
 from app.models.ml import MLModelRegistry, MLTrainingRun
 from app.utils.exceptions import ValidationError
-
-
-MODEL_FILES = {
-    "loss_regressor": "loss_regressor.joblib",
-    "risk_classifier": "risk_classifier.joblib",
-    "anomaly_detector": "anomaly_detector.joblib",
-    "feature_metadata": "feature_metadata.json",
-}
 
 
 def _ensure_artifacts_dir() -> Path:

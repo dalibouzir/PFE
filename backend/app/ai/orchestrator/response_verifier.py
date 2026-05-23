@@ -54,6 +54,7 @@ class ResponseVerifier:
         has_recommendation_agent = any(res.agent_name == "RecommendationAgent" for res in results)
         has_any_evidence = has_sql or has_rag or has_ml or has_recommendation_evidence
         required = _required_sources_for_context(context=context, route=route)
+        intent = str((context.detected_entities or {}).get("intent_family") or "").upper()
         required_sql = "SQL" in required
         required_rag = "RAG" in required
         required_ml = "ML" in required
@@ -90,7 +91,8 @@ class ResponseVerifier:
         contradiction = False
         if has_sql and has_ml and ml_status not in {EVIDENCE_NO_DATA, EVIDENCE_TOOL_ERROR, EVIDENCE_UNSUPPORTED}:
             contradiction = _is_sql_ml_contradiction(results)
-            if contradiction:
+            recommendation_context = intent in {"RECOMMENDATION", "LOT_SPECIFIC_RECOMMENDATION", "FOLLOW_UP"}
+            if contradiction and not (route == AgentRoute.HYBRID_FULL and recommendation_context and not required_ml):
                 warnings.append("SQL_ML_CONTRADICTION")
 
         weak_retrieval = False
@@ -408,12 +410,21 @@ def _has_recommendation_evidence_refs(rec: dict) -> bool:
     refs = rec.get("evidence_refs")
     if not isinstance(refs, list) or not refs:
         return False
+    has_sql_ref = False
+    has_sql_grounded_rule = False
     for ref in refs:
         if not isinstance(ref, dict):
             continue
         ref_type = str(ref.get("type") or "").upper()
         if ref_type == "RAG" and str(ref.get("quality_status") or "").upper() in {"WEAK", "REJECTED"}:
             continue
-        if ref_type in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
-            return True
-    return False
+        source_id = str(ref.get("source_id") or "").strip()
+        if not source_id:
+            continue
+        if ref_type == "SQL":
+            has_sql_ref = True
+        if ref_type == "RULE":
+            triggered_by_type = str(ref.get("triggered_by_type") or "").upper()
+            if triggered_by_type == "SQL" or "FROM_SQL" in str(ref.get("rule_name") or "").upper():
+                has_sql_grounded_rule = True
+    return has_sql_ref or has_sql_grounded_rule

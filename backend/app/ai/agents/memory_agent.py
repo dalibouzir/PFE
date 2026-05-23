@@ -28,7 +28,7 @@ FOLLOWUP_PRODUCT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 RESET_CONTEXT_PATTERN = re.compile(
-    r"\b(autre sujet|changeons de sujet|sans rapport|indépendamment|independamment|nouvelle question|hors sujet|oublie ce lot|oublier ce lot|maintenant oublie|maintenant|passons|météo|meteo|football|nba|crypto|bitcoin|film)\b",
+    r"\b(autre sujet|changeons de sujet|sans rapport|indépendamment|independamment|nouvelle question|hors sujet|oublie ce lot|oublier ce lot|maintenant oublie|parlons du stock|parlons stock|passons au stock|maintenant|passons|météo|meteo|football|nba|crypto|bitcoin|film)\b",
     re.IGNORECASE,
 )
 SMALL_TALK_PATTERN = re.compile(r"^(bonjour|salut|hello|hi|bonsoir|ok|merci|coucou|ca va|ça va)\b", re.IGNORECASE)
@@ -74,6 +74,25 @@ class MemoryAgent(BaseAgent):
                 execution_time_ms=3,
             )
         previous_entities = self.extract_last_entities_from_history(previous, current_query=query)
+        recent_reset = bool(previous_entities.pop("_recent_reset_lot_context", False))
+        ambiguous_lot_followup = bool(AMBIGUOUS_LOT_REFERENCE_PATTERN.search(str(query or "").lower()))
+        if recent_reset and ambiguous_lot_followup:
+            sanitized_entities = dict(context.detected_entities or {})
+            sanitized_entities.pop("batch_ref", None)
+            sanitized_entities.pop("batch_ref_candidate", None)
+            sanitized_entities["needs_batch_clarification"] = True
+            return AgentResult(
+                agent_name=self.name,
+                route=context.route,
+                answer_part="",
+                data={
+                    "entities": sanitized_entities,
+                    "history_count": len(previous),
+                    "memory_reused": False,
+                },
+                confidence=0.8,
+                execution_time_ms=3,
+            )
         should_reuse = self.should_reuse_context(query=query, current_entities=context.detected_entities, previous_entities=previous_entities)
         merged = self.merge_entities(context.detected_entities, previous_entities) if should_reuse else dict(context.detected_entities or {})
         return AgentResult(
@@ -106,6 +125,7 @@ class MemoryAgent(BaseAgent):
         entities: dict = {}
         known_refs = self._known_batch_refs()
         skipped_current = False
+        reset_seen = False
         for item in history:
             role = str(item.get("role") or "")
             content = str(item.get("content") or "")
@@ -116,11 +136,16 @@ class MemoryAgent(BaseAgent):
 
             extracted = self.entity_extractor.extract(content, known_batch_refs=known_refs)
             extracted_dict = extracted.as_dict()
+            if role == "user" and RESET_CONTEXT_PATTERN.search(content.lower()):
+                reset_seen = True
+                entities.pop("batch_ref", None)
+                entities.pop("batch_ref_candidate", None)
+                continue
             if role == "user" and extracted_dict.get("scope") and "scope" not in entities:
                 entities["scope"] = extracted_dict.get("scope")
             if role == "user" and extracted_dict.get("module") and "module" not in entities:
                 entities["module"] = extracted_dict.get("module")
-            if extracted.batch_ref and "batch_ref" not in entities:
+            if extracted.batch_ref and "batch_ref" not in entities and not reset_seen and role in {"user", "assistant"}:
                 entities["batch_ref"] = extracted.batch_ref
 
             stage_match = STAGE_PATTERN.search(content)
@@ -134,6 +159,8 @@ class MemoryAgent(BaseAgent):
 
             if len(entities) >= 5:
                 break
+        if reset_seen:
+            entities["_recent_reset_lot_context"] = True
         return entities
 
     def should_reuse_context(self, *, query: str, current_entities: dict, previous_entities: dict) -> bool:

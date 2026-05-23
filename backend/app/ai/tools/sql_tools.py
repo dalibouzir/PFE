@@ -1212,6 +1212,7 @@ class SQLTools:
         product: str | None = None,
         batch_ref: str | None = None,
         input_ref: str | None = None,
+        direction: str | None = None,
     ) -> dict[str, Any]:
         if not self.module_available("stock_movements"):
             return {"items": [], "sources": [], "warnings": ["MODULE_NOT_AVAILABLE"]}
@@ -1243,8 +1244,14 @@ class SQLTools:
         items: list[dict[str, Any]] = []
         batch_needle = str(batch_ref or "").strip().lower()
         input_needle = str(input_ref or "").strip().lower()
+        direction_norm = str(direction or "").strip().lower()
         for movement_id, movement_date, quantity_kg, movement_type, action_type, source, idem_key, notes, product_name, lot_code, input_id, bl_number, member_name in rows:
             if product and _canonical_product_name(product_name) != _canonical_product_name(product):
+                continue
+            movement_type_norm = str(movement_type or "").strip().lower()
+            if direction_norm == "out" and movement_type_norm != "out":
+                continue
+            if direction_norm == "in" and movement_type_norm != "in":
                 continue
             lot_code_str = str(lot_code or "")
             if batch_needle and batch_needle not in lot_code_str.lower():
@@ -1280,6 +1287,7 @@ class SQLTools:
                     "related_product": product,
                     "related_batch": batch_ref,
                     "related_input": input_ref,
+                    "related_direction": direction_norm or None,
                 }
             ],
             "warnings": ["NO_SQL_DATA"] if not items else [],

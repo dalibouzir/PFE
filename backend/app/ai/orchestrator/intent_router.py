@@ -158,6 +158,12 @@ EXPLANATION_HINTS = {
     "conseils",
     "conseil",
     "que faire",
+    "gestes simples",
+    "mieux stocker",
+    "avant transformation",
+    "avant stockage",
+    "eviter la casse",
+    "éviter la casse",
 }
 BEST_PRACTICE_HINTS = {
     "bonnes pratiques",
@@ -189,6 +195,15 @@ BEST_PRACTICE_HINTS = {
     "que faire",
     "pratiques opérationnelles",
     "pratiques operationnelles",
+    "gestes simples",
+    "mieux stocker",
+    "avant transformation",
+    "avant stockage",
+    "eviter la casse",
+    "éviter la casse",
+    "comment organiser le nettoyage",
+    "quels contrôles minimum",
+    "quels controles minimum",
 }
 REFERENCE_HINTS = {"ce lot", "celui-ci", "celui ci", "ces risques", "ce risque", "cette étape", "cette etape"}
 FOLLOWUP_REFERENCE_PATTERN = re.compile(
@@ -1355,8 +1370,81 @@ def _contract_route_decision(
             "comment ameliorer",
             "comment réduire",
             "comment reduire",
+            "comment organiser",
+            "liste de vérifications",
+            "liste de verifications",
+            "pratiques simples",
+            "criteres concrets",
+            "critères concrets",
+            "que controler",
+            "que contrôler",
+            "quoi verifier",
+            "quoi vérifier",
+            "avant d'emballer",
+            "avant d emballer",
+            "mise en stock",
+            "avant transformation",
         )
     )
+    stage_guidance_context = any(
+        token in lowered_ascii
+        for token in (
+            "nettoyage",
+            "sechage",
+            "tri",
+            "emballage",
+            "emballer",
+            "conditionnement",
+            "stockage",
+            "mise en stock",
+            "transformation",
+            "post-recolte",
+            "post recolte",
+            "post-harvest",
+        )
+    )
+    advisory_intent = asks_best_practice or any(
+        token in lowered_ascii
+        for token in (
+            "comment organiser",
+            "bonnes pratiques",
+            "checklist",
+            "liste de verifications",
+            "pratiques simples",
+            "criteres concrets",
+            "que controler",
+            "quoi verifier",
+            "precautions",
+            "conseils",
+        )
+    )
+    explicit_operational_metrics = any(
+        token in lowered_ascii
+        for token in (
+            "combien",
+            "quantites",
+            "quantite",
+            "total",
+            "actuel",
+            "stock actuel",
+            "mouvements",
+            "pertes mesurees",
+            "classement",
+            "par lot",
+            "par producteur",
+            "factures",
+            "tresorerie",
+        )
+    )
+    if advisory_intent and stage_guidance_context and not explicit_operational_metrics and not asks_risk and not asks_recommendation:
+        entities["intent_family"] = "BEST_PRACTICES"
+        return _decision(
+            AgentRoute.RAG_ONLY,
+            entities,
+            ["RAGKnowledgeAgent"],
+            "Best-practice stage guidance without operational metric request should route to RAG.",
+            0.91,
+        )
     asks_loss = any(
         token in lowered
         for token in ("perte", "pertes", "loss", "efficacite", "efficacité", "efficac", "rendement", "penalis", "pénalis", "perdu", "perdus")
@@ -1761,7 +1849,7 @@ def _contract_route_decision(
         )
 
     if asks_recommendation:
-        if not has_batch and any(token in lowered_ascii for token in ("lot", "batch")):
+        if not has_batch and any(token in lowered_ascii for token in ("lot", "batch")) and not asks_lot_critical_ranking:
             entities["intent_family"] = "FOLLOW_UP"
             entities["needs_batch_clarification"] = True
             return _decision(

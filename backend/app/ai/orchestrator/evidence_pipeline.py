@@ -1615,7 +1615,10 @@ def _compose_route_template_answer(
 def _build_checklist_points(snippets: list[str]) -> list[str]:
     if not snippets:
         return []
-    points = _best_practice_points(snippets[0])[:4]
+    points: list[str] = []
+    for snippet in snippets[:3]:
+        points.extend(_best_practice_points(snippet))
+    points = points[:5]
     return _dedupe_preserve_order(points)
 
 
@@ -1705,6 +1708,19 @@ def _filter_user_warning_codes(*, pack: EvidencePack, verification: EvidenceVeri
     sql_status = _normalize_evidence_status(pack.sql.get("evidence_status")) or ""
     rag_status = _normalize_evidence_status(pack.rag.get("evidence_status")) or ""
     ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
+    intent_upper = str(pack.plan.intent or "").strip().upper()
+    recommendation_hybrid_context = (
+        pack.route == AgentRoute.HYBRID_FULL
+        and intent_upper in {"RECOMMENDATION", "LOT_SPECIFIC_RECOMMENDATION", "ACTION_RECOMMENDATION"}
+    )
+    recommendation_actions = [
+        item for item in (pack.recommendations.get("actions") or [])
+        if isinstance(item, dict)
+    ]
+    recommendation_block_exists = bool(recommendation_actions)
+    has_sql_evidence = sql_status in {EVIDENCE_HAS, EVIDENCE_PARTIAL}
+    has_rag_evidence = bool(pack.rag.get("chunks") or []) or rag_status in {EVIDENCE_HAS, EVIDENCE_PARTIAL}
+    has_recommendation_evidence = any(_has_recommendation_evidence_refs(item) for item in recommendation_actions)
     proven_no_data = {sql_status, rag_status, ml_status}.intersection({EVIDENCE_NO_DATA})
     sql_complete = (
         sql_status == EVIDENCE_HAS
@@ -1719,6 +1735,20 @@ def _filter_user_warning_codes(*, pack: EvidencePack, verification: EvidenceVeri
     filtered: list[str] = []
     for code in codes:
         upper = str(code or "").upper()
+        if (
+            recommendation_hybrid_context
+            and recommendation_block_exists
+            and has_sql_evidence
+            and has_rag_evidence
+            and has_recommendation_evidence
+        ):
+            if upper == "RECOMMENDATION_EVIDENCE_WEAK":
+                # Keep actionable limitation warnings, but suppress this internal quality code
+                # when grounded recommendation evidence is present.
+                continue
+            if upper == "MISSING_RAG_SOURCE" and has_rag_evidence:
+                # Redundant/misleading when RAG evidence was actually retrieved.
+                continue
         if "RAG" not in required and upper in skip_if_optional["RAG"]:
             continue
         if "ML" not in required and upper in skip_if_optional["ML"]:
@@ -3749,10 +3779,34 @@ def _extract_chart_limit(normalized: str) -> int | None:
 
 
 def _best_practice_points(text: str) -> list[str]:
-    content = str(text or "")
-    parts = [item.strip(" .") for item in content.replace("\n", " ").split(",")]
-    points = [part for part in parts if len(part) >= 8]
-    return points
+    content = re.sub(r"\s+", " ", str(text or "").strip())
+    if not content:
+        return []
+
+    def _looks_noisy(fragment: str) -> bool:
+        low = fragment.lower()
+        if len(fragment) < 24:
+            return True
+        if fragment.count(".") >= 2 and len(fragment) < 45:
+            return True
+        if re.search(r"\b(for|with|after|before)\b", low) and not re.search(r"[éèêàùç]", low):
+            return True
+        if re.search(r"\bwest africa\b|\bsenegal\.", low):
+            return True
+        if not re.search(r"[a-zàâäçéèêëîïôöùûüÿœ]", low):
+            return True
+        return False
+
+    candidates = [item.strip(" .;-") for item in re.split(r"[.;:]\s+|,\s+", content)]
+    filtered = [
+        item
+        for item in candidates
+        if item and not _looks_noisy(item)
+    ]
+    if not filtered:
+        compact = content.strip(" .")
+        return [compact] if len(compact) >= 24 else []
+    return filtered[:6]
 
 
 def _derive_vigilance_point(text: str) -> str | None:

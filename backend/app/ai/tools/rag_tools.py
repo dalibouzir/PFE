@@ -59,6 +59,10 @@ class RAGTools:
             items=ranked,
         )
         usable_items = [item for item in assessed_items if str(item.get("quality_status")) in {"STRONG", "PARTIAL"}][:top_k]
+        if pure_advice_query and not usable_items and ranked:
+            # Keep guidance available for advice-only prompts when strict quality gates reject
+            # otherwise relevant knowledge chunks; final composer still applies safety wording.
+            usable_items = ranked[:top_k]
         formatted = format_chunks_for_llm(usable_items)
 
         sources = [

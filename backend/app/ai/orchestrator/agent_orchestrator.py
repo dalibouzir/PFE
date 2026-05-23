@@ -265,6 +265,14 @@ class AgentOrchestrator:
         warning_codes = sorted(set([*verification.warnings, *source_contract_warnings, *warnings_from_runtime]))
         # Internal formatting marker: keep in metadata traces if needed upstream, but hide from user warning list.
         warning_codes = [code for code in warning_codes if code != "MISSING_OPERATION_RESULT"]
+        warning_codes = _filter_warning_codes_for_manager(
+            warning_codes=warning_codes,
+            route=decision.route,
+            intent_family=(context.detected_entities or {}).get("intent_family"),
+            response_blocks=response_blocks,
+            sources=sources,
+            agent_results=agent_results,
+        )
         french_warnings = collapse_user_warning_items(warning_codes)
 
         execution_time_ms = int((time.perf_counter() - started_at) * 1000)
@@ -273,6 +281,7 @@ class AgentOrchestrator:
         ml_ms = _sum_agent_ms(agent_timings, "MLLossAgent")
         recommendation_ms = _sum_agent_ms(agent_timings, "RecommendationAgent")
         llm_ms = compose_ms
+        sql_dispatch_trace = _extract_sql_dispatch_trace(agent_results)
         metadata = {
             "execution_time_ms": execution_time_ms,
             "total_duration_ms": execution_time_ms,
@@ -283,7 +292,9 @@ class AgentOrchestrator:
             "route_confidence": decision.confidence,
             "warning_codes": warning_codes,
             "source_contract_warnings": source_contract_warnings,
-            "sql_dispatch_trace": _extract_sql_dispatch_trace(agent_results),
+            "sql_dispatch_trace": sql_dispatch_trace,
+            # Compatibility alias for consumers that expect sql_operation at metadata top-level.
+            "sql_operation": sql_dispatch_trace.get("sql_operation"),
             "evidence_status": _extract_evidence_status_summary(agent_results),
             "final_response_source": "evidence_pipeline",
             "timing_ms": {
@@ -816,6 +827,66 @@ def _extract_evidence_status_summary(agent_results: list[AgentResult]) -> dict[s
         elif result.agent_name == "MLLossAgent" and result.data.get("evidence_status"):
             statuses["ml"] = str(result.data.get("evidence_status"))
     return statuses
+
+
+def _filter_warning_codes_for_manager(
+    *,
+    warning_codes: list[str],
+    route: AgentRoute,
+    intent_family: str | None,
+    response_blocks: list[dict],
+    sources: list[dict],
+    agent_results: list[AgentResult],
+) -> list[str]:
+    codes = [str(code or "").strip() for code in warning_codes if str(code or "").strip()]
+    if route != AgentRoute.HYBRID_FULL:
+        return codes
+    intent = str(intent_family or "").strip().upper()
+    if intent not in {"RECOMMENDATION", "LOT_SPECIFIC_RECOMMENDATION", "ACTION_RECOMMENDATION"}:
+        return codes
+    has_recommendation_block = any(
+        str((block or {}).get("type") or "").lower() in {"recommendations", "recommendation_cards"}
+        for block in (response_blocks or [])
+        if isinstance(block, dict)
+    )
+    if not has_recommendation_block:
+        return codes
+    source_types = {
+        str((src or {}).get("type") or "").strip().upper()
+        for src in (sources or [])
+        if isinstance(src, dict)
+    }
+    if not {"SQL", "RAG", "RECOMMENDATION"}.issubset(source_types):
+        return codes
+    if not _recommendation_has_grounded_evidence(agent_results):
+        return codes
+
+    drop_codes = {"RECOMMENDATION_EVIDENCE_WEAK"}
+    if "RAG" in source_types:
+        drop_codes.add("MISSING_RAG_SOURCE")
+    return [code for code in codes if str(code).strip().upper() not in drop_codes]
+
+
+def _recommendation_has_grounded_evidence(agent_results: list[AgentResult]) -> bool:
+    reco = _find_agent(agent_results, "RecommendationAgent")
+    if not reco or not isinstance(reco.data, dict):
+        return False
+    recommendations = reco.data.get("recommendations") or []
+    for item in recommendations:
+        if not isinstance(item, dict):
+            continue
+        refs = item.get("evidence_refs")
+        if isinstance(refs, list):
+            for ref in refs:
+                if not isinstance(ref, dict):
+                    continue
+                ref_type = str(ref.get("type") or "").upper()
+                source_id = str(ref.get("source_id") or "").strip()
+                if ref_type == "RAG" and str(ref.get("quality_status") or "").upper() in {"WEAK", "REJECTED"}:
+                    continue
+                if source_id and ref_type in {"SQL", "RAG", "RULE"}:
+                    return True
+    return False
 
 
 def _needs_pre_route_memory_handoff(message: str) -> bool:

@@ -45,6 +45,7 @@ class SQLAnalyticsAgent(BaseAgent):
         scope = entities.get("scope", "global")
         module = entities.get("module", "global")
         member_name = entities.get("member_name")
+        movement_direction = _extract_movement_direction(normalized)
 
         requested_limit = _extract_requested_limit(normalized)
         member_subject_hint = any(
@@ -209,7 +210,12 @@ class SQLAnalyticsAgent(BaseAgent):
                 r = self.sql_tools.process_stage_loss_ranking(days=days)
                 payload["process_stage_loss_ranking"] = r.get("items", [])
             elif op == "get_stock_movements_journal":
-                r = self.sql_tools.get_stock_movements_journal(product=product_for_query, batch_ref=batch_ref, limit=5 if re.search(r"\b5\b|cinq", normalized) else 30)
+                r = self.sql_tools.get_stock_movements_journal(
+                    product=product_for_query,
+                    batch_ref=batch_ref,
+                    limit=5 if re.search(r"\b5\b|cinq", normalized) else 30,
+                    direction=movement_direction,
+                )
                 payload["stock_movements_journal"] = r.get("items", [])
             elif op == "get_collections_summary":
                 r = self.sql_tools.get_collections_summary(product=product_for_query, date_range=effective_date_range)
@@ -348,7 +354,13 @@ class SQLAnalyticsAgent(BaseAgent):
             sources.extend(top_members_by_cost.get("sources", []))
             warnings.extend(top_members_by_cost.get("warnings", []))
 
-        if any(token in normalized for token in ("collect", "collecte", "input")):
+        grouped_by_producer = any(token in normalized for token in ("par producteur", "par producteurs", "par membre", "par membres"))
+        if grouped_by_producer:
+            top_farmers = self.sql_tools.get_top_farmers(product=product, date_range=effective_date_range)
+            payload["top_farmers"] = top_farmers.get("items", [])
+            sources.extend(top_farmers.get("sources", []))
+            warnings.extend(top_farmers.get("warnings", []))
+        elif any(token in normalized for token in ("collect", "collecte", "input")):
             collections = self.sql_tools.get_collections_summary(product=product, date_range=effective_date_range)
             payload["collections_summary"] = collections.get("items", [])
             sources.extend(collections.get("sources", []))
@@ -482,7 +494,11 @@ class SQLAnalyticsAgent(BaseAgent):
             phase3_advance_intent = False
 
         if phase3_stock_movement_intent:
-            movement_rows = self.sql_tools.get_stock_movements_journal(product=product, batch_ref=batch_ref)
+            movement_rows = self.sql_tools.get_stock_movements_journal(
+                product=product,
+                batch_ref=batch_ref,
+                direction=movement_direction,
+            )
             payload["stock_movements_journal"] = movement_rows.get("items", [])
             sources.extend(movement_rows.get("sources", []))
             warnings.extend(movement_rows.get("warnings", []))
@@ -1017,6 +1033,15 @@ def _extract_requested_limit(text: str) -> int | None:
     return None
 
 
+def _extract_movement_direction(normalized: str) -> str | None:
+    text = _normalize_text(normalized)
+    if any(token in text for token in ("sortant", "sortants", "sortie", "sorties", "outbound", "out")):
+        return "out"
+    if any(token in text for token in ("entrant", "entrants", "entree", "entrees", "entrée", "entrées", "inbound", "in")):
+        return "in"
+    return None
+
+
 def _detect_deterministic_operation(normalized: str) -> str | None:
     if "stock" in normalized and any(token in normalized for token in ("mouvement", "mouvements", "journal", "historique", "nature", "origine")):
         return "get_stock_movements_journal"
@@ -1026,6 +1051,10 @@ def _detect_deterministic_operation(normalized: str) -> str | None:
         return "get_current_stock"
     if any(token in normalized for token in ("disponible", "reserve", "restant")) and any(token in normalized for token in ("mangue", "arachide", "mil", "bissap", "produit")):
         return "get_current_stock"
+    if any(token in normalized for token in ("collecte", "collectes", "collecte", "collectees", "collectées")) and any(
+        token in normalized for token in ("par producteur", "par producteurs", "par membre", "par membres")
+    ):
+        return "get_top_farmers"
     if any(token in normalized for token in ("collecte", "collectes", "collecte", "collectees", "collectées")) and not any(
         token in normalized for token in ("bl", "justificatif", "traceabil", "preuve", "lot lie", "lot lié")
     ) and any(token in normalized for token in ("par produit", "quantite", "quantité", "cumulee", "cumulée", "agreg", "agrèg", "domine")):

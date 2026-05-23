@@ -117,12 +117,21 @@ def _has_valid_evidence_refs(rec: dict) -> bool:
     refs = rec.get("evidence_refs") if isinstance(rec, dict) else None
     if not isinstance(refs, list) or not refs:
         return False
+    has_sql_ref = False
+    has_sql_grounded_rule = False
     for ref in refs:
         if not isinstance(ref, dict):
             continue
         ref_type = str(ref.get("type") or "").upper()
         if ref_type == "RAG" and str(ref.get("quality_status") or "").upper() in {"WEAK", "REJECTED"}:
             continue
-        if ref_type in {"SQL", "RAG", "ML", "RULE"} and str(ref.get("source_id") or "").strip():
-            return True
-    return False
+        source_id = str(ref.get("source_id") or "").strip()
+        if not source_id:
+            continue
+        if ref_type == "SQL":
+            has_sql_ref = True
+        if ref_type == "RULE":
+            triggered_by_type = str(ref.get("triggered_by_type") or "").upper()
+            if triggered_by_type == "SQL" or "FROM_SQL" in str(ref.get("rule_name") or "").upper():
+                has_sql_grounded_rule = True
+    return has_sql_ref or has_sql_grounded_rule

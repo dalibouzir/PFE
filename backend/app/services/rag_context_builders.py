@@ -665,8 +665,8 @@ def build_agronomic_knowledge_chunk(
     cooperative_id: UUID,
 ) -> dict[str, Any]:
     content = (
-        f"Agronomic knowledge reference for {chunk.crop} in {chunk.region}, {chunk.country}. "
-        f"Topic: {chunk.topic}. Source: {chunk.source_id}. {chunk.content}"
+        f"Référence post-récolte pour {chunk.crop} ({chunk.region}, {chunk.country}). "
+        f"Thème: {chunk.topic}. {chunk.content}"
     )
     metadata = _base_metadata(
         chunk_type="agronomic_knowledge",

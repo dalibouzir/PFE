@@ -16,7 +16,19 @@ def _get_engine():
     global _engine
     if _engine is None:
         db_url = settings.effective_database_url
-        _engine = create_engine(db_url, pool_pre_ping=True)
+        _engine = create_engine(
+            db_url,
+            pool_pre_ping=True,
+            pool_size=3,
+            max_overflow=2,
+            pool_timeout=10,
+            pool_recycle=120,
+            pool_use_lifo=True,
+            connect_args={
+                # Prevent leaked transactions from pinning Supabase session slots.
+                "options": "-c idle_in_transaction_session_timeout=60000 -c statement_timeout=30000",
+            },
+        )
     return _engine
 
 

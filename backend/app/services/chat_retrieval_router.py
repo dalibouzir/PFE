@@ -307,6 +307,23 @@ RAG_GUIDANCE_HINTS = {
     "aphlis",
     "fao",
     "lessons learned",
+    "comment organiser",
+    "liste de vérifications",
+    "liste de verifications",
+    "pratiques simples",
+    "critères concrets",
+    "criteres concrets",
+    "que contrôler",
+    "que controler",
+    "quoi vérifier",
+    "quoi verifier",
+    "avant d'emballer",
+    "avant d emballer",
+    "avant emballer",
+    "mise en stock",
+    "avant transformation",
+    "verifications",
+    "verification",
 }
 
 OUT_OF_SCOPE_HINTS = {
@@ -392,6 +409,7 @@ OPERATIONAL_TRIGGER_HINTS = {
     "tri",
     "nettoyage",
     "emballage",
+    "emballer",
     "collecte",
     "mangue",
     "mil",
@@ -442,6 +460,8 @@ OPERATIONAL_TRIGGER_HINTS = {
     "predictions",
     "categorie",
     "catégorie",
+    "verification",
+    "verifications",
 }
 
 
@@ -635,6 +655,52 @@ def build_retrieval_plan(message: str, *, mode: str | None = None) -> RetrievalP
             sql_needed=False,
             rag_needed=True,
             reason="Question asks for guidance/references rather than current cooperative operational facts.",
+            suggested_sql_domains=[],
+            suggested_rag_chunk_types=rag_chunk_types or ["agronomic_knowledge", "benchmark_reference"],
+            detected_entities=entities,
+            safety_notes=[],
+        )
+    stage_guidance_signal = _has_signal(
+        normalized,
+        {
+            "nettoyage",
+            "sechage",
+            "tri",
+            "emballage",
+            "emballer",
+            "conditionnement",
+            "stockage",
+            "mise en stock",
+            "transformation",
+            "post recolte",
+            "post-recolte",
+        },
+    )
+    explicit_operational_metric_signal = _has_signal(
+        normalized,
+        {
+            "combien",
+            "quantite",
+            "quantites",
+            "total",
+            "actuel",
+            "stock actuel",
+            "mouvements",
+            "pertes mesurees",
+            "classement",
+            "par lot",
+            "par producteur",
+            "factures",
+            "tresorerie",
+        },
+    )
+    if rag_guidance_signal and stage_guidance_signal and not explicit_operational_metric_signal and not current_data_signal:
+        return RetrievalPlan(
+            intent_type=RetrievalIntentType.RAG_ONLY.value,
+            confidence=0.9,
+            sql_needed=False,
+            rag_needed=True,
+            reason="Best-practice stage guidance detected without explicit operational metric request.",
             suggested_sql_domains=[],
             suggested_rag_chunk_types=rag_chunk_types or ["agronomic_knowledge", "benchmark_reference"],
             detected_entities=entities,

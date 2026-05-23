@@ -8,7 +8,7 @@ from typing import Dict, List
 import joblib
 
 from app.core.config import settings
-from app.ml.training.trainer import MODEL_FILES
+from app.ml.constants import MODEL_FILES
 from app.ml.utils.feature_prep import FORBIDDEN_PREDICTIVE_FEATURES, forbidden_predictive_violations
 from app.ml.utils.model_registry import get_active_model_version, materialize_model_artifacts
 from app.utils.exceptions import ValidationError
