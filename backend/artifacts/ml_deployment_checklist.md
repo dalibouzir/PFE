@@ -36,7 +36,18 @@
 - `/ml/predict`
 - `/ml/assess`
 
-11. Rollback plan:
+11. Chatbot staging release gate (before production promotion):
+- Set env vars: `CHATBOT_GATE_BASE_URL`, `CHATBOT_GATE_EMAIL`, `CHATBOT_GATE_PASSWORD`
+- Run:
+`.venv311/bin/python scripts/chatbot_release_gate_12plus8.py --base-url "$CHATBOT_GATE_BASE_URL"`
+- Optional stricter check (when stable): add `--strict`
+- Expect exit code `0` and artifact under `artifacts/evals/`
+- Local example:
+`.venv311/bin/python scripts/chatbot_release_gate_12plus8.py --base-url http://127.0.0.1:8000`
+- Staging/deployed example:
+`.venv311/bin/python scripts/chatbot_release_gate_12plus8.py --base-url https://weefarm-backend-app.prouddune-c85ebf6e.germanywestcentral.azurecontainerapps.io`
+
+12. Rollback plan:
 - Use model rollback utility to switch active model
 - Restore previous image tag in Azure
 - Re-run smoke tests
