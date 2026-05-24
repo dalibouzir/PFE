@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.orchestrator.agent_orchestrator import AgentOrchestrator
+from app.ai.orchestrator.intent_router import IntentRouter
 from app.ai.schemas.agent_schemas import AgentRoute
 from app.ai.schemas.chat_schemas import ChatAgentResponse
 from app.models.chat import ChatMessage, ChatSession
@@ -19,6 +20,7 @@ from app.db.session import SessionLocal, set_request_id_context
 
 
 logger = logging.getLogger(__name__)
+_TIMEOUT_INTENT_ROUTER = IntentRouter()
 
 
 def generate_agent_chat_reply(
@@ -59,15 +61,20 @@ def generate_agent_chat_reply(
                 pool.shutdown(wait=False, cancel_futures=True)
             except Exception:
                 pass
+            timeout_route = _classify_timeout_route(message=message)
             response = ChatAgentResponse(
                 answer="La requête a dépassé le délai d’exécution. Réessayez avec une question plus ciblée.",
-                route=AgentRoute.OUT_OF_SCOPE,
+                route=timeout_route,
                 agents_used=[],
                 response_blocks=[],
                 sources=[],
                 confidence=0.0,
                 warnings=["Délai d’exécution dépassé sur cette requête."],
-                metadata={"warning_codes": ["REQUEST_TIMEOUT"], "request_id": request_id},
+                metadata={
+                    "warning_codes": ["REQUEST_TIMEOUT"],
+                    "request_id": request_id,
+                    "timeout_fallback_route": timeout_route.value,
+                },
             )
 
         db.add(
@@ -167,6 +174,17 @@ def _request_timeout_seconds() -> float:
     except ValueError:
         value = 60.0
     return max(10.0, min(value, 300.0))
+
+
+def _classify_timeout_route(*, message: str) -> AgentRoute:
+    try:
+        decision = _TIMEOUT_INTENT_ROUTER.classify(message or "")
+        route = decision.route
+        if isinstance(route, AgentRoute):
+            return route
+    except Exception:
+        pass
+    return AgentRoute.OUT_OF_SCOPE
 
 
 def _run_orchestrator_with_worker_session(
