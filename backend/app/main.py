@@ -12,6 +12,7 @@ from sqlalchemy.exc import OperationalError
 from app.api.router import api_router
 from app.core.config import settings
 from app.db.schema_compat import ensure_runtime_schema_compat
+from app.services.runtime_warmup import start_runtime_warmup_background
 from app.utils.exceptions import AppError
 
 
@@ -52,6 +53,7 @@ def _run_schema_compat_background() -> None:
 def startup_schema_compat():
     logger.info("Scheduling background schema compatibility check")
     Thread(target=_run_schema_compat_background, name="schema-compat-startup", daemon=True).start()
+    start_runtime_warmup_background()
 
 
 @app.exception_handler(AppError)

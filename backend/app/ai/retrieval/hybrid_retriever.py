@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import time
 from typing import Any
 
 from sqlalchemy import text
@@ -22,13 +23,30 @@ class HybridRetriever:
         self.current_user = current_user
 
     def retrieve(self, *, query: str, filters: dict, top_k: int = 12) -> list[dict[str, Any]]:
-        if not settings.rag_enabled or not self.current_user.cooperative_id:
-            return []
+        diagnostics = self.retrieve_with_diagnostics(query=query, filters=filters, top_k=top_k)
+        return diagnostics.get("results", [])
 
-        vector_rows = self._vector_candidates(query=query, k=max(24, top_k * 2))
-        keyword_rows = self._keyword_candidates(query=query, k=max(24, top_k * 2))
+    def retrieve_with_diagnostics(self, *, query: str, filters: dict, top_k: int = 12) -> dict[str, Any]:
+        if not settings.rag_enabled or not self.current_user.cooperative_id:
+            return {
+                "results": [],
+                "timing_ms": {
+                    "embedding_ms": 0,
+                    "vector_search_ms": 0,
+                    "keyword_search_ms": 0,
+                    "metadata_filter_ms": 0,
+                    "merge_rank_ms": 0,
+                    "total_retrieval_ms": 0,
+                },
+                "counts": {"vector_candidates": 0, "keyword_candidates": 0, "merged_candidates": 0},
+            }
+
+        total_started = time.perf_counter()
+        vector_rows, vector_debug = self._vector_candidates_with_timing(query=query, k=max(24, top_k * 2))
+        keyword_rows, keyword_debug = self._keyword_candidates_with_timing(query=query, k=max(24, top_k * 2))
 
         merged: dict[str, dict[str, Any]] = {}
+        merge_started = time.perf_counter()
 
         for idx, row in enumerate(vector_rows, start=1):
             chunk_id = str(row.get("chunk_id"))
@@ -55,19 +73,43 @@ class HybridRetriever:
             item["keyword_rank"] = idx
             merged[chunk_id] = item
 
+        merge_rank_ms = int((time.perf_counter() - merge_started) * 1000)
+        filter_started = time.perf_counter()
         filtered = _apply_soft_filters(list(merged.values()), filters=filters)
+        metadata_filter_ms = int((time.perf_counter() - filter_started) * 1000)
         filtered.sort(key=lambda it: float(it.get("hybrid_score", 0.0)), reverse=True)
-        return filtered[:top_k]
+        return {
+            "results": filtered[:top_k],
+            "timing_ms": {
+                "embedding_ms": int(vector_debug.get("embedding_ms", 0) or 0),
+                "vector_search_ms": int(vector_debug.get("vector_search_ms", 0) or 0),
+                "keyword_search_ms": int(keyword_debug.get("keyword_search_ms", 0) or 0),
+                "metadata_filter_ms": metadata_filter_ms,
+                "merge_rank_ms": merge_rank_ms,
+                "total_retrieval_ms": int((time.perf_counter() - total_started) * 1000),
+            },
+            "counts": {
+                "vector_candidates": len(vector_rows),
+                "keyword_candidates": len(keyword_rows),
+                "merged_candidates": len(merged),
+            },
+        }
 
     def _vector_candidates(self, *, query: str, k: int) -> list[dict[str, Any]]:
+        rows, _ = self._vector_candidates_with_timing(query=query, k=k)
+        return rows
+
+    def _vector_candidates_with_timing(self, *, query: str, k: int) -> tuple[list[dict[str, Any]], dict[str, int]]:
         bind = self.db.get_bind()
         if bind is None:
-            return []
+            return [], {"embedding_ms": 0, "vector_search_ms": 0}
         if bind.dialect.name != "postgresql":
-            return []
+            return [], {"embedding_ms": 0, "vector_search_ms": 0}
 
         try:
+            embed_started = time.perf_counter()
             embedding = embed_texts([query])[0]
+            embedding_ms = int((time.perf_counter() - embed_started) * 1000)
             vector_literal = "[" + ",".join(f"{float(value):.8f}" for value in embedding) + "]"
             stmt = text(
                 """
@@ -87,7 +129,8 @@ class HybridRetriever:
                 LIMIT :k
                 """
             )
-            return self.db.execute(
+            query_started = time.perf_counter()
+            rows = self.db.execute(
                 stmt,
                 {
                     "cooperative_id": self.current_user.cooperative_id,
@@ -95,13 +138,19 @@ class HybridRetriever:
                     "k": k,
                 },
             ).mappings().all()
+            vector_search_ms = int((time.perf_counter() - query_started) * 1000)
+            return rows, {"embedding_ms": embedding_ms, "vector_search_ms": vector_search_ms}
         except Exception:
-            return []
+            return [], {"embedding_ms": 0, "vector_search_ms": 0}
 
     def _keyword_candidates(self, *, query: str, k: int) -> list[dict[str, Any]]:
+        rows, _ = self._keyword_candidates_with_timing(query=query, k=k)
+        return rows
+
+    def _keyword_candidates_with_timing(self, *, query: str, k: int) -> tuple[list[dict[str, Any]], dict[str, int]]:
         bind = self.db.get_bind()
         if bind is None:
-            return []
+            return [], {"keyword_search_ms": 0}
 
         if bind.dialect.name == "postgresql":
             try:
@@ -124,6 +173,7 @@ class HybridRetriever:
                     LIMIT :k
                     """
                 )
+                started = time.perf_counter()
                 rows = self.db.execute(
                     stmt,
                     {
@@ -133,14 +183,19 @@ class HybridRetriever:
                     },
                 ).mappings().all()
                 if rows:
-                    return rows
+                    return rows, {"keyword_search_ms": int((time.perf_counter() - started) * 1000)}
             except Exception:
                 pass
 
-        return self._keyword_scan_candidates(query=query, k=k)
+        return self._keyword_scan_candidates_with_timing(query=query, k=k)
 
     def _keyword_scan_candidates(self, *, query: str, k: int) -> list[dict[str, Any]]:
+        rows, _ = self._keyword_scan_candidates_with_timing(query=query, k=k)
+        return rows
+
+    def _keyword_scan_candidates_with_timing(self, *, query: str, k: int) -> tuple[list[dict[str, Any]], dict[str, int]]:
         try:
+            started = time.perf_counter()
             rows = self.db.execute(
                 text(
                     """
@@ -164,7 +219,7 @@ class HybridRetriever:
                 },
             ).mappings().all()
         except Exception:
-            return []
+            return [], {"keyword_search_ms": 0}
 
         items = []
         for row in rows:
@@ -173,7 +228,7 @@ class HybridRetriever:
             if as_dict["keyword_score"] > 0:
                 items.append(as_dict)
         items.sort(key=lambda item: float(item.get("keyword_score", 0.0)), reverse=True)
-        return items[:k]
+        return items[:k], {"keyword_search_ms": int((time.perf_counter() - started) * 1000)}
 
 
 def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:

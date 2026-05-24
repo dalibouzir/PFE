@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import os
 import re
 import time
 import unicodedata
 from datetime import date
 from typing import Any
 
+from sqlalchemy.exc import OperationalError
+
 from app.ai.agents.base_agent import BaseAgent
 from app.ai.schemas.agent_schemas import AgentContext, AgentResult
 from app.ai.tools.sql_tools import SQLTools
+from app.db.session import set_sql_operation_context
 
 EVIDENCE_HAS = "HAS_EVIDENCE"
 EVIDENCE_NO_DATA = "PROVEN_NO_DATA"
@@ -149,7 +153,8 @@ class SQLAnalyticsAgent(BaseAgent):
         mixed_pre_post_intent = preharvest_lot_intent and postharvest_analytics_intent
         warnings: list[str] = []
         payload: dict[str, Any] = {}
-        payload["module_capabilities"] = self.sql_tools.get_module_capabilities()
+        if os.environ.get("AI_AUDIT_DEBUG") == "1":
+            payload["module_capabilities"] = self.sql_tools.get_module_capabilities()
         payload["detected_module"] = module
         payload["query_text"] = query
         if batch_ref:
@@ -176,6 +181,7 @@ class SQLAnalyticsAgent(BaseAgent):
         if op:
             product_for_query = product or _detect_product_from_text(normalized)
             payload["query_operation"] = op
+            op_timing: dict[str, Any] = {"sql_execution_ms": None, "db_error_type": None}
             if op == "avg_paid_invoices_current_quarter":
                 r = self.sql_tools.avg_paid_invoices_current_quarter()
                 payload["avg_paid_invoices_current_quarter"] = r.get("items", [])
@@ -210,7 +216,9 @@ class SQLAnalyticsAgent(BaseAgent):
                 r = self.sql_tools.process_stage_loss_ranking(days=days)
                 payload["process_stage_loss_ranking"] = r.get("items", [])
             elif op == "get_stock_movements_journal":
-                r = self.sql_tools.get_stock_movements_journal(
+                r, op_timing = _timed_sql_tool_call(
+                    "get_stock_movements_journal",
+                    self.sql_tools.get_stock_movements_journal,
                     product=product_for_query,
                     batch_ref=batch_ref,
                     limit=5 if re.search(r"\b5\b|cinq", normalized) else 30,
@@ -218,13 +226,23 @@ class SQLAnalyticsAgent(BaseAgent):
                 )
                 payload["stock_movements_journal"] = r.get("items", [])
             elif op == "get_collections_summary":
-                r = self.sql_tools.get_collections_summary(product=product_for_query, date_range=effective_date_range)
+                r, op_timing = _timed_sql_tool_call(
+                    "get_collections_summary",
+                    self.sql_tools.get_collections_summary,
+                    product=product_for_query,
+                    date_range=effective_date_range,
+                )
                 payload["collections_summary"] = r.get("items", [])
             elif op == "get_top_farmers":
-                r = self.sql_tools.get_top_farmers(product=product_for_query, date_range=effective_date_range)
+                r, op_timing = _timed_sql_tool_call(
+                    "get_top_farmers",
+                    self.sql_tools.get_top_farmers,
+                    product=product_for_query,
+                    date_range=effective_date_range,
+                )
                 payload["top_farmers"] = r.get("items", [])
             elif op == "get_parcels_list":
-                r = self.sql_tools.get_parcels_list(product=product_for_query)
+                r, op_timing = _timed_sql_tool_call("get_parcels_list", self.sql_tools.get_parcels_list, product=product_for_query)
                 payload["parcels_list"] = r.get("items", [])
             elif op == "get_commercial_invoice_linkage":
                 r = self.sql_tools.get_commercial_invoice_linkage()
@@ -236,6 +254,7 @@ class SQLAnalyticsAgent(BaseAgent):
                 payload["treasury_traceability_summary"] = r.get("summary", [])
             else:
                 r = {"items": [], "sources": [], "warnings": []}
+                op_timing = {"sql_execution_ms": None, "db_error_type": None}
             sources.extend(r.get("sources", []))
             warnings.extend(r.get("warnings", []))
             op_rows = r.get("items", []) if isinstance(r, dict) else []
@@ -257,6 +276,8 @@ class SQLAnalyticsAgent(BaseAgent):
                 "evidence_type": "SQL",
                 "evidence_status": EVIDENCE_HAS if op_rows else EVIDENCE_NO_DATA,
                 "warnings": sorted(set(warnings)),
+                "sql_execution_ms": op_timing.get("sql_execution_ms"),
+                "db_error_type": op_timing.get("db_error_type"),
             }
             answer_part = _build_sql_answer(payload)
             confidence = 0.9 if op_rows else 0.72
@@ -332,8 +353,9 @@ class SQLAnalyticsAgent(BaseAgent):
             warnings.extend(stock.get("warnings", []))
 
         if (module == "members" or any(token in normalized for token in ("membre", "membres", "member", "farmer", "producteur", "producteurs"))) and not asks_member_ranking:
-            members = self.sql_tools.get_members_list(member_name=member_name)
+            members, members_timing = _timed_sql_tool_call("get_members_list", self.sql_tools.get_members_list, member_name=member_name)
             payload["members_list"] = members.get("items", [])
+            payload["sql_operation_timing"] = {"operation": "get_members_list", **members_timing}
             sources.extend(members.get("sources", []))
             warnings.extend(members.get("warnings", []))
 
@@ -361,8 +383,14 @@ class SQLAnalyticsAgent(BaseAgent):
             sources.extend(top_farmers.get("sources", []))
             warnings.extend(top_farmers.get("warnings", []))
         elif any(token in normalized for token in ("collect", "collecte", "input")):
-            collections = self.sql_tools.get_collections_summary(product=product, date_range=effective_date_range)
+            collections, collections_timing = _timed_sql_tool_call(
+                "get_collections_summary",
+                self.sql_tools.get_collections_summary,
+                product=product,
+                date_range=effective_date_range,
+            )
             payload["collections_summary"] = collections.get("items", [])
+            payload["sql_operation_timing"] = {"operation": "get_collections_summary", **collections_timing}
             sources.extend(collections.get("sources", []))
             warnings.extend(collections.get("warnings", []))
 
@@ -837,6 +865,20 @@ class SQLAnalyticsAgent(BaseAgent):
                 warnings=[],
                 execution_time_ms=int((time.perf_counter() - start) * 1000),
             )
+        if bool(entities.get("needs_recency_clarification")):
+            return AgentResult(
+                agent_name=self.name,
+                route=context.route,
+                answer_part=(
+                    "Je ne peux pas déterminer de façon fiable le producteur le plus récemment livré avec les opérations SQL disponibles. "
+                    "Je peux soit classer les producteurs par quantité livrée, soit vous donner les dernières livraisons brutes."
+                ),
+                data={"sql_dispatch_trace": {"intent_family": "FOLLOW_UP", "sql_operation": "clarification_required", "row_count": 0}},
+                sources=[],
+                confidence=0.45,
+                warnings=[],
+                execution_time_ms=int((time.perf_counter() - start) * 1000),
+            )
         normalized = _normalize_text(query)
         if ("efficacite" in normalized) and any(token in normalized for token in ("producteur", "producteurs", "membre", "membres")):
             return AgentResult(
@@ -868,21 +910,24 @@ class SQLAnalyticsAgent(BaseAgent):
 
         sql_operation = ""
         tool_function = ""
+        op_timing: dict[str, Any] = {"sql_execution_ms": None, "db_error_type": None}
 
         if intent_family == "STOCK_CURRENT":
             sql_operation = "get_current_stock"
             tool_function = "SQLTools.get_current_stock"
-            result = self.sql_tools.get_current_stock(product=product)
+            result, op_timing = _timed_sql_tool_call(sql_operation, self.sql_tools.get_current_stock, product=product)
             payload["current_stock"] = result.get("items", [])
         elif intent_family == "POSTHARVEST_AVAILABLE_LOTS":
             sql_operation = "get_available_postharvest_lots"
             tool_function = "SQLTools.get_available_postharvest_lots"
-            result = self.sql_tools.get_available_postharvest_lots(product=product)
+            result, op_timing = _timed_sql_tool_call(sql_operation, self.sql_tools.get_available_postharvest_lots, product=product)
             payload["available_postharvest_lots"] = result.get("items", [])
         elif intent_family in {"LOSS_RANKING", "INPUT_OUTPUT_GAP"}:
             sql_operation = "get_canonical_material_balance"
             tool_function = "SQLTools.get_canonical_material_balance"
-            result = self.sql_tools.get_canonical_material_balance(batch_ref=batch_ref, product=product)
+            result, op_timing = _timed_sql_tool_call(
+                sql_operation, self.sql_tools.get_canonical_material_balance, batch_ref=batch_ref, product=product
+            )
             rows = result.get("items", []) or []
             rows = [row for row in rows if row.get("validity_status") == "VALID"]
             sort_key = "loss_pct" if intent_family == "LOSS_RANKING" else "gap_qty"
@@ -895,19 +940,21 @@ class SQLAnalyticsAgent(BaseAgent):
             sql_operation = "get_canonical_material_balance_for_lots"
             tool_function = "SQLTools.get_canonical_material_balance_for_lots"
             lot_refs = _extract_lot_refs(query, explicit=batch_ref)
-            result = self.sql_tools.get_canonical_material_balance_for_lots(lot_refs)
+            result, op_timing = _timed_sql_tool_call(sql_operation, self.sql_tools.get_canonical_material_balance_for_lots, lot_refs)
             payload["material_balance"] = result.get("items", [])
             payload["comparison_lot_refs"] = lot_refs
         elif intent_family == "STAGE_LOSS_ANALYSIS":
             sql_operation = "get_stage_loss_analysis"
             tool_function = "SQLTools.get_stage_loss_analysis"
             stage = _pick_first(entities.get("stage"))
-            result = self.sql_tools.get_stage_loss_analysis(batch_ref=batch_ref, product=product, stage=stage)
+            result, op_timing = _timed_sql_tool_call(
+                sql_operation, self.sql_tools.get_stage_loss_analysis, batch_ref=batch_ref, product=product, stage=stage
+            )
             payload["stage_loss_analysis"] = result.get("items", [])
         elif intent_family == "PREHARVEST_STEPS":
             sql_operation = "get_parcel_preharvest_status"
             tool_function = "SQLTools.preharvest.get_parcel_preharvest_status"
-            result = self.sql_tools.preharvest.get_parcel_preharvest_status(product=product)
+            result, op_timing = _timed_sql_tool_call(sql_operation, self.sql_tools.preharvest.get_parcel_preharvest_status, product=product)
             payload["preharvest_status"] = result.get("data", [])
         elif intent_family == "EXPLANATION_CAUSAL":
             stage = _pick_first(entities.get("stage"))
@@ -915,17 +962,23 @@ class SQLAnalyticsAgent(BaseAgent):
             if stage or any(token in normalized_q for token in ("sechage", "séchage", "tri", "emballage", "conditionnement", "etape", "étape")):
                 sql_operation = "get_stage_loss_analysis"
                 tool_function = "SQLTools.get_stage_loss_analysis"
-                result = self.sql_tools.get_stage_loss_analysis(batch_ref=batch_ref, product=product, stage=stage)
+                result, op_timing = _timed_sql_tool_call(
+                    sql_operation, self.sql_tools.get_stage_loss_analysis, batch_ref=batch_ref, product=product, stage=stage
+                )
                 payload["stage_loss_analysis"] = result.get("items", [])
             else:
                 sql_operation = "get_canonical_material_balance"
                 tool_function = "SQLTools.get_canonical_material_balance"
-                result = self.sql_tools.get_canonical_material_balance(batch_ref=batch_ref, product=product)
+                result, op_timing = _timed_sql_tool_call(
+                    sql_operation, self.sql_tools.get_canonical_material_balance, batch_ref=batch_ref, product=product
+                )
                 payload["material_balance"] = result.get("items", [])
         elif intent_family == "RISK_ANALYSIS":
             sql_operation = "get_canonical_material_balance"
             tool_function = "SQLTools.get_canonical_material_balance"
-            result = self.sql_tools.get_canonical_material_balance(batch_ref=batch_ref, product=product)
+            result, op_timing = _timed_sql_tool_call(
+                sql_operation, self.sql_tools.get_canonical_material_balance, batch_ref=batch_ref, product=product
+            )
             rows = result.get("items", []) or []
             payload["high_risk_lots"] = sorted(
                 [row for row in rows if row.get("validity_status") == "VALID"],
@@ -935,7 +988,9 @@ class SQLAnalyticsAgent(BaseAgent):
         else:  # RECOMMENDATION / LOT_SPECIFIC_RECOMMENDATION / FOLLOW_UP
             sql_operation = "get_canonical_material_balance"
             tool_function = "SQLTools.get_canonical_material_balance"
-            result = self.sql_tools.get_canonical_material_balance(batch_ref=batch_ref, product=product)
+            result, op_timing = _timed_sql_tool_call(
+                sql_operation, self.sql_tools.get_canonical_material_balance, batch_ref=batch_ref, product=product
+            )
             payload["material_balance"] = result.get("items", [])
 
         sources.extend(result.get("sources", []))
@@ -961,6 +1016,8 @@ class SQLAnalyticsAgent(BaseAgent):
             "evidence_type": "SQL",
             "evidence_status": EVIDENCE_HAS if primary_rows else EVIDENCE_NO_DATA,
             "warnings": sorted(set(warnings)),
+            "sql_execution_ms": op_timing.get("sql_execution_ms"),
+            "db_error_type": op_timing.get("db_error_type"),
         }
         payload["sql_dispatch_trace"] = trace
 
@@ -1011,6 +1068,20 @@ def _pick_first(value):
     return None
 
 
+def _timed_sql_tool_call(operation: str, fn, *args, **kwargs) -> tuple[dict[str, Any], dict[str, Any]]:
+    started_at = time.perf_counter()
+    set_sql_operation_context(operation)
+    try:
+        result = fn(*args, **kwargs)
+        return result, {"sql_execution_ms": int((time.perf_counter() - started_at) * 1000), "db_error_type": None}
+    except OperationalError:
+        raise
+    except Exception:
+        raise
+    finally:
+        set_sql_operation_context(None)
+
+
 def _extract_days(text: str, default_days: int) -> int:
     m = re.search(r"(\d+)\s*jour", text)
     if m:
@@ -1045,11 +1116,17 @@ def _extract_movement_direction(normalized: str) -> str | None:
 def _detect_deterministic_operation(normalized: str) -> str | None:
     if "stock" in normalized and any(token in normalized for token in ("mouvement", "mouvements", "journal", "historique", "nature", "origine")):
         return "get_stock_movements_journal"
+    if "stock" in normalized and any(token in normalized for token in ("sortie", "sorties", "sortant", "sortants", "entree", "entrees", "entrée", "entrées", "entrant", "entrants")):
+        return "get_stock_movements_journal"
     if ("stock" in normalized or "produit" in normalized) and any(token in normalized for token in ("seuil", "rupture", "sous le seuil", "proche du seuil")):
         return "get_low_stock_alerts"
     if ("stock" in normalized or "produit" in normalized) and all(token in normalized for token in ("total", "disponible")):
         return "get_current_stock"
     if any(token in normalized for token in ("disponible", "reserve", "restant")) and any(token in normalized for token in ("mangue", "arachide", "mil", "bissap", "produit")):
+        return "get_current_stock"
+    if any(token in normalized for token in ("combien", "reste", "restant", "restante", "disponible", "disponibles")) and any(
+        token in normalized for token in ("mangue", "arachide", "mil", "bissap", "produit", "kg", "kilogramme", "kilogrammes")
+    ):
         return "get_current_stock"
     if any(token in normalized for token in ("collecte", "collectes", "collecte", "collectees", "collectées")) and any(
         token in normalized for token in ("par producteur", "par producteurs", "par membre", "par membres")

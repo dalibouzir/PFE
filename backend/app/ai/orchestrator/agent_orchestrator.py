@@ -59,6 +59,7 @@ class AgentOrchestrator:
     ) -> FinalAgentResponse:
         started_at = time.perf_counter()
         route_started_at = time.perf_counter()
+        known_batch_refs = self._known_batch_refs()
         previous_user_query = self._get_previous_user_message(conversation_id) if conversation_id else None
         pre_route_entities: dict = {}
         if conversation_id and _needs_pre_route_memory_handoff(message) and not _is_reset_phrase(previous_user_query or ""):
@@ -66,6 +67,7 @@ class AgentOrchestrator:
                 message=message,
                 conversation_id=conversation_id,
                 language=language,
+                known_batch_refs=known_batch_refs,
             )
             memory_batch_ref = str(pre_route_entities.get("batch_ref") or "").strip().upper()
             if memory_batch_ref:
@@ -76,7 +78,7 @@ class AgentOrchestrator:
         decision: IntentRouteDecision = self.router.classify(
             message,
             language_hint=language,
-            known_batch_refs=self._known_batch_refs(),
+            known_batch_refs=known_batch_refs,
             previous_user_query=previous_user_query,
         )
         if pre_route_entities:
@@ -280,7 +282,13 @@ class AgentOrchestrator:
         rag_ms = _sum_agent_ms(agent_timings, "RAGKnowledgeAgent")
         ml_ms = _sum_agent_ms(agent_timings, "MLLossAgent")
         recommendation_ms = _sum_agent_ms(agent_timings, "RecommendationAgent")
-        llm_ms = compose_ms
+        llm_metadata = (evidence_metadata.get("llm_metadata") or {}) if isinstance(evidence_metadata, dict) else {}
+        composer_timing = (evidence_metadata.get("composer_timing_ms") or {}) if isinstance(evidence_metadata, dict) else {}
+        llm_ms = int(llm_metadata.get("llm_duration_ms") or 0)
+        rag_result = _find_agent(agent_results, "RAGKnowledgeAgent")
+        rag_timing = {}
+        if rag_result and isinstance(rag_result.data, dict):
+            rag_timing = rag_result.data.get("timing_ms") or {}
         sql_dispatch_trace = _extract_sql_dispatch_trace(agent_results)
         metadata = {
             "execution_time_ms": execution_time_ms,
@@ -309,7 +317,23 @@ class AgentOrchestrator:
                 "response_verify": verify_ms,
                 "confidence": confidence_ms,
                 "source_contract": source_contract_ms,
+                "rag_retrieval": rag_timing,
+                "composer": composer_timing,
+                "llm": llm_metadata,
                 "total": execution_time_ms,
+            },
+            "stage_timing_ms": {
+                "routing_ms": route_ms,
+                "memory_entity_ms": memory_ms,
+                "sql_agent_ms": sql_ms,
+                "rag_agent_ms": rag_ms,
+                "ml_agent_ms": ml_ms,
+                "recommendation_agent_ms": recommendation_ms,
+                "evidence_merge_ms": evidence_pack_ms,
+                "verifier_ms": verify_ms,
+                "composer_ms": compose_ms,
+                "llm_ms": llm_ms,
+                "total_latency_ms": execution_time_ms,
             },
             "durations_ms": {
                 "routing_duration_ms": route_ms,
@@ -365,7 +389,14 @@ class AgentOrchestrator:
 
         return response
 
-    async def _pre_route_memory_entities(self, *, message: str, conversation_id: str, language: str | None) -> dict:
+    async def _pre_route_memory_entities(
+        self,
+        *,
+        message: str,
+        conversation_id: str,
+        language: str | None,
+        known_batch_refs: set[str],
+    ) -> dict:
         try:
             bootstrap_decision = IntentRouteDecision(
                 route=AgentRoute.SQL_ONLY,
@@ -373,7 +404,7 @@ class AgentOrchestrator:
                 detected_entities=self.router.entity_extractor.extract(
                     message,
                     language_hint=language,
-                    known_batch_refs=self._known_batch_refs(),
+                    known_batch_refs=known_batch_refs,
                 ).as_dict(),
                 required_agents=["MemoryAgent"],
                 explanation="pre-route-memory-handoff",

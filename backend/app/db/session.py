@@ -1,9 +1,21 @@
+from __future__ import annotations
+
+import logging
+import time
+from contextvars import ContextVar
 from typing import Any
 
 from sqlalchemy import create_engine
+from sqlalchemy import event
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.exc import OperationalError
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+_ctx_request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
+_ctx_sql_operation: ContextVar[str | None] = ContextVar("sql_operation", default=None)
 
 
 # Lazy engine creation to respect audit_mode set by pytest_configure
@@ -29,6 +41,7 @@ def _get_engine():
                 "options": "-c idle_in_transaction_session_timeout=60000 -c statement_timeout=30000",
             },
         )
+        _install_engine_observability(_engine)
     return _engine
 
 
@@ -80,3 +93,79 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def set_request_id_context(request_id: str | None) -> None:
+    _ctx_request_id.set(request_id)
+
+
+def set_sql_operation_context(sql_operation: str | None) -> None:
+    _ctx_sql_operation.set(sql_operation)
+
+
+def _install_engine_observability(engine) -> None:
+    @event.listens_for(engine, "connect")
+    def _on_connect(dbapi_connection, connection_record):
+        logger.info(
+            "db.connect",
+            extra={
+                "event": {
+                    "request_id": _ctx_request_id.get(),
+                    "sql_operation": _ctx_sql_operation.get(),
+                    "connect_ms": None,
+                }
+            },
+        )
+
+    @event.listens_for(engine, "checkout")
+    def _on_checkout(dbapi_connection, connection_record, connection_proxy):
+        logger.info(
+            "db.checkout",
+            extra={
+                "event": {
+                    "request_id": _ctx_request_id.get(),
+                    "sql_operation": _ctx_sql_operation.get(),
+                    "checkout_ms": None,
+                }
+            },
+        )
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        conn.info.setdefault("query_started_at", []).append(time.perf_counter())
+
+    @event.listens_for(engine, "after_cursor_execute")
+    def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        started_stack = conn.info.get("query_started_at", [])
+        if not started_stack:
+            return
+        started_at = started_stack.pop(-1)
+        elapsed_ms = round((time.perf_counter() - started_at) * 1000.0, 3)
+        row_count = int(getattr(cursor, "rowcount", -1) or 0)
+        logger.info(
+            "db.sql_execution",
+            extra={
+                "event": {
+                    "request_id": _ctx_request_id.get(),
+                    "sql_operation": _ctx_sql_operation.get(),
+                    "sql_execution_ms": elapsed_ms,
+                    "row_count": row_count,
+                }
+            },
+        )
+
+    @event.listens_for(engine, "handle_error")
+    def _handle_error(exception_context):
+        original = exception_context.original_exception
+        error_name = type(original).__name__
+        db_error_type = "OperationalError" if isinstance(original, OperationalError) else error_name
+        logger.exception(
+            "db.sql_error",
+            extra={
+                "event": {
+                    "request_id": _ctx_request_id.get(),
+                    "sql_operation": _ctx_sql_operation.get(),
+                    "db_error_type": db_error_type,
+                }
+            },
+        )

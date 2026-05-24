@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+import logging
 import time
 from uuid import UUID, uuid4
 
@@ -14,6 +15,10 @@ from app.ai.schemas.chat_schemas import ChatAgentResponse
 from app.models.chat import ChatMessage, ChatSession
 from app.models.mixins import current_utc
 from app.models.user import User
+from app.db.session import SessionLocal, set_request_id_context
+
+
+logger = logging.getLogger(__name__)
 
 
 def generate_agent_chat_reply(
@@ -25,6 +30,9 @@ def generate_agent_chat_reply(
     user_id: str | None = None,
     language: str | None = "fr",
 ) -> ChatAgentResponse:
+    request_id = str(uuid4())
+    set_request_id_context(request_id)
+    started_at = time.perf_counter()
     session = _resolve_or_create_session(db, current_user=current_user, conversation_id=conversation_id, seed_text=message)
 
     try:
@@ -32,17 +40,17 @@ def generate_agent_chat_reply(
         db.add(ChatMessage(session_id=session.id, role="user", content=message))
         db.flush()
 
-        orchestrator = AgentOrchestrator(db, current_user)
         try:
             pool = ThreadPoolExecutor(max_workers=1)
             future = pool.submit(
-                asyncio.run,
-                orchestrator.handle(
-                    message=message,
-                    language=language,
-                    conversation_id=str(session.id),
-                    user_id=user_id,
-                ),
+                _run_orchestrator_with_worker_session,
+                request_id=request_id,
+                user_id_value=current_user.id,
+                fallback_user=current_user,
+                message=message,
+                language=language,
+                conversation_id=str(session.id),
+                caller_user_id=user_id,
             )
             response = future.result(timeout=_request_timeout_seconds())
             pool.shutdown(wait=True, cancel_futures=False)
@@ -59,7 +67,7 @@ def generate_agent_chat_reply(
                 sources=[],
                 confidence=0.0,
                 warnings=["Délai d’exécution dépassé sur cette requête."],
-                metadata={"warning_codes": ["REQUEST_TIMEOUT"]},
+                metadata={"warning_codes": ["REQUEST_TIMEOUT"], "request_id": request_id},
             )
 
         db.add(
@@ -102,16 +110,53 @@ def generate_agent_chat_reply(
         )
         db.commit()
         persistence_ms = int((time.perf_counter() - persistence_started_at) * 1000)
-    except Exception:
+    except Exception as exc:
+        total_latency_ms = int((time.perf_counter() - started_at) * 1000)
+        logger.exception(
+            "chat.agent.request_summary",
+            extra={
+                "event": {
+                    "request_id": request_id,
+                    "route": None,
+                    "intent": None,
+                    "sql_operation": None,
+                    "total_latency_ms": total_latency_ms,
+                    "status": "error",
+                    "error_type": type(exc).__name__,
+                }
+            },
+        )
+        set_request_id_context(None)
         db.rollback()
         raise
 
     payload = response.model_dump()
+    route_value = str(getattr(response.route, "value", response.route))
+    sql_trace = (payload.get("metadata") or {}).get("sql_dispatch_trace") if isinstance(payload.get("metadata"), dict) else {}
+    sql_operation = sql_trace.get("sql_operation") if isinstance(sql_trace, dict) else None
+    error_type = "REQUEST_TIMEOUT" if "REQUEST_TIMEOUT" in ((payload.get("metadata") or {}).get("warning_codes") or []) else None
     payload["metadata"] = {
         **payload.get("metadata", {}),
+        "request_id": request_id,
         "conversation_id": str(session.id),
         "persistence_ms": persistence_ms,
     }
+    total_latency_ms = int((time.perf_counter() - started_at) * 1000)
+    logger.info(
+        "chat.agent.request_summary",
+        extra={
+            "event": {
+                "request_id": request_id,
+                "route": route_value,
+                "intent": (payload.get("metadata") or {}).get("intent_family"),
+                "sql_operation": sql_operation,
+                "total_latency_ms": total_latency_ms,
+                "status": "ok",
+                "error_type": error_type,
+            }
+        },
+    )
+    set_request_id_context(None)
     return ChatAgentResponse(**payload)
 
 
@@ -122,6 +167,37 @@ def _request_timeout_seconds() -> float:
     except ValueError:
         value = 60.0
     return max(10.0, min(value, 300.0))
+
+
+def _run_orchestrator_with_worker_session(
+    *,
+    request_id: str,
+    user_id_value,
+    fallback_user: User,
+    message: str,
+    language: str | None,
+    conversation_id: str,
+    caller_user_id: str | None,
+) -> ChatAgentResponse:
+    worker_db = SessionLocal()
+    set_request_id_context(request_id)
+    try:
+        worker_user = worker_db.get(User, user_id_value) or fallback_user
+        orchestrator = AgentOrchestrator(worker_db, worker_user)
+        return asyncio.run(
+            orchestrator.handle(
+                message=message,
+                language=language,
+                conversation_id=conversation_id,
+                user_id=caller_user_id,
+            )
+        )
+    finally:
+        try:
+            worker_db.close()
+        except Exception:
+            pass
+        set_request_id_context(None)
 
 
 def _resolve_or_create_session(db: Session, *, current_user: User, conversation_id: str | None, seed_text: str) -> ChatSession:

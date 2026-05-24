@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, String, and_, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect
 
@@ -30,20 +30,40 @@ POST_HARVEST_STAGES = {"cleaning", "drying", "sorting", "packaging"}
 
 class SQLTools:
     """Controlled SQL tool execution for grounded response generation."""
+    _global_table_availability_cache: dict[tuple[str, str], bool] = {}
+    _global_module_capabilities_cache: dict[str, dict[str, dict[str, Any]]] = {}
 
     def __init__(self, db: Session, current_user: User):
         self.db = db
         self.current_user = current_user
         self.cooperative_id = current_user.cooperative_id
         self.preharvest = PreharvestTools(db, current_user)
+        self._table_availability_cache: dict[str, bool] = {}
 
     def module_available(self, table_name: str) -> bool:
+        bind = self.db.get_bind()
+        cache_key = (str(getattr(bind, "url", "")), table_name)
+        global_cached = SQLTools._global_table_availability_cache.get(cache_key)
+        if global_cached is not None:
+            return global_cached
+        cached = self._table_availability_cache.get(table_name)
+        if cached is not None:
+            return cached
         try:
-            return bool(inspect(self.db.get_bind()).has_table(table_name))
+            available = bool(inspect(bind).has_table(table_name))
+            self._table_availability_cache[table_name] = available
+            SQLTools._global_table_availability_cache[cache_key] = available
+            return available
         except Exception:
+            self._table_availability_cache[table_name] = False
+            SQLTools._global_table_availability_cache[cache_key] = False
             return False
 
     def get_module_capabilities(self) -> dict[str, dict[str, Any]]:
+        bind_key = str(getattr(self.db.get_bind(), "url", ""))
+        cached = SQLTools._global_module_capabilities_cache.get(bind_key)
+        if cached is not None:
+            return cached
         module_tables = {
             "members": ("members",),
             "parcels": ("parcels",),
@@ -67,6 +87,7 @@ class SQLTools:
                 "available_tables": available_tables,
                 "available": len(available_tables) > 0,
             }
+        SQLTools._global_module_capabilities_cache[bind_key] = capabilities
         return capabilities
 
     def get_current_stock(self, product: str | None = None) -> dict[str, Any]:
@@ -478,16 +499,16 @@ class SQLTools:
             .where(Batch.cooperative_id == self.cooperative_id)
             .order_by(ProcessStep.date.desc())
         )
+        if batch_ref:
+            stmt = stmt.where(func.upper(Batch.code) == str(batch_ref).strip().upper())
+        if product:
+            stmt = stmt.where(func.lower(Product.name).in_(_product_aliases(product)))
         stmt = _apply_step_date_range(stmt, date_range)
         rows = self.db.execute(stmt).all()
 
         items = []
         for step_id, code, product_name, step_type, qty_in, qty_out, step_date in rows:
-            if batch_ref and str(code).upper() != str(batch_ref).upper():
-                continue
             if stage and _canonical_stage_name(step_type) != _canonical_stage_name(stage):
-                continue
-            if product and _canonical_product_name(product_name) != _canonical_product_name(product):
                 continue
             q_in = float(qty_in or 0.0)
             q_out = float(qty_out or 0.0)
@@ -581,15 +602,15 @@ class SQLTools:
             .where(Batch.cooperative_id == self.cooperative_id)
             .order_by(Batch.code.asc(), ProcessStep.date.asc(), ProcessStep.sequence_order.asc())
         )
+        if batch_ref:
+            stmt = stmt.where(func.upper(Batch.code) == str(batch_ref).strip().upper())
+        if product:
+            stmt = stmt.where(func.lower(Product.name).in_(_product_aliases(product)))
         rows = self.db.execute(stmt).all()
         grouped: dict[str, dict[str, Any]] = {}
         for batch_id, code, product_name, step_type, qty_in, qty_out, step_date, seq in rows:
             ref = str(code or "")
             if not ref:
-                continue
-            if batch_ref and ref.strip().lower() != str(batch_ref).strip().lower():
-                continue
-            if product and _canonical_product_name(product_name) != _canonical_product_name(product):
                 continue
             canonical_stage = _canonical_stage_name(step_type)
             if canonical_stage not in POST_HARVEST_STAGES:
@@ -1238,16 +1259,26 @@ class SQLTools:
             .outerjoin(Member, Member.id == Input.member_id)
             .where(StockMovement.cooperative_id == self.cooperative_id)
             .order_by(StockMovement.movement_date.desc(), StockMovement.created_at.desc())
-            .limit(max(1, int(limit)))
         )
+        if product:
+            stmt = stmt.where(func.lower(Product.name).in_(_product_aliases(product)))
+        if batch_ref:
+            stmt = stmt.where(func.lower(Batch.code).contains(str(batch_ref).strip().lower()))
+        if input_ref:
+            input_needle = str(input_ref).strip().lower()
+            if input_needle.startswith("col-") and len(input_needle) > 4:
+                stmt = stmt.where(func.lower(func.cast(Input.id, String)).contains(input_needle[4:]))
+        if direction:
+            direction_norm = str(direction).strip().lower()
+            if direction_norm in {"in", "out"}:
+                stmt = stmt.where(func.lower(StockMovement.movement_type) == direction_norm)
+        stmt = stmt.limit(max(1, int(limit)))
         rows = self.db.execute(stmt).all()
         items: list[dict[str, Any]] = []
         batch_needle = str(batch_ref or "").strip().lower()
         input_needle = str(input_ref or "").strip().lower()
         direction_norm = str(direction or "").strip().lower()
         for movement_id, movement_date, quantity_kg, movement_type, action_type, source, idem_key, notes, product_name, lot_code, input_id, bl_number, member_name in rows:
-            if product and _canonical_product_name(product_name) != _canonical_product_name(product):
-                continue
             movement_type_norm = str(movement_type or "").strip().lower()
             if direction_norm == "out" and movement_type_norm != "out":
                 continue

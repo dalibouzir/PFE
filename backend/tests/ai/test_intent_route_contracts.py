@@ -208,10 +208,10 @@ def test_stage_loss_analysis_routes_to_sql(query: str):
         "Pourquoi les pertes sont élevées au séchage ?",
     ],
 )
-def test_hybrid_sql_rag_advisory_loss_routes_with_operational_grounding(query: str):
+def test_advisory_loss_phrasing_routes_to_rag_when_no_measured_scope(query: str):
     decision = router.classify(query)
-    assert decision.route == AgentRoute.HYBRID_SQL_RAG
-    assert decision.detected_entities.get("intent_family") == "EXPLANATION_CAUSAL"
+    assert decision.route == AgentRoute.RAG_ONLY
+    assert decision.detected_entities.get("intent_family") == "BEST_PRACTICES"
 
 
 @pytest.mark.parametrize(
@@ -278,6 +278,51 @@ def test_negative_loss_ranking_not_available_lots():
 def test_negative_best_practices_not_sql_only():
     decision = router.classify("bonnes pratiques de séchage")
     assert decision.route == AgentRoute.RAG_ONLY
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Il reste combien de kg disponibles pour la mangue ?",
+        "Quantité disponible de mangue ?",
+        "Combien reste-t-il de mil disponible ?",
+    ],
+)
+def test_stock_quantity_paraphrases_without_stock_keyword_route_sql(query: str):
+    decision = router.classify(query)
+    assert decision.route == AgentRoute.SQL_ONLY
+    assert decision.detected_entities.get("intent_family") == "STOCK_CURRENT"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Affiche-moi les dernières sorties de stock uniquement.",
+        "Montre les entrées de stock récentes.",
+        "Je veux seulement les mouvements sortants de stock.",
+    ],
+)
+def test_stock_movement_directional_paraphrases_route_sql(query: str):
+    decision = router.classify(query)
+    assert decision.route == AgentRoute.SQL_ONLY
+    assert decision.detected_entities.get("intent_family") == "factual_sql"
+
+
+def test_recent_producer_delivery_requires_clarification():
+    decision = router.classify("Quel producteur a livré le plus récemment ?")
+    assert decision.route == AgentRoute.SQL_ONLY
+    assert bool(decision.detected_entities.get("needs_recency_clarification")) is True
+
+
+def test_stage_measured_ranking_is_not_recommendation():
+    decision = router.classify("Classe les étapes par pertes mesurées.")
+    assert decision.route == AgentRoute.SQL_ONLY
+    assert decision.detected_entities.get("intent_family") == "STAGE_LOSS_ANALYSIS"
+
+
+def test_lot_action_fiable_routes_to_hybrid_full():
+    decision = router.classify("Je veux une action fiable pour LOT-MILX-001 - Mil")
+    assert decision.route == AgentRoute.HYBRID_FULL
 
 
 def test_negative_risk_not_simple_loss_ranking():

@@ -692,7 +692,15 @@ def _compose_llm_summary(
     """
     import time
     llm_start = time.perf_counter()
-    metadata = {"llm_attempted": False, "fallback_used": False, "llm_duration_ms": 0, "provider": "unknown"}
+    metadata = {
+        "llm_attempted": False,
+        "fallback_used": False,
+        "llm_duration_ms": 0,
+        "provider": "unknown",
+        "llm_call_ms": 0,
+        "llm_validation_ms": 0,
+        "llm_fallback_handling_ms": 0,
+    }
     
     try:
         metadata["llm_attempted"] = True
@@ -719,13 +727,16 @@ def _compose_llm_summary(
                 ),
             },
         ]
+        call_started = time.perf_counter()
         response = client.chat(messages)
+        metadata["llm_call_ms"] = int((time.perf_counter() - call_started) * 1000)
         llm_summary = response.content.strip()
         if not llm_summary or len(llm_summary) < 10:
             metadata["fallback_used"] = True
             metadata["fallback_reason"] = "empty_response"
             return None, metadata
         
+        validation_started = time.perf_counter()
         validation_issues = _validate_llm_summary(
             llm_summary,
             pack=pack,
@@ -733,10 +744,12 @@ def _compose_llm_summary(
             deterministic_summary=deterministic_summary,
             limitations=limitations,
         )
+        metadata["llm_validation_ms"] = int((time.perf_counter() - validation_started) * 1000)
         if validation_issues:
             logger.warning(f"LLM validation failed: {validation_issues}")
             metadata["fallback_used"] = True
             metadata["fallback_reason"] = "validation_failed"
+            metadata["llm_fallback_handling_ms"] = int((time.perf_counter() - llm_start) * 1000)
             return None, metadata
         
         logger.info(f"LLM composed summary for {pack.route} via {metadata['provider']}")
@@ -748,6 +761,7 @@ def _compose_llm_summary(
         logger.warning(f"LLM summary error ({metadata.get('provider')}): {llm_error}, fallback to deterministic")
         metadata["fallback_used"] = True
         metadata["fallback_reason"] = llm_error[:50]
+        metadata["llm_fallback_handling_ms"] = int((time.perf_counter() - llm_start) * 1000)
         metadata["llm_duration_ms"] = int((time.perf_counter() - llm_start) * 1000)
         return None, metadata
 
@@ -770,6 +784,11 @@ def _should_use_llm_summary(
         return False
 
     intent_family = str(((pack.plan.answer_contract or {}).get("intent_family") or "")).upper()
+    locked_recommendations = any(
+        _has_recommendation_evidence_refs(item)
+        for item in (pack.recommendations.get("actions") or [])
+        if isinstance(item, dict)
+    )
     lowered_q = _normalize_for_match(pack.question)
     explanation_markers = ("explique", "pourquoi", "que faire", "comment", "conseil", "recommand")
     asks_explanation = any(token in lowered_q for token in explanation_markers)
@@ -792,7 +811,20 @@ def _should_use_llm_summary(
         if sql_status == EVIDENCE_NO_DATA and len(limitations or []) <= 2 and len(str(summary or "")) <= 220:
             return False
 
-    if pack.route in {AgentRoute.RAG_ONLY, AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_FULL}:
+    # RAG-only responses are already composed from curated practical chunks; skip expensive rewrite.
+    if pack.route == AgentRoute.RAG_ONLY:
+        return False
+    if pack.route in {AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_FULL} and not asks_explanation:
+        return False
+    if pack.route in {AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_FULL} and limitations:
+        return False
+    if pack.route in {AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_FULL} and (
+        locked_recommendations or intent_family in {"RECOMMENDATION", "LOT_SPECIFIC_RECOMMENDATION", "ACTION_RECOMMENDATION", "FOLLOW_UP"}
+    ):
+        # Deterministic route templates already preserve numbers/limitations and
+        # avoid expensive LLM validation fallback loops on recommendation flows.
+        return False
+    if pack.route in {AgentRoute.HYBRID_SQL_RAG, AgentRoute.HYBRID_FULL}:
         return True
     if pack.route in {AgentRoute.RECOMMENDATION_ONLY, AgentRoute.HYBRID_RAG_RECOMMENDATION}:
         return True
@@ -946,6 +978,9 @@ def _generate_summary_interpretation(llm_answer: str | None, pack: EvidencePack,
 
 
 def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+    import time
+
+    compose_started = time.perf_counter()
     sql_payload = pack.sql.get("payload") or {}
     contract = pack.plan.answer_contract or {}
     target = contract.get("target") or {}
@@ -1108,6 +1143,7 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
         )
     blocks: list[dict[str, Any]] = []
 
+    deterministic_started = time.perf_counter()
     summary = _compose_summary(pack=pack, sql_payload=sql_payload)
 
     kpi_block = _generate_kpi_cards(sql_payload=sql_payload, pack=pack)
@@ -1186,6 +1222,7 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
         summary = f"Pour ce produit: {summary}"
     if "conclusion" in normalized_q and not summary.lower().startswith("conclusion"):
         summary = f"Conclusion: {summary}"
+    deterministic_compose_ms = int((time.perf_counter() - deterministic_started) * 1000)
 
     # Apply manager-friendly summary polish from locked evidence across all business routes.
     llm_summary = None
@@ -1253,6 +1290,13 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
         "confidence_reason": "warnings_present" if verification.issues else "evidence_verified",
         "warning_categories": {code: _warning_category(code) for code in warning_codes},
         "llm_metadata": llm_metadata,
+        "composer_timing_ms": {
+            "deterministic_compose_ms": deterministic_compose_ms,
+            "llm_call_ms": int(llm_metadata.get("llm_call_ms", 0) or 0),
+            "llm_validation_ms": int(llm_metadata.get("llm_validation_ms", 0) or 0),
+            "llm_fallback_handling_ms": int(llm_metadata.get("llm_fallback_handling_ms", 0) or 0),
+            "compose_total_ms": int((time.perf_counter() - compose_started) * 1000),
+        },
     }
 
     return answer, blocks, metadata

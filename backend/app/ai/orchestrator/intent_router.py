@@ -122,6 +122,12 @@ RECO_HINTS = {
     "sans te baser uniquement sur ml",
     "sans se baser uniquement sur ml",
     "reco",
+    "action fiable",
+    "actions fiables",
+    "que recommandes-tu",
+    "que recommandes tu",
+    "recommandation",
+    "recommandations",
 }
 RECOMMENDATION_REGEXES = (
     re.compile(r"\bconseill\w*\b", re.IGNORECASE),
@@ -549,7 +555,7 @@ class IntentRouter:
                 or any(regex.search(lowered) for regex in RECOMMENDATION_REGEXES)
                 or "action" in lowered
             )
-            and any(token in lowered for token in ("sinon", "invalide", "invalid", "reference", "référence", "introuvable"))
+            and any(token in lowered for token in ("sinon", "invalide", "invalid", "reference", "référence", "introuvable", "action fiable", "actions fiables"))
         )
         if unsupported_hr_hit and not lot_reference_validation_reco:
             entities["intent_family"] = "unsupported_hr_subjective"
@@ -779,7 +785,7 @@ class IntentRouter:
                 0.9,
             )
 
-        if asks_recommendation and any(token in lowered for token in (" lot", "lots", "batch")) and not entities.get("batch_ref"):
+        if asks_recommendation and re.search(r"\b(lot|batch)\b", lowered) and not entities.get("batch_ref"):
             entities["intent_family"] = "follow_up"
             entities["needs_batch_clarification"] = True
             return _decision(
@@ -1321,6 +1327,7 @@ def _contract_route_decision(
             "plan d'action",
             "plan d action",
             "on fait quoi",
+            "on devrait faire quoi",
             "actions prioritaires",
             "action prioritaire",
             "recommandations disponibles",
@@ -1370,6 +1377,8 @@ def _contract_route_decision(
             "comment ameliorer",
             "comment réduire",
             "comment reduire",
+            "comment limiter",
+            "limiter les pertes",
             "comment organiser",
             "liste de vérifications",
             "liste de verifications",
@@ -1380,9 +1389,12 @@ def _contract_route_decision(
             "que contrôler",
             "quoi verifier",
             "quoi vérifier",
+            "points verifier",
+            "points vérifier",
             "avant d'emballer",
             "avant d emballer",
             "mise en stock",
+            "entreposer",
             "avant transformation",
         )
     )
@@ -1396,6 +1408,7 @@ def _contract_route_decision(
             "emballer",
             "conditionnement",
             "stockage",
+            "entreposer",
             "mise en stock",
             "transformation",
             "post-recolte",
@@ -1444,6 +1457,50 @@ def _contract_route_decision(
             ["RAGKnowledgeAgent"],
             "Best-practice stage guidance without operational metric request should route to RAG.",
             0.91,
+        )
+    asks_measured_analytics = explicit_operational_metrics or any(
+        token in lowered_ascii
+        for token in (
+            "mesure",
+            "mesuree",
+            "mesuree",
+            "mesurées",
+            "classement",
+            "classe les etapes",
+            "classement des etapes",
+            "par pertes",
+            "par etape",
+            "total",
+            "dans notre cooperative",
+            "dans notre coop",
+            "dans nos donnees",
+            "selon nos donnees",
+        )
+    )
+    asks_educational_stage_advice = stage_guidance_context and (
+        advisory_intent
+        or (
+            asks_why
+            and any(token in lowered_ascii for token in ("sechage", "tri", "stockage", "entreposer", "mise en stock", "emballage", "conditionnement"))
+        )
+        or any(token in lowered_ascii for token in ("criteres de tri", "critères de tri", "points verifier", "points vérifier", "checklist", "check-list"))
+    )
+    if (
+        asks_educational_stage_advice
+        and not asks_recommendation
+        and not asks_risk
+        and not asks_current_scope
+        and not has_batch
+        and not asks_measured_analytics
+        and not bool(re.search(r"\bstock(?:s)?\b", lowered_ascii))
+    ):
+        entities["intent_family"] = "BEST_PRACTICES"
+        return _decision(
+            AgentRoute.RAG_ONLY,
+            entities,
+            ["RAGKnowledgeAgent"],
+            "Educational post-harvest advice request without measured-data scope should route to RAG.",
+            0.92,
         )
     asks_loss = any(
         token in lowered
@@ -1523,11 +1580,29 @@ def _contract_route_decision(
         entities["sort_by"] = "current_qty"
         entities["sort_order"] = "asc"
     asks_stock = bool(re.search(r"\bstock(?:s)?\b", lowered_ascii)) or ("inventaire" in lowered_ascii) or ("stockable" in lowered_ascii)
+    if not asks_stock and not asks_available_lots and (
+        any(token in lowered_ascii for token in ("combien", "reste", "restant", "restante", "disponible", "disponibles", "quantite disponible", "quantité disponible"))
+        and (
+            bool(entities.get("product"))
+            or any(token in lowered_ascii for token in ("mangue", "mil", "arachide", "bissap", "produit", "produits", "kg", "kilogramme", "kilogrammes"))
+        )
+    ):
+        asks_stock = True
     asks_stock_threshold = any(token in lowered_ascii for token in ("seuil", "rupture", "sous le seuil", "proche du seuil", "risque de rupture"))
     asks_stock_movements = asks_stock and any(
         token in lowered_ascii
         for token in ("mouvement", "mouvements", "journal", "historique", "nature", "origine")
     )
+    asks_stock_direction = any(
+        token in lowered_ascii
+        for token in ("sortie", "sorties", "sortant", "sortants", "entrant", "entrants", "entree", "entrees", "entrée", "entrées")
+    )
+    if asks_stock and asks_stock_direction:
+        asks_stock_movements = True
+        if any(token in lowered_ascii for token in ("sortie", "sorties", "sortant", "sortants")):
+            entities["movement_direction"] = "out"
+        elif any(token in lowered_ascii for token in ("entrant", "entrants", "entree", "entrees", "entrée", "entrées")):
+            entities["movement_direction"] = "in"
     if not asks_stock:
         stock_axes_tokens = ("total", "reserve", "reservee", "reservees", "disponible", "disponibles", "restant", "restante", "restantes")
         stock_axes_hits = sum(1 for token in stock_axes_tokens if token in lowered_ascii)
@@ -1578,7 +1653,8 @@ def _contract_route_decision(
     ) and any(token in lowered_ascii for token in ("etape", "tri", "sechage", "nettoyage", "emballage", "conditionnement", "process"))
     asks_stage_loss = asks_stage_loss or bool(
         re.search(r"\b(etape|process)\b.*\b(plus|pire|moins)\b.*\b(perte|penalis|efficac|kg)\b", lowered_ascii)
-        or re.search(r"\bpertes?\b.*\bpar\s+etape\b", lowered_ascii)
+        or re.search(r"\bpertes?\b.*\bpar\s+etapes?\b", lowered_ascii)
+        or re.search(r"\bclasse\w*\b.*\betapes?\b.*\bpertes?\b", lowered_ascii)
     )
     asks_lot_comparison = (
         any(token in lowered for token in ("compare", "compar", "versus", " vs ", "entre "))
@@ -1626,6 +1702,8 @@ def _contract_route_decision(
         )
         and any(token in lowered for token in ("sechage", "séchage", "tri", "emballage", "post-recolte", "post-récolte"))
     )
+    if asks_advisory_loss_process and not has_batch and not asks_current_scope and not explicit_operational_metrics:
+        asks_recommendation = False
     asks_lot_critical_ranking = has_lot_mention and any(
         token in lowered_ascii
         for token in (
@@ -1638,7 +1716,7 @@ def _contract_route_decision(
             "top lots critiques",
         )
     )
-    if not asks_recommendation and "mesure" in lowered_ascii and (has_lot_mention or asks_loss or asks_risk):
+    if not asks_recommendation and re.search(r"\bmesures?\s+(immediates?|immédiates?|a\s+lancer|à\s+lancer)\b", lowered_ascii) and (has_lot_mention or asks_loss or asks_risk):
         asks_recommendation = True
     asks_ml_log_status = (
         any(token in lowered_ascii for token in ("ml", "anomaly_score", "anomalie", "anomaly"))
@@ -1649,7 +1727,7 @@ def _contract_route_decision(
     )
 
     referential_marker = bool(FOLLOWUP_REFERENCE_PATTERN.search(lowered)) or any(
-        token in lowered for token in ("same product", "meme produit", "même produit", "ce lot", "celui-ci", "celui ci", "et pour le meme produit", "et pour le même produit")
+        token in lowered for token in ("same product", "meme produit", "même produit", "celui-ci", "celui ci", "et pour le meme produit", "et pour le même produit")
     )
     referential_followup = ((bool(previous_entities) or bool(previous_module_hint)) and referential_marker) or (
         referential_marker and asks_recommendation
@@ -1738,6 +1816,17 @@ def _contract_route_decision(
             0.91,
         )
 
+    if asks_stock and (asks_best_practice or asks_why) and not asks_risk and not asks_recommendation:
+        entities["intent_family"] = "hybrid_analysis"
+        entities["module"] = "stocks"
+        return _decision(
+            AgentRoute.HYBRID_SQL_RAG,
+            entities,
+            ["SQLAnalyticsAgent", "RAGKnowledgeAgent"],
+            "Stock fact + advisory explanation should combine SQL and RAG.",
+            0.9,
+        )
+
     if asks_lot_comparison and not asks_risk:
         entities["intent_family"] = "LOT_COMPARISON"
         entities["module"] = "material_balance"
@@ -1748,7 +1837,33 @@ def _contract_route_decision(
         entities["module"] = "post_harvest"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Stage/process loss analysis intent.", 0.91)
 
+    asks_recent_producer_delivery = (
+        any(token in lowered_ascii for token in ("producteur", "producteurs", "membre", "membres"))
+        and "livr" in lowered_ascii
+        and any(token in lowered_ascii for token in ("recent", "récen", "plus recent", "plus récemment", "plus recemment", "dernier", "derniere", "dernière"))
+    )
+    if asks_recent_producer_delivery:
+        entities["intent_family"] = "FOLLOW_UP"
+        entities["needs_recency_clarification"] = True
+        return _decision(
+            AgentRoute.SQL_ONLY,
+            entities,
+            ["SQLAnalyticsAgent"],
+            "Latest-delivery-by-producer wording requires capability clarification; avoid quantity-based fallback.",
+            0.89,
+        )
+
     if asks_advisory_loss_process and not asks_risk:
+        if not asks_current_scope and not has_batch and not explicit_operational_metrics:
+            entities["intent_family"] = "BEST_PRACTICES"
+            entities["module"] = "post_harvest"
+            return _decision(
+                AgentRoute.RAG_ONLY,
+                entities,
+                ["RAGKnowledgeAgent"],
+                "Advisory post-harvest loss wording without measured-data scope should stay RAG.",
+                0.9,
+            )
         entities["intent_family"] = "EXPLANATION_CAUSAL"
         entities["module"] = "post_harvest"
         return _decision(
@@ -1764,7 +1879,7 @@ def _contract_route_decision(
         entities["module"] = "stocks"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Stock movement journal intent.", 0.92)
 
-    if asks_stock and not asks_best_practice and not asks_why and not asks_risk and not asks_recommendation:
+    if asks_stock and not asks_available_lots and not asks_best_practice and not asks_why and not asks_risk and not asks_recommendation:
         entities["intent_family"] = "STOCK_CURRENT"
         return _decision(AgentRoute.SQL_ONLY, entities, ["SQLAnalyticsAgent"], "Current stock intent.", 0.93)
 
@@ -1820,10 +1935,10 @@ def _contract_route_decision(
         entities["intent_family"] = "risk_ml"
         entities["module"] = "ml_risk"
         return _decision(
-            AgentRoute.ML_ONLY,
+            AgentRoute.HYBRID_SQL_ML,
             entities,
-            ["MLLossAgent"],
-            "ML risk-signal wording without SQL-fact request should stay ML-only advisory.",
+            ["SQLAnalyticsAgent", "MLLossAgent"],
+            "ML risk-signal wording should combine ML signals with SQL operational context.",
             0.9,
         )
 
@@ -1849,7 +1964,7 @@ def _contract_route_decision(
         )
 
     if asks_recommendation:
-        if not has_batch and any(token in lowered_ascii for token in ("lot", "batch")) and not asks_lot_critical_ranking:
+        if not has_batch and re.search(r"\b(lot|batch)\b", lowered_ascii) and not asks_lot_critical_ranking:
             entities["intent_family"] = "FOLLOW_UP"
             entities["needs_batch_clarification"] = True
             return _decision(

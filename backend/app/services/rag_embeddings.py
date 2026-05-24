@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import threading
 from typing import Iterable, Optional
 
 import httpx
@@ -12,6 +13,8 @@ from app.utils.exceptions import ValidationError
 
 EMBEDDING_BATCH_SIZE = 64
 _LOCAL_MODEL = None
+_LOCAL_MODEL_LOCK = threading.Lock()
+_LOCAL_ENCODE_LOCK = threading.Lock()
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
@@ -120,13 +123,14 @@ def _local_embeddings(texts: list[str]) -> list[list[float]]:
     model_name = settings.rag_embedding_model.strip() or "sentence-transformers/all-MiniLM-L6-v2"
     model = _get_local_model(model_name)
     try:
-        vectors = model.encode(
-            texts,
-            batch_size=min(64, max(1, len(texts))),
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
+        with _LOCAL_ENCODE_LOCK:
+            vectors = model.encode(
+                texts,
+                batch_size=min(64, max(1, len(texts))),
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
     except Exception as exc:
         raise ValidationError(f"Local embedding generation failed: {exc}") from exc
 
@@ -143,11 +147,14 @@ def _get_local_model(model_name: str):
     global _LOCAL_MODEL
     if _LOCAL_MODEL is not None:
         return _LOCAL_MODEL
-    try:
-        from sentence_transformers import SentenceTransformer
-    except Exception as exc:
-        raise ValidationError(
-            "Local embeddings require sentence-transformers. Install dependency and retry."
-        ) from exc
-    _LOCAL_MODEL = SentenceTransformer(model_name)
+    with _LOCAL_MODEL_LOCK:
+        if _LOCAL_MODEL is not None:
+            return _LOCAL_MODEL
+        try:
+            from sentence_transformers import SentenceTransformer
+        except Exception as exc:
+            raise ValidationError(
+                "Local embeddings require sentence-transformers. Install dependency and retry."
+            ) from exc
+        _LOCAL_MODEL = SentenceTransformer(model_name)
     return _LOCAL_MODEL

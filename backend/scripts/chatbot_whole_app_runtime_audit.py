@@ -54,6 +54,15 @@ class AuditCase:
     expected_response_shape: str
 
 
+@dataclass
+class AuditRunOptions:
+    warmup: bool = False
+    max_cases: int | None = None
+    case_timeout: float = 60.0
+    retry_transient: int = 0
+    resume_from: str | None = None
+
+
 def build_cases() -> list[AuditCase]:
     cases: list[AuditCase] = []
 
@@ -731,6 +740,692 @@ def _latency_class(total_ms: float) -> str:
     return "CRITICAL"
 
 
+def _pct(numerator: float, denominator: float) -> float:
+    if denominator <= 0:
+        return 0.0
+    return float(numerator) / float(denominator)
+
+
+def _round4(value: float) -> float:
+    return round(float(value), 4)
+
+
+def _intent_matches(expected_intent: str, actual_intent: str) -> bool:
+    exp = _upper(expected_intent)
+    act = _upper(actual_intent)
+    if not exp:
+        return True
+    if exp == act:
+        return True
+    if exp in {"FACTUAL_SQL", "ACTION_RECOMMENDATION"}:
+        return bool(act) and act not in {"OUT_OF_SCOPE", "UNSUPPORTED", "SMALL_TALK"}
+    if exp == "RECOMMENDATION" and act in {"RECOMMENDATION", "LOT_SPECIFIC_RECOMMENDATION", "ACTION_RECOMMENDATION", "FOLLOW_UP"}:
+        return True
+    return False
+
+
+def _is_sql_expected_case(row: dict[str, Any]) -> bool:
+    expected_route = _upper(row.get("expected_route"))
+    expected_tool = str(row.get("expected_tool_agent") or "")
+    return (
+        ("SQLANALYTICSAGENT" in expected_tool.upper())
+        or expected_route in {"SQL_ONLY", "HYBRID_SQL_RAG", "HYBRID_SQL_ML", "HYBRID_FULL"}
+    )
+
+
+def _reliability_warning_present(row: dict[str, Any]) -> bool:
+    warning_items = [str(x) for x in (row.get("warnings") or [])]
+    text = " ".join(warning_items).lower()
+    return "informations partielles ou insuffisantes" in text
+
+
+def _llm_flag_count(rows: list[dict[str, Any]], code: str) -> int:
+    code_u = _upper(code)
+    c = 0
+    for row in rows:
+        for w in (row.get("warning_codes_upper") or []):
+            if _upper(w) == code_u:
+                c += 1
+                break
+    return c
+
+
+def _status_is_no_data(row: dict[str, Any]) -> bool:
+    return "PROVEN_NO_DATA" in {
+        _upper(row.get("evidence_status_sql")),
+        _upper(row.get("evidence_status_rag")),
+        _upper(row.get("evidence_status_ml")),
+    }
+
+
+def _status_is_unsupported(row: dict[str, Any]) -> bool:
+    if "UNSUPPORTED" in {
+        _upper(row.get("evidence_status_sql")),
+        _upper(row.get("evidence_status_rag")),
+        _upper(row.get("evidence_status_ml")),
+    }:
+        return True
+    op = str(row.get("actual_sql_operation_tool") or "")
+    shape = str(row.get("expected_response_shape") or "")
+    return op.startswith("UNSUPPORTED_") or op.startswith("producer_efficiency_unsupported") or "unsupported" in shape
+
+
+def _source_pollution_case(row: dict[str, Any]) -> bool:
+    route = _upper(row.get("actual_route"))
+    sources = {_upper(s) for s in (row.get("source_types") or [])}
+    if route == "SQL_ONLY" and "ML" in sources:
+        return True
+    if row.get("failure_category") == "SOURCE_POLLUTION":
+        return True
+    return False
+
+
+def _status_expected_for_rows(row: dict[str, Any]) -> bool:
+    route = _upper(row.get("actual_route"))
+    sql_status = _upper(row.get("evidence_status_sql"))
+    rag_status = _upper(row.get("evidence_status_rag"))
+    ml_status = _upper(row.get("evidence_status_ml"))
+    rows = int(row.get("evidence_row_count") or 0)
+
+    if route == "SQL_ONLY":
+        if rows > 0:
+            return sql_status in {"HAS_EVIDENCE", "PARTIAL_EVIDENCE"}
+        return sql_status in {"PROVEN_NO_DATA", "UNSUPPORTED", "TOOL_ERROR", "PARTIAL_EVIDENCE"}
+    if route == "RAG_ONLY":
+        return rag_status in {"HAS_EVIDENCE", "PARTIAL_EVIDENCE", "PROVEN_NO_DATA", "UNSUPPORTED", "TOOL_ERROR"}
+    if route == "ML_ONLY":
+        if rows > 0:
+            return ml_status in {"HAS_EVIDENCE", "PARTIAL_EVIDENCE"}
+        return ml_status in {"PROVEN_NO_DATA", "UNSUPPORTED", "TOOL_ERROR", "PARTIAL_EVIDENCE"}
+    # Hybrid: at least one usable status among expected layers.
+    statuses = {sql_status, rag_status, ml_status}
+    return bool(statuses.intersection({"HAS_EVIDENCE", "PROVEN_NO_DATA", "PARTIAL_EVIDENCE", "UNSUPPORTED", "TOOL_ERROR"}))
+
+
+def _value_from_timing(rows: list[dict[str, Any]], key: str) -> list[float]:
+    values: list[float] = []
+    for row in rows:
+        t = row.get("timings") or {}
+        values.append(float(t.get(key) or 0.0))
+    return values
+
+
+def _percentile(values: list[float], q: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    idx = int(q * (len(ordered) - 1))
+    return float(ordered[idx])
+
+
+def _score_band(value: float, *, good: float, acceptable: float, bad: float) -> float:
+    # Lower is better (latency bands).
+    if value <= good:
+        return 100.0
+    if value <= acceptable:
+        span = max(acceptable - good, 1.0)
+        return 100.0 - 15.0 * ((value - good) / span)  # 100 -> 85
+    if value <= bad:
+        span = max(bad - acceptable, 1.0)
+        return 85.0 - 30.0 * ((value - acceptable) / span)  # 85 -> 55
+    span = max(bad, 1.0)
+    extra = min((value - bad) / span, 1.0)
+    return max(25.0, 55.0 - 30.0 * extra)
+
+
+def _build_metrics_evaluation_report(*, suite_reports: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    all_rows: list[dict[str, Any]] = []
+    suite_case_counts: dict[str, int] = {}
+    for suite_name, suite in suite_reports.items():
+        rows = list(suite.get("results") or [])
+        suite_case_counts[suite_name] = len(rows)
+        for r in rows:
+            row = dict(r)
+            row["suite"] = suite_name
+            all_rows.append(row)
+
+    total_cases = len(all_rows)
+    sql_expected_rows = [r for r in all_rows if _is_sql_expected_case(r)]
+    sql_op_expected_rows = [r for r in all_rows if _expected_sql_operation(AuditCase(
+        qid=str(r.get("qid") or ""),
+        module_group=str(r.get("module_group") or ""),
+        question=str(r.get("question") or ""),
+        expected_module=str(r.get("expected_module") or ""),
+        expected_route=str(r.get("expected_route") or ""),
+        expected_intent_family=str(r.get("expected_intent_family") or ""),
+        expected_tool_agent=str(r.get("expected_tool_agent") or ""),
+        expected_evidence_source=str(r.get("expected_evidence_source") or ""),
+        expected_response_shape=str(r.get("expected_response_shape") or ""),
+    ))]
+    route_correct = sum(1 for r in all_rows if _upper(r.get("actual_route")) == _upper(r.get("expected_route")))
+    intent_correct = sum(1 for r in all_rows if _intent_matches(str(r.get("expected_intent_family") or ""), str(r.get("actual_intent_family") or "")))
+    sql_op_correct = 0
+    for r in sql_op_expected_rows:
+        expected_op = _expected_sql_operation(
+            AuditCase(
+                qid=str(r.get("qid") or ""),
+                module_group=str(r.get("module_group") or ""),
+                question=str(r.get("question") or ""),
+                expected_module=str(r.get("expected_module") or ""),
+                expected_route=str(r.get("expected_route") or ""),
+                expected_intent_family=str(r.get("expected_intent_family") or ""),
+                expected_tool_agent=str(r.get("expected_tool_agent") or ""),
+                expected_evidence_source=str(r.get("expected_evidence_source") or ""),
+                expected_response_shape=str(r.get("expected_response_shape") or ""),
+            )
+        )
+        if expected_op and str(r.get("actual_sql_operation_tool") or "") == expected_op:
+            sql_op_correct += 1
+
+    sql_operation_missing_count = sum(
+        1 for r in sql_expected_rows if not str(r.get("actual_sql_operation_tool") or "").strip()
+    ) + sum(1 for r in all_rows if str(r.get("failure_category") or "") == "SQL_OPERATION_MISSING")
+    routing_error_count = sum(1 for r in all_rows if str(r.get("failure_category") or "") == "ROUTING_ERROR")
+    intent_mismatch_count = sum(1 for r in all_rows if str(r.get("failure_category") or "") == "INTENT_MISMATCH")
+
+    unnecessary_calls = 0
+    for r in all_rows:
+        route = _upper(r.get("actual_route"))
+        agents = {_upper(a) for a in (r.get("agents_called") or [])}
+        if route == "SQL_ONLY" and ("RAGKNOWLEDGEAGENT" in agents or "MLLOSSAGENT" in agents or "RECOMMENDATIONAGENT" in agents):
+            unnecessary_calls += 1
+        if route == "RAG_ONLY" and ("MLLOSSAGENT" in agents or "SQLANALYTICSAGENT" in agents):
+            unnecessary_calls += 1
+        if route == "ML_ONLY" and ("RAGKNOWLEDGEAGENT" in agents):
+            unnecessary_calls += 1
+    unnecessary_agent_call_rate = _pct(unnecessary_calls, total_cases)
+
+    grounded_fail_categories = {
+        "EVIDENCE_INSUFFICIENT",
+        "RECOMMENDATION_NOT_GROUNDED",
+        "RAG_WEAK_OR_MISSING",
+        "SQL_OPERATION_MISSING",
+        "CANONICAL_METRIC_INCONSISTENCY",
+        "DATA_SOURCE_NOT_COVERED",
+    }
+    hallucination_like = 0
+    grounded_count = 0
+    unsupported_cases = [r for r in all_rows if _status_is_unsupported(r)]
+    no_data_cases = [r for r in all_rows if _status_is_no_data(r)]
+    for r in all_rows:
+        failure = str(r.get("failure_category") or "")
+        warnings = {_upper(w) for w in (r.get("warning_codes_upper") or [])}
+        ungrounded = (
+            failure in grounded_fail_categories
+            or "NUMERIC_CLAIMS_NOT_GROUNDED" in warnings
+            or "RECOMMENDATION_WITHOUT_EVIDENCE" in warnings
+            or "MISSING_EXPECTED_ROUTE_EVIDENCE" in warnings
+        )
+        if ungrounded:
+            hallucination_like += 1
+        else:
+            grounded_count += 1
+
+    unsupported_claim_count = sum(1 for r in unsupported_cases if str(r.get("status") or "") != "PASS")
+    evidence_contradiction_count = sum(
+        1 for r in all_rows
+        if str(r.get("failure_category") or "") == "CANONICAL_METRIC_INCONSISTENCY"
+        or "SQL_ML_CONTRADICTION" in {_upper(w) for w in (r.get("warning_codes_upper") or [])}
+    )
+    no_data_correctness_rate = _pct(sum(1 for r in no_data_cases if str(r.get("status") or "") == "PASS"), len(no_data_cases))
+    unsupported_handling_accuracy = _pct(sum(1 for r in unsupported_cases if str(r.get("status") or "") == "PASS"), len(unsupported_cases))
+
+    evidence_availability_ok = 0
+    evidence_status_correct_count = 0
+    sql_coverage_ok = 0
+    rag_routes = [r for r in all_rows if _upper(r.get("actual_route")) == "RAG_ONLY"]
+    ml_routes = [r for r in all_rows if _upper(r.get("actual_route")) == "ML_ONLY"]
+    recommendation_rows = [r for r in all_rows if str(r.get("module_group") or "") == "recommendations"]
+    for r in all_rows:
+        route = _upper(r.get("actual_route"))
+        sql_status = _upper(r.get("evidence_status_sql"))
+        rag_status = _upper(r.get("evidence_status_rag"))
+        ml_status = _upper(r.get("evidence_status_ml"))
+        if route == "SQL_ONLY":
+            if sql_status in {"HAS_EVIDENCE", "PROVEN_NO_DATA", "PARTIAL_EVIDENCE", "UNSUPPORTED", "TOOL_ERROR"}:
+                evidence_availability_ok += 1
+                sql_coverage_ok += 1
+        elif route == "RAG_ONLY":
+            if rag_status in {"HAS_EVIDENCE", "PROVEN_NO_DATA", "PARTIAL_EVIDENCE", "UNSUPPORTED", "TOOL_ERROR"}:
+                evidence_availability_ok += 1
+        elif route == "ML_ONLY":
+            if ml_status in {"HAS_EVIDENCE", "PROVEN_NO_DATA", "PARTIAL_EVIDENCE", "UNSUPPORTED", "TOOL_ERROR"}:
+                evidence_availability_ok += 1
+        else:
+            if any(st in {"HAS_EVIDENCE", "PROVEN_NO_DATA", "PARTIAL_EVIDENCE"} for st in {sql_status, rag_status, ml_status}):
+                evidence_availability_ok += 1
+
+        if _status_expected_for_rows(r):
+            evidence_status_correct_count += 1
+
+    rag_relevance_ok = sum(1 for r in rag_routes if str(r.get("failure_category") or "") != "RAG_WEAK_OR_MISSING")
+    ml_relevance_ok = sum(1 for r in ml_routes if str(r.get("failure_category") or "") != "ML_SIGNAL_UNAVAILABLE")
+    recommendation_grounded_ok = sum(1 for r in recommendation_rows if bool(r.get("recommendation_grounded")))
+    source_pollution_count = sum(1 for r in all_rows if _source_pollution_case(r))
+
+    llm_attempted_rows = [r for r in all_rows if bool(r.get("llm_attempted"))]
+    llm_attempted_count = len(llm_attempted_rows)
+    llm_changed_numbers_count = _llm_flag_count(all_rows, "LLM_CHANGED_NUMBERS")
+    llm_dropped_limitation_count = _llm_flag_count(all_rows, "LLM_DROPPED_LIMITATION")
+    llm_changed_entities_count = _llm_flag_count(all_rows, "LLM_CHANGED_PRODUCT_NAMES")
+    deterministic_fallback_count = sum(1 for r in all_rows if bool(r.get("llm_fallback_used")))
+
+    number_preservation_rate = 1.0 - _pct(llm_changed_numbers_count, max(llm_attempted_count, 1))
+    entity_preservation_rate = 1.0 - _pct(llm_changed_entities_count, max(llm_attempted_count, 1))
+    limitation_preservation_rate = 1.0 - _pct(llm_dropped_limitation_count, max(llm_attempted_count, 1))
+    unsafe_llm_rewrite_block_rate = _pct(deterministic_fallback_count, max(llm_attempted_count, 1))
+
+    memory_rows = [r for r in all_rows if str(r.get("module_group") or "") == "memory"]
+    followup_rows = [
+        r for r in memory_rows
+        if str(r.get("expected_response_shape") or "") in {
+            "sequence_followup_lot",
+            "sequence_followup_producer",
+            "sequence_followup_product",
+            "sequence_first_item",
+            "sequence_latency_followup",
+        }
+    ]
+    reset_rows = [
+        r for r in memory_rows
+        if str(r.get("expected_response_shape") or "") in {
+            "sequence_reset_clarification",
+            "sequence_topic_switch",
+            "sequence_no_stale_lot",
+            "sequence_rq_memory_reset",
+            "sequence_latency_reset",
+            "sequence_reset",
+        }
+    ]
+    clarify_rows = [
+        r for r in memory_rows
+        if str(r.get("expected_response_shape") or "") in {
+            "sequence_ambiguous_clarify",
+            "sequence_cross_entity_clarify",
+            "sequence_no_lot_inference",
+            "sequence_rq_memory_clarify",
+            "sequence_reset_clarification",
+        }
+    ]
+    followup_accuracy = _pct(sum(1 for r in followup_rows if str(r.get("status") or "") == "PASS"), len(followup_rows))
+    reset_safety_rate = _pct(sum(1 for r in reset_rows if str(r.get("status") or "") == "PASS"), len(reset_rows))
+    clarification_accuracy = _pct(sum(1 for r in clarify_rows if str(r.get("status") or "") == "PASS"), len(clarify_rows))
+    stale_context_leakage_rate = 1.0 - reset_safety_rate if reset_rows else 0.0
+
+    latency_rows = [dict(r) for r in (suite_reports.get("latency") or {}).get("results", [])]
+    latency_values = [float((r.get("timings") or {}).get("total_ms") or r.get("latency_ms") or 0.0) for r in latency_rows]
+    sql_ms_values = _value_from_timing(latency_rows, "sql_ms")
+    rag_ms_values = _value_from_timing(latency_rows, "rag_ms")
+    ml_ms_values = _value_from_timing(latency_rows, "ml_ms")
+    llm_ms_values = _value_from_timing(latency_rows, "llm_ms")
+    composition_ms_values = _value_from_timing(latency_rows, "composition_ms")
+    latency_route_avg: dict[str, float] = {}
+    by_route: dict[str, list[float]] = defaultdict(list)
+    for r in latency_rows:
+        route = str(r.get("actual_route") or "")
+        by_route[route].append(float((r.get("timings") or {}).get("total_ms") or r.get("latency_ms") or 0.0))
+    for route, vals in by_route.items():
+        latency_route_avg[route] = round(sum(vals) / max(1, len(vals)), 2)
+
+    slow_count = sum(1 for v in latency_values if v > 6000.0)
+    critical_count = sum(1 for v in latency_values if v > 10000.0)
+
+    family_avg: dict[str, list[float]] = defaultdict(list)
+    for r in latency_rows:
+        family_avg[str(r.get("module_group") or "")].append(float((r.get("timings") or {}).get("total_ms") or r.get("latency_ms") or 0.0))
+    family_avg_comp = {k: round(sum(v) / max(1, len(v)), 2) for k, v in family_avg.items()}
+    fastest_families = sorted(family_avg_comp.items(), key=lambda kv: kv[1])[:3]
+    slowest_families = sorted(family_avg_comp.items(), key=lambda kv: kv[1], reverse=True)[:3]
+
+    # Subscores
+    route_accuracy = _pct(route_correct, total_cases)
+    intent_accuracy = _pct(intent_correct, total_cases)
+    sql_operation_accuracy = _pct(sql_op_correct, len(sql_op_expected_rows))
+
+    routing_error_penalty = 1.0 - _pct((routing_error_count + intent_mismatch_count + sql_operation_missing_count), max(total_cases, 1))
+    routing_subscore = 100.0 * (
+        0.40 * route_accuracy
+        + 0.20 * intent_accuracy
+        + 0.30 * sql_operation_accuracy
+        + 0.10 * max(0.0, routing_error_penalty)
+    )
+
+    grounded_answer_rate = _pct(grounded_count, total_cases)
+    hallucination_proxy_rate = _pct(hallucination_like, total_cases)
+    evidence_availability_rate = _pct(evidence_availability_ok, total_cases)
+    evidence_status_accuracy = _pct(evidence_status_correct_count, total_cases)
+    grounding_subscore = 100.0 * (
+        0.30 * grounded_answer_rate
+        + 0.25 * (1.0 - hallucination_proxy_rate)
+        + 0.15 * evidence_availability_rate
+        + 0.15 * evidence_status_accuracy
+        + 0.10 * no_data_correctness_rate
+        + 0.05 * unsupported_handling_accuracy
+    )
+
+    recommendation_grounding_rate = _pct(recommendation_grounded_ok, len(recommendation_rows))
+    recommendation_subscore = 100.0 * recommendation_grounding_rate
+
+    memory_subscore = 100.0 * (
+        0.35 * followup_accuracy
+        + 0.35 * reset_safety_rate
+        + 0.20 * clarification_accuracy
+        + 0.10 * (1.0 - stale_context_leakage_rate)
+    )
+
+    llm_safety_subscore = 100.0 * (
+        0.40 * number_preservation_rate
+        + 0.25 * entity_preservation_rate
+        + 0.25 * limitation_preservation_rate
+        + 0.10 * (1.0 - min(unsafe_llm_rewrite_block_rate, 1.0))
+    )
+
+    p50_latency = _percentile(latency_values, 0.50)
+    p90_latency = _percentile(latency_values, 0.90)
+    p95_latency = _percentile(latency_values, 0.95)
+    p50_score = _score_band(p50_latency, good=6000.0, acceptable=8000.0, bad=12000.0)
+    p90_score = _score_band(p90_latency, good=9000.0, acceptable=11000.0, bad=15000.0)
+    p95_score = _score_band(p95_latency, good=9500.0, acceptable=12000.0, bad=16000.0)
+    slow_rate = _pct(slow_count, max(len(latency_rows), 1))
+    critical_rate = _pct(critical_count, max(len(latency_rows), 1))
+    latency_subscore = (
+        0.25 * p50_score
+        + 0.25 * p90_score
+        + 0.20 * p95_score
+        + 0.15 * (100.0 * (1.0 - slow_rate))
+        + 0.15 * (100.0 * (1.0 - critical_rate))
+    )
+
+    overall_weighted_score = (
+        0.20 * routing_subscore
+        + 0.30 * grounding_subscore
+        + 0.10 * recommendation_subscore
+        + 0.10 * memory_subscore
+        + 0.10 * llm_safety_subscore
+        + 0.20 * latency_subscore
+    )
+    ai_reliability_score = (
+        0.20 * routing_subscore
+        + 0.40 * grounding_subscore
+        + 0.15 * recommendation_subscore
+        + 0.15 * memory_subscore
+        + 0.10 * llm_safety_subscore
+    )
+
+    report = {
+        "audit_name": "chatbot_metrics_evaluation",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "dataset": {
+            "total_cases": total_cases,
+            "suite_case_counts": suite_case_counts,
+            "suites": list(suite_reports.keys()),
+        },
+        "routing_orchestration": {
+            "route_accuracy": _round4(route_accuracy),
+            "intent_accuracy": _round4(intent_accuracy),
+            "sql_operation_accuracy": _round4(sql_operation_accuracy),
+            "sql_operation_missing_count": int(sql_operation_missing_count),
+            "routing_error_count": int(routing_error_count),
+            "intent_mismatch_count": int(intent_mismatch_count),
+            "unnecessary_agent_call_rate": _round4(unnecessary_agent_call_rate),
+        },
+        "grounding_hallucination": {
+            "grounded_answer_rate": _round4(grounded_answer_rate),
+            "hallucination_proxy_rate": _round4(hallucination_proxy_rate),
+            "unsupported_claim_count": int(unsupported_claim_count),
+            "evidence_contradiction_count": int(evidence_contradiction_count),
+            "no_data_correctness_rate": _round4(no_data_correctness_rate),
+            "unsupported_handling_accuracy": _round4(unsupported_handling_accuracy),
+            "proxy_note": "Groundedness/hallucination computed from verifier-aligned failure categories and warning flags.",
+        },
+        "evidence_metrics": {
+            "evidence_availability_rate": _round4(evidence_availability_rate),
+            "evidence_status_accuracy": _round4(evidence_status_accuracy),
+            "sql_evidence_coverage": _round4(
+                _pct(sql_coverage_ok, len([r for r in all_rows if _upper(r.get("actual_route")) == "SQL_ONLY"]))
+            ),
+            "rag_evidence_availability_relevance": _round4(_pct(rag_relevance_ok, len(rag_routes))),
+            "ml_evidence_relevance": _round4(_pct(ml_relevance_ok, len(ml_routes))),
+            "recommendation_grounding_rate": _round4(recommendation_grounding_rate),
+            "source_pollution_rate": _round4(_pct(source_pollution_count, total_cases)),
+        },
+        "memory_metrics": {
+            "followup_accuracy": _round4(followup_accuracy),
+            "reset_safety_rate": _round4(reset_safety_rate),
+            "clarification_accuracy": _round4(clarification_accuracy),
+            "stale_context_leakage_rate": _round4(stale_context_leakage_rate),
+        },
+        "llm_guardrail_metrics": {
+            "llm_attempted_count": int(llm_attempted_count),
+            "number_preservation_rate": _round4(number_preservation_rate),
+            "entity_preservation_rate": _round4(entity_preservation_rate),
+            "limitation_preservation_rate": _round4(limitation_preservation_rate),
+            "llm_changed_numbers_count": int(llm_changed_numbers_count),
+            "llm_dropped_limitation_count": int(llm_dropped_limitation_count),
+            "deterministic_fallback_count": int(deterministic_fallback_count),
+            "unsafe_llm_rewrite_block_rate": _round4(unsafe_llm_rewrite_block_rate),
+            "proxy_note": "Guardrail rates are proxy metrics based on warning flags and fallback metadata.",
+        },
+        "latency_metrics": {
+            "p50_total_ms": round(p50_latency, 2),
+            "p90_total_ms": round(p90_latency, 2),
+            "p95_total_ms": round(p95_latency, 2),
+            "avg_total_ms_by_route": latency_route_avg,
+            "avg_sql_ms": round(sum(sql_ms_values) / max(len(sql_ms_values), 1), 2),
+            "avg_rag_ms": round(sum(rag_ms_values) / max(len(rag_ms_values), 1), 2),
+            "avg_ml_ms": round(sum(ml_ms_values) / max(len(ml_ms_values), 1), 2),
+            "avg_llm_ms": round(sum(llm_ms_values) / max(len(llm_ms_values), 1), 2),
+            "avg_composition_ms": round(sum(composition_ms_values) / max(len(composition_ms_values), 1), 2),
+            "slow_case_count_gt_6s": int(slow_count),
+            "critical_case_count_gt_10s": int(critical_count),
+            "fastest_case_families": fastest_families,
+            "slowest_case_families": slowest_families,
+        },
+        "weighted_scores": {
+            "routing_orchestration_20pct": round(routing_subscore, 2),
+            "evidence_grounding_hallucination_30pct": round(grounding_subscore, 2),
+            "recommendation_grounding_10pct": round(recommendation_subscore, 2),
+            "memory_safety_10pct": round(memory_subscore, 2),
+            "llm_safety_10pct": round(llm_safety_subscore, 2),
+            "latency_runtime_20pct": round(latency_subscore, 2),
+            "ai_reliability_score": round(ai_reliability_score, 2),
+            "runtime_performance_score": round(latency_subscore, 2),
+            "overall_ds_ai_chatbot_score": round(overall_weighted_score, 2),
+        },
+        "remaining_risks": [
+            "Latency remains high on several SQL/hybrid paths despite measurable gains.",
+            "LLM guardrail metrics are computed as proxy indicators from runtime flags.",
+            "Production upload smoke still requires manual validation on safe records.",
+        ],
+        "suite_reports": {
+            key: {
+                "audit_mode": value.get("audit_mode"),
+                "counts": value.get("counts"),
+                "total_cases": value.get("total_cases"),
+                "json_report": (value.get("files") or {}).get("json_report"),
+                "md_report": (value.get("files") or {}).get("md_report"),
+            }
+            for key, value in suite_reports.items()
+        },
+    }
+    return report
+
+
+def _write_metrics_markdown(*, report: dict[str, Any], md_path: Path) -> None:
+    ds = report.get("dataset") or {}
+    routing = report.get("routing_orchestration") or {}
+    grounding = report.get("grounding_hallucination") or {}
+    evidence = report.get("evidence_metrics") or {}
+    reco_rate = float(evidence.get("recommendation_grounding_rate") or 0.0)
+    memory = report.get("memory_metrics") or {}
+    llm = report.get("llm_guardrail_metrics") or {}
+    lat = report.get("latency_metrics") or {}
+    scores = report.get("weighted_scores") or {}
+
+    lines: list[str] = []
+    lines.append("# Chatbot Metrics Evaluation (DS/AI Engineering)")
+    lines.append("")
+    lines.append("## 1. Executive summary")
+    lines.append("")
+    lines.append(f"- Generated at: `{report.get('generated_at')}`")
+    lines.append(f"- Total evaluated cases: `{int(ds.get('total_cases') or 0)}`")
+    lines.append(f"- AI reliability score: `{scores.get('ai_reliability_score')}`")
+    lines.append(f"- Runtime performance score: `{scores.get('runtime_performance_score')}`")
+    lines.append(f"- Overall DS/AI chatbot score: `{scores.get('overall_ds_ai_chatbot_score')}`")
+    lines.append("")
+    lines.append("## 2. Dataset/case coverage")
+    lines.append("")
+    lines.append("| Suite | Cases |")
+    lines.append("|---|---:|")
+    for suite, count in sorted((ds.get("suite_case_counts") or {}).items()):
+        lines.append(f"| {suite} | {int(count)} |")
+    lines.append("")
+    lines.append("## 3. Routing metrics table")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---:|")
+    lines.append(f"| route_accuracy | {routing.get('route_accuracy')} |")
+    lines.append(f"| intent_accuracy | {routing.get('intent_accuracy')} |")
+    lines.append(f"| sql_operation_accuracy | {routing.get('sql_operation_accuracy')} |")
+    lines.append(f"| sql_operation_missing_count | {routing.get('sql_operation_missing_count')} |")
+    lines.append(f"| routing_error_count | {routing.get('routing_error_count')} |")
+    lines.append(f"| intent_mismatch_count | {routing.get('intent_mismatch_count')} |")
+    lines.append(f"| unnecessary_agent_call_rate | {routing.get('unnecessary_agent_call_rate')} |")
+    lines.append("")
+    lines.append("## 4. Evidence/grounding metrics table")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---:|")
+    lines.append(f"| evidence_availability_rate | {evidence.get('evidence_availability_rate')} |")
+    lines.append(f"| evidence_status_accuracy | {evidence.get('evidence_status_accuracy')} |")
+    lines.append(f"| sql_evidence_coverage | {evidence.get('sql_evidence_coverage')} |")
+    lines.append(f"| rag_evidence_availability_relevance | {evidence.get('rag_evidence_availability_relevance')} |")
+    lines.append(f"| ml_evidence_relevance | {evidence.get('ml_evidence_relevance')} |")
+    lines.append(f"| no_data_correctness_rate | {grounding.get('no_data_correctness_rate')} |")
+    lines.append(f"| unsupported_handling_accuracy | {grounding.get('unsupported_handling_accuracy')} |")
+    lines.append("")
+    lines.append("## 5. Hallucination/safety metrics table")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---:|")
+    lines.append(f"| grounded_answer_rate | {grounding.get('grounded_answer_rate')} |")
+    lines.append(f"| hallucination_proxy_rate | {grounding.get('hallucination_proxy_rate')} |")
+    lines.append(f"| unsupported_claim_count | {grounding.get('unsupported_claim_count')} |")
+    lines.append(f"| evidence_contradiction_count | {grounding.get('evidence_contradiction_count')} |")
+    lines.append(f"| source_pollution_rate | {evidence.get('source_pollution_rate')} |")
+    lines.append("")
+    lines.append("## 6. Recommendation metrics table")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---:|")
+    lines.append(f"| recommendation_grounding_rate | {reco_rate:.4f} |")
+    lines.append("")
+    lines.append("## 7. Memory metrics table")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---:|")
+    lines.append(f"| followup_accuracy | {memory.get('followup_accuracy')} |")
+    lines.append(f"| reset_safety_rate | {memory.get('reset_safety_rate')} |")
+    lines.append(f"| clarification_accuracy | {memory.get('clarification_accuracy')} |")
+    lines.append(f"| stale_context_leakage_rate | {memory.get('stale_context_leakage_rate')} |")
+    lines.append("")
+    lines.append("## 8. LLM guardrail metrics table")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---:|")
+    lines.append(f"| llm_attempted_count | {llm.get('llm_attempted_count')} |")
+    lines.append(f"| number_preservation_rate | {llm.get('number_preservation_rate')} |")
+    lines.append(f"| entity_preservation_rate | {llm.get('entity_preservation_rate')} |")
+    lines.append(f"| limitation_preservation_rate | {llm.get('limitation_preservation_rate')} |")
+    lines.append(f"| llm_changed_numbers_count | {llm.get('llm_changed_numbers_count')} |")
+    lines.append(f"| llm_dropped_limitation_count | {llm.get('llm_dropped_limitation_count')} |")
+    lines.append(f"| deterministic_fallback_count | {llm.get('deterministic_fallback_count')} |")
+    lines.append(f"| unsafe_llm_rewrite_block_rate | {llm.get('unsafe_llm_rewrite_block_rate')} |")
+    lines.append("")
+    lines.append("## 9. Latency metrics table")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|---|---:|")
+    lines.append(f"| p50_total_ms | {lat.get('p50_total_ms')} |")
+    lines.append(f"| p90_total_ms | {lat.get('p90_total_ms')} |")
+    lines.append(f"| p95_total_ms | {lat.get('p95_total_ms')} |")
+    lines.append(f"| avg_sql_ms | {lat.get('avg_sql_ms')} |")
+    lines.append(f"| avg_rag_ms | {lat.get('avg_rag_ms')} |")
+    lines.append(f"| avg_ml_ms | {lat.get('avg_ml_ms')} |")
+    lines.append(f"| avg_llm_ms | {lat.get('avg_llm_ms')} |")
+    lines.append(f"| avg_composition_ms | {lat.get('avg_composition_ms')} |")
+    lines.append(f"| slow_case_count_gt_6s | {lat.get('slow_case_count_gt_6s')} |")
+    lines.append(f"| critical_case_count_gt_10s | {lat.get('critical_case_count_gt_10s')} |")
+    lines.append("")
+    lines.append("| Route | Avg total ms |")
+    lines.append("|---|---:|")
+    for route, avg_ms in sorted((lat.get("avg_total_ms_by_route") or {}).items()):
+        lines.append(f"| {route} | {avg_ms} |")
+    lines.append("")
+    lines.append("| Fastest families | Avg ms |")
+    lines.append("|---|---:|")
+    for fam, avg in (lat.get("fastest_case_families") or []):
+        lines.append(f"| {fam} | {avg} |")
+    lines.append("")
+    lines.append("| Slowest families | Avg ms |")
+    lines.append("|---|---:|")
+    for fam, avg in (lat.get("slowest_case_families") or []):
+        lines.append(f"| {fam} | {avg} |")
+    lines.append("")
+    lines.append("## 10. Error analysis / remaining risks")
+    lines.append("")
+    for risk in (report.get("remaining_risks") or []):
+        lines.append(f"- {risk}")
+    lines.append("")
+    lines.append("## 11. Final DS/AI readiness score")
+    lines.append("")
+    lines.append("| Component | Weight | Score |")
+    lines.append("|---|---:|---:|")
+    lines.append(f"| Routing/orchestration | 20% | {scores.get('routing_orchestration_20pct')} |")
+    lines.append(f"| Evidence/grounding/hallucination | 30% | {scores.get('evidence_grounding_hallucination_30pct')} |")
+    lines.append(f"| Recommendation grounding | 10% | {scores.get('recommendation_grounding_10pct')} |")
+    lines.append(f"| Memory safety | 10% | {scores.get('memory_safety_10pct')} |")
+    lines.append(f"| LLM safety | 10% | {scores.get('llm_safety_10pct')} |")
+    lines.append(f"| Latency/runtime | 20% | {scores.get('latency_runtime_20pct')} |")
+    lines.append(f"| Overall DS/AI chatbot score | 100% | {scores.get('overall_ds_ai_chatbot_score')} |")
+    lines.append("")
+
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def run_metrics_evaluation(*, options: AuditRunOptions | None = None) -> dict[str, Any]:
+    options = options or AuditRunOptions()
+    suite_modes = [
+        "baseline",
+        "fresh",
+        "manual-regression",
+        "detail-members-memory",
+        "response-quality",
+        "latency",
+    ]
+    suite_reports: dict[str, dict[str, Any]] = {}
+    for mode in suite_modes:
+        suite_reports[mode] = run_audit(mode=mode, options=options)
+
+    report = _build_metrics_evaluation_report(suite_reports=suite_reports)
+
+    out_dir = ROOT / "artifacts" / "evals"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    json_path = out_dir / f"chatbot_metrics_evaluation_{ts}.json"
+    md_path = out_dir / f"chatbot_metrics_evaluation_{ts}.md"
+
+    report["files"] = {
+        "json_report": str(json_path),
+        "md_report": str(md_path),
+    }
+
+    json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_metrics_markdown(report=report, md_path=md_path)
+
+    return report
+
+
 def _extract_timing_components(metadata: dict[str, Any], elapsed_ms: float) -> dict[str, float]:
     durations = metadata.get("durations_ms") or {}
     timing_ms = metadata.get("timing_ms") or {}
@@ -872,11 +1567,26 @@ def _classify(case: AuditCase, *, payload: dict[str, Any], status_code: int, lat
 
 
 def _run_one(client: TestClient, headers: dict[str, str], question: str, conversation_id: str | None = None) -> tuple[int, dict[str, Any], float]:
+    return _run_one_with_timeout(client, headers, question, conversation_id=conversation_id, timeout_s=60.0)
+
+
+def _run_one_with_timeout(
+    client: TestClient,
+    headers: dict[str, str],
+    question: str,
+    *,
+    conversation_id: str | None = None,
+    timeout_s: float = 60.0,
+) -> tuple[int, dict[str, Any], float]:
     payload: dict[str, Any] = {"message": question, "language": "fr"}
     if conversation_id:
         payload["conversation_id"] = conversation_id
     t0 = time.perf_counter()
-    resp = client.post("/chat/agent", headers=headers, json=payload, timeout=60)
+    try:
+        resp = client.post("/chat/agent", headers=headers, json=payload, timeout=timeout_s)
+    except Exception as exc:
+        elapsed = (time.perf_counter() - t0) * 1000.0
+        return 599, {"error": str(exc), "error_type": exc.__class__.__name__}, elapsed
     elapsed = (time.perf_counter() - t0) * 1000.0
     try:
         body = resp.json() if resp.status_code == 200 else {"error": resp.text}
@@ -885,8 +1595,72 @@ def _run_one(client: TestClient, headers: dict[str, str], question: str, convers
     return resp.status_code, body, elapsed
 
 
-def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
+def _is_transient_failure(
+    status_code: int,
+    body: dict[str, Any],
+    elapsed_ms: float,
+    *,
+    case_timeout_s: float,
+    attempt: int,
+) -> tuple[bool, str]:
+    error_text = str((body or {}).get("error") or "").lower()
+    error_type = str((body or {}).get("error_type") or "").lower()
+    is_timeout = (
+        status_code in {408, 504, 599}
+        or "timeout" in error_text
+        or "timed out" in error_text
+        or "readtimeout" in error_type
+    )
+    provider_or_conn = any(token in error_text for token in (
+        "connection reset",
+        "connection aborted",
+        "connection refused",
+        "temporary failure",
+        "service unavailable",
+        "provider",
+        "upstream",
+    ))
+    db_saturation = status_code == 503 or "too many connections" in error_text or "pool" in error_text
+    first_call_anomaly = attempt == 1 and elapsed_ms >= max(case_timeout_s * 1000.0 * 0.9, 30000.0)
+    if is_timeout:
+        return True, "timeout"
+    if provider_or_conn:
+        return True, "provider_or_connection"
+    if db_saturation:
+        return True, "db_saturation"
+    if first_call_anomaly:
+        return True, "first_call_latency_anomaly"
+    return False, ""
+
+
+def _execute_warmup(client: TestClient, headers: dict[str, str], *, timeout_s: float) -> list[dict[str, Any]]:
+    warmup_steps: list[dict[str, Any]] = []
+    t0 = time.perf_counter()
+    health = client.get("/health", timeout=timeout_s)
+    warmup_steps.append({
+        "step": "health",
+        "status_code": health.status_code,
+        "elapsed_ms": round((time.perf_counter() - t0) * 1000.0, 2),
+    })
+    for label, question in (
+        ("chat_members", "Liste des membres"),
+        ("chat_rag", "Checklist avant emballage"),
+    ):
+        sc, body, elapsed_ms = _run_one_with_timeout(client, headers, question, timeout_s=timeout_s)
+        warmup_steps.append({
+            "step": label,
+            "status_code": sc,
+            "elapsed_ms": round(elapsed_ms, 2),
+            "route": body.get("route"),
+            "intent_family": _extract_intent_family(body.get("metadata") or {}),
+            "error": body.get("error"),
+        })
+    return warmup_steps
+
+
+def run_audit(*, mode: str = "baseline", options: AuditRunOptions | None = None) -> dict[str, Any]:
     os.environ["AI_AUDIT_DEBUG"] = "1"
+    options = options or AuditRunOptions()
     mode_normalized = str(mode or "baseline").strip().lower()
     if mode_normalized not in {"baseline", "fresh", "manual-regression", "detail-members-memory", "response-quality", "latency"}:
         raise ValueError(f"Unsupported audit mode: {mode}")
@@ -902,6 +1676,13 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
         cases = build_latency_cases()
     else:
         cases = build_cases()
+    if options.resume_from:
+        start_idx = next((i for i, c in enumerate(cases) if c.qid == options.resume_from), None)
+        if start_idx is None:
+            raise ValueError(f"Unknown --resume-from case id: {options.resume_from}")
+        cases = cases[start_idx:]
+    if options.max_cases is not None and options.max_cases > 0:
+        cases = cases[: options.max_cases]
     total_cases = len(cases)
 
     # Persist cases for reproducibility
@@ -918,12 +1699,52 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
             raise RuntimeError(f"Login failed: {login.status_code} {login.text}")
         token = login.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
+        warmup_trace: list[dict[str, Any]] = []
+        if options.warmup:
+            warmup_trace = _execute_warmup(client, headers, timeout_s=options.case_timeout)
 
         memory_conversation_id: str | None = None
+        runtime_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_prefix = "chatbot_whole_app_runtime_audit_fresh" if mode_normalized == "fresh" else ("chatbot_whole_app_runtime_audit_manual_regression" if mode_normalized == "manual-regression" else ("chatbot_whole_app_runtime_audit_detail_members_memory" if mode_normalized == "detail-members-memory" else ("chatbot_whole_app_runtime_audit_response_quality" if mode_normalized == "response-quality" else ("chatbot_whole_app_runtime_audit_latency" if mode_normalized == "latency" else "chatbot_whole_app_runtime_audit"))))
+        out_dir = ROOT / "artifacts" / "evals"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        case_log_path = out_dir / f"{file_prefix}_{runtime_ts}.cases.jsonl"
 
         for idx, case in enumerate(cases, start=1):
             if not case.expected_response_shape.startswith("sequence_"):
-                status_code, body, elapsed_ms = _run_one(client, headers, case.question)
+                attempts: list[dict[str, Any]] = []
+                final_retry_count = 0
+                transient_error_type = ""
+                status_code = 0
+                body: dict[str, Any] = {}
+                elapsed_ms = 0.0
+                for attempt in range(1, max(1, options.retry_transient + 1) + 1):
+                    status_code, body, elapsed_ms = _run_one_with_timeout(
+                        client,
+                        headers,
+                        case.question,
+                        timeout_s=options.case_timeout,
+                    )
+                    is_transient, transient_kind = _is_transient_failure(
+                        status_code,
+                        body,
+                        elapsed_ms,
+                        case_timeout_s=options.case_timeout,
+                        attempt=attempt,
+                    )
+                    attempts.append({
+                        "attempt": attempt,
+                        "status_code": status_code,
+                        "latency_ms": round(elapsed_ms, 2),
+                        "route": body.get("route"),
+                        "error": body.get("error"),
+                        "transient_kind": transient_kind if is_transient else "",
+                    })
+                    if is_transient and attempt <= options.retry_transient:
+                        final_retry_count = attempt
+                        transient_error_type = transient_kind
+                        continue
+                    break
                 metadata = body.get("metadata") or {}
                 status, failure, reason = _classify(case, payload=body, status_code=status_code, latency_ms=elapsed_ms, metadata=metadata)
                 if status == "PASS" and case.qid.startswith("DM"):
@@ -942,6 +1763,14 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
                         status, failure, reason = latency_failure
                 timings = _extract_timing_components(metadata, elapsed_ms)
 
+                evidence_statuses = _extract_evidence_statuses(metadata)
+                source_types = sorted(_evidence_types(body))
+                warning_codes = metadata.get("warning_codes") or []
+                warning_codes_upper = [str(code).strip().upper() for code in warning_codes if str(code).strip()]
+                if not warning_codes_upper:
+                    warning_codes_upper = [str(w).strip().upper() for w in (body.get("warnings") or []) if str(w).strip()]
+                llm_meta = metadata.get("llm_metadata") or {}
+
                 result = {
                     "qid": case.qid,
                     "module_group": case.module_group,
@@ -955,13 +1784,19 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
                     "actual_route": body.get("route"),
                     "actual_intent_family": _extract_intent_family(metadata),
                     "actual_sql_operation_tool": _extract_sql_operation(metadata),
-                    "evidence_status_sql": _extract_evidence_statuses(metadata).get("sql"),
-                    "evidence_status_ml": _extract_evidence_statuses(metadata).get("ml"),
-                    "evidence_status_rag": _extract_evidence_statuses(metadata).get("rag"),
+                    "evidence_status_sql": evidence_statuses.get("sql"),
+                    "evidence_status_ml": evidence_statuses.get("ml"),
+                    "evidence_status_rag": evidence_statuses.get("rag"),
+                    "source_types": source_types,
                     "agents_called": body.get("agents_used") or [],
                     "evidence_row_count": _extract_evidence_row_count(body, metadata),
+                    "recommendation_grounded": _recommendation_grounded(body, metadata),
                     "response_blocks": [str((b or {}).get("type") or "") for b in (body.get("response_blocks") or []) if isinstance(b, dict)],
                     "warnings": body.get("warnings") or [],
+                    "warning_codes_upper": warning_codes_upper,
+                    "llm_attempted": bool(llm_meta.get("llm_attempted")),
+                    "llm_fallback_used": bool(llm_meta.get("fallback_used")),
+                    "llm_provider": str(llm_meta.get("provider") or ""),
                     "confidence": _safe_num(body.get("confidence"), 0.0),
                     "final_answer_text": str(body.get("answer") or ""),
                     "latency_ms": round(elapsed_ms, 2),
@@ -970,8 +1805,29 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
                     "status": status,
                     "failure_category": failure,
                     "reason": reason,
+                    "error_type": transient_error_type or str(body.get("error_type") or ""),
+                    "retry_count": final_retry_count,
+                    "attempts": attempts,
                 }
                 results.append(result)
+                case_log_row = {
+                    "qid": case.qid,
+                    "question": case.question,
+                    "route": result.get("actual_route"),
+                    "sql_operation": result.get("actual_sql_operation_tool"),
+                    "evidence_status": {
+                        "sql": result.get("evidence_status_sql"),
+                        "ml": result.get("evidence_status_ml"),
+                        "rag": result.get("evidence_status_rag"),
+                    },
+                    "latency_ms": result.get("latency_ms"),
+                    "error_type": result.get("error_type"),
+                    "retry_count": result.get("retry_count"),
+                    "final_verdict": result.get("status"),
+                    "failure_category": result.get("failure_category"),
+                }
+                with case_log_path.open("a", encoding="utf-8") as fp:
+                    fp.write(json.dumps(case_log_row, ensure_ascii=False) + "\n")
                 print(f"[{idx:02d}/{total_cases}] {case.qid} {status} {failure} route={result['actual_route']} latency={result['latency_ms']}ms", flush=True)
                 continue
 
@@ -1012,14 +1868,14 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
                 q1 = "Quel lot a la perte la plus élevée ?"
                 q2 = "Quelles actions pour ce lot ?"
                 q3 = "Maintenant oublie ce lot et montre seulement le stock de mangue."
-            st1, b1, t1 = _run_one(client, headers, q1)
+            st1, b1, t1 = _run_one_with_timeout(client, headers, q1, timeout_s=options.case_timeout)
             m1 = b1.get("metadata") or {}
             memory_conversation_id = (m1.get("conversation_id") or memory_conversation_id)
-            st2, b2, t2 = _run_one(client, headers, q2, conversation_id=memory_conversation_id)
+            st2, b2, t2 = _run_one_with_timeout(client, headers, q2, conversation_id=memory_conversation_id, timeout_s=options.case_timeout)
             m2 = b2.get("metadata") or {}
             memory_conversation_id = (m2.get("conversation_id") or memory_conversation_id)
             if q3:
-                st3, b3, t3 = _run_one(client, headers, q3, conversation_id=memory_conversation_id)
+                st3, b3, t3 = _run_one_with_timeout(client, headers, q3, conversation_id=memory_conversation_id, timeout_s=options.case_timeout)
                 m3 = b3.get("metadata") or {}
             else:
                 st3, b3, t3, m3 = st2, b2, 0.0, (b2.get("metadata") or {})
@@ -1048,6 +1904,14 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
             failure = "NO_FAILURE" if mem_ok else "MEMORY_CONTEXT_ERROR"
             reason = "memory reset honored" if mem_ok else f"reset ignored: route={route3} intent={intent3}"
 
+            evidence_statuses = _extract_evidence_statuses(m3)
+            source_types = sorted(_evidence_types(b3))
+            warning_codes = m3.get("warning_codes") or []
+            warning_codes_upper = [str(code).strip().upper() for code in warning_codes if str(code).strip()]
+            if not warning_codes_upper:
+                warning_codes_upper = [str(w).strip().upper() for w in (b3.get("warnings") or []) if str(w).strip()]
+            llm_meta = m3.get("llm_metadata") or {}
+
             result = {
                 "qid": case.qid,
                 "module_group": case.module_group,
@@ -1061,13 +1925,19 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
                 "actual_route": b3.get("route"),
                 "actual_intent_family": _extract_intent_family(m3),
                 "actual_sql_operation_tool": _extract_sql_operation(m3),
-                "evidence_status_sql": _extract_evidence_statuses(m3).get("sql"),
-                "evidence_status_ml": _extract_evidence_statuses(m3).get("ml"),
-                "evidence_status_rag": _extract_evidence_statuses(m3).get("rag"),
+                "evidence_status_sql": evidence_statuses.get("sql"),
+                "evidence_status_ml": evidence_statuses.get("ml"),
+                "evidence_status_rag": evidence_statuses.get("rag"),
+                "source_types": source_types,
                 "agents_called": b3.get("agents_used") or [],
                 "evidence_row_count": _extract_evidence_row_count(b3, m3),
+                "recommendation_grounded": _recommendation_grounded(b3, m3),
                 "response_blocks": [str((b or {}).get("type") or "") for b in (b3.get("response_blocks") or []) if isinstance(b, dict)],
                 "warnings": b3.get("warnings") or [],
+                "warning_codes_upper": warning_codes_upper,
+                "llm_attempted": bool(llm_meta.get("llm_attempted")),
+                "llm_fallback_used": bool(llm_meta.get("fallback_used")),
+                "llm_provider": str(llm_meta.get("provider") or ""),
                 "confidence": _safe_num(b3.get("confidence"), 0.0),
                 "final_answer_text": str(b3.get("answer") or ""),
                 "latency_ms": round(t1 + t2 + t3, 2),
@@ -1083,6 +1953,8 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
                 "status": status,
                 "failure_category": failure,
                 "reason": reason,
+                "error_type": str(b3.get("error_type") or ""),
+                "retry_count": 0,
                 "sequence_details": {
                     "step1": {"status": st1, "route": b1.get("route"), "intent": _extract_intent_family(m1)},
                     "step2": {"status": st2, "route": b2.get("route"), "intent": _extract_intent_family(m2)},
@@ -1090,6 +1962,24 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
                 },
             }
             results.append(result)
+            case_log_row = {
+                "qid": case.qid,
+                "question": case.question,
+                "route": result.get("actual_route"),
+                "sql_operation": result.get("actual_sql_operation_tool"),
+                "evidence_status": {
+                    "sql": result.get("evidence_status_sql"),
+                    "ml": result.get("evidence_status_ml"),
+                    "rag": result.get("evidence_status_rag"),
+                },
+                "latency_ms": result.get("latency_ms"),
+                "error_type": result.get("error_type"),
+                "retry_count": result.get("retry_count"),
+                "final_verdict": result.get("status"),
+                "failure_category": result.get("failure_category"),
+            }
+            with case_log_path.open("a", encoding="utf-8") as fp:
+                fp.write(json.dumps(case_log_row, ensure_ascii=False) + "\n")
             print(f"[{idx:02d}/{total_cases}] {case.qid} {status} {failure} route={result['actual_route']} latency={result['latency_ms']}ms", flush=True)
 
     pass_count = sum(1 for r in results if r["status"] == "PASS")
@@ -1145,10 +2035,7 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
         },
     }
 
-    out_dir = ROOT / "artifacts" / "evals"
-    out_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_prefix = "chatbot_whole_app_runtime_audit_fresh" if mode_normalized == "fresh" else ("chatbot_whole_app_runtime_audit_manual_regression" if mode_normalized == "manual-regression" else ("chatbot_whole_app_runtime_audit_detail_members_memory" if mode_normalized == "detail-members-memory" else ("chatbot_whole_app_runtime_audit_response_quality" if mode_normalized == "response-quality" else ("chatbot_whole_app_runtime_audit_latency" if mode_normalized == "latency" else "chatbot_whole_app_runtime_audit"))))
     json_path = out_dir / f"{file_prefix}_{ts}.json"
     md_path = out_dir / f"{file_prefix}_{ts}.md"
 
@@ -1227,6 +2114,9 @@ def run_audit(*, mode: str = "baseline") -> dict[str, Any]:
 
     report["files"]["json_report"] = str(json_path)
     report["files"]["md_report"] = str(md_path)
+    report["files"]["case_log_jsonl"] = str(case_log_path)
+    report["run_options"] = asdict(options)
+    report["warmup_trace"] = warmup_trace
 
     # persist updated file pointers
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1238,12 +2128,39 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run deterministic whole-app chatbot runtime audit.")
     parser.add_argument(
         "--mode",
-        choices=["baseline", "fresh", "manual-regression", "detail-members-memory", "response-quality", "latency"],
+        choices=["baseline", "fresh", "manual-regression", "detail-members-memory", "response-quality", "latency", "metrics-evaluation"],
         default="baseline",
-        help="Audit set to execute: baseline (fixed 60), fresh (paraphrased anti-overfit set), manual-regression (strict semantic families), detail-members-memory, response-quality, or latency.",
+        help="Audit set to execute: baseline (fixed 60), fresh (paraphrased anti-overfit set), manual-regression (strict semantic families), detail-members-memory, response-quality, latency, or metrics-evaluation.",
     )
+    parser.add_argument("--warmup", action="store_true", help="Run non-scored warmup calls before scored cases.")
+    parser.add_argument("--max-cases", type=int, default=None, help="Limit number of scored cases for this run.")
+    parser.add_argument("--case-timeout", type=float, default=60.0, help="Per request timeout in seconds.")
+    parser.add_argument("--retry-transient", type=int, default=0, help="Retry count for transient timeout/provider/db saturation failures.")
+    parser.add_argument("--resume-from", type=str, default=None, help="Resume from a specific case id (inclusive).")
     args = parser.parse_args()
-    r = run_audit(mode=args.mode)
-    print(r["files"]["json_report"])
-    print(r["files"]["md_report"])
-    print(json.dumps(r["counts"], ensure_ascii=False))
+    options = AuditRunOptions(
+        warmup=bool(args.warmup),
+        max_cases=args.max_cases,
+        case_timeout=float(args.case_timeout),
+        retry_transient=max(0, int(args.retry_transient or 0)),
+        resume_from=args.resume_from,
+    )
+    if args.mode == "metrics-evaluation":
+        r = run_metrics_evaluation(options=options)
+        print(r["files"]["json_report"])
+        print(r["files"]["md_report"])
+        print(
+            json.dumps(
+                {
+                    "overall_ds_ai_chatbot_score": (r.get("weighted_scores") or {}).get("overall_ds_ai_chatbot_score"),
+                    "ai_reliability_score": (r.get("weighted_scores") or {}).get("ai_reliability_score"),
+                    "runtime_performance_score": (r.get("weighted_scores") or {}).get("runtime_performance_score"),
+                },
+                ensure_ascii=False,
+            )
+        )
+    else:
+        r = run_audit(mode=args.mode, options=options)
+        print(r["files"]["json_report"])
+        print(r["files"]["md_report"])
+        print(json.dumps(r["counts"], ensure_ascii=False))

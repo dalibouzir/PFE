@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any
 
 from sqlalchemy import select
@@ -15,23 +16,49 @@ from app.ai.retrieval.retrieval_filters import build_retrieval_filters
 from app.models.rag import RAGChunk, RAGDocument
 from app.models.user import User
 
+_RAG_ADVICE_CACHE_TTL_SECONDS = 90
+_RAG_ADVICE_CACHE_MAX = 128
+_RAG_ADVICE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
 
 class RAGTools:
     def __init__(self, db: Session, current_user: User):
+        self.current_user = current_user
         self.retriever = HybridRetriever(db, current_user)
 
     def search(self, *, query: str, detected_entities: dict, top_k: int = 5) -> dict[str, Any]:
+        total_started = time.perf_counter()
+        rewrite_started = time.perf_counter()
         rewritten = rewrite_query(query)
+        rewrite_ms = int((time.perf_counter() - rewrite_started) * 1000)
+        filters_started = time.perf_counter()
         filters = build_retrieval_filters(detected_entities)
+        filters_ms = int((time.perf_counter() - filters_started) * 1000)
         pure_advice_query = _is_pure_advice_query(query, detected_entities=detected_entities)
+        cache_key = ""
+        if pure_advice_query and not filters.get("batch_ref"):
+            cache_key = self._advice_cache_key(query=rewritten["expanded_domain_query"], filters=filters, top_k=top_k)
+            cached = _RAG_ADVICE_CACHE.get(cache_key)
+            if cached and cached[0] > time.time():
+                payload = dict(cached[1])
+                timing = dict(payload.get("timing_ms", {}))
+                timing["cache_hit"] = True
+                timing["total_search_ms"] = int((time.perf_counter() - total_started) * 1000)
+                payload["timing_ms"] = timing
+                return payload
         if pure_advice_query:
             filters = {
                 **filters,
                 "prefer_knowledge_sources": True,
                 "avoid_operational_sources": True,
             }
-        candidates = self.retriever.retrieve(query=rewritten["expanded_domain_query"], filters=filters, top_k=12)
+        retrieve_started = time.perf_counter()
+        retrieval = self.retriever.retrieve_with_diagnostics(query=rewritten["expanded_domain_query"], filters=filters, top_k=12)
+        retrieve_ms = int((time.perf_counter() - retrieve_started) * 1000)
+        candidates = retrieval.get("results", [])
+        retrieval_timing = retrieval.get("timing_ms", {})
         ranked = rerank_chunks(candidates, detected_entities=detected_entities, top_k=top_k)
+        rerank_ms = max(0, retrieve_ms - int(retrieval_timing.get("total_retrieval_ms", 0) or 0))
         if pure_advice_query:
             ranked = _prefer_advice_knowledge_chunks(ranked, top_k=top_k)
         if not ranked:
@@ -40,7 +67,8 @@ class RAGTools:
             if pure_advice_query:
                 broad_filters["prefer_knowledge_sources"] = True
                 broad_filters["avoid_operational_sources"] = True
-            broad_candidates = self.retriever.retrieve(query=rewritten["expanded_domain_query"], filters=broad_filters, top_k=12)
+            broad = self.retriever.retrieve_with_diagnostics(query=rewritten["expanded_domain_query"], filters=broad_filters, top_k=12)
+            broad_candidates = broad.get("results", [])
             ranked = rerank_chunks(broad_candidates, detected_entities={}, top_k=top_k)
             if pure_advice_query:
                 ranked = _prefer_advice_knowledge_chunks(ranked, top_k=top_k)
@@ -94,7 +122,7 @@ class RAGTools:
             warnings.append("ADVICE_KNOWLEDGE_MISSING")
         if not usable_items and assessed_items:
             warnings.append("RAG_QUALITY_INSUFFICIENT")
-        return {
+        payload = {
             "rewrite": rewritten,
             "filters": {
                 key: sorted(list(value)) if isinstance(value, set) else value
@@ -106,7 +134,45 @@ class RAGTools:
             "warnings": sorted(set(warnings)),
             "weak_retrieval": weak,
             "sources": sources,
+            "timing_ms": {
+                "query_rewrite_ms": rewrite_ms,
+                "filter_build_ms": filters_ms,
+                "embedding_ms": int(retrieval_timing.get("embedding_ms", 0) or 0),
+                "vector_search_ms": int(retrieval_timing.get("vector_search_ms", 0) or 0),
+                "metadata_filter_ms": int(retrieval_timing.get("metadata_filter_ms", 0) or 0),
+                "context_build_ms": int(retrieval_timing.get("merge_rank_ms", 0) or 0),
+                "rerank_ms": rerank_ms,
+                "retrieval_total_ms": int(retrieval_timing.get("total_retrieval_ms", 0) or 0),
+                "quality_filter_ms": int(
+                    max(
+                        0,
+                        (time.perf_counter() - total_started) * 1000
+                        - rewrite_ms
+                        - filters_ms
+                        - int(retrieval_timing.get("total_retrieval_ms", 0) or 0),
+                    )
+                ),
+                "cache_hit": False,
+                "total_search_ms": int((time.perf_counter() - total_started) * 1000),
+            },
+            "counts": retrieval.get("counts", {}),
         }
+        if cache_key:
+            self._set_advice_cache(cache_key, payload)
+        return payload
+
+    def _advice_cache_key(self, *, query: str, filters: dict[str, Any], top_k: int) -> str:
+        products = ",".join(sorted(str(v) for v in (filters.get("product") or set())))
+        stages = ",".join(sorted(str(v) for v in (filters.get("stage") or set())))
+        language = str(filters.get("language") or "fr")
+        coop = str(self.current_user.cooperative_id or "")
+        return f"{coop}|{language}|{products}|{stages}|{top_k}|{query.strip().lower()}"
+
+    def _set_advice_cache(self, key: str, payload: dict[str, Any]) -> None:
+        if len(_RAG_ADVICE_CACHE) >= _RAG_ADVICE_CACHE_MAX:
+            oldest_key = min(_RAG_ADVICE_CACHE, key=lambda k: _RAG_ADVICE_CACHE[k][0])
+            _RAG_ADVICE_CACHE.pop(oldest_key, None)
+        _RAG_ADVICE_CACHE[key] = (time.time() + _RAG_ADVICE_CACHE_TTL_SECONDS, payload)
 
     def _direct_keyword_fallback(self, *, query: str, filters: dict[str, Any], top_k: int) -> list[dict[str, Any]]:
         terms = [token.strip().lower() for token in str(query or "").replace("?", " ").split() if len(token.strip()) > 2][:8]

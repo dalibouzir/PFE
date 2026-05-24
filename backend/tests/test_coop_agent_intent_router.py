@@ -11,10 +11,10 @@ def test_stock_question_routes_sql_only():
     assert "SQLAnalyticsAgent" in decision.required_agents
 
 
-def test_loss_best_practice_question_routes_hybrid_sql_rag():
+def test_loss_best_practice_question_routes_rag_only():
     decision = router.classify("Explique comment réduire les pertes pendant le séchage.")
-    assert decision.route == AgentRoute.HYBRID_SQL_RAG
-    assert decision.required_agents == ["SQLAnalyticsAgent", "RAGKnowledgeAgent"]
+    assert decision.route == AgentRoute.RAG_ONLY
+    assert decision.required_agents == ["RAGKnowledgeAgent"]
 
 
 def test_anomaly_question_routes_hybrid_sql_ml():
