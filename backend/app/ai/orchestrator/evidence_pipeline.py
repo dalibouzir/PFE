@@ -1002,9 +1002,13 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
             f"Je ne trouve pas de lot correspondant à la référence {target_value}. "
             "Vérifiez la référence (ex. LOT-...) puis redemandez les recommandations pour ce lot."
         )
+        recommendation_block = _compose_recommendation_block(pack=pack)
+        response_blocks = [{"type": "summary", "title": "Résumé", "content": message}]
+        if recommendation_block:
+            response_blocks.append(recommendation_block)
         return (
             message,
-            [{"type": "summary", "title": "Résumé", "content": message}],
+            response_blocks,
             {
                 "answer_type": "unknown_lot_reference",
                 "evidence_roles": _evidence_roles(pack),
@@ -1012,7 +1016,7 @@ def compose_answer(pack: EvidencePack, verification: EvidenceVerification) -> tu
                 "evidence_status_contract": _evidence_status_contract(pack),
                 "answer_contract": contract,
                 "required_evidence_types": list(pack.plan.required_sources),
-                "missing_evidence_types": ["SQL", "RECOMMENDATION"],
+                "missing_evidence_types": ["SQL"] if recommendation_block else ["SQL", "RECOMMENDATION"],
                 "found_evidence_types": _found_evidence_types(pack),
                 "confidence_reason": "unknown_lot_reference",
                 "warning_categories": {},
@@ -1422,7 +1426,7 @@ def _compose_limitations(*, pack: EvidencePack, verification: EvidenceVerificati
 
     has_sql = bool(pack.sql.get("rows") or pack.sql.get("metrics") or pack.sql.get("payload") or sql_status == EVIDENCE_NO_DATA)
     has_rag = bool(pack.rag.get("chunks") or pack.rag.get("content_snippets") or rag_status == EVIDENCE_NO_DATA)
-    has_ml = bool(pack.ml or ml_status == EVIDENCE_NO_DATA)
+    has_ml = _has_material_ml_evidence(pack=pack)
     has_reco = bool(pack.recommendations.get("actions"))
 
     if "SQL" in required and not has_sql:
@@ -1587,7 +1591,7 @@ def _compose_route_template_answer(
         lines = ["1. Données mesurées", measured, "", "2. Signal ML"]
         if pack.ml and ml_status == EVIDENCE_NO_DATA:
             lines.append("Aucun signal ML élevé n’est enregistré dans les journaux disponibles.")
-        elif pack.ml:
+        elif _has_material_ml_evidence(pack=pack):
             lines.append(explanation if "Signal ML:" in explanation else f"Signal ML disponible ({str(pack.ml.get('risk_level') or 'UNKNOWN').upper()}).")
         else:
             lines.append("Signal ML indisponible pour cette entité.")
@@ -2352,7 +2356,7 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
             ml_batch = str(pack.ml.get("affected_batch") or pack.ml.get("batch_ref") or "").strip()
             if anchor_lot and ml_batch and ml_batch != anchor_lot:
                 ml_line = f"Le signal ML n’est pas disponible pour le lot {anchor_lot} (donnée ML trouvée pour {ml_batch})."
-            else:
+            elif _has_material_ml_evidence(pack=pack):
                 ml_line = (
                     f"Signal ML: le modèle indique un risque {str(pack.ml.get('risk_level') or 'UNKNOWN').upper()} "
                     f"(anomaly_score {float(pack.ml.get('anomaly_score', 0.0) or 0.0):.4f})."
@@ -2581,9 +2585,7 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
                     return "Conseils pratiques basés sur la base de connaissances post-récolte."
             return snippets[0]
 
-    if pack.route in {AgentRoute.HYBRID_SQL_ML, AgentRoute.ML_ONLY} and pack.ml:
-        risk = str(pack.ml.get("risk_level") or "UNKNOWN").upper()
-        anomaly = bool(pack.ml.get("anomaly_detected"))
+    if pack.route in {AgentRoute.HYBRID_SQL_ML, AgentRoute.ML_ONLY}:
         sql_line = ""
         if sql_payload.get("batch_summary"):
             row = (sql_payload.get("batch_summary") or [{}])[0]
@@ -2591,9 +2593,16 @@ def _compose_summary(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> str:
                 f"Fait SQL: lot {row.get('batch_ref') or row.get('lot_code')} | perte {float(row.get('loss_pct', 0.0) or 0.0):.1f}% | "
                 f"efficacité {float(row.get('efficiency_pct', 0.0) or 0.0):.1f}%."
             )
-        return (sql_line + " " if sql_line else "") + f"Signal ML: risque {risk} | anomalie {'oui' if anomaly else 'non'}."
-    if pack.route == AgentRoute.HYBRID_SQL_ML and not pack.ml:
-        return "Signal ML indisponible pour cette entité; la synthèse ci-dessus reste basée sur les faits SQL vérifiés."
+        if pack.ml and ml_status == EVIDENCE_NO_DATA:
+            return (sql_line + " " if sql_line else "") + "Aucun signal ML élevé n’est enregistré dans les journaux disponibles."
+        if _has_material_ml_evidence(pack=pack):
+            risk = str(pack.ml.get("risk_level") or "UNKNOWN").upper()
+            anomaly = bool(pack.ml.get("anomaly_detected"))
+            return (sql_line + " " if sql_line else "") + f"Signal ML: risque {risk} | anomalie {'oui' if anomaly else 'non'}."
+        if pack.ml:
+            return (sql_line + " " if sql_line else "") + "Signal ML indisponible pour cette entité; la synthèse ci-dessus reste basée sur les faits SQL vérifiés."
+        if pack.route == AgentRoute.HYBRID_SQL_ML:
+            return "Signal ML indisponible pour cette entité; la synthèse ci-dessus reste basée sur les faits SQL vérifiés."
 
     return "Je n’ai pas trouvé de preuve opérationnelle exploitable pour répondre précisément à cette demande."
 
@@ -2738,15 +2747,49 @@ def _build_answer_contract(
 
 
 def _has_material_ml_evidence(*, pack: EvidencePack) -> bool:
-    if pack.route in {AgentRoute.ML_ONLY, AgentRoute.HYBRID_SQL_ML}:
-        return True
-    if pack.route != AgentRoute.HYBRID_FULL:
+    if pack.route not in {AgentRoute.ML_ONLY, AgentRoute.HYBRID_SQL_ML, AgentRoute.HYBRID_FULL}:
         return False
 
     ml_payload = pack.ml or {}
-    meaningful_ml_keys = [k for k in ml_payload.keys() if k not in {"evidence_status"}]
-    for key in meaningful_ml_keys:
+    ml_status = _normalize_evidence_status(ml_payload.get("evidence_status")) or ""
+    if ml_status == EVIDENCE_NO_DATA:
+        return False
+
+    for key in ml_payload.keys():
         value = ml_payload.get(key)
+        key_name = str(key)
+        if key_name == "risk_level":
+            risk = str(value or "").strip().upper()
+            if risk and risk not in {"UNKNOWN", "NONE", "N/A", "NA"}:
+                return True
+            continue
+        if key_name == "anomaly_detected":
+            if bool(value):
+                return True
+            continue
+        if key_name in {"observed_loss_pct", "expected_loss_pct", "deviation", "anomaly_score"}:
+            if value is not None:
+                return True
+            continue
+        if key_name == "sources" and isinstance(value, list):
+            for source_item in value:
+                if not isinstance(source_item, dict):
+                    continue
+                source_status = _normalize_evidence_status(source_item.get("evidence_status")) or ""
+                record_count = source_item.get("record_count")
+                has_records = isinstance(record_count, (int, float)) and record_count > 0
+                if source_status == EVIDENCE_HAS or has_records or source_item.get("result_id"):
+                    return True
+            continue
+        if key_name in {
+            "evidence_status",
+            "warnings",
+            "confidence",
+            "affected_stage",
+            "affected_batch",
+            "batch_ref",
+        }:
+            continue
         if value not in (None, "", [], {}, "UNKNOWN"):
             return True
 

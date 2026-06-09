@@ -226,6 +226,54 @@ def test_hybrid_full_recommendation_answer_uses_deterministic_sections():
     assert "4. Limites" in answer
 
 
+def test_ml_no_data_does_not_render_unknown_signal_card():
+    pack = EvidencePack(
+        question="Combien de signaux ML HIGH sont enregistrés ?",
+        plan=AnswerPlan(
+            module="ml_logs",
+            intent="risk_ml",
+            answer_type="explanation",
+            required_sources=["ML"],
+            required_fields=[],
+            completeness_rules=[],
+            output_blocks_needed=["answer_summary", "sources", "warnings"],
+            operation="ml_high_signal_count",
+            answer_contract={"intent_family": "risk_ml", "route": "ML_ONLY", "required_layers": {"ml": True}},
+        ),
+        route=AgentRoute.ML_ONLY,
+        sql={"tables_used": [], "rows": [], "metrics": {}, "calculations": {}, "payload": {}},
+        rag={"chunks": [], "titles": [], "content_snippets": [], "scores": [], "topics": []},
+        ml={
+            "anomaly_detected": False,
+            "risk_level": "UNKNOWN",
+            "observed_loss_pct": None,
+            "expected_loss_pct": None,
+            "deviation": None,
+            "confidence": 0.72,
+            "warnings": ["NO_ML_DATA"],
+            "evidence_status": "PROVEN_NO_DATA",
+            "sources": [{"type": "ml", "record_count": 0, "evidence_status": "PROVEN_NO_DATA"}],
+        },
+        recommendations={"actions": [], "insufficient_evidence": False},
+        warnings=[],
+        confidence=0.72,
+        module_registry={},
+    )
+
+    verification = verify_evidence(pack)
+    answer, blocks, _metadata = compose_answer(pack, verification)
+    signal_cards = [
+        item
+        for block in blocks
+        if block.get("type") == "kpi_cards"
+        for item in (block.get("items") or [])
+        if item.get("title") == "Signal ML"
+    ]
+
+    assert "UNKNOWN" not in answer
+    assert signal_cards == []
+
+
 def test_rag_checklist_answer_sanitizes_source_like_markers():
     pack = EvidencePack(
         question="Donne une checklist courte avant l’emballage des mangues.",
