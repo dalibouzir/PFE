@@ -120,6 +120,15 @@ def test_keyword_fallback_terms_strip_accents_punctuation_and_fillers():
     ]
 
 
+def test_merge_ranked_chunks_keeps_exact_keyword_match_first():
+    exact = {"chunk_id": "a26", "title": "Knowledge Mangue - tri mangues abîmées", "final_score": 1.0}
+    broad = {"chunk_id": "generic", "title": "Knowledge Mangue - tri mangue", "final_score": 0.72}
+
+    merged = rag_tools._merge_ranked_chunks([exact], [broad], top_k=2)
+
+    assert [item["chunk_id"] for item in merged] == ["a26", "generic"]
+
+
 def test_rag_only_weak_evidence_returns_insufficient_message():
     pack = EvidencePack(
         question="q",

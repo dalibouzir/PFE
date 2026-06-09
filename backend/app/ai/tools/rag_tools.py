@@ -61,6 +61,19 @@ class RAGTools:
         ranked = rerank_chunks(candidates, detected_entities=detected_entities, top_k=top_k)
         rerank_ms = max(0, retrieve_ms - int(retrieval_timing.get("total_retrieval_ms", 0) or 0))
         if pure_advice_query:
+            keyword_ranked = self._direct_keyword_fallback(
+                query=rewritten["normalized_query"] or rewritten["expanded_domain_query"],
+                filters={
+                    **filters,
+                    "product": set(),
+                    "stage": set(),
+                    "prefer_knowledge_sources": True,
+                    "avoid_operational_sources": True,
+                    "batch_ref": None,
+                },
+                top_k=top_k,
+            )
+            ranked = _merge_ranked_chunks(keyword_ranked, ranked, top_k=top_k)
             ranked = _prefer_advice_knowledge_chunks(ranked, top_k=top_k)
         if not ranked:
             # Controlled broadening: keep same query but remove strict entity filters.
@@ -281,8 +294,7 @@ class RAGTools:
                     "final_score": score,
                 }
             )
-            if len(result) >= top_k:
-                break
+        result.sort(key=lambda item: float(item.get("final_score") or 0.0), reverse=True)
         return result[:top_k]
 
     def retrieve_knowledge(self, query: str, product: str | None = None, stage: str | None = None, topic: str | None = None) -> dict[str, Any]:
@@ -412,6 +424,21 @@ def _prefer_advice_knowledge_chunks(items: list[dict[str, Any]], *, top_k: int) 
     if preferred:
         return preferred[:top_k]
     return items[:top_k]
+
+
+def _merge_ranked_chunks(primary: list[dict[str, Any]], secondary: list[dict[str, Any]], *, top_k: int) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in [*primary, *secondary]:
+        key = str(item.get("chunk_id") or item.get("document_id") or item.get("title") or item.get("content") or "")
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        merged.append(item)
+        if len(merged) >= top_k:
+            break
+    return merged
 
 
 def _strict_advice_selection(items: list[dict[str, Any]], *, top_k: int) -> tuple[list[dict[str, Any]], bool]:
