@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from app.ai.orchestrator.evidence_pipeline import AnswerPlan, EvidencePack, compose_answer, verify_evidence
 from app.ai.schemas.agent_schemas import AgentRoute
 from app.ai.tools import rag_tools
@@ -52,6 +54,70 @@ def test_raw_chunk_text_is_sanitized():
     assert "```" not in sanitized
     assert "source:" not in sanitized.lower()
     assert "Avant emballage" in sanitized
+
+
+def test_mango_damaged_sorting_advice_uses_keyword_fallback(monkeypatch):
+    class FakeRetriever:
+        current_user = SimpleNamespace(cooperative_id="coop-1")
+
+        def retrieve_with_diagnostics(self, *, query, filters, top_k):
+            return {
+                "results": [
+                    {
+                        "document_id": "op-doc",
+                        "chunk_id": "op-chunk",
+                        "title": "Operational stock",
+                        "content": "Stock actuel de mangue",
+                        "metadata": {"source_table": "stocks"},
+                        "source_type": "stocks",
+                        "final_score": 0.9,
+                    }
+                ],
+                "timing_ms": {},
+                "counts": {},
+            }
+
+    tool = object.__new__(rag_tools.RAGTools)
+    tool.current_user = SimpleNamespace(cooperative_id="coop-1")
+    tool.retriever = FakeRetriever()
+
+    def fake_keyword_fallback(*, query, filters, top_k):
+        return [
+            {
+                "document_id": "doc-a26",
+                "chunk_id": "chunk-a26",
+                "title": "Knowledge Mangue - tri mangues abîmées",
+                "content": (
+                    "Critères de tri mangues abîmées: zones molles étendues, moisissure visible, "
+                    "fissures profondes, odeur fermentée. Isoler ces fruits protège le reste du lot."
+                ),
+                "metadata": {"chunk_type": "agronomic_knowledge", "topic": "tri mangues abîmées", "crop": "Mangue"},
+                "source_type": "knowledge_chunks",
+                "final_score": 0.9,
+            }
+        ]
+
+    monkeypatch.setattr(tool, "_direct_keyword_fallback", fake_keyword_fallback)
+
+    result = tool.search(
+        query="Donne-moi les critères de tri pour les mangues abîmées.",
+        detected_entities={"language": "fr"},
+        top_k=3,
+    )
+
+    assert result["chunks"]
+    assert result["chunks"][0]["quality_status"] in {"STRONG", "PARTIAL"}
+    assert "mangues abîmées" in result["chunks"][0]["sanitized_summary"]
+    assert "RAG_QUALITY_INSUFFICIENT" not in result["warnings"]
+
+
+def test_keyword_fallback_terms_strip_accents_punctuation_and_fillers():
+    assert rag_tools._keyword_fallback_terms("Donne-moi les critères de tri pour les mangues abîmées.") == [
+        "criteres",
+        "tri",
+        "mangues",
+        "abimees",
+    ]
 
 
 def test_rag_only_weak_evidence_returns_insufficient_message():

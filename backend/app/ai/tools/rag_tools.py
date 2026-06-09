@@ -13,6 +13,7 @@ from app.ai.retrieval.hybrid_retriever import HybridRetriever
 from app.ai.retrieval.query_rewriter import rewrite_query
 from app.ai.retrieval.reranker import rerank_chunks
 from app.ai.retrieval.retrieval_filters import build_retrieval_filters
+from app.db.session import SessionLocal
 from app.models.rag import RAGChunk, RAGDocument
 from app.models.user import User
 
@@ -87,6 +88,30 @@ class RAGTools:
             items=ranked,
         )
         usable_items = [item for item in assessed_items if str(item.get("quality_status")) in {"STRONG", "PARTIAL"}][:top_k]
+        if pure_advice_query and not usable_items:
+            fallback_filters = {
+                **filters,
+                "product": set(),
+                "stage": set(),
+                "prefer_knowledge_sources": True,
+                "avoid_operational_sources": True,
+                "batch_ref": None,
+            }
+            fallback_ranked = self._direct_keyword_fallback(
+                query=rewritten["normalized_query"] or rewritten["expanded_domain_query"],
+                filters=fallback_filters,
+                top_k=top_k,
+            )
+            if fallback_ranked:
+                assessed_items = _assess_rag_evidence_items(
+                    query=query,
+                    detected_entities=detected_entities,
+                    items=fallback_ranked,
+                )
+                usable_items = [
+                    item for item in assessed_items if str(item.get("quality_status")) in {"STRONG", "PARTIAL"}
+                ][:top_k]
+                ranked = fallback_ranked
         if pure_advice_query and not usable_items and ranked:
             # Keep guidance available for advice-only prompts when strict quality gates reject
             # otherwise relevant knowledge chunks; final composer still applies safety wording.
@@ -175,7 +200,7 @@ class RAGTools:
         _RAG_ADVICE_CACHE[key] = (time.time() + _RAG_ADVICE_CACHE_TTL_SECONDS, payload)
 
     def _direct_keyword_fallback(self, *, query: str, filters: dict[str, Any], top_k: int) -> list[dict[str, Any]]:
-        terms = [token.strip().lower() for token in str(query or "").replace("?", " ").split() if len(token.strip()) > 2][:8]
+        terms = _keyword_fallback_terms(query)
         if not terms:
             return []
 
@@ -193,7 +218,24 @@ class RAGTools:
             .where(RAGChunk.cooperative_id == self.retriever.current_user.cooperative_id)
             .order_by(RAGChunk.created_at.desc())
         )
-        rows = self.retriever.db.execute(stmt).all()
+        read_db = SessionLocal()
+        try:
+            rows = list(read_db.execute(stmt).all())
+        except Exception:
+            try:
+                read_db.rollback()
+            except Exception:
+                pass
+            return []
+        finally:
+            try:
+                read_db.rollback()
+            except Exception:
+                pass
+            try:
+                read_db.close()
+            except Exception:
+                pass
 
         product_filters = {str(item).lower() for item in (filters.get("product") or set()) if str(item).strip()}
         stage_filters = {str(item).lower() for item in (filters.get("stage") or set()) if str(item).strip()}
@@ -202,7 +244,7 @@ class RAGTools:
         result: list[dict[str, Any]] = []
         for chunk_id, document_id, content, chunk_meta, title, source_type, doc_meta in rows:
             content_text = str(content or "").strip()
-            lowered = content_text.lower()
+            lowered = _normalize_for_keyword_match(content_text)
             if not content_text:
                 continue
             if not any(term in lowered for term in terms):
@@ -292,8 +334,14 @@ def _is_pure_advice_query(query: str, *, detected_entities: dict[str, Any]) -> b
         "meilleures pratiques",
         "procédure",
         "procedure",
+        "explique",
+        "pourquoi",
         "précaution",
         "precaution",
+        "critère",
+        "critere",
+        "critères",
+        "criteres",
         "check-list",
         "checklist",
         "comment éviter",
@@ -465,6 +513,35 @@ def _normalize_text(value: str) -> str:
     lowered = lowered.replace("é", "e").replace("è", "e").replace("ê", "e").replace("à", "a").replace("ù", "u").replace("î", "i").replace("ô", "o")
     lowered = re.sub(r"[^a-z0-9\\s-]", " ", lowered)
     return " ".join(lowered.split())
+
+
+def _normalize_for_keyword_match(value: str) -> str:
+    return _normalize_text(str(value or "").replace("-", " "))
+
+
+def _keyword_fallback_terms(query: str) -> list[str]:
+    normalized = _normalize_for_keyword_match(query)
+    stop = {
+        "donne",
+        "moi",
+        "les",
+        "des",
+        "pour",
+        "avec",
+        "dans",
+        "une",
+        "un",
+        "le",
+        "la",
+        "de",
+        "du",
+        "sur",
+        "quels",
+        "quelles",
+        "quel",
+        "quelle",
+    }
+    return [token for token in normalized.split() if len(token) > 2 and token not in stop][:8]
 
 
 def _token_overlap_ratio(query_tokens: set[str], text: str) -> float:
