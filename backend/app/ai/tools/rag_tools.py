@@ -13,7 +13,6 @@ from app.ai.retrieval.hybrid_retriever import HybridRetriever
 from app.ai.retrieval.query_rewriter import rewrite_query
 from app.ai.retrieval.reranker import rerank_chunks
 from app.ai.retrieval.retrieval_filters import build_retrieval_filters
-from app.db.session import SessionLocal
 from app.models.rag import RAGChunk, RAGDocument
 from app.models.user import User
 
@@ -231,24 +230,14 @@ class RAGTools:
             .where(RAGChunk.cooperative_id == self.retriever.current_user.cooperative_id)
             .order_by(RAGChunk.created_at.desc())
         )
-        read_db = SessionLocal()
         try:
-            rows = list(read_db.execute(stmt).all())
+            rows = list(self.retriever.db.execute(stmt).all())
         except Exception:
             try:
-                read_db.rollback()
+                self.retriever.db.rollback()
             except Exception:
                 pass
             return []
-        finally:
-            try:
-                read_db.rollback()
-            except Exception:
-                pass
-            try:
-                read_db.close()
-            except Exception:
-                pass
 
         product_filters = {str(item).lower() for item in (filters.get("product") or set()) if str(item).strip()}
         stage_filters = {str(item).lower() for item in (filters.get("stage") or set()) if str(item).strip()}
