@@ -2677,7 +2677,17 @@ def _compose_explanation(*, pack: EvidencePack, sql_payload: dict[str, Any]) -> 
             return (sql_line + " Le contexte documentaire est insuffisant pour expliquer les causes avec certitude.").strip()
 
     ml_status = _normalize_evidence_status(pack.ml.get("evidence_status")) or ""
+    op = str(pack.plan.operation or "")
     if pack.route in {AgentRoute.HYBRID_SQL_ML, AgentRoute.ML_ONLY} and pack.ml and ml_status == EVIDENCE_NO_DATA:
+        return "Aucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré."
+    if pack.route in {AgentRoute.HYBRID_SQL_ML, AgentRoute.ML_ONLY} and op == "ml_high_signal_count":
+        rows = pack.ml.get("ml_high_signal_count") or []
+        if rows:
+            row = rows[0] or {}
+            count = int(row.get("high_signal_count", 0) or 0)
+            days = int(row.get("days", 0) or 0)
+            period = f" sur {days} jours" if days else ""
+            return f"Comptage agrégé: {count} alerte(s) ML HIGH{period}; ce n’est pas un score de risque pour un lot précis."
         return "Aucun signal ML élevé n’est enregistré dans les journaux disponibles. Cela ne signifie pas absence de risque, seulement absence de signal ML enregistré."
     if pack.route in {AgentRoute.HYBRID_SQL_ML, AgentRoute.ML_ONLY} and pack.ml:
         return (
@@ -2753,6 +2763,8 @@ def _has_material_ml_evidence(*, pack: EvidencePack) -> bool:
     ml_payload = pack.ml or {}
     ml_status = _normalize_evidence_status(ml_payload.get("evidence_status")) or ""
     if ml_status == EVIDENCE_NO_DATA:
+        return False
+    if "ml_high_signal_count" in ml_payload:
         return False
 
     for key in ml_payload.keys():

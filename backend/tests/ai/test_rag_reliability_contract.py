@@ -274,6 +274,51 @@ def test_ml_no_data_does_not_render_unknown_signal_card():
     assert signal_cards == []
 
 
+def test_ml_high_signal_count_does_not_render_unknown_signal_card():
+    pack = EvidencePack(
+        question="Combien de signaux ML HIGH sont enregistrés ?",
+        plan=AnswerPlan(
+            module="ml_logs",
+            intent="risk_ml",
+            answer_type="risk_list",
+            required_sources=["ML"],
+            required_fields=["rows"],
+            completeness_rules=[],
+            output_blocks_needed=["answer_summary", "sources", "warnings"],
+            operation="ml_high_signal_count",
+            required_answer_fields=["high_signal_count"],
+            allowed_sources=["ml"],
+            answer_contract={"intent_family": "risk_ml", "route": "ML_ONLY", "required_layers": {"ml": True}},
+        ),
+        route=AgentRoute.ML_ONLY,
+        sql={"tables_used": [], "rows": [], "metrics": {}, "calculations": {}, "payload": {}},
+        rag={"chunks": [], "titles": [], "content_snippets": [], "scores": [], "topics": []},
+        ml={
+            "ml_high_signal_count": [{"high_signal_count": 1, "days": 60}],
+            "evidence_status": "HAS_EVIDENCE",
+        },
+        recommendations={"actions": [], "insufficient_evidence": False},
+        warnings=[],
+        confidence=0.84,
+        module_registry={},
+    )
+
+    verification = verify_evidence(pack)
+    answer, blocks, _metadata = compose_answer(pack, verification)
+    signal_cards = [
+        item
+        for block in blocks
+        if block.get("type") == "kpi_cards"
+        for item in (block.get("items") or [])
+        if item.get("title") == "Signal ML"
+    ]
+
+    assert "UNKNOWN" not in answer
+    assert "Signaux ML HIGH" in answer
+    assert "Comptage agrégé" in answer
+    assert signal_cards == []
+
+
 def test_rag_checklist_answer_sanitizes_source_like_markers():
     pack = EvidencePack(
         question="Donne une checklist courte avant l’emballage des mangues.",
