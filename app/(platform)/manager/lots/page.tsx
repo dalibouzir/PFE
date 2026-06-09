@@ -967,6 +967,7 @@ export default function LotsPage() {
           creation_date: values.creation_date,
           initial_qty: requestedQty,
           unit: lotUnit,
+          grade: lotGrade,
           process_steps: plannedStepsDraft,
         };
 

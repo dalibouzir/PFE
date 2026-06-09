@@ -256,7 +256,7 @@ def create_batch(db: Session, manager: User, payload) -> Batch:
         estimated_charge_fcfa = round_metric(max(float(estimated_qty_kg), 0.0))
     legacy_mode = payload.member_id is None and payload.parcel_id is None
     if legacy_mode:
-        reserve_stock_for_lot(db, cooperative_id, product, estimated_qty_kg)
+        reserve_stock_for_lot(db, cooperative_id, product, estimated_qty_kg, grade=payload.grade)
 
     attempts = 0
     while attempts < 5:

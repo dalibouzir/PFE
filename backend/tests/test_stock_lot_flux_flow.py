@@ -11,7 +11,7 @@ from app.models.enums import UserRole
 from app.models.product import Product
 from app.models.stock import Stock
 from app.models.user import User
-from app.schemas.batch import BatchCreate, BatchStatusUpdate
+from app.schemas.batch import BatchCreate, BatchStartPostHarvestRequest, BatchStatusUpdate
 from app.schemas.input import InputCreate
 from app.schemas.process_step import ProcessStepCreate, ProcessStepUpdate
 from app.schemas.stock import StockCreate
@@ -92,6 +92,64 @@ def test_auto_generated_reference_is_incremental(db_session):
     first_num = int(first.code.rsplit("-", 1)[-1])
     second_num = int(second.code.rsplit("-", 1)[-1])
     assert second_num == first_num + 1
+
+
+def test_post_harvest_lot_creation_uses_selected_grade_bucket(db_session):
+    manager, product, stock = _manager_and_product(db_session)
+    stock.total_stock_kg = 0.0
+    stock.reserved_in_lots_kg = 0.0
+    stock.quantity = 0.0
+
+    grade_a = Stock(
+        cooperative_id=manager.cooperative_id,
+        product_id=product.id,
+        grade="A",
+        quantity=100.0,
+        total_stock_kg=100.0,
+        reserved_in_lots_kg=0.0,
+        processed_output_kg=0.0,
+        threshold=0.0,
+        unit="kg",
+    )
+    grade_b = Stock(
+        cooperative_id=manager.cooperative_id,
+        product_id=product.id,
+        grade="B",
+        quantity=80.0,
+        total_stock_kg=80.0,
+        reserved_in_lots_kg=0.0,
+        processed_output_kg=0.0,
+        threshold=0.0,
+        unit="kg",
+    )
+    db_session.add_all([grade_a, grade_b])
+    db_session.commit()
+
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            creation_date=date.today(),
+            initial_qty=40.0,
+            unit="kg",
+            grade="A",
+            process_steps=["tri", "emballage"],
+        ),
+    )
+    started = batch_service.start_postharvest(
+        db_session,
+        manager,
+        batch.id,
+        payload=BatchStartPostHarvestRequest(product_id=product.id, grade="A", quantity_kg=40.0),
+    )
+
+    db_session.refresh(grade_a)
+    db_session.refresh(grade_b)
+    assert started.postharvest_started_at is not None
+    assert grade_a.reserved_in_lots_kg == pytest.approx(40.0)
+    assert grade_a.quantity == pytest.approx(60.0)
+    assert grade_b.reserved_in_lots_kg == pytest.approx(0.0)
 
 
 def test_step_execution_propagates_quantities_and_converts_units(db_session):

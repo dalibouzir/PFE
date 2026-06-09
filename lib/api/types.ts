@@ -707,6 +707,7 @@ export type BatchCreate = {
   creation_date: string;
   initial_qty: number;
   unit: "kg" | "ton";
+  grade?: string | null;
   process_steps: string[];
   surface_ha?: number | null;
   expected_yield_kg_per_ha?: number | null;

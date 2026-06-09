@@ -15,6 +15,7 @@ class BatchCreate(BaseModel):
     creation_date: date
     initial_qty: float = Field(gt=0)
     unit: str = Field(default="kg", min_length=1, max_length=16)
+    grade: Optional[str] = Field(default=None, min_length=1, max_length=40)
     process_steps: List[str] = Field(min_length=1)
     surface_ha: Optional[float] = Field(default=None, ge=0)
     expected_yield_kg_per_ha: Optional[float] = Field(default=None, ge=0)
