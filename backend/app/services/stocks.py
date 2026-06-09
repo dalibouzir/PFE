@@ -304,8 +304,8 @@ def release_reserved_stock_for_lot(db: Session, cooperative_id, product: Product
     return stock
 
 
-def apply_processed_output_delta(db: Session, cooperative_id, product: Product, output_kg: float) -> Stock:
-    stock = get_stock_by_product(db, cooperative_id, product.id)
+def apply_processed_output_delta(db: Session, cooperative_id, product: Product, output_kg: float, grade: str | None = None) -> Stock:
+    stock = get_stock_by_product(db, cooperative_id, product.id, grade)
     if stock is None:
         raise ValidationError("Stock row not found for the requested product.")
     next_output = round_metric(stock.processed_output_kg + float(output_kg))

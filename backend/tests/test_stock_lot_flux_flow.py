@@ -152,6 +152,79 @@ def test_post_harvest_lot_creation_uses_selected_grade_bucket(db_session):
     assert grade_b.reserved_in_lots_kg == pytest.approx(0.0)
 
 
+def test_final_post_harvest_step_completes_selected_grade_bucket(db_session):
+    manager, product, stock = _manager_and_product(db_session)
+    stock.total_stock_kg = 0.0
+    stock.reserved_in_lots_kg = 0.0
+    stock.quantity = 0.0
+
+    grade_a = Stock(
+        cooperative_id=manager.cooperative_id,
+        product_id=product.id,
+        grade="A",
+        quantity=100.0,
+        total_stock_kg=100.0,
+        reserved_in_lots_kg=0.0,
+        processed_output_kg=0.0,
+        threshold=0.0,
+        unit="kg",
+    )
+    grade_b = Stock(
+        cooperative_id=manager.cooperative_id,
+        product_id=product.id,
+        grade="B",
+        quantity=80.0,
+        total_stock_kg=80.0,
+        reserved_in_lots_kg=0.0,
+        processed_output_kg=0.0,
+        threshold=0.0,
+        unit="kg",
+    )
+    db_session.add_all([grade_a, grade_b])
+    db_session.commit()
+
+    batch = batch_service.create_batch(
+        db_session,
+        manager,
+        BatchCreate(
+            product_id=product.id,
+            creation_date=date.today(),
+            initial_qty=40.0,
+            unit="kg",
+            grade="A",
+            process_steps=["tri", "emballage"],
+        ),
+    )
+    batch_service.start_postharvest(
+        db_session,
+        manager,
+        batch.id,
+        payload=BatchStartPostHarvestRequest(product_id=product.id, grade="A", quantity_kg=40.0),
+    )
+    process_step_service.create_process_step(
+        db_session,
+        manager,
+        ProcessStepCreate(batch_id=batch.id, type="tri", date=date.today(), loss_value=5.0, loss_unit="kg"),
+    )
+    process_step_service.create_process_step(
+        db_session,
+        manager,
+        ProcessStepCreate(batch_id=batch.id, type="emballage", date=date.today(), loss_value=3.0, loss_unit="kg"),
+    )
+
+    completed = batch_service.require_batch(db_session, manager, batch.id, with_steps=True)
+    db_session.refresh(grade_a)
+    db_session.refresh(grade_b)
+    assert completed.status.value == "completed"
+    assert completed.current_qty == pytest.approx(32.0)
+    assert grade_a.total_stock_kg == pytest.approx(92.0)
+    assert grade_a.reserved_in_lots_kg == pytest.approx(0.0)
+    assert grade_a.quantity == pytest.approx(92.0)
+    assert grade_a.processed_output_kg == pytest.approx(32.0)
+    assert grade_b.reserved_in_lots_kg == pytest.approx(0.0)
+    assert grade_b.processed_output_kg == pytest.approx(0.0)
+
+
 def test_step_execution_propagates_quantities_and_converts_units(db_session):
     manager, product, stock = _manager_and_product(db_session)
     stock.total_stock_kg = 3000.0

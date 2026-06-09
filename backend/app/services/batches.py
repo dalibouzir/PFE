@@ -533,11 +533,18 @@ def transition_batch_status(db: Session, batch: Batch, next_status: BatchStatus)
     if next_status == BatchStatus.COMPLETED and batch.status != BatchStatus.COMPLETED:
         product = batch.product
         if product is not None:
-            if batch.member_id is None and batch.parcel_id is None and batch.status in (BatchStatus.CREATED, BatchStatus.IN_PROGRESS):
-                release_reserved_stock_for_lot(db, batch.cooperative_id, product, batch.initial_qty)
             meta = _read_postharvest_stock_meta(batch)
+            output_grade = None
             if meta is not None:
-                grade = normalize_stock_grade(str(meta.get("grade") or "Non spécifié"))
+                output_grade = normalize_stock_grade(str(meta.get("grade") or "Non spécifié"))
+            if (
+                meta is None
+                and batch.member_id is None
+                and batch.parcel_id is None
+                and batch.status in (BatchStatus.CREATED, BatchStatus.IN_PROGRESS)
+            ):
+                release_reserved_stock_for_lot(db, batch.cooperative_id, product, batch.initial_qty)
+            if meta is not None:
                 remaining = max(float(batch.current_qty or 0.0), 0.0)
                 if remaining > 0:
                     apply_reserved_stock_delta(
@@ -546,9 +553,9 @@ def transition_batch_status(db: Session, batch: Batch, next_status: BatchStatus)
                         product,
                         -remaining,
                         create_if_missing=False,
-                        grade=grade,
+                        grade=output_grade,
                     )
-            apply_processed_output_delta(db, batch.cooperative_id, product, batch.current_qty)
+            apply_processed_output_delta(db, batch.cooperative_id, product, batch.current_qty, grade=output_grade)
     batch.status = next_status
     return batch
 
