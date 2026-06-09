@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ai.tools.app_data_tools import source, tool_response, warnings_for_empty
+from app.ai.tools.lot_resolution import resolve_lot_reference
 from app.models.batch import Batch
 from app.models.enums import RiskLevel
 from app.models.ml import MLModelRegistry, MLPredictionLog, MLTrainingRun
@@ -26,15 +27,12 @@ class MLTools:
 
     def analyze_loss_risk(self, *, batch_ref: str | None = None, stage: str | None = None) -> dict[str, Any]:
         batch_id = None
+        canonical_batch_ref = batch_ref
         if batch_ref:
-            batch = self.db.scalar(
-                select(Batch).where(
-                    Batch.cooperative_id == self.current_user.cooperative_id,
-                    func.upper(Batch.code) == str(batch_ref).upper(),
-                )
-            )
-            if batch:
-                batch_id = batch.id
+            resolved_lot = resolve_lot_reference(self.db, self.current_user.cooperative_id, batch_ref)
+            if resolved_lot:
+                batch_id = resolved_lot.batch_id
+                canonical_batch_ref = resolved_lot.canonical_ref
             else:
                 return {
                     "anomaly_detected": False,
@@ -65,7 +63,7 @@ class MLTools:
                 "expected_loss_pct": None,
                 "deviation": None,
                 "affected_stage": stage,
-                "affected_batch": batch_ref,
+                "affected_batch": canonical_batch_ref,
                 "confidence": 0.72,
                 "warnings": warnings,
                 "evidence_status": EVIDENCE_NO_DATA,
@@ -94,7 +92,7 @@ class MLTools:
             "expected_loss_pct": expected_loss,
             "deviation": deviation,
             "affected_stage": stage or row.critical_stage,
-            "affected_batch": batch_ref,
+            "affected_batch": canonical_batch_ref,
             "confidence": confidence,
             "warnings": warnings,
             "evidence_status": EVIDENCE_HAS if row else EVIDENCE_PARTIAL,

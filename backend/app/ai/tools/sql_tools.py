@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import inspect
 
 from app.ai.tools.material_balance_tools import compute_material_balance
+from app.ai.tools.lot_resolution import resolve_lot_reference
 from app.ai.tools.preharvest_tools import PreharvestTools
 from app.models.batch import Batch
 from app.models.commercial_invoice import CommercialInvoice
@@ -436,17 +437,22 @@ class SQLTools:
         }
 
     def get_batch_summary(self, batch_ref: str | None = None) -> dict[str, Any]:
+        resolved_lot = resolve_lot_reference(self.db, self.cooperative_id, batch_ref) if batch_ref else None
         stmt = (
-            select(Batch.id, Batch.code, Product.name, Batch.initial_qty, Batch.current_qty, Batch.unit, Batch.status)
+            select(Batch.id, Batch.code, Batch.postharvest_reference, Product.name, Batch.initial_qty, Batch.current_qty, Batch.unit, Batch.status)
             .join(Product, Product.id == Batch.product_id)
             .where(Batch.cooperative_id == self.cooperative_id)
             .order_by(Batch.creation_date.desc())
         )
-        rows = self.db.execute(stmt).all()
+        if batch_ref and resolved_lot is None:
+            rows = []
+        elif resolved_lot is not None:
+            stmt = stmt.where(Batch.id == resolved_lot.batch_id)
+            rows = self.db.execute(stmt).all()
+        else:
+            rows = self.db.execute(stmt).all()
         items = []
-        for batch_id, code, product_name, initial_qty, current_qty, unit, status in rows:
-            if batch_ref and str(code).upper() != str(batch_ref).upper():
-                continue
+        for batch_id, code, postharvest_reference, product_name, initial_qty, current_qty, unit, status in rows:
             initial = float(initial_qty or 0.0)
             current = float(current_qty or 0.0)
             loss_pct = ((initial - current) / initial * 100.0) if initial > 0 else 0.0
@@ -454,6 +460,8 @@ class SQLTools:
                 {
                     "batch_id": str(batch_id),
                     "batch_ref": str(code),
+                    "requested_batch_ref": batch_ref,
+                    "postharvest_reference": str(postharvest_reference) if postharvest_reference else None,
                     "product": str(product_name),
                     "initial_qty": initial,
                     "current_qty": current,
@@ -484,6 +492,23 @@ class SQLTools:
         product: str | None = None,
         date_range: list[str] | None = None,
     ) -> dict[str, Any]:
+        resolved_lot = resolve_lot_reference(self.db, self.cooperative_id, batch_ref) if batch_ref else None
+        if batch_ref and resolved_lot is None:
+            return {
+                "items": [],
+                "sources": [
+                    {
+                        "type": "sql",
+                        "table": "process_steps,batches",
+                        "label": "Pertes par étape",
+                        "record_count": 0,
+                        "related_batch": batch_ref,
+                        "related_stage": stage,
+                        "related_product": product,
+                    }
+                ],
+                "warnings": ["NO_MATCHING_BATCH"],
+            }
         stmt = (
             select(
                 ProcessStep.id,
@@ -493,21 +518,22 @@ class SQLTools:
                 ProcessStep.qty_in,
                 ProcessStep.qty_out,
                 ProcessStep.date,
+                ProcessStep.sequence_order,
             )
             .join(Batch, Batch.id == ProcessStep.batch_id)
             .join(Product, Product.id == Batch.product_id)
             .where(Batch.cooperative_id == self.cooperative_id)
-            .order_by(ProcessStep.date.desc())
+            .order_by(ProcessStep.sequence_order.asc(), ProcessStep.date.asc())
         )
-        if batch_ref:
-            stmt = stmt.where(func.upper(Batch.code) == str(batch_ref).strip().upper())
+        if resolved_lot is not None:
+            stmt = stmt.where(Batch.id == resolved_lot.batch_id)
         if product:
             stmt = stmt.where(func.lower(Product.name).in_(_product_aliases(product)))
         stmt = _apply_step_date_range(stmt, date_range)
         rows = self.db.execute(stmt).all()
 
         items = []
-        for step_id, code, product_name, step_type, qty_in, qty_out, step_date in rows:
+        for step_id, code, product_name, step_type, qty_in, qty_out, step_date, sequence_order in rows:
             if stage and _canonical_stage_name(step_type) != _canonical_stage_name(stage):
                 continue
             q_in = float(qty_in or 0.0)
@@ -524,9 +550,15 @@ class SQLTools:
                     "loss_pct": loss_pct,
                     "efficiency_pct": (q_out / q_in * 100.0) if q_in > 0 else 0.0,
                     "date": str(step_date),
+                    "sequence_order": int(sequence_order or 0),
                 }
             )
 
+        warnings = ["NO_SQL_DATA"] if not items else []
+        if batch_ref and not items and resolved_lot is not None:
+            fallback = self._postharvest_stock_movement_step_fallback(resolved_lot.batch_id)
+            if fallback:
+                warnings = ["PROCESS_STEP_DETAILS_MISSING_BUT_STOCK_MOVEMENTS_EXIST"]
         return {
             "items": items,
             "sources": [
@@ -540,7 +572,7 @@ class SQLTools:
                     "related_product": product,
                 }
             ],
-            "warnings": ["NO_SQL_DATA"] if not items else [],
+            "warnings": warnings,
         }
 
     def get_postharvest_process_step_losses(
@@ -557,16 +589,17 @@ class SQLTools:
             date_range=date_range,
         )
         rows = base.get("items", []) or []
+        base_warnings = list(base.get("warnings", []))
         wanted_stage = _canonical_stage_name(stage) if stage else None
         items: list[dict[str, Any]] = []
         for row in rows:
             canonical_stage = _canonical_stage_name(row.get("stage"))
-            if canonical_stage not in POST_HARVEST_STAGES:
+            if canonical_stage not in POST_HARVEST_STAGES and not batch_ref:
                 continue
             if wanted_stage and canonical_stage != wanted_stage:
                 continue
             enriched = dict(row)
-            enriched["stage"] = _stage_display_label(canonical_stage)
+            enriched["stage"] = _stage_display_label(canonical_stage) if canonical_stage in POST_HARVEST_STAGES else str(row.get("stage") or "")
             enriched["stage_canonical"] = canonical_stage
             items.append(enriched)
         return {
@@ -582,10 +615,26 @@ class SQLTools:
                     "related_product": product,
                 }
             ],
-            "warnings": ["NO_SQL_DATA"] if not items else [],
+            "warnings": base_warnings if not items and base_warnings else ([] if items else ["NO_SQL_DATA"]),
         }
 
     def get_postharvest_material_balance(self, batch_ref: str | None = None, product: str | None = None) -> dict[str, Any]:
+        resolved_lot = resolve_lot_reference(self.db, self.cooperative_id, batch_ref) if batch_ref else None
+        if batch_ref and resolved_lot is None:
+            return {
+                "items": [],
+                "sources": [
+                    {
+                        "type": "sql",
+                        "table": "batches,process_steps",
+                        "label": "Bilan matière post-récolte",
+                        "record_count": 0,
+                        "related_batch": batch_ref,
+                        "related_product": product,
+                    }
+                ],
+                "warnings": ["NO_MATCHING_BATCH"],
+            }
         stmt = (
             select(
                 Batch.id,
@@ -602,8 +651,8 @@ class SQLTools:
             .where(Batch.cooperative_id == self.cooperative_id)
             .order_by(Batch.code.asc(), ProcessStep.date.asc(), ProcessStep.sequence_order.asc())
         )
-        if batch_ref:
-            stmt = stmt.where(func.upper(Batch.code) == str(batch_ref).strip().upper())
+        if resolved_lot is not None:
+            stmt = stmt.where(Batch.id == resolved_lot.batch_id)
         if product:
             stmt = stmt.where(func.lower(Product.name).in_(_product_aliases(product)))
         rows = self.db.execute(stmt).all()
@@ -613,7 +662,7 @@ class SQLTools:
             if not ref:
                 continue
             canonical_stage = _canonical_stage_name(step_type)
-            if canonical_stage not in POST_HARVEST_STAGES:
+            if canonical_stage not in POST_HARVEST_STAGES and resolved_lot is None:
                 continue
             entry = grouped.setdefault(
                 ref,
@@ -627,7 +676,7 @@ class SQLTools:
             entry["steps"].append(
                 {
                     "stage_canonical": canonical_stage,
-                    "stage": _stage_display_label(canonical_stage),
+                    "stage": _stage_display_label(canonical_stage) if canonical_stage in POST_HARVEST_STAGES else str(step_type or ""),
                     "qty_in": float(qty_in or 0.0),
                     "qty_out": float(qty_out or 0.0),
                     "date": str(step_date),
@@ -641,7 +690,7 @@ class SQLTools:
             steps = entry.get("steps", [])
             if not steps:
                 continue
-            steps = sorted(steps, key=lambda s: (str(s.get("date") or ""), int(s.get("sequence_order") or 0)))
+            steps = sorted(steps, key=lambda s: (int(s.get("sequence_order") or 0), str(s.get("date") or "")))
             input_qty = float(steps[0].get("qty_in", 0.0) or 0.0)
             output_qty = float(steps[-1].get("qty_out", 0.0) or 0.0)
             if input_qty <= 0:
@@ -691,7 +740,10 @@ class SQLTools:
                 }
             )
         if not items:
-            warnings.append("NO_SQL_DATA")
+            if batch_ref and resolved_lot is not None and self._postharvest_stock_movement_step_fallback(resolved_lot.batch_id):
+                warnings.append("PROCESS_STEP_DETAILS_MISSING_BUT_STOCK_MOVEMENTS_EXIST")
+            else:
+                warnings.append("NO_SQL_DATA")
         return {
             "items": items,
             "sources": [
@@ -775,7 +827,9 @@ class SQLTools:
         product: str | None = None,
         stage: str | None = None,
     ) -> dict[str, Any]:
-        rows = self.get_postharvest_process_step_losses(batch_ref=batch_ref, product=product, stage=stage).get("items", [])
+        source = self.get_postharvest_process_step_losses(batch_ref=batch_ref, product=product, stage=stage)
+        rows = source.get("items", [])
+        source_warnings = source.get("warnings", [])
         if batch_ref:
             items = []
             for row in rows:
@@ -852,7 +906,7 @@ class SQLTools:
                     "related_product": product,
                 }
             ],
-            "warnings": ["NO_SQL_DATA"] if not items else [],
+            "warnings": source_warnings if not items and source_warnings else ([] if items else ["NO_SQL_DATA"]),
         }
 
     def get_postharvest_batch_summary(self, batch_ref: str | None = None, product: str | None = None) -> dict[str, Any]:
@@ -1237,6 +1291,24 @@ class SQLTools:
     ) -> dict[str, Any]:
         if not self.module_available("stock_movements"):
             return {"items": [], "sources": [], "warnings": ["MODULE_NOT_AVAILABLE"]}
+        resolved_lot = resolve_lot_reference(self.db, self.cooperative_id, batch_ref) if batch_ref else None
+        if batch_ref and resolved_lot is None:
+            return {
+                "items": [],
+                "sources": [
+                    {
+                        "type": "sql",
+                        "table": "stock_movements,inputs,batches,products,members",
+                        "label": "Journal des mouvements de stock",
+                        "record_count": 0,
+                        "related_product": product,
+                        "related_batch": batch_ref,
+                        "related_input": input_ref,
+                        "related_direction": direction,
+                    }
+                ],
+                "warnings": ["NO_MATCHING_BATCH"],
+            }
         stmt = (
             select(
                 StockMovement.id,
@@ -1249,6 +1321,7 @@ class SQLTools:
                 StockMovement.notes,
                 Product.name,
                 Batch.code,
+                Batch.postharvest_reference,
                 Input.id,
                 Input.bl_number,
                 Member.full_name,
@@ -1262,8 +1335,8 @@ class SQLTools:
         )
         if product:
             stmt = stmt.where(func.lower(Product.name).in_(_product_aliases(product)))
-        if batch_ref:
-            stmt = stmt.where(func.lower(Batch.code).contains(str(batch_ref).strip().lower()))
+        if resolved_lot is not None:
+            stmt = stmt.where(StockMovement.batch_id == resolved_lot.batch_id)
         if input_ref:
             input_needle = str(input_ref).strip().lower()
             if input_needle.startswith("col-") and len(input_needle) > 4:
@@ -1278,14 +1351,15 @@ class SQLTools:
         batch_needle = str(batch_ref or "").strip().lower()
         input_needle = str(input_ref or "").strip().lower()
         direction_norm = str(direction or "").strip().lower()
-        for movement_id, movement_date, quantity_kg, movement_type, action_type, source, idem_key, notes, product_name, lot_code, input_id, bl_number, member_name in rows:
+        for movement_id, movement_date, quantity_kg, movement_type, action_type, source, idem_key, notes, product_name, lot_code, postharvest_reference, input_id, bl_number, member_name in rows:
             movement_type_norm = str(movement_type or "").strip().lower()
             if direction_norm == "out" and movement_type_norm != "out":
                 continue
             if direction_norm == "in" and movement_type_norm != "in":
                 continue
             lot_code_str = str(lot_code or "")
-            if batch_needle and batch_needle not in lot_code_str.lower():
+            postharvest_ref_str = str(postharvest_reference or "")
+            if batch_needle and batch_needle not in lot_code_str.lower() and batch_needle not in postharvest_ref_str.lower():
                 continue
             input_reference = f"COL-{str(input_id)[:8].upper()}" if input_id is not None else ""
             if input_needle and input_needle not in input_reference.lower():
@@ -1300,6 +1374,8 @@ class SQLTools:
                     "source": str(source or ""),
                     "product": str(product_name or ""),
                     "batch_ref": lot_code_str,
+                    "requested_batch_ref": batch_ref,
+                    "postharvest_reference": postharvest_ref_str or None,
                     "input_reference": input_reference or None,
                     "bl_number": str(bl_number or ""),
                     "member_name": str(member_name or ""),
@@ -1323,6 +1399,24 @@ class SQLTools:
             ],
             "warnings": ["NO_SQL_DATA"] if not items else [],
         }
+
+    def _postharvest_stock_movement_step_fallback(self, batch_id) -> dict[str, Any] | None:
+        if not self.module_available("stock_movements"):
+            return None
+        row = self.db.execute(
+            select(func.count(StockMovement.id), func.min(StockMovement.action_type))
+            .where(
+                StockMovement.cooperative_id == self.cooperative_id,
+                StockMovement.batch_id == batch_id,
+                func.lower(StockMovement.source) == "post_harvest_step",
+            )
+        ).first()
+        if not row:
+            return None
+        count, sample_action = row
+        if int(count or 0) <= 0:
+            return None
+        return {"movement_count": int(count or 0), "sample_action_type": str(sample_action or "")}
 
     def get_collecte_traceability(self) -> dict[str, Any]:
         counts_row = self.db.execute(

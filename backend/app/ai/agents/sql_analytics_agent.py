@@ -880,6 +880,13 @@ class SQLAnalyticsAgent(BaseAgent):
                 execution_time_ms=int((time.perf_counter() - start) * 1000),
             )
         normalized = _normalize_text(query)
+        step_listing_intent = (
+            batch_ref
+            and any(token in normalized for token in ("liste", "lister", "affiche", "afficher", "montre", "donne"))
+            and any(token in normalized for token in ("etape", "etapes", "process step", "process_steps"))
+        )
+        if step_listing_intent:
+            intent_family = "PROCESS_STEP_LISTING"
         if ("efficacite" in normalized) and any(token in normalized for token in ("producteur", "producteurs", "membre", "membres")):
             return AgentResult(
                 agent_name=self.name,
@@ -899,6 +906,7 @@ class SQLAnalyticsAgent(BaseAgent):
             "INPUT_OUTPUT_GAP",
             "LOT_COMPARISON",
             "STAGE_LOSS_ANALYSIS",
+            "PROCESS_STEP_LISTING",
             "PREHARVEST_STEPS",
             "EXPLANATION_CAUSAL",
             "RISK_ANALYSIS",
@@ -951,6 +959,14 @@ class SQLAnalyticsAgent(BaseAgent):
                 sql_operation, self.sql_tools.get_stage_loss_analysis, batch_ref=batch_ref, product=product, stage=stage
             )
             payload["stage_loss_analysis"] = result.get("items", [])
+        elif intent_family == "PROCESS_STEP_LISTING":
+            sql_operation = "get_process_step_losses"
+            tool_function = "SQLTools.get_process_step_losses"
+            stage = _pick_first(entities.get("stage"))
+            result, op_timing = _timed_sql_tool_call(
+                sql_operation, self.sql_tools.get_process_step_losses, batch_ref=batch_ref, product=product, stage=stage
+            )
+            payload["process_step_losses"] = result.get("items", [])
         elif intent_family == "PREHARVEST_STEPS":
             sql_operation = "get_parcel_preharvest_status"
             tool_function = "SQLTools.preharvest.get_parcel_preharvest_status"
@@ -1049,6 +1065,8 @@ class SQLAnalyticsAgent(BaseAgent):
             return list(payload.get("available_postharvest_lots") or [])
         if intent_family == "STAGE_LOSS_ANALYSIS":
             return list(payload.get("stage_loss_analysis") or [])
+        if intent_family == "PROCESS_STEP_LISTING":
+            return list(payload.get("process_step_losses") or [])
         if intent_family in {"LOSS_RANKING", "INPUT_OUTPUT_GAP", "EXPLANATION_CAUSAL", "RECOMMENDATION", "FOLLOW_UP"}:
             return list(payload.get("material_balance") or [])
         if intent_family in {"LOT_COMPARISON", "LOT_SPECIFIC_RECOMMENDATION"}:
@@ -1451,6 +1469,16 @@ def _build_sql_answer(payload: dict[str, Any]) -> str:
         rows = payload.get("stock_movements_journal", [])
         if not rows:
             return "Aucun mouvement de stock correspondant n’a été trouvé."
+        query_text = _normalize_text(str(payload.get("query_text") or ""))
+        if any(token in query_text for token in ("liste", "lister", "affiche", "afficher", "montre")):
+            lines = [f"Mouvements de stock ({len(rows)}):"]
+            for row in rows:
+                lines.append(
+                    f"- {row.get('movement_date')}: {row.get('movement_type')} / {row.get('action_type')} | "
+                    f"{float(row.get('quantity_kg', 0.0) or 0.0):.1f} kg | source {row.get('source')} | "
+                    f"lot {row.get('batch_ref') or 'N/A'}."
+                )
+            return "\n".join(lines)
         top = rows[0]
         return (
             f"Journal mouvements ({len(rows)}): dernier mouvement {top.get('movement_date')} | {top.get('movement_type')} / {top.get('action_type')} | "
@@ -1646,7 +1674,26 @@ def _build_sql_answer(payload: dict[str, Any]) -> str:
             )
         return "Donnée non disponible pour cette requête précise."
 
-    if payload.get("requested_batch_ref") and not payload.get("batch_summary"):
+    trace_warnings = set((payload.get("sql_dispatch_trace") or {}).get("warnings") or [])
+    if "PROCESS_STEP_DETAILS_MISSING_BUT_STOCK_MOVEMENTS_EXIST" in trace_warnings:
+        return (
+            "Des mouvements de stock existent pour ce lot, mais les détails d’étapes process_steps "
+            "sont manquants ou non liés."
+        )
+
+    if (
+        payload.get("requested_batch_ref")
+        and not payload.get("batch_summary")
+        and not any(
+            payload.get(key)
+            for key in (
+                "process_step_losses",
+                "stage_loss_analysis",
+                "material_balance",
+                "stock_movements_journal",
+            )
+        )
+    ):
         return f"Je n’ai pas trouvé de lot avec la référence {_display_batch_ref(payload.get('requested_batch_ref'))}."
     if payload.get("cooperative_overview"):
         row = payload["cooperative_overview"][0]
@@ -1925,6 +1972,18 @@ def _build_sql_answer(payload: dict[str, Any]) -> str:
             f"{float(item.get('loss_percentage', item.get('loss_pct', 0.0))):.1f} % et une efficacité de "
             f"{float(item.get('efficiency_percentage', item.get('efficiency_pct', 0.0))):.1f} %."
         )
+    if payload.get("process_step_losses"):
+        query_text = _normalize_text(str(payload.get("query_text") or ""))
+        if any(token in query_text for token in ("liste", "lister", "affiche", "afficher", "montre")):
+            rows = payload.get("process_step_losses") or []
+            lines = [f"Étapes enregistrées pour {_display_batch_ref(rows[0].get('batch_ref'))} ({len(rows)}):"]
+            for row in rows:
+                lines.append(
+                    f"- {_fr_stage_label(row.get('stage'))}: entrée {float(row.get('qty_in', 0.0) or 0.0):.1f} kg, "
+                    f"sortie {float(row.get('qty_out', 0.0) or 0.0):.1f} kg, "
+                    f"perte {float(row.get('loss_pct', 0.0) or 0.0):.1f}%."
+                )
+            return "\n".join(lines)
     if payload.get("top_process_stage"):
         item = payload.get("top_process_stage") or {}
         return (

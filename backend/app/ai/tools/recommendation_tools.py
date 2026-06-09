@@ -6,6 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.ai.tools.app_data_tools import source, tool_response, warnings_for_empty
+from app.ai.tools.lot_resolution import resolve_lot_reference
 from app.models.batch import Batch
 from app.models.enums import RiskLevel
 from app.models.ml import MLRecommendationLog
@@ -15,6 +16,7 @@ from app.models.process_step import ProcessStep
 from app.models.rag import RAGChunk, RAGDocument
 from app.models.recommendation import Recommendation
 from app.models.stock import Stock
+from app.models.stock_movement import StockMovement
 from app.models.user import User
 
 POST_HARVEST_STAGES = {"cleaning", "drying", "sorting", "packaging"}
@@ -37,7 +39,13 @@ class RecommendationTools:
         recommendations: list[dict[str, Any]] = []
         stage = _pick_first(detected_entities.get("stage"))
         product = _pick_first(detected_entities.get("product"))
-        batch_ref = detected_entities.get("batch_ref")
+        requested_batch_ref = detected_entities.get("batch_ref")
+        resolved_lot = (
+            resolve_lot_reference(self.db, self.current_user.cooperative_id, requested_batch_ref)
+            if self.db is not None and self.current_user is not None and requested_batch_ref
+            else None
+        )
+        batch_ref = resolved_lot.canonical_ref if resolved_lot is not None else requested_batch_ref
         sql_payload = (sql_results or {}).get("data") if isinstance(sql_results, dict) else {}
         sql_sources = (sql_results or {}).get("sources") if isinstance(sql_results, dict) else []
         rag_sources = rag_results or []
@@ -63,6 +71,16 @@ class RecommendationTools:
                 ]
             else:
                 batch_rows = [row for row in (sql_payload.get("batch_summary") or []) if isinstance(row, dict)]
+        if batch_ref and not batch_rows and resolved_lot is not None:
+            batch_rows = [
+                {
+                    "batch_ref": resolved_lot.canonical_ref,
+                    "requested_batch_ref": requested_batch_ref,
+                    "product": getattr(resolved_lot.batch.product, "name", None),
+                    "loss_pct": _batch_loss_pct(resolved_lot.batch),
+                    "efficiency_pct": _batch_efficiency_pct(resolved_lot.batch),
+                }
+            ]
         if batch_ref:
             batch_rows = [row for row in batch_rows if str(row.get("batch_ref") or row.get("lot_code") or "").upper() == str(batch_ref).upper()] or batch_rows
         if product:
@@ -99,6 +117,8 @@ class RecommendationTools:
         stage_rows = []
         if isinstance(sql_payload, dict):
             stage_rows = [row for row in (sql_payload.get("process_step_losses") or []) if isinstance(row, dict)]
+        if not stage_rows and resolved_lot is not None:
+            stage_rows = self._stage_rows_for_batch(resolved_lot.batch_id, batch_ref)
         if stage:
             stage_rows = [row for row in stage_rows if str(row.get("stage") or "").lower() == str(stage).lower()] or stage_rows
         if stage_rows:
@@ -209,6 +229,70 @@ class RecommendationTools:
                     scope=scope_label,
                 )
             )
+
+        # Invalid/unknown lot guard: keep recommendation flow safe and grounded.
+        # When a lot reference is requested but no SQL row matches, return a concrete
+        # manager action anchored to a SQL "no match" evidence reference.
+        if batch_ref and not batch_rows and not stage_rows and resolved_lot is None:
+            no_match_ref = _sql_evidence_ref(
+                label="SQL lot lookup",
+                short_fact=f"Aucun lot correspondant à la référence {batch_ref} n’a été trouvé dans les données SQL.",
+                table="batches",
+                batch_ref=str(batch_ref),
+                metric_name="match_count",
+                metric_value=0.0,
+            )
+            recommendations.append(
+                _recommendation_item(
+                    rec_id="rec_invalid_lot_reference",
+                    title="Valider la référence lot avant action opérationnelle",
+                    action=(
+                        f"Confirmer la référence {batch_ref}, vérifier le registre des lots, "
+                        "puis relancer la recommandation avec un code LOT-... existant."
+                    ),
+                    reason="La référence demandée est invalide ou absente du périmètre SQL actuel.",
+                    priority="HIGH",
+                    confidence=0.82,
+                    related_batch=str(batch_ref),
+                    evidence_refs=[no_match_ref, _rule_evidence_ref("RULE_INVALID_LOT_FROM_SQL_LOOKUP", no_match_ref)],
+                    scope=scope_label,
+                )
+            )
+
+        if batch_ref and resolved_lot is not None and not stage_rows:
+            movement_fallback = self._postharvest_movement_fallback(resolved_lot.batch_id)
+            if movement_fallback:
+                fallback_ref = _sql_evidence_ref(
+                    label="SQL stock movements without linked process steps",
+                    short_fact=(
+                        f"Des mouvements de stock existent pour {batch_ref}, mais les détails process_steps "
+                        "sont absents ou non liés."
+                    ),
+                    table="stock_movements,process_steps,batches",
+                    batch_ref=batch_ref,
+                    metric_name="post_harvest_stock_movement_count",
+                    metric_value=float(movement_fallback.get("movement_count", 0)),
+                )
+                recommendations.append(
+                    _recommendation_item(
+                        rec_id="rec_link_missing_process_steps",
+                        title="Corriger le chaînage étapes post-récolte",
+                        action=(
+                            f"Vérifier le lien process_step_id/workflow_step_id des mouvements de stock du lot {batch_ref} "
+                            "avant de conclure sur les pertes par étape."
+                        ),
+                        reason="Stock movements exist but process-step details are missing/not linked.",
+                        priority="MEDIUM",
+                        confidence=0.76,
+                        related_batch=batch_ref,
+                        related_stage=str(movement_fallback.get("sample_action_type") or ""),
+                        evidence_refs=[
+                            fallback_ref,
+                            _rule_evidence_ref("RULE_PROCESS_STEP_LINKAGE_GAP_FROM_SQL", fallback_ref),
+                        ],
+                        scope=scope_label,
+                    )
+                )
 
         if use_global_snapshot and snapshot:
             global_rows = snapshot.get("high_risk_lots", [])
@@ -409,6 +493,50 @@ class RecommendationTools:
             "rag_practices": rag_practices,
             "batch_count": len(lot_metrics),
         }
+
+    def _postharvest_movement_fallback(self, batch_id) -> dict[str, Any] | None:
+        if self.db is None or self.current_user is None:
+            return None
+        row = self.db.execute(
+            select(func.count(StockMovement.id), func.min(StockMovement.action_type)).where(
+                StockMovement.cooperative_id == self.current_user.cooperative_id,
+                StockMovement.batch_id == batch_id,
+                func.lower(StockMovement.source) == "post_harvest_step",
+            )
+        ).first()
+        if not row:
+            return None
+        count, sample_action = row
+        if int(count or 0) <= 0:
+            return None
+        return {"movement_count": int(count or 0), "sample_action_type": str(sample_action or "")}
+
+    def _stage_rows_for_batch(self, batch_id, batch_ref: str | None) -> list[dict[str, Any]]:
+        if self.db is None or self.current_user is None:
+            return []
+        rows = self.db.execute(
+            select(ProcessStep.type, ProcessStep.qty_in, ProcessStep.qty_out, Product.name)
+            .join(Batch, Batch.id == ProcessStep.batch_id)
+            .join(Product, Product.id == Batch.product_id)
+            .where(Batch.cooperative_id == self.current_user.cooperative_id, ProcessStep.batch_id == batch_id)
+            .order_by(ProcessStep.sequence_order.asc(), ProcessStep.date.asc())
+        ).all()
+        data: list[dict[str, Any]] = []
+        for step_type, qty_in, qty_out, product_name in rows:
+            q_in = float(qty_in or 0.0)
+            q_out = float(qty_out or 0.0)
+            data.append(
+                {
+                    "batch_ref": batch_ref,
+                    "product": str(product_name or ""),
+                    "stage": str(step_type or ""),
+                    "qty_in": q_in,
+                    "qty_out": q_out,
+                    "loss_pct": ((q_in - q_out) / q_in * 100.0) if q_in > 0 else 0.0,
+                    "efficiency_pct": (q_out / q_in * 100.0) if q_in > 0 else 0.0,
+                }
+            )
+        return data
 
     def get_ai_recommendations(
         self,
@@ -627,6 +755,18 @@ def _recommendation_payload(recommendation: Recommendation, batch: Batch, produc
         "rationale": recommendation.rationale,
         "created_at": str(recommendation.created_at),
     }
+
+
+def _batch_loss_pct(batch: Batch) -> float:
+    initial = float(batch.initial_qty or 0.0)
+    current = float(batch.current_qty or 0.0)
+    return ((initial - current) / initial * 100.0) if initial > 0 else 0.0
+
+
+def _batch_efficiency_pct(batch: Batch) -> float:
+    initial = float(batch.initial_qty or 0.0)
+    current = float(batch.current_qty or 0.0)
+    return (current / initial * 100.0) if initial > 0 else 0.0
 
 
 def _product_aliases(value: str | None) -> list[str]:

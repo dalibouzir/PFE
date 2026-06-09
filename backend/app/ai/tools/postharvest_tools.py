@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ai.tools.app_data_tools import apply_date_filter, canonical_product_name, enum_value, source, tool_response, warnings_for_empty
+from app.ai.tools.lot_resolution import resolve_lot_reference
 from app.ai.tools.material_balance_tools import compute_material_balance
 from app.models.batch import Batch
 from app.models.process_step import ProcessStep
@@ -110,14 +111,17 @@ class PostharvestTools:
         return self.get_process_steps(batch_ref=batch_ref)
 
     def _batch_rows(self, *, batch_ref: str | None = None, status: str | None = None, product: str | None = None, date_range: list[str] | None = None, limit: int | None = None):
+        resolved_lot = resolve_lot_reference(self.db, self.current_user.cooperative_id, batch_ref) if batch_ref else None
+        if batch_ref and resolved_lot is None:
+            return []
         stmt = (
             select(Batch.id, Batch.code, Product.name, Batch.initial_qty, Batch.current_qty, Batch.unit, Batch.status, Batch.creation_date)
             .join(Product, Product.id == Batch.product_id)
             .where(Batch.cooperative_id == self.current_user.cooperative_id)
             .order_by(Batch.creation_date.desc())
         )
-        if batch_ref:
-            stmt = stmt.where(func.upper(Batch.code) == str(batch_ref).upper())
+        if resolved_lot is not None:
+            stmt = stmt.where(Batch.id == resolved_lot.batch_id)
         if status:
             stmt = stmt.where(func.lower(Batch.status) == str(status).lower())
         if product:
@@ -128,6 +132,9 @@ class PostharvestTools:
         return self.db.execute(stmt).all()
 
     def _process_step_rows(self, *, batch_ref: str | None = None, product: str | None = None, stage: str | None = None, date_range: list[str] | None = None):
+        resolved_lot = resolve_lot_reference(self.db, self.current_user.cooperative_id, batch_ref) if batch_ref else None
+        if batch_ref and resolved_lot is None:
+            return []
         stmt = (
             select(ProcessStep.id, Batch.code, Product.name, ProcessStep.type, ProcessStep.qty_in, ProcessStep.qty_out, ProcessStep.date)
             .join(Batch, Batch.id == ProcessStep.batch_id)
@@ -135,8 +142,8 @@ class PostharvestTools:
             .where(Batch.cooperative_id == self.current_user.cooperative_id)
             .order_by(ProcessStep.date.desc())
         )
-        if batch_ref:
-            stmt = stmt.where(func.upper(Batch.code) == str(batch_ref).upper())
+        if resolved_lot is not None:
+            stmt = stmt.where(Batch.id == resolved_lot.batch_id)
         if product:
             stmt = stmt.where(func.lower(Product.name).in_(_product_aliases(product)))
         if stage:

@@ -217,6 +217,12 @@ class AgentOrchestrator:
                 and str(sql_result.answer_part or "").strip()
             ):
                 answer = str(sql_result.answer_part)
+            if sql_result and str(sql_result.answer_part or "").strip():
+                sql_trace = (sql_result.data or {}).get("sql_dispatch_trace") if isinstance(sql_result.data, dict) else {}
+                sql_operation = str((sql_trace or {}).get("sql_operation") or "")
+                is_list_prompt = any(token in normalized_message for token in ("liste", "lister", "affiche", "afficher", "montre"))
+                if is_list_prompt and sql_operation in {"get_process_step_losses", "get_stock_movements_journal"}:
+                    answer = str(sql_result.answer_part)
 
             # Keep the previous text builder as a fallback guard if composition returns an empty body.
             if not str(answer or "").strip():
@@ -430,10 +436,18 @@ class AgentOrchestrator:
         if self.current_user.cooperative_id is None:
             return set()
         try:
-            rows = self.db.scalars(select(Batch.code).where(Batch.cooperative_id == self.current_user.cooperative_id)).all()
+            rows = self.db.execute(
+                select(Batch.code, Batch.postharvest_reference).where(Batch.cooperative_id == self.current_user.cooperative_id)
+            ).all()
         except Exception:
             return set()
-        return {str(row).upper() for row in rows if str(row or "").strip()}
+        refs: set[str] = set()
+        for code, postharvest_reference in rows:
+            if str(code or "").strip():
+                refs.add(str(code).upper())
+            if str(postharvest_reference or "").strip():
+                refs.add(str(postharvest_reference).upper())
+        return refs
 
     def _get_previous_user_message(self, conversation_id: str | None) -> str | None:
         if not conversation_id:
@@ -891,10 +905,25 @@ def _filter_warning_codes_for_manager(
         return codes
     if not _recommendation_has_grounded_evidence(agent_results):
         return codes
+    if any(str(code).strip().upper() == "NO_SQL_DATA" for code in codes):
+        # Keep warnings untouched when SQL has no data (invalid lot/no-data cases).
+        return codes
 
     drop_codes = {"RECOMMENDATION_EVIDENCE_WEAK"}
     if "RAG" in source_types:
         drop_codes.add("MISSING_RAG_SOURCE")
+    # In grounded HYBRID recommendation answers, these codes are often redundant
+    # with already explicit limits and create warning noise in UI.
+    drop_codes.update(
+        {
+            "RAG_QUALITY_INSUFFICIENT",
+            "RAG_EVIDENCE_REJECTED",
+            "WEAK_RETRIEVAL",
+            "SOURCE_DATA_EMPTY",
+            "NO_ML_DATA",
+            "MISSING_ML_SOURCE",
+        }
+    )
     return [code for code in codes if str(code).strip().upper() not in drop_codes]
 
 
